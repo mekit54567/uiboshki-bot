@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime
+from datetime import date
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -8,12 +8,20 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 from database import (
-    add_deadline, get_active_deadlines,
-    mark_deadline_done, delete_deadline,
-    upsert_user,
+    add_deadline, get_active_deadlines, mark_deadline_done,
+    delete_deadline, upsert_user, get_deadline_stats,
 )
 
 router = Router()
+
+CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+
+MAIN_KB = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),      KeyboardButton(text="🌅 Завтра")],
+    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),    KeyboardButton(text="➕ Дедлайн")],
+    [KeyboardButton(text="🤖 Решить"),      KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="🗳 Голосование")],
+    [KeyboardButton(text="❓ Вопрос анон"), KeyboardButton(text="🔔 Подписка"),    KeyboardButton(text="⚙️ Настройки")],
+], resize_keyboard=True)
 
 
 class AddDeadline(StatesGroup):
@@ -23,19 +31,11 @@ class AddDeadline(StatesGroup):
     due_time    = State()
 
 
-CANCEL_KB = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="❌ Отмена")]],
-    resize_keyboard=True,
-)
-
-BACK_KB = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="📅 Расписание сегодня"), KeyboardButton(text="📋 Дедлайны")],
-        [KeyboardButton(text="➕ Добавить дедлайн"),   KeyboardButton(text="🤖 Решить задачу")],
-        [KeyboardButton(text="🔕 Отписаться"),         KeyboardButton(text="🔔 Подписаться")],
-    ],
-    resize_keyboard=True,
-)
+def progress_bar(delta: int, max_days: int = 14) -> str:
+    if delta <= 0:
+        return "🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴"
+    filled = max(0, 10 - min(int(delta / max_days * 10), 10))
+    return "▓" * filled + "░" * (10 - filled)
 
 
 def format_deadlines(deadlines: list[dict]) -> str:
@@ -43,32 +43,32 @@ def format_deadlines(deadlines: list[dict]) -> str:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
     today = date.today()
-    lines = ["📋 <b>Дедлайны группы:</b>\n"]
-    for d in deadlines:
-        due = date.fromisoformat(d["due_date"])
-        delta = (due - today).days
-        if delta < 0:
-            badge = "💀 просрочен"
-        elif delta == 0:
-            badge = "🔴 сегодня!"
-        elif delta == 1:
-            badge = "🟠 завтра"
-        elif delta <= 3:
-            badge = f"🟡 через {delta} дн."
-        else:
-            badge = f"🟢 через {delta} дн."
+    lines = ["📋 <b>Дедлайны группы</b>\n━━━━━━━━━━━━━━━━━━━\n"]
 
-        time_part = f" {d['due_time']}" if d.get("due_time") else ""
-        desc_part = f"\n   📝 {d['description']}" if d.get("description") else ""
+    for d in deadlines:
+        due   = date.fromisoformat(d["due_date"])
+        delta = (due - today).days
+
+        if delta < 0:   badge = "💀 просрочен"
+        elif delta == 0: badge = "🔴 сегодня!"
+        elif delta == 1: badge = "🟠 завтра"
+        elif delta <= 3: badge = f"🟡 через {delta} дн."
+        else:            badge = f"🟢 через {delta} дн."
+
+        bar      = progress_bar(delta)
+        tp       = f" {d['due_time']}" if d.get("due_time") else ""
+        desc_str = f"\n   📝 {d['description']}" if d.get("description") else ""
+
         lines.append(
             f"[{d['id']}] <b>{d['subject']}</b>\n"
-            f"   📅 {d['due_date']}{time_part} — {badge}{desc_part}"
+            f"   📅 {d['due_date']}{tp} — {badge}\n"
+            f"   [{bar}]{desc_str}"
         )
-    lines.append("\n/done ID — выполнено  |  /del ID — удалить")
+
+    lines.append("\n━━━━━━━━━━━━━━━━━━━")
+    lines.append("/done ID — выполнено  •  /del ID — удалить")
     return "\n\n".join(lines)
 
-
-# ── Список дедлайнов ──────────────────────────────────────────────────────────
 
 @router.message(Command("deadlines"))
 @router.message(F.text == "📋 Дедлайны")
@@ -78,33 +78,45 @@ async def cmd_deadlines(message: Message):
     await message.answer(format_deadlines(deadlines), parse_mode="HTML")
 
 
-# ── Добавить дедлайн — FSM ────────────────────────────────────────────────────
+@router.message(Command("stats"))
+async def cmd_stats(message: Message):
+    s = await get_deadline_stats()
+    total  = s["total"]
+    done   = s["done"]
+    active = s["active"]
+    over   = s["overdue"]
+    pct    = int(done / total * 100) if total else 0
+    bar    = "▓" * (pct // 10) + "░" * (10 - pct // 10)
+
+    await message.answer(
+        f"📊 <b>Статистика дедлайнов</b>\n\n"
+        f"Всего: {total}\n"
+        f"✅ Выполнено: {done}\n"
+        f"🔥 Активных: {active}\n"
+        f"💀 Просрочено: {over}\n\n"
+        f"Прогресс: [{bar}] {pct}%",
+        parse_mode="HTML"
+    )
+
 
 @router.message(Command("add"))
-@router.message(F.text == "➕ Добавить дедлайн")
+@router.message(F.text == "➕ Дедлайн")
 async def cmd_add_start(message: Message, state: FSMContext):
     await state.set_state(AddDeadline.subject)
-    await message.answer(
-        "📌 Название предмета/задания?\n(например: <i>Алгоритмы, лаб.1</i>)",
-        parse_mode="HTML",
-        reply_markup=CANCEL_KB,
-    )
+    await message.answer("📌 Название предмета/задания?\n(например: <i>Алгоритмы, лаб.1</i>)", parse_mode="HTML", reply_markup=CANCEL_KB)
 
 
 @router.message(F.text == "❌ Отмена")
 async def cmd_cancel(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Отменено.", reply_markup=BACK_KB)
+    await message.answer("Отменено.", reply_markup=MAIN_KB)
 
 
 @router.message(AddDeadline.subject)
 async def add_subject(message: Message, state: FSMContext):
     await state.update_data(subject=message.text.strip())
     await state.set_state(AddDeadline.description)
-    await message.answer(
-        "📝 Краткое описание задания?\n(или отправь <i>–</i> чтобы пропустить)",
-        parse_mode="HTML",
-    )
+    await message.answer("📝 Описание? (или <i>–</i> пропустить)", parse_mode="HTML")
 
 
 @router.message(AddDeadline.description)
@@ -112,35 +124,26 @@ async def add_description(message: Message, state: FSMContext):
     desc = message.text.strip()
     await state.update_data(description="" if desc == "–" else desc)
     await state.set_state(AddDeadline.due_date)
-    await message.answer(
-        "📅 Дата дедлайна?\nФормат: <b>ДД.ММ.ГГГГ</b> или <b>ДД.ММ</b>",
-        parse_mode="HTML",
-    )
+    await message.answer("📅 Дата? Формат: <b>ДД.ММ</b> или <b>ДД.ММ.ГГГГ</b>", parse_mode="HTML")
 
 
 @router.message(AddDeadline.due_date)
 async def add_due_date(message: Message, state: FSMContext):
-    raw = message.text.strip()
-    # Поддержка ДД.ММ и ДД.ММ.ГГГГ
+    raw   = message.text.strip()
     match = re.match(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$", raw)
     if not match:
-        await message.answer("❌ Неверный формат даты. Введи, например: <b>30.05.2025</b>", parse_mode="HTML")
+        await message.answer("❌ Неверный формат. Например: <b>30.05</b>", parse_mode="HTML")
         return
-
     day, month, year = match.groups()
     year = year or str(date.today().year)
     try:
         parsed = date(int(year), int(month), int(day))
     except ValueError:
-        await message.answer("❌ Такой даты не существует. Попробуй ещё раз.")
+        await message.answer("❌ Такой даты не существует.")
         return
-
     await state.update_data(due_date=parsed.isoformat())
     await state.set_state(AddDeadline.due_time)
-    await message.answer(
-        "⏰ Время сдачи?\nФормат: <b>ЧЧ:ММ</b> (например 23:59)\nИли отправь <i>–</i> чтобы пропустить.",
-        parse_mode="HTML",
-    )
+    await message.answer("⏰ Время? Формат <b>ЧЧ:ММ</b> или <i>–</i>", parse_mode="HTML")
 
 
 @router.message(AddDeadline.due_time)
@@ -156,44 +159,31 @@ async def add_due_time(message: Message, state: FSMContext):
 
     data = await state.get_data()
     await state.clear()
-
-    deadline_id = await add_deadline(
-        subject=data["subject"],
-        description=data.get("description", ""),
-        due_date=data["due_date"],
-        due_time=due_time,
-        created_by=message.from_user.id,
-    )
-
-    time_part = f" в {due_time}" if due_time else ""
+    did = await add_deadline(data["subject"], data.get("description",""), data["due_date"], due_time, message.from_user.id)
+    tp  = f" в {due_time}" if due_time else ""
     await message.answer(
-        f"✅ Дедлайн добавлен (ID: {deadline_id})!\n\n"
-        f"📌 <b>{data['subject']}</b>\n"
-        f"📅 {data['due_date']}{time_part}",
-        parse_mode="HTML",
-        reply_markup=BACK_KB,
+        f"✅ <b>Дедлайн добавлен!</b> (ID: {did})\n\n"
+        f"📌 {data['subject']}\n"
+        f"📅 {data['due_date']}{tp}",
+        parse_mode="HTML", reply_markup=MAIN_KB
     )
 
-
-# ── Отметить выполненным / удалить ────────────────────────────────────────────
 
 @router.message(Command("done"))
 async def cmd_done(message: Message):
     parts = message.text.split()
     if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("Использование: /done ID\nПример: /done 3")
+        await message.answer("Использование: /done 3")
         return
-    did = int(parts[1])
-    await mark_deadline_done(did)
-    await message.answer(f"✅ Дедлайн #{did} отмечен как выполненный!")
+    await mark_deadline_done(int(parts[1]))
+    await message.answer(f"✅ Дедлайн #{parts[1]} выполнен!")
 
 
 @router.message(Command("del"))
 async def cmd_del(message: Message):
     parts = message.text.split()
     if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("Использование: /del ID\nПример: /del 3")
+        await message.answer("Использование: /del 3")
         return
-    did = int(parts[1])
-    await delete_deadline(did)
-    await message.answer(f"🗑 Дедлайн #{did} удалён.")
+    await delete_deadline(int(parts[1]))
+    await message.answer(f"🗑 Дедлайн #{parts[1]} удалён.")

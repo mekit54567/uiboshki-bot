@@ -8,16 +8,13 @@ from database import init_db
 from handlers import register_handlers
 from scheduler import start_scheduler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
+    dp  = Dispatcher(storage=MemoryStorage())
 
     await init_db()
     register_handlers(dp)
@@ -25,7 +22,7 @@ async def main():
     scheduler = start_scheduler(bot)
     scheduler.start()
 
-    logger.info("Бот запущен!")
+    logger.info("🚀 Бот УИБО-03-24 запущен!")
     try:
         await dp.start_polling(bot, skip_updates=True)
     finally:

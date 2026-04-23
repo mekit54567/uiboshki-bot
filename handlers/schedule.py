@@ -1,21 +1,44 @@
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from schedule_parser import get_today_schedule
+from schedule_parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson
 from database import upsert_user
 
 router = Router()
 
 
 @router.message(Command("schedule"))
-@router.message(lambda m: m.text == "📅 Расписание сегодня")
-async def cmd_schedule(message: Message):
-    await upsert_user(
-        message.from_user.id,
-        message.from_user.username or "",
-        message.from_user.full_name or "",
-    )
-    wait_msg = await message.answer("⏳ Загружаю расписание...")
-    text = await get_today_schedule()
-    await wait_msg.edit_text(text, parse_mode="HTML")
+@router.message(F.text == "📅 Сегодня")
+async def cmd_today(message: Message):
+    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    wait = await message.answer("⏳ Загружаю...")
+    await wait.edit_text(await get_today_schedule(), parse_mode="HTML")
+
+
+@router.message(Command("tomorrow"))
+@router.message(F.text == "🌅 Завтра")
+async def cmd_tomorrow(message: Message):
+    wait = await message.answer("⏳ Загружаю...")
+    await wait.edit_text(await get_tomorrow_schedule(), parse_mode="HTML")
+
+
+@router.message(Command("week"))
+@router.message(F.text == "📆 Неделя")
+async def cmd_week(message: Message):
+    wait = await message.answer("⏳ Загружаю неделю...")
+    text = await get_week_schedule()
+    await wait.delete()
+    # Разбиваем на части если длинно
+    if len(text) <= 4096:
+        await message.answer(text, parse_mode="HTML")
+    else:
+        for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+            await message.answer(chunk, parse_mode="HTML")
+
+
+@router.message(Command("next"))
+@router.message(F.text == "⏭ Следующая")
+async def cmd_next(message: Message):
+    wait = await message.answer("⏳ Смотрю...")
+    await wait.edit_text(await get_next_lesson(), parse_mode="HTML")
