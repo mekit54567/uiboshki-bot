@@ -2,14 +2,15 @@ import httpx
 import base64
 import logging
 import json
+import os
 
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_KEY = "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"
+OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "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")
 
-MODEL_TEXT  = "google/gemini-2.0-flash-exp:free"
-MODEL_PHOTO = "google/gemini-2.0-flash-exp:free"
+MODEL_TEXT  = "google/gemini-3.1-flash-lite-preview"
+MODEL_PHOTO = "google/gemini-3.1-flash-lite-preview"
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -32,7 +33,7 @@ def get_headers() -> dict:
     return {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://t.me/uibo_bot",
+        "HTTP-Referer": "https://github.com/mekit54567/uiboshki-bot",
         "X-Title": "UIBO-03-24 Bot",
     }
 
@@ -49,11 +50,7 @@ async def solve_text(task: str, subject: str = "") -> str:
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            OPENROUTER_URL,
-            headers=get_headers(),
-            content=body
-        )
+        resp = await client.post(OPENROUTER_URL, headers=get_headers(), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
@@ -74,10 +71,6 @@ async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=90) as client:
-        resp = await client.post(
-            OPENROUTER_URL,
-            headers=get_headers(),
-            content=body
-        )
+        resp = await client.post(OPENROUTER_URL, headers=get_headers(), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
