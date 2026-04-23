@@ -1,10 +1,18 @@
 import httpx
 import base64
 import logging
-from config import GROQ_API_KEY, GROQ_MODEL
+from config import GROQ_API_KEY
 
 logger = logging.getLogger(__name__)
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# OpenRouter endpoint (совместим с OpenAI API)
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_KEY = "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"
+
+# Бесплатная модель — Gemini Flash
+MODEL_TEXT  = "google/gemini-2.0-flash-exp:free"
+# Для фото — тоже умеет картинки
+MODEL_PHOTO = "google/gemini-2.0-flash-exp:free"
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -26,10 +34,18 @@ def build_system_prompt(subject: str = "") -> str:
     )
 
 
+def get_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://t.me/uibo_bot",
+        "X-Title": "УИБО-03-24 Bot",
+    }
+
+
 async def solve_text(task: str, subject: str = "") -> str:
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
-        "model": GROQ_MODEL,
+        "model": MODEL_TEXT,
         "messages": [
             {"role": "system", "content": build_system_prompt(subject)},
             {"role": "user",   "content": f"Задание:\n{task}"},
@@ -38,16 +54,15 @@ async def solve_text(task: str, subject: str = "") -> str:
         "temperature": 0.3,
     }
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(GROQ_URL, headers=headers, json=payload)
+        resp = await client.post(OPENROUTER_URL, headers=get_headers(), json=payload)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
 
 async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str = "") -> str:
     b64 = base64.b64encode(image_bytes).decode()
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
-        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "model": MODEL_PHOTO,
         "messages": [
             {"role": "system", "content": build_system_prompt(subject)},
             {"role": "user", "content": [
@@ -59,6 +74,6 @@ async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str
         "temperature": 0.3,
     }
     async with httpx.AsyncClient(timeout=90) as client:
-        resp = await client.post(GROQ_URL, headers=headers, json=payload)
+        resp = await client.post(OPENROUTER_URL, headers=get_headers(), json=payload)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
