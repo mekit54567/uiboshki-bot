@@ -12,6 +12,12 @@ from database import upsert_user
 logger = logging.getLogger(__name__)
 router = Router()
 
+BUTTON_TEXTS = {
+    "📅 Расписание сегодня", "📋 Дедлайны",
+    "➕ Добавить дедлайн", "🤖 Решить задачу",
+    "🔕 Отписаться", "🔔 Подписаться", "❌ Отмена",
+}
+
 
 class SolverState(StatesGroup):
     waiting_task = State()
@@ -48,11 +54,9 @@ async def handle_task_text(message: Message, state: FSMContext):
     try:
         answer = await solve_text(message.text)
         await wait.delete()
-        # Telegram ограничивает сообщение 4096 символами
         if len(answer) <= 4096:
             await message.answer(answer, parse_mode="Markdown")
         else:
-            # Разбиваем на части
             for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
                 await message.answer(chunk, parse_mode="Markdown")
     except Exception as e:
@@ -60,14 +64,13 @@ async def handle_task_text(message: Message, state: FSMContext):
         await wait.edit_text(f"❌ Ошибка при обращении к AI: {e}")
 
 
-# ── Получить фото задачи ─────────────────────────────────────────────────────
+# ── Получить фото задачи ──────────────────────────────────────────────────────
 
 @router.message(SolverState.waiting_task, F.photo)
 async def handle_task_photo(message: Message, state: FSMContext, bot: Bot):
     await state.clear()
     wait = await message.answer("🧠 Анализирую фото, секунду...")
     try:
-        # Берём самое большое фото
         photo = message.photo[-1]
         file = await bot.get_file(photo.file_id)
         file_bytes = await bot.download_file(file.file_path)
@@ -90,7 +93,10 @@ async def handle_task_photo(message: Message, state: FSMContext, bot: Bot):
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_plain_text(message: Message, state: FSMContext):
     """Если пользователь просто написал текст — предполагаем, что это задача."""
-    # Проверяем, что не в другом FSM состоянии
+    # Игнорируем кнопки меню
+    if message.text in BUTTON_TEXTS:
+        return
+
     current = await state.get_state()
     if current is not None:
         return
