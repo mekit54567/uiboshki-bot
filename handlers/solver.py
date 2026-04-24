@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
-from groq_solver import solve_text, solve_image, SUBJECTS
+from groq_solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from database import upsert_user, add_solver_history, get_solver_history
 
 logger = logging.getLogger(__name__)
@@ -22,12 +22,23 @@ SUBJECT_KB = ReplyKeyboardMarkup(
     resize_keyboard=True, one_time_keyboard=True
 )
 
-CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+STOP_KB = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="🛑 Завершить диалог")]],
+    resize_keyboard=True
+)
+
+MAIN_KB = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),      KeyboardButton(text="🌅 Завтра")],
+    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),    KeyboardButton(text="➕ Дедлайн")],
+    [KeyboardButton(text="🤖 Решить"),      KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="🗳 Голосование")],
+    [KeyboardButton(text="❓ Вопрос анон"), KeyboardButton(text="🔔 Подписка"),    KeyboardButton(text="⚙️ Настройки")],
+], resize_keyboard=True)
 
 
 class SolverState(StatesGroup):
     choose_subject = State()
     waiting_task   = State()
+    in_dialog      = State()
 
 
 @router.message(Command("solve"))
@@ -40,54 +51,135 @@ async def cmd_solve(message: Message, state: FSMContext):
 
 @router.message(SolverState.choose_subject, F.text)
 async def choose_subject(message: Message, state: FSMContext):
-    await state.update_data(subject=message.text.strip())
+    if message.text in BUTTON_TEXTS:
+        await state.clear()
+        return
+    await state.update_data(subject=message.text.strip(), history=[])
     await state.set_state(SolverState.waiting_task)
     await message.answer(
         f"✅ Предмет: <b>{message.text}</b>\n\n"
-        "Пришли задачу — текстом или фото 📸",
-        parse_mode="HTML", reply_markup=CANCEL_KB
+        "Пришли задачу — текстом или фото 📸\n"
+        "<i>Совет: печатный текст распознаётся лучше рукописного</i>",
+        parse_mode="HTML", reply_markup=STOP_KB
     )
+
+
+@router.message(F.text == "🛑 Завершить диалог")
+async def stop_dialog(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("✅ Диалог завершён.", reply_markup=MAIN_KB)
 
 
 @router.message(Command("cancel"), SolverState.waiting_task)
 @router.message(Command("cancel"), SolverState.choose_subject)
+@router.message(Command("cancel"), SolverState.in_dialog)
 async def cancel_solve(message: Message, state: FSMContext):
     await state.clear()
-    await message.answer("Отменено.")
+    await message.answer("Отменено.", reply_markup=MAIN_KB)
 
 
 @router.message(SolverState.waiting_task, F.text)
-async def handle_task_text(message: Message, state: FSMContext):
+async def handle_first_task(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    await state.clear()
-    wait = await message.answer("🧠 Решаю, секунду...")
+    wait    = await message.answer("🧠 Решаю, секунду...")
     try:
         answer = await solve_text(message.text, subject)
+        if not answer or len(answer.strip()) < 10:
+            await wait.edit_text("🤔 Не смог обработать. Попробуй переформулировать.")
+            return
         await wait.delete()
         await add_solver_history(message.from_user.id, message.text, answer, subject)
+
+        # Сохраняем историю и переходим в режим диалога
+        history = [
+            {"role": "user",      "content": f"Задание:\n{message.text}"},
+            {"role": "assistant", "content": answer},
+        ]
+        await state.update_data(history=history)
+        await state.set_state(SolverState.in_dialog)
+
         for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
             await message.answer(chunk, parse_mode="Markdown")
+
+        await message.answer(
+            "💬 Можешь уточнить или задать следующий вопрос.\n"
+            "Нажми <b>🛑 Завершить диалог</b> чтобы выйти.",
+            parse_mode="HTML"
+        )
     except Exception as e:
         logger.error(e)
         await wait.edit_text(f"❌ Ошибка: {e}")
 
 
 @router.message(SolverState.waiting_task, F.photo)
-async def handle_task_photo(message: Message, state: FSMContext, bot: Bot):
+async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    await state.clear()
-    wait = await message.answer("🧠 Анализирую фото...")
+    wait    = await message.answer("🧠 Анализирую фото...")
     try:
         photo      = message.photo[-1]
         file       = await bot.get_file(photo.file_id)
         file_bytes = await bot.download_file(file.file_path)
         answer     = await solve_image(file_bytes.read(), subject=subject)
+
+        if not answer or len(answer.strip()) < 10:
+            await wait.edit_text(
+                "📝 Не смог распознать фото.\n\n"
+                "Попробуй:\n• Переслать текстом\n• Сделать чёткое фото\n• Прислать скриншот"
+            )
+            return
+
         await wait.delete()
         await add_solver_history(message.from_user.id, "[фото]", answer, subject)
+
+        history = [
+            {"role": "user",      "content": "Задание на фото (уже решено)"},
+            {"role": "assistant", "content": answer},
+        ]
+        await state.update_data(history=history)
+        await state.set_state(SolverState.in_dialog)
+
         for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
             await message.answer(chunk, parse_mode="Markdown")
+
+        await message.answer(
+            "💬 Можешь уточнить или задать следующий вопрос.\n"
+            "Нажми <b>🛑 Завершить диалог</b> чтобы выйти.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(e)
+        await wait.edit_text(f"❌ Ошибка: {e}")
+
+
+@router.message(SolverState.in_dialog, F.text)
+async def handle_dialog(message: Message, state: FSMContext):
+    data    = await state.get_data()
+    subject = data.get("subject", "")
+    history = data.get("history", [])
+
+    # Добавляем новый вопрос в историю
+    history.append({"role": "user", "content": message.text})
+
+    wait = await message.answer("🧠 Думаю...")
+    try:
+        answer = await solve_with_history(history, subject)
+        if not answer or len(answer.strip()) < 10:
+            await wait.edit_text("🤔 Не смог ответить. Попробуй иначе.")
+            return
+
+        await wait.delete()
+
+        # Сохраняем ответ в историю (максимум 10 сообщений чтобы не переполнить)
+        history.append({"role": "assistant", "content": answer})
+        if len(history) > 10:
+            history = history[-10:]
+        await state.update_data(history=history)
+
+        for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
+            await message.answer(chunk, parse_mode="Markdown")
+
     except Exception as e:
         logger.error(e)
         await wait.edit_text(f"❌ Ошибка: {e}")
@@ -118,6 +210,9 @@ async def handle_plain_text(message: Message, state: FSMContext):
     wait = await message.answer("🤖 Похоже задание — решаю...")
     try:
         answer = await solve_text(message.text)
+        if not answer or len(answer.strip()) < 10:
+            await wait.delete()
+            return
         await wait.delete()
         await add_solver_history(message.from_user.id, message.text, answer)
         for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
