@@ -1,4 +1,5 @@
 import re
+import json
 from datetime import date
 from zoneinfo import ZoneInfo
 
@@ -12,6 +13,7 @@ from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
     delete_deadline, upsert_user, get_deadline_stats,
 )
+from config import STAROSTA_ID
 
 router = Router()
 TZ = ZoneInfo("Europe/Moscow")
@@ -34,7 +36,6 @@ class AddDeadline(StatesGroup):
 
 
 def format_date(date_str: str) -> str:
-    """2026-04-26 → 26.04.2026"""
     try:
         d = date.fromisoformat(date_str)
         return d.strftime("%d.%m.%Y")
@@ -43,7 +44,6 @@ def format_date(date_str: str) -> str:
 
 
 def progress_bar(delta: int, max_days: int = 14) -> str:
-    """Минималистичный прогресс-бар ━━━╌╌"""
     if delta <= 0:
         return "━━━━━━━━━━ 100%"
     filled = max(0, 10 - min(int(delta / max_days * 10), 10))
@@ -198,3 +198,69 @@ async def cmd_del(message: Message):
         return
     await delete_deadline(int(parts[1]))
     await message.answer(f"🗑 Дедлайн #{parts[1]} удалён.")
+
+
+# ── Импорт дедлайнов из СДО ──────────────────────────────────────────────────
+
+SKIP_KEYWORDS = [
+    "практикум", "пример решения", "образец решения",
+    "методические указания", "активность", "мероприятие",
+    "достижение", "научная конференция", "пример программы",
+]
+
+TODAY = date.today().isoformat()
+
+
+def should_skip(name: str) -> bool:
+    name_lower = name.lower()
+    return any(kw in name_lower for kw in SKIP_KEYWORDS)
+
+
+@router.message(Command("importdeadlines"))
+async def cmd_import_deadlines(message: Message):
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    await message.answer("📤 Пришли файл <b>deadlines.json</b>", parse_mode="HTML")
+
+
+@router.message(F.document)
+async def handle_deadlines_json(message: Message):
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        return
+    if not message.document.file_name.endswith('.json'):
+        return
+    if 'deadline' not in message.document.file_name.lower():
+        return
+
+    wait = await message.answer("⏳ Импортирую дедлайны...")
+    try:
+        bot  = message.bot
+        file = await bot.get_file(message.document.file_id)
+        data = await bot.download_file(file.file_path)
+        content = json.loads(data.read().decode('utf-8'))
+        assignments = content.get("assignments", content) if isinstance(content, dict) else content
+
+        added = skipped = 0
+        for a in assignments:
+            if not a.get("due_date") or a["due_date"] < TODAY:
+                skipped += 1
+                continue
+            if should_skip(a.get("name", "")):
+                skipped += 1
+                continue
+            subject = f"{a['name']} ({a.get('course_name', '')})"
+            await add_deadline(
+                subject=subject,
+                description="",
+                due_date=a["due_date"],
+                due_time=a.get("due_time"),
+                created_by=0
+            )
+            added += 1
+
+        await wait.edit_text(
+            f"✅ Импорт завершён!\n\nДобавлено: {added}\nПропущено: {skipped}"
+        )
+    except Exception as e:
+        await wait.edit_text(f"❌ Ошибка: {e}")
