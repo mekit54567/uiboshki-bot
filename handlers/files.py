@@ -1,20 +1,36 @@
+import json
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from database import add_file, get_files, delete_file
+from config import STAROSTA_ID
 
 router = Router()
 
 CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
+MAIN_KB = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),      KeyboardButton(text="🌅 Завтра")],
+    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),    KeyboardButton(text="➕ Дедлайн")],
+    [KeyboardButton(text="🤖 Решить"),      KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="🗳 Голосование")],
+    [KeyboardButton(text="❓ Вопрос анон"), KeyboardButton(text="🔔 Подписка"),    KeyboardButton(text="⚙️ Настройки")],
+], resize_keyboard=True)
 
 
 class UploadFile(StatesGroup):
     waiting_file    = State()
     waiting_title   = State()
     waiting_subject = State()
+
+
+def subjects_keyboard(files: list[dict]) -> InlineKeyboardMarkup:
+    """Клавиатура с предметами."""
+    subjects = sorted(set(f["subject"] for f in files if f.get("subject")))
+    buttons = [[InlineKeyboardButton(text=s, callback_data=f"files_subj:{s}")] for s in subjects]
+    buttons.append([InlineKeyboardButton(text="📋 Все файлы", callback_data="files_subj:__all__")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 @router.message(Command("files"))
@@ -24,20 +40,75 @@ async def cmd_files(message: Message):
     if not files:
         await message.answer("📁 Файлов пока нет.\n\nЗагрузить: /upload")
         return
+    await message.answer(
+        f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
+        parse_mode="HTML",
+        reply_markup=subjects_keyboard(files)
+    )
 
-    lines = ["📁 <b>Файлы группы</b>\n━━━━━━━━━━━━━━━━━━━\n"]
-    for f in files:
-        subj = f" [{f['subject']}]" if f.get("subject") else ""
-        lines.append(f"[{f['id']}] 📄 <b>{f['title']}</b>{subj}")
 
-    lines.append("\nОтправить файл: /getfile ID\nУдалить: /delfile ID\nЗагрузить: /upload")
-    await message.answer("\n".join(lines), parse_mode="HTML")
+@router.callback_query(F.data.startswith("files_subj:"))
+async def files_by_subject(callback: CallbackQuery):
+    subject = callback.data.split(":", 1)[1]
+    if subject == "__all__":
+        files = await get_files()
+    else:
+        files = await get_files(subject)
 
+    if not files:
+        await callback.answer("Файлов нет")
+        return
+
+    # Показываем список файлов с кнопками
+    buttons = []
+    for f in files[:30]:  # максимум 30
+        name = f["title"][:40]
+        buttons.append([InlineKeyboardButton(text=f"📄 {name}", callback_data=f"getfile:{f['id']}")])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="files_back")])
+
+    title = subject if subject != "__all__" else "Все файлы"
+    await callback.message.edit_text(
+        f"📁 <b>{title}</b> ({len(files)} файлов):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+    )
+
+
+@router.callback_query(F.data == "files_back")
+async def files_back(callback: CallbackQuery):
+    files = await get_files()
+    await callback.message.edit_text(
+        f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
+        parse_mode="HTML",
+        reply_markup=subjects_keyboard(files)
+    )
+
+
+@router.callback_query(F.data.startswith("getfile:"))
+async def send_file(callback: CallbackQuery, bot: Bot):
+    fid = int(callback.data.split(":")[1])
+    files = await get_files()
+    f = next((x for x in files if x["id"] == fid), None)
+    if not f:
+        await callback.answer("Файл не найден")
+        return
+    try:
+        await bot.send_document(
+            callback.message.chat.id,
+            f["file_id"],
+            caption=f"📄 {f['title']}\n📚 {f['subject']}"
+        )
+        await callback.answer()
+    except Exception as e:
+        await callback.answer(f"Ошибка: {e}", show_alert=True)
+
+
+# ── Загрузка файла вручную ────────────────────────────────────────────────────
 
 @router.message(Command("upload"))
 async def cmd_upload(message: Message, state: FSMContext):
     await state.set_state(UploadFile.waiting_file)
-    await message.answer("📎 Прикрепи файл (документ, PDF, фото):", reply_markup=CANCEL_KB)
+    await message.answer("📎 Прикрепи файл:", reply_markup=CANCEL_KB)
 
 
 @router.message(UploadFile.waiting_file, F.document | F.photo)
@@ -48,17 +119,16 @@ async def receive_file(message: Message, state: FSMContext):
     else:
         file_id   = message.photo[-1].file_id
         file_name = "фото"
-
     await state.update_data(file_id=file_id, file_name=file_name)
     await state.set_state(UploadFile.waiting_title)
-    await message.answer("📝 Название файла? (например: <i>Методичка по алгоритмам</i>)", parse_mode="HTML")
+    await message.answer("📝 Название файла?")
 
 
 @router.message(UploadFile.waiting_title, F.text)
 async def receive_title(message: Message, state: FSMContext):
     if message.text == "❌ Отмена":
         await state.clear()
-        await message.answer("Отменено.")
+        await message.answer("Отменено.", reply_markup=MAIN_KB)
         return
     await state.update_data(title=message.text.strip())
     await state.set_state(UploadFile.waiting_subject)
@@ -69,37 +139,16 @@ async def receive_title(message: Message, state: FSMContext):
 async def receive_subject(message: Message, state: FSMContext):
     if message.text == "❌ Отмена":
         await state.clear()
-        await message.answer("Отменено.")
+        await message.answer("Отменено.", reply_markup=MAIN_KB)
         return
     data    = await state.get_data()
     subject = "" if message.text.strip() == "–" else message.text.strip()
     await state.clear()
-
     fid = await add_file(data["title"], subject, data["file_id"], data["file_name"], message.from_user.id)
     await message.answer(
-        f"✅ Файл сохранён! (ID: {fid})\n\n"
-        f"📄 <b>{data['title']}</b>\n"
-        f"Получить: /getfile {fid}",
-        parse_mode="HTML"
+        f"✅ Файл сохранён! (ID: {fid})\n📄 <b>{data['title']}</b>",
+        parse_mode="HTML", reply_markup=MAIN_KB
     )
-
-
-@router.message(Command("getfile"))
-async def cmd_getfile(message: Message, bot: Bot):
-    parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("Использование: /getfile ID")
-        return
-    fid   = int(parts[1])
-    files = await get_files()
-    f     = next((x for x in files if x["id"] == fid), None)
-    if not f:
-        await message.answer("❌ Файл не найден.")
-        return
-    try:
-        await bot.send_document(message.chat.id, f["file_id"], caption=f"📄 {f['title']}")
-    except Exception:
-        await bot.send_photo(message.chat.id, f["file_id"], caption=f"📄 {f['title']}")
 
 
 @router.message(Command("delfile"))
@@ -110,3 +159,65 @@ async def cmd_delfile(message: Message):
         return
     await delete_file(int(parts[1]))
     await message.answer(f"🗑 Файл #{parts[1]} удалён.")
+
+
+# ── Синхронизация файлов из локальной базы ────────────────────────────────────
+
+@router.message(Command("syncfiles"))
+async def cmd_syncfiles(message: Message):
+    """Только для старосты — синхронизирует файлы из JSON."""
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    await message.answer(
+        "📤 Пришли файл <b>files_export.json</b> — загружу все файлы в базу.",
+        parse_mode="HTML"
+    )
+
+
+@router.message(F.document)
+async def handle_sync_json(message: Message):
+    """Получаем files_export.json и синхронизируем."""
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        return
+    if not message.document.file_name.endswith('.json'):
+        return
+    if 'export' not in message.document.file_name.lower() and 'files' not in message.document.file_name.lower():
+        return
+
+    wait = await message.answer("⏳ Синхронизирую файлы...")
+
+    try:
+        from aiogram import Bot
+        bot = message.bot
+        file = await bot.get_file(message.document.file_id)
+        data = await bot.download_file(file.file_path)
+        files = json.loads(data.read().decode('utf-8'))
+
+        added = 0
+        skipped = 0
+        for f in files:
+            if not f.get('file_id') or f.get('title') == 'Файл':
+                skipped += 1
+                continue
+            # Проверяем нет ли уже
+            existing = await get_files(f.get('subject', ''))
+            if any(x['file_id'] == f['file_id'] for x in existing):
+                skipped += 1
+                continue
+            await add_file(
+                title=f['title'],
+                subject=f.get('subject', ''),
+                file_id=f['file_id'],
+                file_name=f.get('file_name', ''),
+                uploaded_by=0
+            )
+            added += 1
+
+        await wait.edit_text(
+            f"✅ Синхронизация завершена!\n\n"
+            f"Добавлено: {added}\n"
+            f"Пропущено: {skipped}"
+        )
+    except Exception as e:
+        await wait.edit_text(f"❌ Ошибка: {e}")
