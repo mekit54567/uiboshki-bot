@@ -12,7 +12,6 @@ from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
 
-# Храним уже отправленные напоминания чтобы не дублировать
 _sent_reminders: set[tuple] = set()
 
 
@@ -34,11 +33,21 @@ def progress_bar(delta: int, max_days: int = 14) -> str:
 
 
 async def send_morning_schedule(bot: Bot):
-    text  = await get_today_schedule()
+    schedule_text = await get_today_schedule()
+
+    # Добавляем погоду
+    try:
+        from handlers.weather import get_weather_for_morning
+        weather_text = await get_weather_for_morning()
+        full_text = f"{weather_text}\n\n{schedule_text}"
+    except Exception as e:
+        logger.error(f"Weather error: {e}")
+        full_text = schedule_text
+
     users = await get_all_subscribed_users()
     for uid in users:
         try:
-            await bot.send_message(uid, text, parse_mode="HTML")
+            await bot.send_message(uid, full_text, parse_mode="HTML")
         except Exception as e:
             logger.warning(f"Не смог отправить {uid}: {e}")
 
@@ -72,12 +81,10 @@ async def send_deadline_reminders(bot: Bot):
 
 
 async def check_lesson_reminders(bot: Bot):
-    """Каждую минуту проверяем — не пора ли напомнить о паре. Без дублей."""
     global _sent_reminders
     try:
         now   = datetime.now(TZ)
         today = now.date()
-        # Сбрасываем кэш в полночь
         if now.hour == 0 and now.minute == 0:
             _sent_reminders.clear()
 
@@ -98,7 +105,6 @@ async def check_lesson_reminders(bot: Bot):
                 t = e["time_start"]
                 diff = abs((t - remind_time).total_seconds())
                 if diff <= 60:
-                    # Ключ уникальности: пользователь + время пары + минуты напоминания
                     key = (uid, t.strftime("%H:%M"), remind_mins)
                     if key in _sent_reminders:
                         continue
