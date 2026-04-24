@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from database import upsert_user, set_subscription, get_user
 from config import GROUP_NAME, STAROSTA_ID
@@ -8,12 +8,21 @@ from config import GROUP_NAME, STAROSTA_ID
 router = Router()
 
 MAIN_KB = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),      KeyboardButton(text="🌅 Завтра")],
-    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),    KeyboardButton(text="➕ Дедлайн")],
-    [KeyboardButton(text="🤖 Решить"),      KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="🗳 Голосование")],
-    [KeyboardButton(text="❓ Вопрос анон"), KeyboardButton(text="🔔 Подписка"),    KeyboardButton(text="⚙️ Настройки")],
-    [KeyboardButton(text="🌤 Погода"),      KeyboardButton(text="📝 ДЗ"),          KeyboardButton(text="🏆 Рейтинг")],
+    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
+    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
+    [KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="📝 ДЗ"),         KeyboardButton(text="🌤 Погода")],
+    [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="⚙️ Настройки"),  KeyboardButton(text="⋯ Действия")],
 ], resize_keyboard=True)
+
+ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="➕ Добавить дедлайн",  callback_data="act:add_deadline")],
+    [InlineKeyboardButton(text="🗳 Голосование",        callback_data="act:vote")],
+    [InlineKeyboardButton(text="❓ Вопрос анониму",     callback_data="act:anon")],
+    [InlineKeyboardButton(text="➕ Добавить ДЗ",        callback_data="act:add_hw")],
+    [InlineKeyboardButton(text="📜 История решений",    callback_data="act:history")],
+    [InlineKeyboardButton(text="📆 След. неделя",         callback_data="act:nextweek")],
+    [InlineKeyboardButton(text="🔔 Подписка",           callback_data="act:subscribe")],
+])
 
 
 @router.message(CommandStart())
@@ -24,17 +33,71 @@ async def cmd_start(message: Message):
         f"👋 Привет, <b>{user.first_name}</b>!\n\n"
         f"Я бот группы <b>{GROUP_NAME}</b> 🎓\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
-        "📅 <b>Расписание</b> — пары на сегодня, завтра, неделю\n"
-        "📋 <b>Дедлайны</b> — общий трекер группы\n"
-        "🤖 <b>Решалка</b> — текст или фото задачи\n"
-        "📁 <b>Файлы</b> — лекции и методички\n"
-        "🌤 <b>Погода</b> — прямо сейчас\n"
-        "📝 <b>ДЗ</b> — доска домашних заданий\n"
-        "🏆 <b>Рейтинг</b> — кто решил больше задач\n"
+        "📅 Расписание — сегодня, завтра, неделя\n"
+        "📋 Дедлайны — трекер группы\n"
+        "🤖 Решалка — текст или фото задачи\n"
+        "📁 Файлы — лекции и методички\n"
+        "📝 ДЗ — доска домашних заданий\n"
+        "🌤 Погода — прямо сейчас\n"
+        "⋯ Действия — всё остальное\n"
         "━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
         reply_markup=MAIN_KB
     )
+
+
+@router.message(F.text == "⋯ Действия")
+async def cmd_actions(message: Message):
+    await message.answer("Выбери действие:", reply_markup=ACTIONS_KB)
+
+
+@router.callback_query(F.data.startswith("act:"))
+async def handle_action(callback: CallbackQuery, state=None):
+    action = callback.data.split(":")[1]
+    await callback.message.delete()
+
+    if action == "add_deadline":
+        from aiogram.fsm.context import FSMContext
+        await callback.message.answer(
+            "📌 Название предмета/задания?\n(например: <i>Алгоритмы, лаб.1</i>)",
+            parse_mode="HTML"
+        )
+        # Триггерим через команду
+        await callback.bot.send_message(callback.from_user.id, "/add")
+
+    elif action == "vote":
+        await callback.message.answer(
+            "🗳 <b>Голосование</b>\n\n"
+            "Создать: /vote Твой вопрос\n"
+            "Например: <code>/vote Идём на пары в пятницу?</code>\n\n"
+            "Посмотреть текущее: /vote",
+            parse_mode="HTML"
+        )
+
+    elif action == "anon":
+        await callback.bot.send_message(callback.from_user.id, "/anon")
+
+    elif action == "add_hw":
+        await callback.bot.send_message(callback.from_user.id, "/addhw")
+
+    elif action == "history":
+        await callback.bot.send_message(callback.from_user.id, "/history")
+
+    elif action == "nextweek":
+        await callback.bot.send_message(callback.from_user.id, "/nextweek")
+
+    elif action == "subscribe":
+        await upsert_user(callback.from_user.id, callback.from_user.username or "", callback.from_user.full_name or "")
+        user = await get_user(callback.from_user.id)
+        is_sub = user and user.get("subscribed")
+        if is_sub:
+            await set_subscription(callback.from_user.id, 0)
+            await callback.message.answer("🔕 Отписался от уведомлений.")
+        else:
+            await set_subscription(callback.from_user.id, 1)
+            await callback.message.answer("✅ Подписан на уведомления!")
+
+    await callback.answer()
 
 
 @router.message(Command("help"))
@@ -42,27 +105,28 @@ async def cmd_help(message: Message):
     text = (
         "📖 <b>Команды:</b>\n\n"
         "/schedule — расписание сегодня\n"
-        "/tomorrow — расписание завтра\n"
-        "/week — расписание на неделю\n"
+        "/tomorrow — завтра\n"
+        "/week — неделя\n"
         "/next — следующая пара\n"
         "/deadlines — дедлайны\n"
-        "/add — добавить дедлайн\n"
         "/done ID — выполнено\n"
-        "/del ID — удалить\n"
+        "/del ID — удалить дедлайн\n"
         "/solve — решить задачу\n"
         "/history — история решений\n"
-        "/rating — рейтинг активности\n"
+        "/rating — рейтинг\n"
         "/hw — доска ДЗ\n"
         "/weather — погода\n"
-        "/files — файлы группы\n"
+        "/files — файлы\n"
+        "/vote Вопрос — голосование\n"
+        "/anon — анонимный вопрос\n"
+        "/setreminder N — напоминание за N мин\n"
         "/subscribe — уведомления вкл\n"
         "/unsubscribe — уведомления выкл\n"
-        "/setreminder N — напоминание за N минут\n"
     )
     if STAROSTA_ID:
         text += (
             "\n<b>Только для старосты:</b>\n"
-            "/announce — рассылка объявления\n"
+            "/announce — рассылка\n"
             "/addhw — добавить ДЗ\n"
             "/setzam ID — установить зама\n"
             "/syncfiles — загрузить файлы\n"
@@ -76,15 +140,7 @@ async def cmd_help(message: Message):
 async def cmd_subscribe(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
     await set_subscription(message.from_user.id, 1)
-    user = await get_user(message.from_user.id)
-    mins = user.get("reminder_minutes", 15) if user else 15
-    await message.answer(
-        f"✅ Подписан на уведомления!\n\n"
-        f"📅 Расписание каждое утро в 6:30\n"
-        f"⏰ Напоминание о парах за {mins} мин\n"
-        f"🌤 Погода утром\n\n"
-        f"Изменить напоминание: /setreminder 30"
-    )
+    await message.answer("✅ Подписан! Расписание каждое утро в 6:30 🌅")
 
 
 @router.message(Command("unsubscribe"))
@@ -115,7 +171,7 @@ async def cmd_settings(message: Message):
     mins = user.get("reminder_minutes", 15) if user else 15
     sub  = "✅ включены" if (user and user.get("subscribed")) else "❌ выключены"
     await message.answer(
-        f"⚙️ <b>Твои настройки</b>\n\n"
+        f"⚙️ <b>Настройки</b>\n\n"
         f"🔔 Уведомления: {sub}\n"
         f"⏰ Напоминание до пары: <b>{mins} мин</b>\n\n"
         f"Изменить: /setreminder 15\n"

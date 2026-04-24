@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from schedule_parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson
+from schedule_parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson, get_next_week_schedule
 from database import upsert_user
 
 router = Router()
@@ -29,12 +29,18 @@ async def cmd_week(message: Message):
     wait = await message.answer("⏳ Загружаю неделю...")
     text = await get_week_schedule()
     await wait.delete()
-    # Разбиваем на части если длинно
-    if len(text) <= 4096:
-        await message.answer(text, parse_mode="HTML")
-    else:
-        for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
-            await message.answer(chunk, parse_mode="HTML")
+    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+        await message.answer(chunk, parse_mode="HTML")
+
+
+@router.message(Command("nextweek"))
+@router.message(F.text == "📆 След. неделя")
+async def cmd_next_week(message: Message):
+    wait = await message.answer("⏳ Загружаю следующую неделю...")
+    text = await get_next_week_schedule()
+    await wait.delete()
+    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+        await message.answer(chunk, parse_mode="HTML")
 
 
 @router.message(Command("next"))
