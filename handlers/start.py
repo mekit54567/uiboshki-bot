@@ -16,12 +16,12 @@ MAIN_KB = ReplyKeyboardMarkup(keyboard=[
 
 ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="➕ Добавить дедлайн",  callback_data="act:add_deadline")],
+    [InlineKeyboardButton(text="📆 След. неделя",       callback_data="act:nextweek")],
     [InlineKeyboardButton(text="🗳 Голосование",        callback_data="act:vote")],
     [InlineKeyboardButton(text="❓ Вопрос анониму",     callback_data="act:anon")],
     [InlineKeyboardButton(text="➕ Добавить ДЗ",        callback_data="act:add_hw")],
     [InlineKeyboardButton(text="📜 История решений",    callback_data="act:history")],
-    [InlineKeyboardButton(text="📆 След. неделя",         callback_data="act:nextweek")],
-    [InlineKeyboardButton(text="🔔 Подписка",           callback_data="act:subscribe")],
+    [InlineKeyboardButton(text="🔔 Подписка вкл/выкл",  callback_data="act:subscribe")],
 ])
 
 
@@ -52,21 +52,24 @@ async def cmd_actions(message: Message):
 
 
 @router.callback_query(F.data.startswith("act:"))
-async def handle_action(callback: CallbackQuery, state=None):
+async def handle_action(callback: CallbackQuery):
     action = callback.data.split(":")[1]
     await callback.message.delete()
 
     if action == "add_deadline":
-        from aiogram.fsm.context import FSMContext
-        await callback.message.answer(
-            "📌 Название предмета/задания?\n(например: <i>Алгоритмы, лаб.1</i>)",
-            parse_mode="HTML"
-        )
-        # Триггерим через команду
         await callback.bot.send_message(callback.from_user.id, "/add")
 
+    elif action == "nextweek":
+        from schedule_parser import get_next_week_schedule
+        wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
+        text = await get_next_week_schedule()
+        await callback.bot.delete_message(callback.from_user.id, wait.message_id)
+        for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+            await callback.bot.send_message(callback.from_user.id, chunk, parse_mode="HTML")
+
     elif action == "vote":
-        await callback.message.answer(
+        await callback.bot.send_message(
+            callback.from_user.id,
             "🗳 <b>Голосование</b>\n\n"
             "Создать: /vote Твой вопрос\n"
             "Например: <code>/vote Идём на пары в пятницу?</code>\n\n"
@@ -83,19 +86,16 @@ async def handle_action(callback: CallbackQuery, state=None):
     elif action == "history":
         await callback.bot.send_message(callback.from_user.id, "/history")
 
-    elif action == "nextweek":
-        await callback.bot.send_message(callback.from_user.id, "/nextweek")
-
     elif action == "subscribe":
         await upsert_user(callback.from_user.id, callback.from_user.username or "", callback.from_user.full_name or "")
         user = await get_user(callback.from_user.id)
         is_sub = user and user.get("subscribed")
         if is_sub:
             await set_subscription(callback.from_user.id, 0)
-            await callback.message.answer("🔕 Отписался от уведомлений.")
+            await callback.bot.send_message(callback.from_user.id, "🔕 Отписался от уведомлений.")
         else:
             await set_subscription(callback.from_user.id, 1)
-            await callback.message.answer("✅ Подписан на уведомления!")
+            await callback.bot.send_message(callback.from_user.id, "✅ Подписан на уведомления!")
 
     await callback.answer()
 
@@ -107,6 +107,7 @@ async def cmd_help(message: Message):
         "/schedule — расписание сегодня\n"
         "/tomorrow — завтра\n"
         "/week — неделя\n"
+        "/nextweek — следующая неделя\n"
         "/next — следующая пара\n"
         "/deadlines — дедлайны\n"
         "/done ID — выполнено\n"
