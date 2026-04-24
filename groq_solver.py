@@ -9,8 +9,9 @@ logger = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-MODEL_TEXT  = "meta-llama/llama-4-scout-17b-16e-instruct"
-MODEL_PHOTO = "meta-llama/llama-4-scout-17b-16e-instruct"
+# Llama 4 Maverick — умнее Scout, видит фото, бесплатно
+MODEL_TEXT  = "meta-llama/llama-4-maverick-17b-128e-instruct"
+MODEL_PHOTO = "meta-llama/llama-4-maverick-17b-128e-instruct"
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -26,7 +27,6 @@ def build_system_prompt(subject: str = "") -> str:
         "Решай задания с подробным объяснением на русском языке. "
         "ВАЖНО: НЕ используй LaTeX разметку ($, \\cdot, \\div, \\frac и т.д.). "
         "Пиши математику обычным текстом: умножение через ×, деление через ÷, дроби через /. "
-        "Например: 27 × 44 ÷ 2, а не $27 \\cdot 44 \\div 2$. "
         "Структура ответа:\n"
         "1. Краткий ответ\n"
         "2. Решение шаг за шагом\n"
@@ -61,7 +61,6 @@ async def solve_text(task: str, subject: str = "") -> str:
 
 
 async def solve_with_history(history: list, subject: str = "") -> str:
-    """Решение с историей диалога."""
     messages = [{"role": "system", "content": build_system_prompt(subject)}]
     messages.extend(history)
     payload = {

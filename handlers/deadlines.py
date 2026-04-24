@@ -1,11 +1,12 @@
 import re
 from datetime import date
+from zoneinfo import ZoneInfo
 
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
@@ -13,6 +14,7 @@ from database import (
 )
 
 router = Router()
+TZ = ZoneInfo("Europe/Moscow")
 
 CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
 
@@ -31,11 +33,23 @@ class AddDeadline(StatesGroup):
     due_time    = State()
 
 
+def format_date(date_str: str) -> str:
+    """2026-04-26 → 26.04.2026"""
+    try:
+        d = date.fromisoformat(date_str)
+        return d.strftime("%d.%m.%Y")
+    except:
+        return date_str
+
+
 def progress_bar(delta: int, max_days: int = 14) -> str:
+    """Минималистичный прогресс-бар ━━━╌╌"""
     if delta <= 0:
-        return "🔴🔴🔴🔴🔴🔴🔴🔴🔴🔴"
+        return "━━━━━━━━━━ 100%"
     filled = max(0, 10 - min(int(delta / max_days * 10), 10))
-    return "▓" * filled + "░" * (10 - filled)
+    bar = "━" * filled + "╌" * (10 - filled)
+    pct = max(0, min(100, filled * 10))
+    return f"{bar} {pct}%"
 
 
 def format_deadlines(deadlines: list[dict]) -> str:
@@ -43,30 +57,28 @@ def format_deadlines(deadlines: list[dict]) -> str:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
     today = date.today()
-    lines = ["📋 <b>Дедлайны группы</b>\n━━━━━━━━━━━━━━━━━━━\n"]
+    lines = ["📋 <b>Дедлайны группы</b>\n"]
 
     for d in deadlines:
         due   = date.fromisoformat(d["due_date"])
         delta = (due - today).days
 
-        if delta < 0:   badge = "💀 просрочен"
+        if delta < 0:    badge = "💀 просрочен"
         elif delta == 0: badge = "🔴 сегодня!"
         elif delta == 1: badge = "🟠 завтра"
         elif delta <= 3: badge = f"🟡 через {delta} дн."
         else:            badge = f"🟢 через {delta} дн."
 
-        bar      = progress_bar(delta)
-        tp       = f" {d['due_time']}" if d.get("due_time") else ""
-        desc_str = f"\n   📝 {d['description']}" if d.get("description") else ""
+        tp       = f" в {d['due_time']}" if d.get("due_time") else ""
+        desc_str = f"\n   📝 {d['description']}" if d.get("description") and d["description"] not in ("", "-") else ""
 
         lines.append(
             f"[{d['id']}] <b>{d['subject']}</b>\n"
-            f"   📅 {d['due_date']}{tp} — {badge}\n"
-            f"   [{bar}]{desc_str}"
+            f"   📅 {format_date(d['due_date'])}{tp} — {badge}\n"
+            f"   {progress_bar(delta)}{desc_str}"
         )
 
-    lines.append("\n━━━━━━━━━━━━━━━━━━━")
-    lines.append("/done ID — выполнено  •  /del ID — удалить")
+    lines.append("\n/done ID — выполнено  •  /del ID — удалить")
     return "\n\n".join(lines)
 
 
@@ -80,21 +92,21 @@ async def cmd_deadlines(message: Message):
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
-    s = await get_deadline_stats()
+    s      = await get_deadline_stats()
     total  = s["total"]
     done   = s["done"]
     active = s["active"]
     over   = s["overdue"]
     pct    = int(done / total * 100) if total else 0
-    bar    = "▓" * (pct // 10) + "░" * (10 - pct // 10)
-
+    filled = pct // 10
+    bar    = "━" * filled + "╌" * (10 - filled)
     await message.answer(
         f"📊 <b>Статистика дедлайнов</b>\n\n"
         f"Всего: {total}\n"
         f"✅ Выполнено: {done}\n"
         f"🔥 Активных: {active}\n"
         f"💀 Просрочено: {over}\n\n"
-        f"Прогресс: [{bar}] {pct}%",
+        f"Прогресс: {bar} {pct}%",
         parse_mode="HTML"
     )
 
@@ -156,15 +168,14 @@ async def add_due_time(message: Message, state: FSMContext):
             await message.answer("❌ Неверный формат. Введи ЧЧ:ММ или <i>–</i>", parse_mode="HTML")
             return
         due_time = raw
-
     data = await state.get_data()
     await state.clear()
-    did = await add_deadline(data["subject"], data.get("description",""), data["due_date"], due_time, message.from_user.id)
+    did = await add_deadline(data["subject"], data.get("description", ""), data["due_date"], due_time, message.from_user.id)
     tp  = f" в {due_time}" if due_time else ""
     await message.answer(
         f"✅ <b>Дедлайн добавлен!</b> (ID: {did})\n\n"
         f"📌 {data['subject']}\n"
-        f"📅 {data['due_date']}{tp}",
+        f"📅 {format_date(data['due_date'])}{tp}",
         parse_mode="HTML", reply_markup=MAIN_KB
     )
 
