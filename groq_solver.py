@@ -9,9 +9,8 @@ logger = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-# Llama 4 Maverick — умнее Scout, видит фото, бесплатно
-MODEL_TEXT  = "meta-llama/llama-4-maverick-17b-128e-instruct"
-MODEL_PHOTO = "meta-llama/llama-4-maverick-17b-128e-instruct"
+MODEL_TEXT  = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_PHOTO = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -29,7 +28,7 @@ def build_system_prompt(subject: str = "") -> str:
         "Пиши математику обычным текстом: умножение через ×, деление через ÷, дроби через /. "
         "Структура ответа:\n"
         "1. Краткий ответ\n"
-        "2. Решение шаг за шагом\n"
+        "2. Решение\n"
         "3. Итог\n\n"
         "Используй эмодзи, будь дружелюбен и понятен. "
         "Если пользователь задаёт уточняющий вопрос — отвечай в контексте предыдущего разговора."
