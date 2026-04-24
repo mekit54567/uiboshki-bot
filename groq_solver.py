@@ -6,11 +6,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "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")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-MODEL_TEXT  = "google/gemini-3.1-flash-lite-preview"
-MODEL_PHOTO = "google/gemini-3.1-flash-lite-preview"
+# Llama 4 Scout — умнее 3.3, видит фото, бесплатно
+MODEL_TEXT  = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_PHOTO = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -31,10 +32,8 @@ def build_system_prompt(subject: str = "") -> str:
 
 def get_headers() -> dict:
     return {
-        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "Authorization": f"Bearer {GROQ_KEY}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/mekit54567/uiboshki-bot",
-        "X-Title": "UIBO-03-24 Bot",
     }
 
 
@@ -50,7 +49,7 @@ async def solve_text(task: str, subject: str = "") -> str:
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(OPENROUTER_URL, headers=get_headers(), content=body)
+        resp = await client.post(GROQ_URL, headers=get_headers(), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
@@ -71,6 +70,6 @@ async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=90) as client:
-        resp = await client.post(OPENROUTER_URL, headers=get_headers(), content=body)
+        resp = await client.post(GROQ_URL, headers=get_headers(), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
