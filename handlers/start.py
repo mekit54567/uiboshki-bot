@@ -67,7 +67,7 @@ async def cmd_help(message: Message):
 async def cmd_subscribe(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
     await set_subscription(message.from_user.id, 1)
-    await message.answer("✅ Подписан на уведомления!\n\nБуду писать каждое утро в 7:30 🌅")
+    await message.answer("✅ Подписан на уведомления!\n\nБуду писать каждое утро в 6:30 🌅")
 
 
 @router.message(Command("unsubscribe"))
