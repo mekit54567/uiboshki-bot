@@ -190,14 +190,9 @@ async def cmd_syncfiles(message: Message):
 
 @router.message(F.document)
 async def handle_sync_json(message: Message):
-    import logging
-    log = logging.getLogger(__name__)
-    log.info(f"GOT DOCUMENT: {message.document.file_name} from {message.from_user.id}")
     if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
-        await message.answer(f"debug: не староста {message.from_user.id} != {STAROSTA_ID}")
         return
     if not message.document.file_name.endswith('.json'):
-        await message.answer(f"debug: не json")
         return
 
     fname = message.document.file_name.lower()
