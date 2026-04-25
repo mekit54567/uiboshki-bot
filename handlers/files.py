@@ -213,16 +213,33 @@ async def handle_sync_json(message: Message):
             data = await bot.download_file(file.file_path)
             deadlines = json.loads(data.read().decode('utf-8'))
 
+            # Поддержка формата {"assignments": [...]} и просто [...]
+            if isinstance(deadlines, dict):
+                assignments = deadlines.get('assignments', [])
+            else:
+                assignments = deadlines
+
+            from datetime import date
+            today = date.today().isoformat()
+
             added = skipped = 0
-            for d in deadlines:
-                if not d.get('subject') or not d.get('due_date'):
+            for d in assignments:
+                if not isinstance(d, dict):
                     skipped += 1
                     continue
+                due = d.get('due_date', '')
+                if not due or due < today:
+                    skipped += 1
+                    continue
+                # Формируем название: "СР-2 (Математика)"
+                name = d.get('name') or d.get('subject') or 'Без названия'
+                course = d.get('course_name', '')
+                subject = f"{name} ({course})" if course else name
                 try:
                     await add_deadline(
-                        subject=d['subject'],
+                        subject=subject,
                         description=d.get('description', ''),
-                        due_date=d['due_date'],
+                        due_date=due,
                         due_time=d.get('due_time', ''),
                         created_by=0
                     )
