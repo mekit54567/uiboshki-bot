@@ -194,9 +194,50 @@ async def handle_sync_json(message: Message):
         return
     if not message.document.file_name.endswith('.json'):
         return
-    if 'export' not in message.document.file_name.lower() and 'files' not in message.document.file_name.lower():
+
+    fname = message.document.file_name.lower()
+    is_files_sync     = 'files' in fname or 'export' in fname
+    is_deadline_sync  = 'deadline' in fname
+
+    if not is_files_sync and not is_deadline_sync:
         return
 
+    # ── Импорт дедлайнов ──────────────────────────────────────────────────────
+    if is_deadline_sync:
+        from database import add_deadline
+        from datetime import datetime
+        wait = await message.answer("⏳ Импортирую дедлайны...")
+        try:
+            bot  = message.bot
+            file = await bot.get_file(message.document.file_id)
+            data = await bot.download_file(file.file_path)
+            deadlines = json.loads(data.read().decode('utf-8'))
+
+            added = skipped = 0
+            for d in deadlines:
+                if not d.get('subject') or not d.get('due_date'):
+                    skipped += 1
+                    continue
+                try:
+                    await add_deadline(
+                        subject=d['subject'],
+                        description=d.get('description', ''),
+                        due_date=d['due_date'],
+                        due_time=d.get('due_time', ''),
+                        created_by=0
+                    )
+                    added += 1
+                except Exception:
+                    skipped += 1
+
+            await wait.edit_text(
+                f"✅ Дедлайны импортированы!\n\nДобавлено: {added}\nПропущено: {skipped}"
+            )
+        except Exception as e:
+            await wait.edit_text(f"❌ Ошибка: {e}")
+        return
+
+    # ── Импорт файлов ─────────────────────────────────────────────────────────
     wait = await message.answer("⏳ Синхронизирую файлы...")
     try:
         bot  = message.bot
@@ -204,22 +245,26 @@ async def handle_sync_json(message: Message):
         data = await bot.download_file(file.file_path)
         files = json.loads(data.read().decode('utf-8'))
 
+        # Загружаем все существующие file_id одним запросом — правильная проверка дублей
+        all_existing = await get_files()
+        existing_ids = {x['file_id'] for x in all_existing}
+
         added = skipped = 0
         for f in files:
             if not f.get('file_id') or f.get('title') == 'Файл':
                 skipped += 1
                 continue
-            existing = await get_files(f.get('subject', ''))
-            if any(x['file_id'] == f['file_id'] for x in existing):
+            if f['file_id'] in existing_ids:
                 skipped += 1
                 continue
             await add_file(
-                title=f['title'],
+                title=f.get('title', 'Без названия'),
                 subject=f.get('subject', ''),
                 file_id=f['file_id'],
                 file_name=f.get('file_name', ''),
                 uploaded_by=0
             )
+            existing_ids.add(f['file_id'])  # чтобы не дублировать внутри одного JSON
             added += 1
 
         await wait.edit_text(
