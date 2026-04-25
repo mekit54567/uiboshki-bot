@@ -5,3 +5,4 @@ httpx==0.27.2
 icalendar==5.0.13
 recurring-ical-events==3.3.0
 python-dateutil==2.9.0
+libsql-experimental==0.0.37

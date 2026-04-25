@@ -1,6 +1,10 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    Message, ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+)
 
 from database import upsert_user, set_subscription, get_user
 from config import GROUP_NAME, STAROSTA_ID
@@ -23,6 +27,11 @@ ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="📜 История решений",    callback_data="act:history")],
     [InlineKeyboardButton(text="🔔 Подписка вкл/выкл",  callback_data="act:subscribe")],
 ])
+
+CANCEL_KB = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ Отмена")]],
+    resize_keyboard=True
+)
 
 
 @router.message(CommandStart())
@@ -52,24 +61,40 @@ async def cmd_actions(message: Message):
 
 
 @router.callback_query(F.data.startswith("act:"))
-async def handle_action(callback: CallbackQuery):
+async def handle_action(callback: CallbackQuery, state: FSMContext):
+    """
+    Ключевое отличие от старой версии:
+    - НЕ делаем send_message("/history") — это выводило команду в чат
+    - Вместо этого вызываем логику напрямую через state и callback.from_user.id
+    - callback.message.from_user — это БОТ, поэтому для прав используем callback.from_user
+    """
     action = callback.data.split(":")[1]
+    uid = callback.from_user.id
     await callback.message.delete()
 
+    # ── Добавить дедлайн ─────────────────────────────────────────────────────
     if action == "add_deadline":
-        await callback.bot.send_message(callback.from_user.id, "/add")
+        from handlers.deadlines import AddDeadline
+        await state.set_state(AddDeadline.subject)
+        await callback.bot.send_message(
+            uid,
+            "📚 Введи название предмета:",
+            reply_markup=CANCEL_KB
+        )
 
+    # ── Следующая неделя ──────────────────────────────────────────────────────
     elif action == "nextweek":
         from schedule_parser import get_next_week_schedule
-        wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
+        wait = await callback.bot.send_message(uid, "⏳ Загружаю следующую неделю...")
         text = await get_next_week_schedule()
-        await callback.bot.delete_message(callback.from_user.id, wait.message_id)
+        await callback.bot.delete_message(uid, wait.message_id)
         for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
-            await callback.bot.send_message(callback.from_user.id, chunk, parse_mode="HTML")
+            await callback.bot.send_message(uid, chunk, parse_mode="HTML")
 
+    # ── Голосование ───────────────────────────────────────────────────────────
     elif action == "vote":
         await callback.bot.send_message(
-            callback.from_user.id,
+            uid,
             "🗳 <b>Голосование</b>\n\n"
             "Создать: /vote Твой вопрос\n"
             "Например: <code>/vote Идём на пары в пятницу?</code>\n\n"
@@ -77,25 +102,57 @@ async def handle_action(callback: CallbackQuery):
             parse_mode="HTML"
         )
 
+    # ── Анонимный вопрос ──────────────────────────────────────────────────────
     elif action == "anon":
-        await callback.bot.send_message(callback.from_user.id, "/anon")
-
-    elif action == "add_hw":
-        await callback.bot.send_message(callback.from_user.id, "/addhw")
-
-    elif action == "history":
-        await callback.bot.send_message(callback.from_user.id, "/history")
-
-    elif action == "subscribe":
-        await upsert_user(callback.from_user.id, callback.from_user.username or "", callback.from_user.full_name or "")
-        user = await get_user(callback.from_user.id)
-        is_sub = user and user.get("subscribed")
-        if is_sub:
-            await set_subscription(callback.from_user.id, 0)
-            await callback.bot.send_message(callback.from_user.id, "🔕 Отписался от уведомлений.")
+        from handlers.social import AnonQuestion
+        if not STAROSTA_ID:
+            await callback.bot.send_message(uid, "⚠️ Староста не настроен.")
         else:
-            await set_subscription(callback.from_user.id, 1)
-            await callback.bot.send_message(callback.from_user.id, "✅ Подписан на уведомления!")
+            await state.set_state(AnonQuestion.waiting)
+            await callback.bot.send_message(
+                uid,
+                "🕵️ Пиши анонимный вопрос — имя не будет указано.\n"
+                "Вопрос получит только староста.\n\n"
+                "/cancel — отмена"
+            )
+
+    # ── Добавить ДЗ ───────────────────────────────────────────────────────────
+    elif action == "add_hw":
+        from handlers.announce import HWAdd, is_editor
+        if not await is_editor(uid):
+            await callback.bot.send_message(uid, "❌ Только для старосты и зама.")
+        else:
+            await state.set_state(HWAdd.subject)
+            await callback.bot.send_message(uid, "📚 Предмет?")
+
+    # ── История решений ───────────────────────────────────────────────────────
+    elif action == "history":
+        from database import get_solver_history
+        history = await get_solver_history(uid, limit=5)
+        if not history:
+            await callback.bot.send_message(uid, "📭 История пустая — ещё не решал задачи.")
+        else:
+            lines = ["📜 <b>Последние 5 задач:</b>\n"]
+            for i, h in enumerate(history, 1):
+                subj = f" [{h['subject']}]" if h.get("subject") else ""
+                task = h["task_text"][:80] + ("..." if len(h["task_text"]) > 80 else "")
+                lines.append(f"{i}.{subj} {task}\n   <i>{h['created_at'][:10]}</i>")
+            await callback.bot.send_message(uid, "\n".join(lines), parse_mode="HTML")
+
+    # ── Подписка ──────────────────────────────────────────────────────────────
+    elif action == "subscribe":
+        await upsert_user(
+            callback.from_user.id,
+            callback.from_user.username or "",
+            callback.from_user.full_name or ""
+        )
+        user = await get_user(uid)
+        if user and user.get("subscribed"):
+            await set_subscription(uid, 0)
+            await callback.bot.send_message(uid, "🔕 Отписался от уведомлений.")
+        else:
+            await set_subscription(uid, 1)
+            await callback.bot.send_message(uid, "✅ Подписан на уведомления!")
 
     await callback.answer()
 
