@@ -1,3 +1,4 @@
+import time
 import httpx
 import logging
 from datetime import date, datetime, timedelta
@@ -6,19 +7,33 @@ from zoneinfo import ZoneInfo
 from icalendar import Calendar
 import recurring_ical_events
 
-from config import ICAL_URL, TIMEZONE
+from config import ICAL_URL, TIMEZONE, SCHEDULE_CACHE_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
 
 DAY_NAMES = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
 
+# ── Простой TTL-кэш сырого ical-фида ────────────────────────────────────────────
+# Раньше fetch_schedule_raw() дёргался без кэша отовсюду: каждую минуту из
+# check_lesson_reminders (scheduler.py), плюс из каждой команды /today, /tomorrow
+# и т.д. — десятки одинаковых HTTP-запросов к стороннему серверу в минуту.
+_cache_data: bytes | None = None
+_cache_time: float = 0.0
 
-async def fetch_schedule_raw() -> bytes:
+
+async def fetch_schedule_raw(force: bool = False) -> bytes:
+    global _cache_data, _cache_time
+    now = time.monotonic()
+    if not force and _cache_data is not None and (now - _cache_time) < SCHEDULE_CACHE_TTL_SECONDS:
+        return _cache_data
+
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(ICAL_URL)
         resp.raise_for_status()
-        return resp.content
+        _cache_data = resp.content
+        _cache_time = now
+        return _cache_data
 
 
 def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:

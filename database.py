@@ -4,6 +4,9 @@ from config import DATABASE_PATH
 
 async def init_db():
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        # WAL снижает риск "database is locked" при параллельных cron-джобах
+        # (scheduler.py гоняет несколько задач) вместе с обычными хендлерами.
+        await db.execute("PRAGMA journal_mode=WAL;")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id     INTEGER PRIMARY KEY,
@@ -69,6 +72,26 @@ async def init_db():
                 user_id   INTEGER PRIMARY KEY,
                 full_name TEXT,
                 username  TEXT
+            )
+        """)
+        # ── Лента "Подслушано" ───────────────────────────────────────────────
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS feed_posts (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                text        TEXT,
+                photo_file_id TEXT,
+                author_id   INTEGER NOT NULL,
+                message_id  INTEGER,
+                created_at  TEXT DEFAULT (datetime('now')),
+                deleted     INTEGER DEFAULT 0
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS feed_reactions (
+                post_id  INTEGER,
+                user_id  INTEGER,
+                emoji    TEXT,
+                PRIMARY KEY (post_id, user_id)
             )
         """)
         await db.commit()
@@ -244,3 +267,56 @@ async def close_vote(vote_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("UPDATE votes SET active=0 WHERE id=?", (vote_id,))
         await db.commit()
+
+
+# ── Лента "Подслушано" ────────────────────────────────────────────────────────
+
+async def get_last_feed_post_time(author_id: int) -> str | None:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT created_at FROM feed_posts
+            WHERE author_id=? AND deleted=0
+            ORDER BY created_at DESC LIMIT 1
+        """, (author_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def add_feed_post(text: str, photo_file_id: str, author_id: int) -> int:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO feed_posts (text, photo_file_id, author_id) VALUES (?, ?, ?)
+        """, (text, photo_file_id, author_id))
+        await db.commit()
+        return cursor.lastrowid
+
+async def set_feed_post_message_id(post_id: int, message_id: int):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE feed_posts SET message_id=? WHERE id=?", (message_id, post_id))
+        await db.commit()
+
+async def get_feed_post(post_id: int) -> dict | None:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM feed_posts WHERE id=?", (post_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+async def delete_feed_post(post_id: int):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE feed_posts SET deleted=1 WHERE id=?", (post_id,))
+        await db.commit()
+
+async def set_feed_reaction(post_id: int, user_id: int, emoji: str):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO feed_reactions (post_id, user_id, emoji) VALUES (?, ?, ?)
+        """, (post_id, user_id, emoji))
+        await db.commit()
+
+async def get_feed_reaction_counts(post_id: int) -> dict:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT emoji, COUNT(*) as cnt FROM feed_reactions WHERE post_id=? GROUP BY emoji
+        """, (post_id,))
+        rows = await cursor.fetchall()
+        return {r[0]: r[1] for r in rows}

@@ -7,33 +7,16 @@ from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
 from groq_solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from database import upsert_user, add_solver_history, get_solver_history
+from keyboards import MAIN_KB, STOP_DIALOG_KB, MENU_BUTTON_TEXTS
+from intent_router import classify_intent, dispatch_intent
 
 logger = logging.getLogger(__name__)
 router = Router()
-
-BUTTON_TEXTS = {
-    "📅 Сегодня","📆 Неделя","🌅 Завтра","⏭ Следующая",
-    "📋 Дедлайны","➕ Дедлайн","🤖 Решить","📁 Файлы",
-    "🗳 Голосование","❓ Вопрос анон","🔔 Подписка","⚙️ Настройки",
-    "❌ Отмена","🌤 Погода",
-}
 
 SUBJECT_KB = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text=s)] for s in SUBJECTS],
     resize_keyboard=True, one_time_keyboard=True
 )
-
-STOP_KB = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="🛑 Завершить диалог")]],
-    resize_keyboard=True
-)
-
-MAIN_KB = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
-    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
-    [KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="📝 ДЗ"),         KeyboardButton(text="🌤 Погода")],
-    [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="⚙️ Настройки"),  KeyboardButton(text="⋯ Действия")],
-], resize_keyboard=True)
 
 
 class SolverState(StatesGroup):
@@ -52,14 +35,17 @@ async def cmd_solve(message: Message, state: FSMContext):
 
 @router.message(SolverState.choose_subject, F.text)
 async def choose_subject(message: Message, state: FSMContext):
-    if message.text in BUTTON_TEXTS:
+    # Защита на случай, если MenuInterruptMiddleware почему-то не сработал
+    # (например, при апдейте aiogram) — не даём тексту кнопки меню стать
+    # "названием предмета".
+    if message.text in MENU_BUTTON_TEXTS:
         await state.clear()
         return
     await state.update_data(subject=message.text.strip(), history=[], msg_ids=[])
     await state.set_state(SolverState.waiting_task)
     msg = await message.answer(
         f"✅ Предмет: <b>{message.text}</b>\n\nПришли задачу — текстом или фото 📸",
-        parse_mode="HTML", reply_markup=STOP_KB
+        parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
     await state.update_data(msg_ids=[msg.message_id])
 
@@ -215,10 +201,20 @@ async def cmd_history(message: Message):
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_plain_text(message: Message, state: FSMContext):
-    if message.text in BUTTON_TEXTS:
+    if message.text in MENU_BUTTON_TEXTS:
         return
     if await state.get_state() is not None:
         return
+
+    # Фаза 1: сначала пробуем понять намерение без команд/кнопок
+    # ("когда следующая пара", "покажи дедлайны" и т.д.). Если не удалось —
+    # при достаточной длине считаем это учебной задачей для решалки, как раньше.
+    intent = await classify_intent(message.text)
+    if intent != "none":
+        handled = await dispatch_intent(intent, message)
+        if handled:
+            return
+
     if len(message.text) < 20:
         return
     wait = await message.answer("🤖 Похоже задание — решаю...")

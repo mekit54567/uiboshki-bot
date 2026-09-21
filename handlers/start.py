@@ -1,28 +1,12 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, CallbackQuery
 
 from database import upsert_user, set_subscription, get_user
 from config import GROUP_NAME, STAROSTA_ID
+from keyboards import MAIN_KB, ACTIONS_KB
 
 router = Router()
-
-MAIN_KB = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
-    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
-    [KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="📝 ДЗ"),         KeyboardButton(text="🌤 Погода")],
-    [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="⚙️ Настройки"),  KeyboardButton(text="⋯ Действия")],
-], resize_keyboard=True)
-
-ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="➕ Добавить дедлайн",  callback_data="act:add_deadline")],
-    [InlineKeyboardButton(text="📆 След. неделя",       callback_data="act:nextweek")],
-    [InlineKeyboardButton(text="🗳 Голосование",        callback_data="act:vote")],
-    [InlineKeyboardButton(text="❓ Вопрос анониму",     callback_data="act:anon")],
-    [InlineKeyboardButton(text="➕ Добавить ДЗ",        callback_data="act:add_hw")],
-    [InlineKeyboardButton(text="📜 История решений",    callback_data="act:history")],
-    [InlineKeyboardButton(text="🔔 Подписка вкл/выкл",  callback_data="act:subscribe")],
-])
 
 
 @router.message(CommandStart())
@@ -39,8 +23,12 @@ async def cmd_start(message: Message):
         "📁 Файлы — лекции и методички\n"
         "📝 ДЗ — доска домашних заданий\n"
         "🌤 Погода — прямо сейчас\n"
+        "🗣 Подслушано — анонимная лента группы\n"
         "⋯ Действия — всё остальное\n"
-        "━━━━━━━━━━━━━━━━━━━",
+        "━━━━━━━━━━━━━━━━━━━\n\n"
+        "Кстати, можно просто написать вопрос своими словами — "
+        "например «когда следующая пара» или «какие дедлайны на неделе» — "
+        "бот попробует понять и ответить без команд.",
         parse_mode="HTML",
         reply_markup=MAIN_KB
     )
@@ -76,6 +64,9 @@ async def handle_action(callback: CallbackQuery):
             "Посмотреть текущее: /vote",
             parse_mode="HTML"
         )
+
+    elif action == "feed":
+        await callback.bot.send_message(callback.from_user.id, "/feed")
 
     elif action == "anon":
         await callback.bot.send_message(callback.from_user.id, "/anon")
@@ -119,10 +110,13 @@ async def cmd_help(message: Message):
         "/weather — погода\n"
         "/files — файлы\n"
         "/vote Вопрос — голосование\n"
-        "/anon — анонимный вопрос\n"
+        "/feed — анонимный пост в общую ленту группы\n"
+        "/anon — анонимный вопрос лично старосте\n"
         "/setreminder N — напоминание за N мин\n"
         "/subscribe — уведомления вкл\n"
-        "/unsubscribe — уведомления выкл\n"
+        "/unsubscribe — уведомления выкл\n\n"
+        "💬 Можно писать и обычным текстом без команд — бот попробует понять,\n"
+        "что ты хочешь (расписание, дедлайны, файлы и т.д.)."
     )
     if STAROSTA_ID:
         text += (
@@ -132,6 +126,7 @@ async def cmd_help(message: Message):
             "/setzam ID — установить зама\n"
             "/syncfiles — загрузить файлы\n"
             "/importdeadlines — импорт дедлайнов\n"
+            "/delpost ID — удалить пост из ленты\n"
         )
     await message.answer(text, parse_mode="HTML")
 

@@ -7,25 +7,17 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
     delete_deadline, upsert_user, get_deadline_stats,
 )
 from config import STAROSTA_ID
+from keyboards import MAIN_KB, CANCEL_KB
 
 router = Router()
 TZ = ZoneInfo("Europe/Moscow")
-
-CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
-
-MAIN_KB = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
-    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
-    [KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="📝 ДЗ"),         KeyboardButton(text="🌤 Погода")],
-    [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="⚙️ Настройки"),  KeyboardButton(text="⋯ Действия")],
-], resize_keyboard=True)
 
 
 class AddDeadline(StatesGroup):
@@ -222,4 +214,3 @@ async def cmd_import_deadlines(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer("📤 Пришли файл <b>deadlines.json</b>", parse_mode="HTML")
-

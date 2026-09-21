@@ -1,22 +1,15 @@
 import json
 from aiogram import Router, F, Bot
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from database import add_file, get_files, delete_file
 from config import STAROSTA_ID
+from keyboards import MAIN_KB, CANCEL_KB
 
 router = Router()
-
-CANCEL_KB = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="❌ Отмена")]], resize_keyboard=True)
-MAIN_KB = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
-    [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
-    [KeyboardButton(text="📁 Файлы"),       KeyboardButton(text="📝 ДЗ"),         KeyboardButton(text="🌤 Погода")],
-    [KeyboardButton(text="🏆 Рейтинг"),     KeyboardButton(text="⚙️ Настройки"),  KeyboardButton(text="⋯ Действия")],
-], resize_keyboard=True)
 
 
 class UploadFile(StatesGroup):
@@ -188,7 +181,13 @@ async def cmd_syncfiles(message: Message):
     )
 
 
-@router.message(F.document)
+# ВАЖНО: StateFilter(None) — без этого фильтра этот хендлер перехватывал ЛЮБОЙ
+# документ в ЛЮБОМ активном FSM-состоянии (включая HWAdd.content из announce.py,
+# т.к. files_router регистрируется раньше announce_router в register_handlers),
+# и /addhw с прикреплённым файлом молча ломался: документ сюда прилетал, имя не
+# оканчивалось на .json, хендлер тихо выходил — а hw_content_input так и не
+# вызывался. Теперь этот хендлер реагирует только вне активных диалогов.
+@router.message(F.document, StateFilter(None))
 async def handle_sync_json(message: Message):
     if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
         return
@@ -205,7 +204,6 @@ async def handle_sync_json(message: Message):
     # ── Импорт дедлайнов ──────────────────────────────────────────────────────
     if is_deadline_sync:
         from database import add_deadline
-        from datetime import datetime
         wait = await message.answer("⏳ Импортирую дедлайны...")
         try:
             bot  = message.bot
