@@ -91,5 +91,11 @@ async def extract_and_save(bot, db_file_id: int, tg_file_id: str, file_name: str
         return False
 
     from database import save_file_text
-    await save_file_text(db_file_id, text)
+    try:
+        await save_file_text(db_file_id, text)
+    except Exception as e:
+        # Тот же контракт, что и выше: сбой не должен ронять аплоад/синк
+        # (в /syncfiles исключение отсюда обрывало импорт всех оставшихся файлов).
+        logger.warning(f"Не смог сохранить текст файла (file_id={db_file_id}): {e}")
+        return False
     return True

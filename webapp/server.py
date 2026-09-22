@@ -61,7 +61,10 @@ async def get_current_user(x_telegram_init_data: str = Header(default="")) -> di
         raise HTTPException(status_code=401, detail="нет данных пользователя в initData")
 
     from database import upsert_user
-    await upsert_user(user["id"], user.get("username", ""), user.get("first_name", ""))
+    # full_name — как у бота (aiogram User.full_name = "first last"), иначе каждый
+    # заход в WebApp перетирал в users фамилию, записанную ботом.
+    full_name = " ".join(p for p in (user.get("first_name", ""), user.get("last_name", "")) if p)
+    await upsert_user(user["id"], user.get("username", ""), full_name)
     return user
 
 

@@ -126,7 +126,8 @@ async def add_subject(message: Message, state: FSMContext):
 @router.message(AddDeadline.description)
 async def add_description(message: Message, state: FSMContext):
     desc = message.text.strip()
-    await state.update_data(description="" if desc == "–" else desc)
+    # В подсказке длинное тире "–", но с клавиатуры обычно вводят дефис "-" — принимаем оба.
+    await state.update_data(description="" if desc in ("–", "-") else desc)
     await state.set_state(AddDeadline.due_date)
     await message.answer("📅 Дата? Формат: <b>ДД.ММ</b> или <b>ДД.ММ.ГГГГ</b>", parse_mode="HTML")
 
@@ -154,7 +155,7 @@ async def add_due_date(message: Message, state: FSMContext):
 async def add_due_time(message: Message, state: FSMContext):
     raw = message.text.strip()
     due_time = None
-    if raw != "–":
+    if raw not in ("–", "-"):  # дефис с клавиатуры тоже = "пропустить"
         match = re.match(r"^(\d{1,2}):(\d{2})$", raw)
         if not match:
             await message.answer("❌ Неверный формат. Введи ЧЧ:ММ или <i>–</i>", parse_mode="HTML")

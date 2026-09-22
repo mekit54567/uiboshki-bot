@@ -172,7 +172,7 @@ async def receive_subject(message: Message, state: FSMContext):
         await message.answer("Отменено.", reply_markup=MAIN_KB)
         return
     data    = await state.get_data()
-    subject = "" if message.text.strip() == "–" else message.text.strip()
+    subject = "" if message.text.strip() in ("–", "-") else message.text.strip()
     await state.clear()
     fid = await add_file(data["title"], subject, data["file_id"], data["file_name"], message.from_user.id)
 

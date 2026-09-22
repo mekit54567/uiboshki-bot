@@ -406,7 +406,9 @@ async def search_files(query: str, limit: int = 20) -> list[dict]:
 # это либо личные настройки, либо архив, который не привязан к семестру.
 async def clear_semester_data():
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        for table in ("deadlines", "homework", "files", "vote_answers", "votes"):
+        # file_text — вместе с files: иначе извлечённый текст всех лекций
+        # семестра навсегда остаётся в базе сиротами (см. delete_file).
+        for table in ("deadlines", "homework", "files", "file_text", "vote_answers", "votes"):
             try:
                 await db.execute(f"DELETE FROM {table}")
             except Exception:
