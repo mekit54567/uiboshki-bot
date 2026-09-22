@@ -1,3 +1,4 @@
+import re
 import time
 import httpx
 import logging
@@ -36,6 +37,18 @@ async def fetch_schedule_raw(force: bool = False) -> bytes:
         return _cache_data
 
 
+TEACHER_RE = re.compile(r"Преподаватель:\s*([^\n\\]+)")
+
+
+def _extract_teacher(component) -> str:
+    """Имя преподавателя зашито в DESCRIPTION у пар типа ЛК/ПР
+    ("Преподаватель: Фамилия Имя Отчество\n..."). У "СР"/доп. занятий
+    его может не быть вовсе — тогда просто пустая строка."""
+    desc = str(component.get("DESCRIPTION", ""))
+    m = TEACHER_RE.search(desc)
+    return m.group(1).strip() if m else ""
+
+
 def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
     cal = Calendar.from_ical(ical_data)
     events_raw = recurring_ical_events.of(cal).at(target)
@@ -47,6 +60,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
             continue
 
         location = str(component.get("LOCATION", ""))
+        teacher  = _extract_teacher(component)
         dtstart  = component.get("DTSTART")
         dtend    = component.get("DTEND")
 
@@ -72,6 +86,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
             "time":       time_str,
             "time_start": time_start,
             "location":   location,
+            "teacher":    teacher,
         })
 
     events.sort(key=lambda e: e["time"] or "99:99")
@@ -208,3 +223,57 @@ async def get_first_lesson_today() -> dict | None:
         return None
     except Exception:
         return None
+
+
+# ── Поиск по преподавателю / аудитории (в рамках расписания СВОЕЙ группы) ──────
+# У университета нет публичного API для поиска препода/аудитории по имени
+# (см. PLAN.md, Фаза 4) — единственный документированный способ получить чужой
+# ical по /schedule/api/ical/{type}/{id} требует УЖЕ знать числовой id, а найти
+# его иначе как вручную через DevTools на сайте нельзя. Зато в календаре своей
+# группы у каждой пары ЛК/ПР в DESCRIPTION уже зашито полное имя преподавателя,
+# а в LOCATION — аудитория. Ищем прямо по ним, без похода во внешние источники.
+
+async def search_by_teacher(query: str, days_ahead: int = 14) -> list[dict]:
+    query = query.strip().lower()
+    if not query:
+        return []
+    raw   = await fetch_schedule_raw()
+    today = datetime.now(TZ).date()
+    results = []
+    for i in range(days_ahead):
+        d = today + timedelta(days=i)
+        for e in parse_events_for_date(raw, d):
+            if query in e.get("teacher", "").lower():
+                results.append({**e, "date": d})
+    return results
+
+
+async def search_by_room(query: str, days_ahead: int = 14) -> list[dict]:
+    query = query.strip().lower()
+    if not query:
+        return []
+    raw   = await fetch_schedule_raw()
+    today = datetime.now(TZ).date()
+    results = []
+    for i in range(days_ahead):
+        d = today + timedelta(days=i)
+        for e in parse_events_for_date(raw, d):
+            if query in e.get("location", "").lower():
+                results.append({**e, "date": d})
+    return results
+
+
+def format_search_results(results: list[dict], empty_text: str) -> str:
+    if not results:
+        return empty_text
+    lines = []
+    last_date = None
+    for e in results[:15]:
+        if e["date"] != last_date:
+            lines.append(f"\n📅 <b>{DAY_NAMES[e['date'].weekday()]}, {e['date'].strftime('%d.%m')}</b>")
+            last_date = e["date"]
+        teacher_part = f" · {e['teacher']}" if e.get("teacher") else ""
+        lines.append(f"⏰ {e['time']} — {e['summary']}{teacher_part}\n📍 {e['location'] or '—'}")
+    if len(results) > 15:
+        lines.append(f"\n… и ещё {len(results) - 15}")
+    return "\n".join(lines).strip()

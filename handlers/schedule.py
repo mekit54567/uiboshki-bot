@@ -6,7 +6,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from schedule_parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson, get_next_week_schedule
+from schedule_parser import (
+    get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson,
+    get_next_week_schedule, search_by_teacher, search_by_room, format_search_results,
+)
 from database import upsert_user, add_lesson_note, get_lesson_notes
 from keyboards import CANCEL_KB, MAIN_KB
 
@@ -82,6 +85,39 @@ async def cmd_next_week(message: Message):
 async def cmd_next(message: Message):
     wait = await message.answer("⏳ Смотрю...")
     await wait.edit_text(await get_next_lesson(), parse_mode="HTML")
+
+
+# ── Поиск по преподавателю / аудитории ──────────────────────────────────────
+# Ищем в рамках расписания своей группы (см. schedule_parser.py — почему не
+# сделан поиск по всему университету). На ближайшие 2 недели, чтобы поймать
+# и пары через неделю (расписание в основном по INTERVAL=2).
+
+@router.message(Command("teacher"))
+async def cmd_teacher(message: Message):
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("👤 Использование: <code>/teacher Дзюрдзя</code>", parse_mode="HTML")
+        return
+    query = parts[1].strip()
+    wait = await message.answer("⏳ Ищу...")
+    results = await search_by_teacher(query)
+    text = format_search_results(results, f"👤 Пар с «{query}» в ближайшие 2 недели не нашёл.")
+    header = f"👤 <b>{query}</b>\n" if results else ""
+    await wait.edit_text(header + text, parse_mode="HTML")
+
+
+@router.message(Command("room"))
+async def cmd_room(message: Message):
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("🚪 Использование: <code>/room А-18</code>", parse_mode="HTML")
+        return
+    query = parts[1].strip()
+    wait = await message.answer("⏳ Ищу...")
+    results = await search_by_room(query)
+    text = format_search_results(results, f"🚪 Пар в «{query}» в ближайшие 2 недели не нашёл.")
+    header = f"🚪 <b>{query}</b>\n" if results else ""
+    await wait.edit_text(header + text, parse_mode="HTML")
 
 
 # ── Заметки на пару ─────────────────────────────────────────────────────────
