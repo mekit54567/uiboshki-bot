@@ -119,6 +119,45 @@ async def init_db():
                 PRIMARY KEY (post_id, user_id)
             )
         """)
+
+        # ── Полнотекстовый поиск по файлам (Фаза 6) ─────────────────────────
+        # external-content FTS5 таблица над files: не дублирует данные, триггеры
+        # держат индекс в синхроне при add_file/delete_file. Полезно, когда файлов
+        # много и пролистывать по предметам неудобно — ищем по названию/предмету/
+        # имени файла одним запросом.
+        try:
+            await db.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
+                    title, subject, file_name, content='files', content_rowid='id'
+                )
+            """)
+            await db.execute("""
+                CREATE TRIGGER IF NOT EXISTS files_ai AFTER INSERT ON files BEGIN
+                    INSERT INTO files_fts(rowid, title, subject, file_name)
+                    VALUES (new.id, new.title, new.subject, new.file_name);
+                END
+            """)
+            await db.execute("""
+                CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
+                    INSERT INTO files_fts(files_fts, rowid, title, subject, file_name)
+                    VALUES ('delete', old.id, old.title, old.subject, old.file_name);
+                END
+            """)
+            await db.execute("""
+                CREATE TRIGGER IF NOT EXISTS files_au AFTER UPDATE ON files BEGIN
+                    INSERT INTO files_fts(files_fts, rowid, title, subject, file_name)
+                    VALUES ('delete', old.id, old.title, old.subject, old.file_name);
+                    INSERT INTO files_fts(rowid, title, subject, file_name)
+                    VALUES (new.id, new.title, new.subject, new.file_name);
+                END
+            """)
+            # На случай, если files_fts только что создалась, а files уже не пустая
+            # (апгрейд существующей базы) — досыпаем индекс задним числом.
+            await db.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"FTS5 недоступен, поиск по файлам работать не будет: {e}")
+
         await db.commit()
 
 
@@ -261,6 +300,32 @@ async def delete_file(fid: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM files WHERE id=?", (fid,))
         await db.commit()
+
+async def search_files(query: str, limit: int = 20) -> list[dict]:
+    """Полнотекстовый поиск по title/subject/file_name через FTS5.
+    Каждое слово запроса — отдельная кавычка-фраза (без спецсимволов
+    FTS5-синтаксиса), между словами — неявный AND. Пустой/бессмысленный
+    запрос и отсутствие таблицы (FTS5 недоступен) — просто пустой список,
+    а не ошибка."""
+    tokens = [t.replace('"', '') for t in query.strip().split() if t.strip('"')]
+    if not tokens:
+        return []
+    fts_query = " ".join(f'"{t}"' for t in tokens)
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT files.* FROM files_fts
+                JOIN files ON files.id = files_fts.rowid
+                WHERE files_fts MATCH ?
+                ORDER BY bm25(files_fts)
+                LIMIT ?
+            """, (fts_query, limit))
+            return [dict(r) for r in await cursor.fetchall()]
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"search_files failed: {e}")
+        return []
 
 
 # ── Votes ─────────────────────────────────────────────────────────────────────

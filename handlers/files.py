@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from database import add_file, get_files, delete_file
+from database import add_file, get_files, delete_file, search_files
 from config import STAROSTA_ID
 from keyboards import MAIN_KB, CANCEL_KB
 
@@ -48,6 +48,29 @@ async def cmd_files(message: Message):
         f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
         parse_mode="HTML",
         reply_markup=subjects_keyboard(subjects)
+    )
+
+
+@router.message(Command("search"))
+async def cmd_search(message: Message):
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer(
+            "🔎 Использование: <code>/search матстат лекция</code>\n"
+            "Ищет по названию, предмету и имени файла.",
+            parse_mode="HTML"
+        )
+        return
+
+    results = await search_files(parts[1])
+    if not results:
+        await message.answer(f"🔎 По запросу «{parts[1]}» ничего не найдено.")
+        return
+
+    await message.answer(
+        f"🔎 <b>Нашёл {len(results)}:</b>",
+        parse_mode="HTML",
+        reply_markup=files_keyboard(results)
     )
 
 
