@@ -27,11 +27,14 @@ _ERROR_ALERT_COOLDOWN_SECONDS = 5 * 60
 async def notify_starosta_on_error(event: ErrorEvent, bot: Bot):
     global _LAST_ERROR_ALERT_AT
     logger.exception(f"Необработанная ошибка в хендлере: {event.exception}")
+    logger.warning(f"DEBUG notify_starosta_on_error: STAROSTA_ID={STAROSTA_ID!r} _LAST_ERROR_ALERT_AT={_LAST_ERROR_ALERT_AT!r}")
 
     if not STAROSTA_ID:
+        logger.warning("DEBUG: возврат по STAROSTA_ID")
         return
     now = time.monotonic()
     if now - _LAST_ERROR_ALERT_AT < _ERROR_ALERT_COOLDOWN_SECONDS:
+        logger.warning(f"DEBUG: возврат по троттлингу, now={now!r}")
         return
     _LAST_ERROR_ALERT_AT = now
     try:
