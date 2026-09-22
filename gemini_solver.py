@@ -63,7 +63,11 @@ async def solve_with_lecture_context(task: str, subject: str, lecture_context: s
     url = GEMINI_URL_TEMPLATE.format(model=GEMINI_MODEL)
 
     async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(url, params={"key": GEMINI_API_KEY}, json=payload)
+        # Ключ — в заголовке, а НЕ в ?key= query-параметре: при ошибке HTTP
+        # (429 квота, 400, 404 модели) str(httpx.HTTPStatusError) содержит полный
+        # URL запроса, а handlers/solver.py показывает текст исключения
+        # пользователю в чате ("❌ Ошибка: ...") — ключ утекал бы в Telegram.
+        resp = await client.post(url, headers={"x-goog-api-key": GEMINI_API_KEY}, json=payload)
         resp.raise_for_status()
         data = resp.json()
 
