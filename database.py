@@ -80,6 +80,25 @@ async def init_db():
                 username  TEXT
             )
         """)
+        # ── Диффы расписания ─────────────────────────────────────────────────
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS schedule_snapshots (
+                date        TEXT PRIMARY KEY,
+                events_json TEXT NOT NULL,
+                updated_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # ── Заметки на конкретный день/пару ──────────────────────────────────
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_notes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL,
+                subject     TEXT,
+                text        TEXT NOT NULL,
+                created_by  INTEGER,
+                created_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
         # ── Лента "Подслушано" ───────────────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS feed_posts (
@@ -333,3 +352,51 @@ async def get_feed_reaction_counts(post_id: int) -> dict:
         """, (post_id,))
         rows = await cursor.fetchall()
         return {r[0]: r[1] for r in rows}
+
+
+# ── Диффы расписания ─────────────────────────────────────────────────────────
+
+async def get_schedule_snapshot(date_str: str) -> list | None:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT events_json FROM schedule_snapshots WHERE date=?", (date_str,))
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        import json
+        return json.loads(row[0])
+
+async def save_schedule_snapshot(date_str: str, events: list):
+    import json
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO schedule_snapshots (date, events_json, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(date) DO UPDATE SET
+                events_json = excluded.events_json,
+                updated_at  = excluded.updated_at
+        """, (date_str, json.dumps(events, ensure_ascii=False)))
+        await db.commit()
+
+
+# ── Заметки на день/пару ─────────────────────────────────────────────────────
+
+async def add_lesson_note(date_str: str, subject: str, text: str, created_by: int) -> int:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO lesson_notes (date, subject, text, created_by) VALUES (?, ?, ?, ?)
+        """, (date_str, subject, text, created_by))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_lesson_notes(date_str: str) -> list[dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM lesson_notes WHERE date=? ORDER BY created_at
+        """, (date_str,))
+        return [dict(r) for r in await cursor.fetchall()]
+
+async def delete_lesson_note(note_id: int):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM lesson_notes WHERE id=?", (note_id,))
+        await db.commit()

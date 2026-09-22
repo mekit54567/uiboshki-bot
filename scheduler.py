@@ -7,7 +7,7 @@ from aiogram import Bot
 
 from config import (
     TIMEZONE, SCHEDULE_HOUR, SCHEDULE_MINUTE, DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE,
-    SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID,
+    SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID, SCHEDULE_DIFF_CHECK_MINUTES,
 )
 from database import get_all_subscribed_users, get_deadlines_soon, get_user
 from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date
@@ -166,9 +166,12 @@ async def sync_sdo_deadlines(bot: Bot):
 
 
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
+    from schedule_diff import check_schedule_changes
+
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(send_morning_schedule,   "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
     scheduler.add_job(send_deadline_reminders, "cron", hour=DEADLINE_REMINDER_HOUR, minute=DEADLINE_REMINDER_MINUTE, args=[bot])
     scheduler.add_job(check_lesson_reminders,  "cron", minute="*",                  args=[bot])
     scheduler.add_job(sync_sdo_deadlines,      "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot])
+    scheduler.add_job(check_schedule_changes,  "interval", minutes=SCHEDULE_DIFF_CHECK_MINUTES, args=[bot])
     return scheduler
