@@ -45,12 +45,18 @@ if not GROUP_CHAT_ID:
 # на полный текст лекций выбранного предмета (см. file_text.py,
 # database.get_subject_lecture_context). Нужен именно Gemini, а не Groq/DeepSeek,
 # из-за размера контекста — целый предмет (8-16 лекций) легко превышает
-# 100-300К токенов, это не лезет в бесплатные лимиты Groq/DeepSeek, а у Gemini
-# free tier — контекст 1M токенов. GEMINI_MODEL — не факт, что актуален на
-# момент деплоя (Google меняет линейку моделей чаще, чем хотелось бы) — проверь
-# в Google AI Studio, если решалка по лекциям отвечает 404 на имя модели.
+# 100-300К токенов, это не лезет в бесплатные лимиты Groq/DeepSeek. У Gemini
+# контекстное окно 1M токенов, но реальный free/AI-Studio тир (проверено на
+# аккаунте владельца, сентябрь 2026) даёт всего 250К токенов/минуту на запрос —
+# это тоже жёсткий потолок на размер контекста одного запроса, не только скорость
+# (см. gemini_solver._fit_context_budget — обрезка по целым лекциям, если предмет
+# не влезает). GEMINI_MODEL — gemini-3.1-flash-lite выбран не как "самая мощная",
+# а как модель с лучшим дневным лимитом на этом тире (500 RPD против 20 RPD у
+# gemini-3-flash/2.5-flash/3.5-flash — TPM у всех одинаковый, 250К). Google меняет
+# линейку моделей быстро — если решалка по лекциям отвечает 404 на имя модели,
+# смотри актуальный список в Google AI Studio → ключ API → "Copy cURL quickstart".
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # ─── WebApp (Mini App) ─────────────────────────────────────────────────────────
 # HTTPS-адрес, на котором крутится webapp/server.py (см. webapp/README.md).

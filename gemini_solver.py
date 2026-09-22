@@ -39,6 +39,40 @@ SYSTEM_INSTRUCTION = (
 )
 
 
+# Реальный лимит free/AI-Studio тира — 250К токенов/минуту НА ЗАПРОС (не только
+# суммарно), проверено на живом аккаунте (см. config.py). Символ/токен для
+# русского текста на практике оказался ближе к ~3.7-4 (проверено на реальной
+# лекции МИРЭА: 55.7К символов = 14734 токена), но берём консервативно ~3.2,
+# чтобы с запасом остался бюджет под системный промпт, текст задания и ответ —
+# не выжимаем лимит "впритык". Если контекст предмета всё равно не влезает
+# (16 лекций и больше) — режем по ЦЕЛЫМ лекциям, а не обрубаем текст посередине,
+# и явно предупреждаем об этом в ответе (см. solve_with_lecture_context).
+MAX_CONTEXT_CHARS = 700_000  # ~220К токенов при 3.2 симв/токен
+
+
+def _fit_context_budget(context: str, max_chars: int = MAX_CONTEXT_CHARS) -> tuple[str, bool]:
+    """Возвращает (обрезанный_контекст, был_ли_обрезан). Режет по разделителям
+    "=== Название лекции ===", которые ставит database.get_subject_lecture_context —
+    то есть теряются только САМЫЕ ПОСЛЕДНИЕ лекции целиком, а не хвост текста
+    посреди какой-то одной лекции."""
+    if len(context) <= max_chars:
+        return context, False
+    blocks = context.split("\n\n=== ")
+    fitted = blocks[0]
+    truncated = False
+    if len(fitted) > max_chars:
+        # Даже первая лекция целиком не влезает — резать по лекциям нечего,
+        # обрезаем её саму, иначе запрос уйдёт больше лимита и упадёт.
+        return fitted[:max_chars], True
+    for block in blocks[1:]:
+        candidate = fitted + "\n\n=== " + block
+        if len(candidate) > max_chars:
+            truncated = True
+            break
+        fitted = candidate
+    return fitted, truncated
+
+
 async def solve_with_lecture_context(task: str, subject: str, lecture_context: str) -> str:
     """Кидает исключение (RuntimeError/ValueError/httpx.HTTPStatusError), если
     что-то пошло не так — в отличие от groq_solver.solve_text тут нет фолбэка
@@ -50,9 +84,11 @@ async def solve_with_lecture_context(task: str, subject: str, lecture_context: s
     if not lecture_context.strip():
         raise ValueError("По этому предмету нет ни одной лекции с извлечённым текстом")
 
+    fitted_context, truncated = _fit_context_budget(lecture_context)
+
     user_text = (
         f"Предмет: {subject}\n\n"
-        f"=== Материалы лекций предмета ===\n{lecture_context}\n\n"
+        f"=== Материалы лекций предмета ===\n{fitted_context}\n\n"
         f"=== Задание (практика) ===\n{task}"
     )
     payload = {
@@ -82,4 +118,11 @@ async def solve_with_lecture_context(task: str, subject: str, lecture_context: s
     if not text.strip():
         finish_reason = candidate.get("finishReason", "unknown")
         raise RuntimeError(f"Gemini вернула пустой ответ (finishReason={finish_reason})")
+
+    if truncated:
+        text = (
+            "⚠️ Лекций по предмету оказалось больше, чем влезает в один запрос "
+            "(лимит бесплатного тира Gemini) — часть последних лекций не вошла "
+            "в контекст, ответ основан не на всех материалах предмета.\n\n" + text
+        )
     return text
