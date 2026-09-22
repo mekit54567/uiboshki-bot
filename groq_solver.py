@@ -136,6 +136,34 @@ async def chat_with_reasoning(history: list, subject: str = "") -> dict:
         }
 
 
+async def extract_text_from_image(image_bytes: bytes, mime: str = "image/jpeg") -> str:
+    """OCR фото для дедлайнов: только достаёт текст с картинки, ничего не решает
+    и не комментирует (в отличие от solve_image) — используется, когда к
+    дедлайну прикладывают фото задания вместо того, чтобы печатать текст руками."""
+    b64 = base64.b64encode(image_bytes).decode()
+    payload = {
+        "model": MODEL_PHOTO,
+        "messages": [
+            {"role": "system", "content": (
+                "Ты просто распознаёшь текст с фотографии. Не решай задачи, не комментируй "
+                "и не добавляй ничего от себя — верни только текст, который есть на фото, как есть. "
+                "Если текста нет или он совсем нечитаем — верни пустую строку."
+            )},
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                {"type": "text", "text": "Извлеки весь текст с этого фото."},
+            ]},
+        ],
+        "max_tokens": 1024,
+        "temperature": 0.0,
+    }
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(GROQ_URL, headers=get_headers(), content=body)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
+
 async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str = "") -> str:
     b64 = base64.b64encode(image_bytes).decode()
     payload = {

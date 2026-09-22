@@ -1,5 +1,5 @@
 import aiosqlite
-from config import DATABASE_PATH
+from config import DATABASE_PATH, STAROSTA_ID
 
 
 async def init_db():
@@ -7,6 +7,10 @@ async def init_db():
         # WAL снижает риск "database is locked" при параллельных cron-джобах
         # (scheduler.py гоняет несколько задач) вместе с обычными хендлерами.
         await db.execute("PRAGMA journal_mode=WAL;")
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='deadline_done'"
+        )
+        deadline_done_is_new = (await cursor.fetchone()) is None
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id     INTEGER PRIMARY KEY,
@@ -35,6 +39,28 @@ async def init_db():
             await db.execute("ALTER TABLE deadlines ADD COLUMN external_id TEXT")
         except Exception:
             pass  # колонка уже есть
+
+        # Статус "выполнено" раньше был общим на всех (колонка deadlines.done),
+        # теперь — персональный для каждого пользователя (свой чек-марк не влияет
+        # на остальных, см. запрос владельца). Колонку deadlines.done не трогаем
+        # (легаси, нигде больше не читается), а факты "кто отметил" храним тут.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS deadline_done (
+                deadline_id INTEGER NOT NULL,
+                user_id     INTEGER NOT NULL,
+                done_at     TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (deadline_id, user_id)
+            )
+        """)
+        if deadline_done_is_new:
+            # Единоразовый перенос: то, что было отмечено выполненным при старой
+            # (общей) схеме, засчитываем старосте — чтобы история не терялась
+            # молча при обновлении бота.
+            await db.execute(
+                "INSERT OR IGNORE INTO deadline_done (deadline_id, user_id) "
+                "SELECT id, ? FROM deadlines WHERE done = 1",
+                (STAROSTA_ID,)
+            )
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,42 +255,124 @@ async def get_deadline_by_external_id(external_id: str) -> dict | None:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
-async def get_active_deadlines() -> list[dict]:
+# Дедлайн считается "общим" (видят все), если его добавил/утвердил староста,
+# либо это автосинк из СДО (created_by=0) — всё остальное видит только автор.
+_DEADLINE_COLS = "d.id, d.subject, d.description, d.due_date, d.due_time, d.created_by, d.created_at, d.external_id"
+
+
+def is_shared_deadline(d: dict) -> bool:
+    return d.get("created_by") in (0, STAROSTA_ID)
+
+
+async def get_active_deadlines(viewer_id: int, include_done: bool = False) -> list[dict]:
+    """Дедлайны, видимые viewer_id: общие (старосты/СДО) + свои личные.
+    "done" в каждой записи — персональный статус именно viewer_id, не общий."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM deadlines WHERE done=0 ORDER BY due_date, due_time")
+        query = f"""
+            SELECT {_DEADLINE_COLS},
+                   EXISTS(
+                       SELECT 1 FROM deadline_done dd
+                       WHERE dd.deadline_id = d.id AND dd.user_id = ?
+                   ) AS done
+            FROM deadlines d
+            WHERE (d.created_by = ? OR d.created_by IN (0, ?))
+        """
+        params = [viewer_id, viewer_id, STAROSTA_ID]
+        if not include_done:
+            query += """
+                AND NOT EXISTS (
+                    SELECT 1 FROM deadline_done dd2
+                    WHERE dd2.deadline_id = d.id AND dd2.user_id = ?
+                )
+            """
+            params.append(viewer_id)
+        query += " ORDER BY d.due_date, d.due_time"
+        cursor = await db.execute(query, params)
         return [dict(r) for r in await cursor.fetchall()]
 
-async def get_deadlines_soon(days=3) -> list[dict]:
+async def get_deadlines_soon(days=3, viewer_id: int | None = None, shared_only: bool = False) -> list[dict]:
+    """shared_only=True — для группового поста (модерация старостой): только
+    общие дедлайны, не выполненные старостой. Иначе — персональная подборка
+    для viewer_id (общие + его личные, не отмеченные им самим)."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("""
-            SELECT * FROM deadlines WHERE done=0
-            AND due_date BETWEEN date('now') AND date('now', ? || ' days')
-            ORDER BY due_date, due_time
-        """, (str(days),))
+        if shared_only:
+            query = f"""
+                SELECT {_DEADLINE_COLS} FROM deadlines d
+                WHERE d.created_by IN (0, ?)
+                AND d.due_date BETWEEN date('now') AND date('now', ? || ' days')
+                AND NOT EXISTS (SELECT 1 FROM deadline_done dd WHERE dd.deadline_id=d.id AND dd.user_id=?)
+                ORDER BY d.due_date, d.due_time
+            """
+            params = (STAROSTA_ID, str(days), STAROSTA_ID)
+        else:
+            if viewer_id is None:
+                raise ValueError("viewer_id обязателен при shared_only=False")
+            query = f"""
+                SELECT {_DEADLINE_COLS} FROM deadlines d
+                WHERE (d.created_by = ? OR d.created_by IN (0, ?))
+                AND d.due_date BETWEEN date('now') AND date('now', ? || ' days')
+                AND NOT EXISTS (SELECT 1 FROM deadline_done dd WHERE dd.deadline_id=d.id AND dd.user_id=?)
+                ORDER BY d.due_date, d.due_time
+            """
+            params = (viewer_id, STAROSTA_ID, str(days), viewer_id)
+        cursor = await db.execute(query, params)
         return [dict(r) for r in await cursor.fetchall()]
 
-async def get_deadline_stats() -> dict:
+async def get_deadline_stats(viewer_id: int) -> dict:
+    """Статистика по дедлайнам, видимым viewer_id, с учётом его личного done."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        total   = (await (await db.execute("SELECT COUNT(*) FROM deadlines")).fetchone())[0]
-        done    = (await (await db.execute("SELECT COUNT(*) FROM deadlines WHERE done=1")).fetchone())[0]
-        overdue = (await (await db.execute("SELECT COUNT(*) FROM deadlines WHERE done=0 AND due_date < date('now')")).fetchone())[0]
-        active  = (await (await db.execute("SELECT COUNT(*) FROM deadlines WHERE done=0 AND due_date >= date('now')")).fetchone())[0]
+        visible = "(d.created_by = ? OR d.created_by IN (0, ?))"
+        vparams = (viewer_id, STAROSTA_ID)
+        done_expr = "EXISTS(SELECT 1 FROM deadline_done dd WHERE dd.deadline_id=d.id AND dd.user_id=?)"
+
+        total = (await (await db.execute(
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible}", vparams
+        )).fetchone())[0]
+        done = (await (await db.execute(
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND {done_expr}",
+            vparams + (viewer_id,)
+        )).fetchone())[0]
+        overdue = (await (await db.execute(
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date < date('now') AND NOT {done_expr}",
+            vparams + (viewer_id,)
+        )).fetchone())[0]
+        active = (await (await db.execute(
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date >= date('now') AND NOT {done_expr}",
+            vparams + (viewer_id,)
+        )).fetchone())[0]
         return {"total": total, "done": done, "overdue": overdue, "active": active}
 
-async def mark_deadline_done(did: int):
+async def mark_deadline_done(did: int, user_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute("UPDATE deadlines SET done=1 WHERE id=?", (did,))
+        await db.execute(
+            "INSERT OR IGNORE INTO deadline_done (deadline_id, user_id) VALUES (?, ?)",
+            (did, user_id)
+        )
         await db.commit()
 
-async def set_deadline_done(did: int, done: bool):
-    """В отличие от mark_deadline_done (только 0→1, используется в боте для
-    кнопки "Готово") — тут можно и обратно, нужно для чекбоксов в WebApp,
-    где случайный клик надо уметь отменить."""
+async def unmark_deadline_done(did: int, user_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute("UPDATE deadlines SET done=? WHERE id=?", (1 if done else 0, did))
+        await db.execute(
+            "DELETE FROM deadline_done WHERE deadline_id=? AND user_id=?", (did, user_id)
+        )
         await db.commit()
+
+async def set_deadline_done(did: int, user_id: int, done: bool):
+    """Персональная отметка "выполнено" — у каждого своя, не влияет на других
+    (ни в боте через /done, ни в WebApp через чекбокс)."""
+    if done:
+        await mark_deadline_done(did, user_id)
+    else:
+        await unmark_deadline_done(did, user_id)
+
+async def is_deadline_done(did: int, user_id: int) -> bool:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM deadline_done WHERE deadline_id=? AND user_id=?", (did, user_id)
+        )
+        return (await cursor.fetchone()) is not None
 
 async def get_deadline(did: int) -> dict | None:
     async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -275,6 +383,7 @@ async def get_deadline(did: int) -> dict | None:
 
 async def delete_deadline(did: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM deadline_done WHERE deadline_id=?", (did,))
         await db.execute("DELETE FROM deadlines WHERE id=?", (did,))
         await db.commit()
 
@@ -408,7 +517,7 @@ async def clear_semester_data():
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # file_text — вместе с files: иначе извлечённый текст всех лекций
         # семестра навсегда остаётся в базе сиротами (см. delete_file).
-        for table in ("deadlines", "homework", "files", "file_text", "vote_answers", "votes"):
+        for table in ("deadlines", "deadline_done", "homework", "files", "file_text", "vote_answers", "votes"):
             try:
                 await db.execute(f"DELETE FROM {table}")
             except Exception:

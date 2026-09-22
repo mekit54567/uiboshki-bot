@@ -58,7 +58,17 @@ def extract_text(data: bytes, file_name: str) -> str:
         if name.endswith(".pptx"):
             return _extract_pptx(data)
         if name.endswith(".txt"):
-            return data.decode("utf-8", errors="ignore")
+            # Многие .txt лекций сохранены в Windows-1251 (стандартный Notepad
+            # на русской Windows), а не UTF-8 — если строгий UTF-8 не читается,
+            # это почти наверняка cp1251, пробуем его перед тем, как сдаваться
+            # на errors="ignore" (который на 1251-файле съел бы всю кириллицу).
+            try:
+                return data.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    return data.decode("cp1251")
+                except UnicodeDecodeError:
+                    return data.decode("utf-8", errors="ignore")
     except Exception as e:
         logger.warning(f"Не смог распарсить {file_name}: {e}")
         return ""

@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, STAROSTA_ID
 from webapp.auth import InitDataError, validate_init_data
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -106,21 +106,13 @@ async def api_schedule_next(user: dict = CurrentUser):
     return {"html": await get_next_lesson()}
 
 
-# ── Дедлайны / доска ДЗ (одна и та же таблица, done — это и есть чекбокс) ────
+# ── Дедлайны (общие + личные, "done" персональный для каждого) ──────────────
 
 @app.get("/api/deadlines")
 async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
     from database import get_active_deadlines, get_deadline_stats
-    import aiosqlite
-    from config import DATABASE_PATH
-    if include_done:
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute("SELECT * FROM deadlines ORDER BY done, due_date, due_time")
-            items = [dict(r) for r in await cursor.fetchall()]
-    else:
-        items = await get_active_deadlines()
-    stats = await get_deadline_stats()
+    items = await get_active_deadlines(user["id"], include_done=include_done)
+    stats = await get_deadline_stats(user["id"])
     return {"items": items, "stats": stats}
 
 
@@ -134,7 +126,11 @@ async def api_deadline_toggle(deadline_id: int, body: ToggleBody, user: dict = C
     existing = await get_deadline(deadline_id)
     if not existing:
         raise HTTPException(status_code=404, detail="дедлайн не найден")
-    await set_deadline_done(deadline_id, body.done)
+    is_shared = existing["created_by"] in (0, STAROSTA_ID)
+    if not is_shared and existing["created_by"] != user["id"]:
+        raise HTTPException(status_code=403, detail="это чужой личный дедлайн")
+    # Персонально для user["id"] — не трогает статус остальных по этому же дедлайну.
+    await set_deadline_done(deadline_id, user["id"], body.done)
     return {"ok": True, "id": deadline_id, "done": body.done}
 
 

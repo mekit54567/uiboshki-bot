@@ -97,29 +97,32 @@ DEADLINE_POST_KB = InlineKeyboardMarkup(inline_keyboard=[[
 
 
 async def send_deadline_reminders(bot: Bot):
-    deadlines = await get_deadlines_soon(days=3)
-    if not deadlines:
-        return
-
-    text  = _format_deadline_reminders(deadlines)
+    # Дедлайны теперь бывают личные (видны только автору) — рассылка каждому
+    # подписчику собирается персонально (общие + его личные, не отмеченные им
+    # самим), а не одним и тем же текстом всем подряд.
     users = await get_all_subscribed_users()
     for uid in users:
         try:
-            await bot.send_message(uid, text, parse_mode="HTML")
+            deadlines = await get_deadlines_soon(days=3, viewer_id=uid)
+            if not deadlines:
+                continue
+            await bot.send_message(uid, _format_deadline_reminders(deadlines), parse_mode="HTML")
         except Exception as e:
             logger.warning(f"Не смог отправить {uid}: {e}")
 
-    # Дедлайны (особенно из автосинка СДО) не всегда достоверны — прежде чем
-    # светить их в общем чате всей группы, спрашиваем старосту. Сама рассылка
-    # подписчикам выше это не блокирует — она была и раньше.
+    # В общий чат группы имеет смысл предлагать публиковать только общие
+    # дедлайны (старосты/автосинка СДО), никогда — чью-то личную запись.
     if STAROSTA_ID and GROUP_CHAT_ID:
         try:
-            await bot.send_message(
-                STAROSTA_ID,
-                text + "\n\n👆 Опубликовать этот список в общий чат группы?",
-                parse_mode="HTML",
-                reply_markup=DEADLINE_POST_KB,
-            )
+            shared = await get_deadlines_soon(days=3, shared_only=True)
+            if shared:
+                text = _format_deadline_reminders(shared)
+                await bot.send_message(
+                    STAROSTA_ID,
+                    text + "\n\n👆 Опубликовать этот список в общий чат группы?",
+                    parse_mode="HTML",
+                    reply_markup=DEADLINE_POST_KB,
+                )
         except Exception as e:
             logger.warning(f"Не смог отправить старосте запрос на публикацию дедлайнов: {e}")
 

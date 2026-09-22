@@ -1,9 +1,10 @@
 import re
 import json
+import logging
 from datetime import date
 from zoneinfo import ZoneInfo
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -11,11 +12,12 @@ from aiogram.types import Message, CallbackQuery
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
-    delete_deadline, upsert_user, get_deadline_stats,
+    delete_deadline, upsert_user, get_deadline_stats, get_deadline,
 )
 from config import STAROSTA_ID, GROUP_CHAT_ID
 from keyboards import MAIN_KB, CANCEL_KB
 
+logger = logging.getLogger(__name__)
 router = Router()
 TZ = ZoneInfo("Europe/Moscow")
 
@@ -78,13 +80,13 @@ def format_deadlines(deadlines: list[dict]) -> str:
 @router.message(F.text == "📋 Дедлайны")
 async def cmd_deadlines(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    deadlines = await get_active_deadlines()
+    deadlines = await get_active_deadlines(message.from_user.id)
     await message.answer(format_deadlines(deadlines), parse_mode="HTML")
 
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
-    s      = await get_deadline_stats()
+    s      = await get_deadline_stats(message.from_user.id)
     total  = s["total"]
     done   = s["done"]
     active = s["active"]
@@ -120,12 +122,47 @@ async def cmd_cancel(message: Message, state: FSMContext):
 async def add_subject(message: Message, state: FSMContext):
     await state.update_data(subject=message.text.strip())
     await state.set_state(AddDeadline.description)
-    await message.answer("📝 Описание? (или <i>–</i> пропустить)", parse_mode="HTML")
+    await message.answer(
+        "📝 Описание? (текстом, фото задания — текст распознаю автоматически, или <i>–</i> пропустить)",
+        parse_mode="HTML"
+    )
+
+
+@router.message(AddDeadline.description, F.photo)
+async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
+    from groq_solver import extract_text_from_image
+    from html import escape as html_escape
+
+    wait = await message.answer("🔎 Распознаю текст с фото...")
+    text = ""
+    try:
+        photo      = message.photo[-1]
+        file       = await bot.get_file(photo.file_id)
+        file_bytes = await bot.download_file(file.file_path)
+        text       = await extract_text_from_image(file_bytes.read())
+    except Exception as e:
+        logger.warning(f"Не смог распознать фото дедлайна: {e}")
+
+    text = (text or "").strip()
+    if not text:
+        await wait.edit_text(
+            "❌ Не смог распознать текст на фото. Опиши задание текстом (или <i>–</i> — пропустить):",
+            parse_mode="HTML"
+        )
+        return
+
+    await state.update_data(description=text[:1500])
+    await state.set_state(AddDeadline.due_date)
+    preview = html_escape(text[:500])
+    await wait.edit_text(
+        f"📝 Распознал с фото:\n<i>{preview}</i>\n\n📅 Дата? Формат: <b>ДД.ММ</b> или <b>ДД.ММ.ГГГГ</b>",
+        parse_mode="HTML"
+    )
 
 
 @router.message(AddDeadline.description)
 async def add_description(message: Message, state: FSMContext):
-    desc = message.text.strip()
+    desc = (message.text or "").strip()
     # В подсказке длинное тире "–", но с клавиатуры обычно вводят дефис "-" — принимаем оба.
     await state.update_data(description="" if desc in ("–", "-") else desc)
     await state.set_state(AddDeadline.due_date)
@@ -153,14 +190,23 @@ async def add_due_date(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.due_time)
 async def add_due_time(message: Message, state: FSMContext):
-    raw = message.text.strip()
+    raw = (message.text or "").strip()
     due_time = None
     if raw not in ("–", "-"):  # дефис с клавиатуры тоже = "пропустить"
-        match = re.match(r"^(\d{1,2}):(\d{2})$", raw)
-        if not match:
-            await message.answer("❌ Неверный формат. Введи ЧЧ:ММ или <i>–</i>", parse_mode="HTML")
+        # Разделитель ":" или "." (с телефона часто набирают точкой), но с
+        # проверкой реального диапазона часов/минут — "22.61"/"25:10" не пройдут.
+        match = re.match(r"^(\d{1,2})[:.](\d{2})$", raw)
+        hh = mm = None
+        if match:
+            hh, mm = int(match.group(1)), int(match.group(2))
+        if not match or not (0 <= hh <= 23 and 0 <= mm <= 59):
+            await message.answer(
+                "❌ Неверное время. Формат <b>ЧЧ:ММ</b>, часы 00–23, минуты 00–59 "
+                "(например 09:30 или 22:59), или <i>–</i> — пропустить",
+                parse_mode="HTML"
+            )
             return
-        due_time = raw
+        due_time = f"{hh:02d}:{mm:02d}"
     data = await state.get_data()
     await state.clear()
     did = await add_deadline(data["subject"], data.get("description", ""), data["due_date"], due_time, message.from_user.id)
@@ -179,8 +225,15 @@ async def cmd_done(message: Message):
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /done 3")
         return
-    await mark_deadline_done(int(parts[1]))
-    await message.answer(f"✅ Дедлайн #{parts[1]} выполнен!")
+    did = int(parts[1])
+    existing = await get_deadline(did)
+    if not existing:
+        await message.answer("❌ Дедлайн с таким ID не найден.")
+        return
+    # Персональная отметка: у каждого свой статус "выполнено" — не влияет
+    # на то, что видят остальные (в т.ч. по этому же общему дедлайну).
+    await mark_deadline_done(did, message.from_user.id)
+    await message.answer(f"✅ У тебя дедлайн #{did} отмечен как выполненный!")
 
 
 @router.message(Command("del"))
@@ -189,8 +242,24 @@ async def cmd_del(message: Message):
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /del 3")
         return
-    await delete_deadline(int(parts[1]))
-    await message.answer(f"🗑 Дедлайн #{parts[1]} удалён.")
+    did = int(parts[1])
+    existing = await get_deadline(did)
+    if not existing:
+        await message.answer("❌ Дедлайн с таким ID не найден.")
+        return
+
+    is_shared = existing["created_by"] in (0, STAROSTA_ID)
+    is_owner  = existing["created_by"] == message.from_user.id
+    if is_shared:
+        if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+            await message.answer("❌ Это общий дедлайн — удалить может только староста.")
+            return
+    elif not is_owner:
+        await message.answer("❌ Это чужой личный дедлайн — удалить его может только автор.")
+        return
+
+    await delete_deadline(did)
+    await message.answer(f"🗑 Дедлайн #{did} удалён.")
 
 
 # ── Импорт дедлайнов из СДО ──────────────────────────────────────────────────
