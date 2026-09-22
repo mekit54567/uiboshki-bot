@@ -20,6 +20,10 @@ class AnnounceState(StatesGroup):
     waiting = State()
 
 
+class ClearSemState(StatesGroup):
+    confirm = State()
+
+
 @router.message(Command("announce"))
 async def cmd_announce(message: Message, state: FSMContext):
     if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
@@ -70,6 +74,39 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
         f"Отправлено: {sent}\n"
         f"Ошибок: {failed}"
     )
+
+
+# ── Очистка семестра ─────────────────────────────────────────────────────────
+
+@router.message(Command("clearsem"))
+async def cmd_clearsem(message: Message, state: FSMContext):
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    await state.set_state(ClearSemState.confirm)
+    await message.answer(
+        "⚠️ <b>Это сбросит данные прошлого семестра:</b>\n\n"
+        "• Дедалйн-трекер 🗓\n"
+        "• Доску ДЗ 📝\n"
+        "• Файлы 📁\n"
+        "• Голосования 🗳\n\n"
+        "<b>Подписки, настройки напоминаний и историю решений это НЕ тронет.</b>\n\n"
+        "Продолжить? Напиши <b>да</b> для подтверждения, или <b>нет</b> для отмены.",
+        parse_mode="HTML"
+    )
+
+
+@router.message(ClearSemState.confirm, F.text)
+async def clearsem_confirm(message: Message, state: FSMContext):
+    answer = message.text.strip().lower()
+    if answer in ("да", "yes", "y", "д"):
+        from database import clear_semester_data
+        await clear_semester_data()
+        await state.clear()
+        await message.answer("🧹 Готово! Доска чистого семестра.")
+    else:
+        await state.clear()
+        await message.answer("Отменено — данные сохранены.")
 
 
 # ── Доска ДЗ ─────────────────────────────────────────────────────────────────

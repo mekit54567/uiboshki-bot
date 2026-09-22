@@ -328,6 +328,20 @@ async def search_files(query: str, limit: int = 20) -> list[dict]:
         return []
 
 
+# ── Очистка семестра (для /clearsem) ────────────────────────────────────────
+# Сносит "живые" данные конкретного семестра — дедлайны, доску ДЗ, файлы,
+# голосования. НЕ трогает: подписки/настройки пользователей, историю решений
+# решалки, заметки на пары, ленту "Подслушано", zam_id в settings —
+# это либо личные настройки, либо архив, который не привязан к семестру.
+async def clear_semester_data():
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for table in ("deadlines", "homework", "files", "vote_answers", "votes"):
+            try:
+                await db.execute(f"DELETE FROM {table}")
+            except Exception:
+                pass  # таблицы homework/votes создаются лениво — их может не быть
+        await db.commit()
+
 # ── Votes ─────────────────────────────────────────────────────────────────────
 
 async def create_vote(question: str, created_by: int) -> int:

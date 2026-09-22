@@ -134,6 +134,7 @@ async def cmd_help(message: Message):
             "/importdeadlines — импорт дедлайнов\n"
             "/syncsdo — вручную синхронизировать дедлайны из СДО\n"
             "/delpost ID — удалить пост из ленты\n"
+            "/clearsem — сбросить дедлайны/ДЗ/файлы/голосования (новый семестр)\n"
         )
     await message.answer(text, parse_mode="HTML")
 
