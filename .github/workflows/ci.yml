@@ -1,0 +1,32 @@
+name: CI
+
+# Прогоняет тесты (tests/, pytest) на каждый push и pull request в main.
+# Реальный БД-слой, реальный роутинг aiogram (Dispatcher.feed_update) —
+# сеть наружу (Telegram/Groq/Gemini) в тестах не используется, поэтому
+# секреты (BOT_TOKEN и т.д.) для CI не нужны, тесты работают на фейковых
+# значениях (см. tests/conftest.py).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Compile check (весь репозиторий)
+        run: python -m py_compile $(git ls-files '*.py')
+
+      - name: Run tests
+        run: python -m pytest -v

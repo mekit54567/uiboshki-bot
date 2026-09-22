@@ -37,6 +37,25 @@ def format_date(date_str: str) -> str:
         return date_str
 
 
+def parse_due_time(raw: str) -> tuple[bool, str | None]:
+    """Разбор и валидация времени дедлайна. Возвращает (валидно, значение):
+    (True, None) — пользователь пропустил ("–"/"-"), (True, "ЧЧ:ММ") — валидное
+    время (разделитель ":" или "." — с телефона часто набирают точкой),
+    (False, None) — неверный формат или диапазон (например "22.61", "25:10").
+    Вынесено отдельной функцией, чтобы граничные случаи были покрыты
+    юнит-тестами напрямую, без прогона через FSM."""
+    raw = raw.strip()
+    if raw in ("–", "-"):
+        return True, None
+    match = re.match(r"^(\d{1,2})[:.](\d{2})$", raw)
+    if not match:
+        return False, None
+    hh, mm = int(match.group(1)), int(match.group(2))
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return False, None
+    return True, f"{hh:02d}:{mm:02d}"
+
+
 def progress_bar(delta: int, max_days: int = 14) -> str:
     if delta <= 0:
         return "━━━━━━━━━━ 100%"
@@ -190,23 +209,14 @@ async def add_due_date(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.due_time)
 async def add_due_time(message: Message, state: FSMContext):
-    raw = (message.text or "").strip()
-    due_time = None
-    if raw not in ("–", "-"):  # дефис с клавиатуры тоже = "пропустить"
-        # Разделитель ":" или "." (с телефона часто набирают точкой), но с
-        # проверкой реального диапазона часов/минут — "22.61"/"25:10" не пройдут.
-        match = re.match(r"^(\d{1,2})[:.](\d{2})$", raw)
-        hh = mm = None
-        if match:
-            hh, mm = int(match.group(1)), int(match.group(2))
-        if not match or not (0 <= hh <= 23 and 0 <= mm <= 59):
-            await message.answer(
-                "❌ Неверное время. Формат <b>ЧЧ:ММ</b>, часы 00–23, минуты 00–59 "
-                "(например 09:30 или 22:59), или <i>–</i> — пропустить",
-                parse_mode="HTML"
-            )
-            return
-        due_time = f"{hh:02d}:{mm:02d}"
+    ok, due_time = parse_due_time(message.text or "")
+    if not ok:
+        await message.answer(
+            "❌ Неверное время. Формат <b>ЧЧ:ММ</b>, часы 00–23, минуты 00–59 "
+            "(например 09:30 или 22:59), или <i>–</i> — пропустить",
+            parse_mode="HTML"
+        )
+        return
     data = await state.get_data()
     await state.clear()
     did = await add_deadline(data["subject"], data.get("description", ""), data["due_date"], due_time, message.from_user.id)
