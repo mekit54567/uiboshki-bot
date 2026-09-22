@@ -8,8 +8,9 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from schedule_parser import (
     get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson,
-    get_next_week_schedule, search_by_teacher, search_by_room, format_search_results,
+    get_next_week_schedule, list_upcoming_events, format_search_results,
 )
+from mirea_schedule_api import search_targets, get_baseinfo, fetch_ical, TARGET_TEACHER, TARGET_ROOM
 from database import upsert_user, add_lesson_note, get_lesson_notes
 from keyboards import CANCEL_KB, MAIN_KB
 
@@ -87,10 +88,49 @@ async def cmd_next(message: Message):
     await wait.edit_text(await get_next_lesson(), parse_mode="HTML")
 
 
-# ── Поиск по преподавателю / аудитории ──────────────────────────────────────
-# Ищем в рамках расписания своей группы (см. schedule_parser.py — почему не
-# сделан поиск по всему университету). На ближайшие 2 недели, чтобы поймать
-# и пары через неделю (расписание в основном по INTERVAL=2).
+# ── Поиск по преподавателю / аудитории (по всему университету) ─────────────
+# Раньше искали только в рамках расписания своей группы (не было известно
+# публичного API). Оказалось — есть: schedule-of.mirea.ru/schedule/api/search
+# (см. mirea_schedule_api.py — как нашли и откуда). Ищем по всей базе МИРЭА,
+# при нескольких совпадениях — уточняем инлайн-кнопками, дальше тянем ical
+# именно этого препода/аудитории (не только пары с моей группой) на 2 недели.
+
+_TARGET_EMOJI = {TARGET_TEACHER: "👤", TARGET_ROOM: "🚪"}
+_TARGET_CB_PREFIX = {TARGET_TEACHER: "sst", TARGET_ROOM: "ssr"}
+
+
+def _target_pick_kb(results: list[dict], target_type: int) -> InlineKeyboardMarkup:
+    prefix = _TARGET_CB_PREFIX[target_type]
+    buttons = [[InlineKeyboardButton(text=r["fullTitle"], callback_data=f"{prefix}:{r['id']}")] for r in results]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def _render_target_schedule(target_id: int, target_type: int, title: str) -> str:
+    emoji = _TARGET_EMOJI[target_type]
+    ical = await fetch_ical(target_id, target_type)
+    if ical is None:
+        return f"{emoji} <b>{title}</b>\n\n⚠️ Не удалось получить расписание."
+    events = list_upcoming_events(ical, days_ahead=14)
+    text = format_search_results(events, "Пар в ближайшие 2 недели не нашёл.")
+    return f"{emoji} <b>{title}</b>\n{text}"
+
+
+async def _handle_target_search(message: Message, query: str, target_type: int, label: str):
+    wait = await message.answer("⏳ Ищу...")
+    results = await search_targets(query, target_type)
+    if not results:
+        await wait.edit_text(f"{_TARGET_EMOJI[target_type]} {label} «{query}» не нашёл.")
+        return
+    if len(results) == 1:
+        r = results[0]
+        text = await _render_target_schedule(r["id"], target_type, r["fullTitle"])
+        await wait.edit_text(text, parse_mode="HTML")
+        return
+    await wait.edit_text(
+        f"{_TARGET_EMOJI[target_type]} Нашёл несколько совпадений — выбери:",
+        reply_markup=_target_pick_kb(results, target_type)
+    )
+
 
 @router.message(Command("teacher"))
 async def cmd_teacher(message: Message):
@@ -98,12 +138,7 @@ async def cmd_teacher(message: Message):
     if len(parts) < 2 or not parts[1].strip():
         await message.answer("👤 Использование: <code>/teacher Дзюрдзя</code>", parse_mode="HTML")
         return
-    query = parts[1].strip()
-    wait = await message.answer("⏳ Ищу...")
-    results = await search_by_teacher(query)
-    text = format_search_results(results, f"👤 Пар с «{query}» в ближайшие 2 недели не нашёл.")
-    header = f"👤 <b>{query}</b>\n" if results else ""
-    await wait.edit_text(header + text, parse_mode="HTML")
+    await _handle_target_search(message, parts[1].strip(), TARGET_TEACHER, "Препода")
 
 
 @router.message(Command("room"))
@@ -112,12 +147,27 @@ async def cmd_room(message: Message):
     if len(parts) < 2 or not parts[1].strip():
         await message.answer("🚪 Использование: <code>/room А-18</code>", parse_mode="HTML")
         return
-    query = parts[1].strip()
-    wait = await message.answer("⏳ Ищу...")
-    results = await search_by_room(query)
-    text = format_search_results(results, f"🚪 Пар в «{query}» в ближайшие 2 недели не нашёл.")
-    header = f"🚪 <b>{query}</b>\n" if results else ""
-    await wait.edit_text(header + text, parse_mode="HTML")
+    await _handle_target_search(message, parts[1].strip(), TARGET_ROOM, "Аудиторию")
+
+
+@router.callback_query(F.data.startswith("sst:"))
+async def teacher_pick(callback: CallbackQuery):
+    target_id = int(callback.data.split(":", 1)[1])
+    info = await get_baseinfo(target_id, TARGET_TEACHER)
+    title = info["fullTitle"] if info else str(target_id)
+    text = await _render_target_schedule(target_id, TARGET_TEACHER, title)
+    await callback.message.edit_text(text, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("ssr:"))
+async def room_pick(callback: CallbackQuery):
+    target_id = int(callback.data.split(":", 1)[1])
+    info = await get_baseinfo(target_id, TARGET_ROOM)
+    title = info["fullTitle"] if info else str(target_id)
+    text = await _render_target_schedule(target_id, TARGET_ROOM, title)
+    await callback.message.edit_text(text, parse_mode="HTML")
+    await callback.answer()
 
 
 # ── Заметки на пару ─────────────────────────────────────────────────────────

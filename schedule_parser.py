@@ -225,43 +225,23 @@ async def get_first_lesson_today() -> dict | None:
         return None
 
 
-# ── Поиск по преподавателю / аудитории (в рамках расписания СВОЕЙ группы) ──────
-# У университета нет публичного API для поиска препода/аудитории по имени
-# (см. PLAN.md, Фаза 4) — единственный документированный способ получить чужой
-# ical по /schedule/api/ical/{type}/{id} требует УЖЕ знать числовой id, а найти
-# его иначе как вручную через DevTools на сайте нельзя. Зато в календаре своей
-# группы у каждой пары ЛК/ПР в DESCRIPTION уже зашито полное имя преподавателя,
-# а в LOCATION — аудитория. Ищем прямо по ним, без похода во внешние источники.
-
-async def search_by_teacher(query: str, days_ahead: int = 14) -> list[dict]:
-    query = query.strip().lower()
-    if not query:
-        return []
-    raw   = await fetch_schedule_raw()
+def list_upcoming_events(raw: bytes, days_ahead: int = 14) -> list[dict]:
+    """Плоский список всех пар на ближайшие days_ahead дней из произвольного
+    ical (не обязательно своей группы — годится и для чужого препода/
+    аудитории, полученных через mirea_schedule_api.fetch_ical)."""
     today = datetime.now(TZ).date()
     results = []
     for i in range(days_ahead):
         d = today + timedelta(days=i)
         for e in parse_events_for_date(raw, d):
-            if query in e.get("teacher", "").lower():
-                results.append({**e, "date": d})
+            results.append({**e, "date": d})
     return results
 
-
-async def search_by_room(query: str, days_ahead: int = 14) -> list[dict]:
-    query = query.strip().lower()
-    if not query:
-        return []
-    raw   = await fetch_schedule_raw()
-    today = datetime.now(TZ).date()
-    results = []
-    for i in range(days_ahead):
-        d = today + timedelta(days=i)
-        for e in parse_events_for_date(raw, d):
-            if query in e.get("location", "").lower():
-                results.append({**e, "date": d})
-    return results
-
+# ── Форматирование результатов поиска (преподаватель/аудитория) ────────────
+# Раньше здесь же жили search_by_teacher/search_by_room, искавшие только
+# в рамках расписания своей группы — заменены на mirea_schedule_api.py
+# (нашёлся настоящий публичный поиск по всему университету). Форматирование
+# результатов осталось общим — им пользуется handlers/schedule.py.
 
 def format_search_results(results: list[dict], empty_text: str) -> str:
     if not results:
