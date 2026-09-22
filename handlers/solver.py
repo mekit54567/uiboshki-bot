@@ -6,8 +6,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
 from groq_solver import solve_text, solve_image, solve_with_history, SUBJECTS
-from database import upsert_user, add_solver_history, get_solver_history
-from keyboards import MAIN_KB, STOP_DIALOG_KB, MENU_BUTTON_TEXTS
+from gemini_solver import solve_with_lecture_context
+from database import (
+    upsert_user, add_solver_history, get_solver_history,
+    get_subjects_with_lecture_text, get_subject_lecture_context,
+)
+from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
 
 logger = logging.getLogger(__name__)
@@ -23,6 +27,16 @@ class SolverState(StatesGroup):
     choose_subject = State()
     waiting_task   = State()
     in_dialog      = State()
+
+
+class LectureSolverState(StatesGroup):
+    """Отдельная (не мульти-turn) машина состояний для решалки по лекциям —
+    см. gemini_solver.py. Не переиспользует SolverState: там subject — это
+    произвольная категория из фиксированного SUBJECTS, здесь — обязательно
+    точное название предмета, по которому реально есть загруженные лекции
+    (иначе неоткуда взять контекст)."""
+    choose_subject = State()
+    waiting_task   = State()
 
 
 @router.message(Command("solve"))
@@ -250,3 +264,70 @@ async def handle_plain_text(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(e)
         await wait.delete()
+
+
+# ── Решалка по лекциям (Gemini, Фаза 9) ─────────────────────────────────────
+
+@router.message(Command("solve_lectures"))
+async def cmd_solve_lectures(message: Message, state: FSMContext):
+    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    subjects = await get_subjects_with_lecture_text()
+    if not subjects:
+        await message.answer(
+            "📖 Пока ни по одному предмету нет загруженных лекций с текстом "
+            "(PDF/DOCX/PPTX не-сканы). Сначала загрузи через /upload — если формат "
+            "поддерживается, бот сам заберёт текст в контекст."
+        )
+        return
+    kb = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=s)] for s in subjects],
+        resize_keyboard=True, one_time_keyboard=True
+    )
+    await state.set_state(LectureSolverState.choose_subject)
+    await message.answer("📖 По какому предмету решаем — на основе загруженных лекций?", reply_markup=kb)
+
+
+@router.message(LectureSolverState.choose_subject, F.text)
+async def lecture_choose_subject(message: Message, state: FSMContext):
+    if message.text in MENU_BUTTON_TEXTS:
+        await state.clear()
+        return
+    subject = message.text.strip()
+    subjects = await get_subjects_with_lecture_text()
+    if subject not in subjects:
+        await message.answer("Не нашёл такой предмет среди тех, где есть лекции — выбери кнопкой из списка выше.")
+        return
+    await state.update_data(subject=subject)
+    await state.set_state(LectureSolverState.waiting_task)
+    await message.answer(
+        f"✅ Предмет: <b>{subject}</b>\n\nПришли текст задания (практики) — решу, опираясь на лекции этого предмета.",
+        parse_mode="HTML", reply_markup=CANCEL_KB
+    )
+
+
+@router.message(LectureSolverState.waiting_task, F.text)
+async def lecture_handle_task(message: Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer("Отменено.", reply_markup=MAIN_KB)
+        return
+
+    data    = await state.get_data()
+    subject = data.get("subject", "")
+    wait = await message.answer("📖 Читаю лекции и решаю — с большим контекстом это может занять чуть больше времени...")
+    try:
+        context_text = await get_subject_lecture_context(subject)
+        answer = await solve_with_lecture_context(message.text, subject, context_text)
+        await wait.delete()
+        await add_solver_history(message.from_user.id, message.text, answer, subject)
+        for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
+            try:
+                await message.answer(chunk, parse_mode="Markdown")
+            except Exception:
+                await message.answer(chunk)
+        await message.answer("Готово ✅ (/solve_lectures — ещё раз по этому или другому предмету)", reply_markup=MAIN_KB)
+    except Exception as e:
+        logger.error(e)
+        await wait.edit_text(f"❌ Ошибка: {e}")
+    finally:
+        await state.clear()

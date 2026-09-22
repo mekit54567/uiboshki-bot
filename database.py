@@ -57,6 +57,14 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS file_text (
+                file_id      INTEGER PRIMARY KEY,
+                content      TEXT NOT NULL,
+                char_count   INTEGER,
+                extracted_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS votes (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 question    TEXT NOT NULL,
@@ -314,7 +322,55 @@ async def get_files(subject: str = None) -> list[dict]:
 async def delete_file(fid: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM files WHERE id=?", (fid,))
+        # file_text не связана FK/CASCADE (SQLite её не включает по умолчанию,
+        # заводить ради одной таблицы отдельный PRAGMA не стали) — чистим руками,
+        # иначе после удаления файла его текст молча остаётся висеть в контексте
+        # предмета для решалки по лекциям (Фаза 9).
+        await db.execute("DELETE FROM file_text WHERE file_id=?", (fid,))
         await db.commit()
+
+async def save_file_text(file_id: int, text: str):
+    """Сохраняет извлечённый из файла лекции текст (см. file_text.py). Вызывается
+    один раз при загрузке/синхронизации файла — не при каждом решении задачи,
+    это и есть "кэш" контекста лекций, о котором шла речь в обсуждении."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO file_text (file_id, content, char_count, extracted_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(file_id) DO UPDATE SET
+                content=excluded.content, char_count=excluded.char_count, extracted_at=excluded.extracted_at
+        """, (file_id, text, len(text)))
+        await db.commit()
+
+async def get_subject_lecture_context(subject: str) -> str:
+    """Склеенный текст всех лекций предмета (в порядке добавления файлов) —
+    контекст для решалки по лекциям (Фаза 9, Gemini). Каждая лекция отделена
+    заголовком с названием файла, чтобы при желании модель могла сослаться
+    на конкретный источник в ответе."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT f.title, ft.content
+            FROM file_text ft
+            JOIN files f ON f.id = ft.file_id
+            WHERE f.subject = ?
+            ORDER BY f.id
+        """, (subject,))
+        rows = await cursor.fetchall()
+    return "\n\n".join(f"=== {r['title']} ===\n{r['content']}" for r in rows)
+
+async def get_subjects_with_lecture_text() -> list[str]:
+    """Предметы, по которым есть хоть один файл с извлечённым текстом — решалка
+    по лекциям предлагает выбор только из них (иначе можно было бы выбрать
+    предмет без единой лекции и получить пустой контекст)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT DISTINCT f.subject FROM file_text ft
+            JOIN files f ON f.id = ft.file_id
+            WHERE f.subject IS NOT NULL AND f.subject != ''
+            ORDER BY f.subject
+        """)
+        return [r[0] for r in await cursor.fetchall()]
 
 async def search_files(query: str, limit: int = 20) -> list[dict]:
     """Полнотекстовый поиск по title/subject/file_name через FTS5.

@@ -98,6 +98,9 @@ async def handle_action(callback: CallbackQuery):
     elif action == "solve_ds":
         await callback.bot.send_message(callback.from_user.id, "/solve_ds")
 
+    elif action == "solve_lectures":
+        await callback.bot.send_message(callback.from_user.id, "/solve_lectures")
+
     elif action == "nextweek":
         from schedule_parser import get_next_week_schedule
         wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
@@ -159,6 +162,7 @@ async def cmd_help(message: Message):
         "/del ID — удалить дедлайн\n"
         "/solve — решить задачу\n"
         "/solve_ds — решить через DeepSeek\n"
+        "/solve_lectures — решить опираясь на загруженные лекции предмета (Gemini)\n"
         "/history — история решений\n"
         "/rating — рейтинг\n"
         "/hw — доска ДЗ\n"

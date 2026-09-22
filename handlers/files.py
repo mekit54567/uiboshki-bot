@@ -175,8 +175,16 @@ async def receive_subject(message: Message, state: FSMContext):
     subject = "" if message.text.strip() == "–" else message.text.strip()
     await state.clear()
     fid = await add_file(data["title"], subject, data["file_id"], data["file_name"], message.from_user.id)
+
+    # Пытаемся сразу вытащить текст (PDF/DOCX/PPTX/TXT) для решалки по лекциям
+    # (Фаза 9) — не блокирует сохранение файла, если не получилось (скан,
+    # неподдерживаемый формат, файл недоступен для скачивания и т.д.).
+    from file_text import extract_and_save
+    got_text = await extract_and_save(message.bot, fid, data["file_id"], data["file_name"])
+    lecture_note = "\n📖 Добавлен в контекст лекций для решалки." if got_text else ""
+
     await message.answer(
-        f"✅ Файл сохранён! (ID: {fid})\n📄 <b>{data['title']}</b>",
+        f"✅ Файл сохранён! (ID: {fid})\n📄 <b>{data['title']}</b>{lecture_note}",
         parse_mode="HTML", reply_markup=MAIN_KB
     )
 
@@ -287,7 +295,7 @@ async def handle_sync_json(message: Message):
         all_existing = await get_files()
         existing_ids = {x['file_id'] for x in all_existing}
 
-        added = skipped = 0
+        added = skipped = with_text = 0
         for f in files:
             if not f.get('file_id') or f.get('title') == 'Файл':
                 skipped += 1
@@ -295,7 +303,7 @@ async def handle_sync_json(message: Message):
             if f['file_id'] in existing_ids:
                 skipped += 1
                 continue
-            await add_file(
+            new_fid = await add_file(
                 title=f.get('title', 'Без названия'),
                 subject=f.get('subject', ''),
                 file_id=f['file_id'],
@@ -305,8 +313,16 @@ async def handle_sync_json(message: Message):
             existing_ids.add(f['file_id'])  # чтобы не дублировать внутри одного JSON
             added += 1
 
+            # Тот же текст-экстрактор, что и в ручной загрузке (см. receive_subject
+            # выше) — при массовом импорте это может занять время (последовательно
+            # качаем и парсим каждый файл), но синк — редкая ручная операция
+            # старосты, а не то, что дёргается на каждый чих.
+            from file_text import extract_and_save
+            if await extract_and_save(bot, new_fid, f['file_id'], f.get('file_name', '')):
+                with_text += 1
+
         await wait.edit_text(
-            f"✅ Синхронизация завершена!\n\nДобавлено: {added}\nПропущено: {skipped}"
+            f"✅ Синхронизация завершена!\n\nДобавлено: {added}\nС текстом лекции: {with_text}\nПропущено: {skipped}"
         )
     except Exception as e:
         await wait.edit_text(f"❌ Ошибка: {e}")
