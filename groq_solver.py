@@ -9,8 +9,16 @@ logger = logging.getLogger(__name__)
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 
-MODEL_TEXT  = "meta-llama/llama-4-scout-17b-16e-instruct"
-MODEL_PHOTO = "meta-llama/llama-4-scout-17b-16e-instruct"
+DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+
+MODEL_TEXT      = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_PHOTO     = "meta-llama/llama-4-scout-17b-16e-instruct"
+MODEL_DEEPSEEK  = "deepseek-chat"
+
+# Фото понимает только Groq (llama-4-scout умеет в vision, DeepSeek chat — нет),
+# поэтому solve_image всегда идёт через Groq вне зависимости от backend.
+BACKENDS = ("groq", "deepseek")
 
 SUBJECTS = [
     "Математика", "Информатика", "Экономика", "Менеджмент",
@@ -35,16 +43,29 @@ def build_system_prompt(subject: str = "") -> str:
     )
 
 
-def get_headers() -> dict:
+def get_headers(backend: str = "groq") -> dict:
+    key = DEEPSEEK_KEY if backend == "deepseek" else GROQ_KEY
     return {
-        "Authorization": f"Bearer {GROQ_KEY}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
 
 
-async def solve_text(task: str, subject: str = "") -> str:
+def _url_and_model(backend: str) -> tuple[str, str]:
+    if backend == "deepseek":
+        return DEEPSEEK_URL, MODEL_DEEPSEEK
+    return GROQ_URL, MODEL_TEXT
+
+
+async def solve_text(task: str, subject: str = "", backend: str = "groq") -> str:
+    if backend not in BACKENDS:
+        backend = "groq"
+    if backend == "deepseek" and not DEEPSEEK_KEY:
+        logger.warning("DeepSeek запрошен, но DEEPSEEK_API_KEY не задан — фолбэк на Groq")
+        backend = "groq"
+    url, model = _url_and_model(backend)
     payload = {
-        "model": MODEL_TEXT,
+        "model": model,
         "messages": [
             {"role": "system", "content": build_system_prompt(subject)},
             {"role": "user",   "content": f"Задание:\n{task}"},
@@ -54,23 +75,29 @@ async def solve_text(task: str, subject: str = "") -> str:
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(GROQ_URL, headers=get_headers(), content=body)
+        resp = await client.post(url, headers=get_headers(backend), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
 
-async def solve_with_history(history: list, subject: str = "") -> str:
+async def solve_with_history(history: list, subject: str = "", backend: str = "groq") -> str:
+    if backend not in BACKENDS:
+        backend = "groq"
+    if backend == "deepseek" and not DEEPSEEK_KEY:
+        logger.warning("DeepSeek запрошен, но DEEPSEEK_API_KEY не задан — фолбэк на Groq")
+        backend = "groq"
+    url, model = _url_and_model(backend)
     messages = [{"role": "system", "content": build_system_prompt(subject)}]
     messages.extend(history)
     payload = {
-        "model": MODEL_TEXT,
+        "model": model,
         "messages": messages,
         "max_tokens": 2048,
         "temperature": 0.3,
     }
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(GROQ_URL, headers=get_headers(), content=body)
+        resp = await client.post(url, headers=get_headers(backend), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 

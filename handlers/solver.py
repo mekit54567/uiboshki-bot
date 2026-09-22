@@ -26,11 +26,15 @@ class SolverState(StatesGroup):
 
 
 @router.message(Command("solve"))
+@router.message(Command("solve_ds"))
 @router.message(F.text == "🤖 Решить")
 async def cmd_solve(message: Message, state: FSMContext):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    backend = "deepseek" if (message.text or "").startswith("/solve_ds") else "groq"
+    await state.update_data(backend=backend)
     await state.set_state(SolverState.choose_subject)
-    await message.answer("📚 Выбери предмет:", reply_markup=SUBJECT_KB)
+    label = " (🐋 DeepSeek)" if backend == "deepseek" else ""
+    await message.answer(f"📚 Выбери предмет{label}:", reply_markup=SUBJECT_KB)
 
 
 @router.message(SolverState.choose_subject, F.text)
@@ -41,10 +45,13 @@ async def choose_subject(message: Message, state: FSMContext):
     if message.text in MENU_BUTTON_TEXTS:
         await state.clear()
         return
-    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[])
+    data = await state.get_data()
+    backend = data.get("backend", "groq")
+    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend)
     await state.set_state(SolverState.waiting_task)
+    note = "\n\n(фото — всегда через Groq, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
-        f"✅ Предмет: <b>{message.text}</b>\n\nПришли задачу — текстом или фото 📸",
+        f"✅ Предмет: <b>{message.text}</b>\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
     await state.update_data(msg_ids=[msg.message_id])
@@ -101,9 +108,10 @@ async def send_answer(message: Message, state: FSMContext, answer: str):
 async def handle_first_task(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
+    backend = data.get("backend", "groq")
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
-        answer = await solve_text(message.text, subject)
+        answer = await solve_text(message.text, subject, backend=backend)
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог обработать. Попробуй переформулировать.")
             return
@@ -159,6 +167,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
 async def handle_dialog(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
+    backend = data.get("backend", "groq")
     history = data.get("history", [])
     msg_ids = data.get("msg_ids", [])
 
@@ -168,7 +177,7 @@ async def handle_dialog(message: Message, state: FSMContext):
 
     wait = await message.answer("🧠 Думаю...")
     try:
-        answer = await solve_with_history(history, subject)
+        answer = await solve_with_history(history, subject, backend=backend)
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог ответить. Попробуй иначе.")
             return
@@ -215,16 +224,24 @@ async def handle_plain_text(message: Message, state: FSMContext):
         if handled:
             return
 
-    if len(message.text) < 20:
+    text = message.text
+    backend = "groq"
+    for prefix in ("дипсик:", "deepseek:", "через дипсик:"):
+        if text.lower().startswith(prefix):
+            backend = "deepseek"
+            text = text[len(prefix):].strip()
+            break
+
+    if len(text) < 15:
         return
-    wait = await message.answer("🤖 Похоже задание — решаю...")
+    wait = await message.answer("🤖 Похоже задание — решаю..." + (" (🐋 DeepSeek)" if backend == "deepseek" else ""))
     try:
-        answer = await solve_text(message.text)
+        answer = await solve_text(text, backend=backend)
         if not answer or len(answer.strip()) < 10:
             await wait.delete()
             return
         await wait.delete()
-        await add_solver_history(message.from_user.id, message.text, answer)
+        await add_solver_history(message.from_user.id, text, answer)
         for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
             try:
                 await message.answer(chunk, parse_mode="Markdown")

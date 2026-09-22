@@ -35,6 +35,7 @@ STOP_DIALOG_KB = ReplyKeyboardMarkup(
 
 ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="➕ Добавить дедлайн",     callback_data="act:add_deadline")],
+    [InlineKeyboardButton(text="🐋 Решить через DeepSeek",  callback_data="act:solve_ds")],
     [InlineKeyboardButton(text="📆 След. неделя",          callback_data="act:nextweek")],
     [InlineKeyboardButton(text="🗳 Голосование",           callback_data="act:vote")],
     [InlineKeyboardButton(text="🗣 Подслушано (на группу)", callback_data="act:feed")],

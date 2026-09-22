@@ -47,6 +47,9 @@ async def handle_action(callback: CallbackQuery):
     if action == "add_deadline":
         await callback.bot.send_message(callback.from_user.id, "/add")
 
+    elif action == "solve_ds":
+        await callback.bot.send_message(callback.from_user.id, "/solve_ds")
+
     elif action == "nextweek":
         from schedule_parser import get_next_week_schedule
         wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
@@ -104,6 +107,7 @@ async def cmd_help(message: Message):
         "/done ID — выполнено\n"
         "/del ID — удалить дедлайн\n"
         "/solve — решить задачу\n"
+        "/solve_ds — решить через DeepSeek\n"
         "/history — история решений\n"
         "/rating — рейтинг\n"
         "/hw — доска ДЗ\n"
