@@ -1,6 +1,6 @@
 import logging
 from aiogram import Router, F, Bot
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
@@ -72,8 +72,11 @@ async def choose_subject(message: Message, state: FSMContext):
 
 
 @router.message(F.text == "🛑 Завершить диалог")
-async def stop_dialog(message: Message, state: FSMContext, bot: Bot):
-    data = await state.get_data()
+async def stop_dialog(message: Message, state: FSMContext, bot: Bot, interrupted_fsm_data: dict | None = None):
+    # "🛑 Завершить диалог" входит в MENU_BUTTON_TEXTS, поэтому к этому моменту
+    # MenuInterruptMiddleware уже сбросил state — msg_ids берём из того, что он
+    # успел сохранить перед сбросом.
+    data = interrupted_fsm_data if interrupted_fsm_data is not None else await state.get_data()
     await state.clear()
 
     # Удаляем сообщения диалога из чата
@@ -222,7 +225,13 @@ async def cmd_history(message: Message):
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 
-@router.message(F.text & ~F.text.startswith("/"))
+# StateFilter(None) обязателен: этот catch-all зарегистрирован в роутере РАНЬШЕ
+# хендлеров решалки по лекциям (LectureSolverState ниже). Без фильтра он
+# забирал себе любой текст в любом состоянии и просто выходил по проверке
+# state ниже — апдейт считался обработанным, и lecture_choose_subject /
+# lecture_handle_task не вызывались никогда (/solve_lectures зависал на
+# выборе предмета).
+@router.message(F.text & ~F.text.startswith("/"), StateFilter(None))
 async def handle_plain_text(message: Message, state: FSMContext):
     if message.text in MENU_BUTTON_TEXTS:
         return

@@ -25,5 +25,9 @@ class MenuInterruptMiddleware(BaseMiddleware):
             current = await state.get_state()
             if current is not None:
                 logger.info(f"Menu button '{event.text}' interrupted FSM state {current} for user {event.from_user.id}")
+                # Данные сброшенного диалога отдаём хендлеру кнопки — иначе тот,
+                # кому они нужны (solver.stop_dialog чистит сообщения диалога по
+                # msg_ids), видит уже пустой state и ничего не может сделать.
+                data["interrupted_fsm_data"] = await state.get_data()
                 await state.clear()
         return await handler(event, data)
