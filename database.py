@@ -26,9 +26,15 @@ async def init_db():
                 due_time    TEXT,
                 created_by  INTEGER,
                 created_at  TEXT DEFAULT (datetime('now')),
-                done        INTEGER DEFAULT 0
+                done        INTEGER DEFAULT 0,
+                external_id TEXT
             )
         """)
+        # Миграция для баз, созданных до появления external_id (автосинк СДО).
+        try:
+            await db.execute("ALTER TABLE deadlines ADD COLUMN external_id TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,14 +147,21 @@ async def get_user(user_id: int) -> dict | None:
 
 # ── Deadlines ─────────────────────────────────────────────────────────────────
 
-async def add_deadline(subject, description, due_date, due_time, created_by) -> int:
+async def add_deadline(subject, description, due_date, due_time, created_by, external_id=None) -> int:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
-            INSERT INTO deadlines (subject, description, due_date, due_time, created_by)
-            VALUES (?, ?, ?, ?, ?)
-        """, (subject, description, due_date, due_time, created_by))
+            INSERT INTO deadlines (subject, description, due_date, due_time, created_by, external_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (subject, description, due_date, due_time, created_by, external_id))
         await db.commit()
         return cursor.lastrowid
+
+async def get_deadline_by_external_id(external_id: str) -> dict | None:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM deadlines WHERE external_id=?", (external_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 async def get_active_deadlines() -> list[dict]:
     async with aiosqlite.connect(DATABASE_PATH) as db:

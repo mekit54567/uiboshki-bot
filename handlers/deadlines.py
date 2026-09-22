@@ -214,3 +214,31 @@ async def cmd_import_deadlines(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer("📤 Пришли файл <b>deadlines.json</b>", parse_mode="HTML")
+
+
+@router.message(Command("syncsdo"))
+async def cmd_sync_sdo(message: Message):
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+
+    from sdo_parser import sync_deadlines
+
+    wait = await message.answer("⏳ Синхронизирую дедлайны из СДО...")
+    result = await sync_deadlines()
+
+    if result.get("expired"):
+        await wait.edit_text(
+            "⚠️ Кука СДО протухла. Зайди в online-edu.mirea.ru в браузере "
+            "(с «запомнить меня»), возьми свежее значение MoodleSession "
+            "(DevTools → Application → Cookies) и обнови SDO_SESSION_COOKIE."
+        )
+        return
+
+    if "error" in result:
+        await wait.edit_text(f"❌ Ошибка: {result['error']}")
+        return
+
+    await wait.edit_text(
+        f"✅ Готово!\n\nДобавлено: {result['added']}\nУже было: {result['skipped']}"
+    )

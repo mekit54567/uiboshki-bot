@@ -126,6 +126,7 @@ async def cmd_help(message: Message):
             "/setzam ID — установить зама\n"
             "/syncfiles — загрузить файлы\n"
             "/importdeadlines — импорт дедлайнов\n"
+            "/syncsdo — вручную синхронизировать дедлайны из СДО\n"
             "/delpost ID — удалить пост из ленты\n"
         )
     await message.answer(text, parse_mode="HTML")

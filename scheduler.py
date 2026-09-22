@@ -5,7 +5,10 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 
-from config import TIMEZONE, SCHEDULE_HOUR, SCHEDULE_MINUTE, DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE
+from config import (
+    TIMEZONE, SCHEDULE_HOUR, SCHEDULE_MINUTE, DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE,
+    SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID,
+)
 from database import get_all_subscribed_users, get_deadlines_soon, get_user
 from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date
 
@@ -124,9 +127,48 @@ async def check_lesson_reminders(bot: Bot):
         logger.error(f"check_lesson_reminders: {e}")
 
 
+# ── Автосинк дедлайнов из СДО ────────────────────────────────────────────────
+
+_sdo_expired_notified = False  # не спамим старосте одним и тем же каждые N часов
+
+
+async def sync_sdo_deadlines(bot: Bot):
+    global _sdo_expired_notified
+    from sdo_parser import sync_deadlines
+
+    result = await sync_deadlines()
+
+    if result.get("expired"):
+        if not _sdo_expired_notified and STAROSTA_ID:
+            try:
+                await bot.send_message(
+                    STAROSTA_ID,
+                    "⚠️ Сессия СДО протухла — автосинк дедлайнов не работает.\n\n"
+                    "Зайди в online-edu.mirea.ru в браузере (с опцией «запомнить меня»), "
+                    "возьми свежее значение куки MoodleSession (DevTools → Application → "
+                    "Cookies) и обнови переменную окружения SDO_SESSION_COOKIE.",
+                )
+                _sdo_expired_notified = True
+            except Exception as e:
+                logger.warning(f"Не смог уведомить старосту о протухшей куке СДО: {e}")
+        return
+
+    _sdo_expired_notified = False  # сессия снова живая — сбрасываем флаг
+
+    if result["added"] and STAROSTA_ID:
+        try:
+            await bot.send_message(
+                STAROSTA_ID,
+                f"🔄 Автосинк СДО: добавлено новых дедлайнов — {result['added']}",
+            )
+        except Exception as e:
+            logger.warning(f"Не смог уведомить старосту об автосинке СДО: {e}")
+
+
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(send_morning_schedule,   "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
     scheduler.add_job(send_deadline_reminders, "cron", hour=DEADLINE_REMINDER_HOUR, minute=DEADLINE_REMINDER_MINUTE, args=[bot])
     scheduler.add_job(check_lesson_reminders,  "cron", minute="*",                  args=[bot])
+    scheduler.add_job(sync_sdo_deadlines,      "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot])
     return scheduler

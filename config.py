@@ -51,3 +51,16 @@ DEFAULT_REMINDER_MINUTES = 15
 
 # ─── Кэш расписания (минут) ────────────────────────────────────────────────────
 SCHEDULE_CACHE_TTL_SECONDS = int(os.getenv("SCHEDULE_CACHE_TTL_SECONDS", "300"))
+
+# ─── СДО (Moodle) ───────────────────────────────────────────────────────────────
+# Значение куки MoodleSession, полученное один раз обычным логином в браузере
+# (с "запомнить меня"). Когда протухнет — старосте прилетит уведомление,
+# нужно будет зайти в СДО в браузере и обновить значение здесь.
+SDO_SESSION_COOKIE = os.getenv("SDO_SESSION_COOKIE", "")
+SDO_BASE_URL = os.getenv("SDO_BASE_URL", "https://online-edu.mirea.ru")
+SDO_SYNC_INTERVAL_HOURS = int(os.getenv("SDO_SYNC_INTERVAL_HOURS", "6"))
+
+if not SDO_SESSION_COOKIE:
+    logger.warning(
+        "⚠️ SDO_SESSION_COOKIE не задана — автосинк дедлайнов из СДО работать не будет."
+    )
