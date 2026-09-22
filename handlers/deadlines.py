@@ -7,13 +7,13 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
     delete_deadline, upsert_user, get_deadline_stats,
 )
-from config import STAROSTA_ID
+from config import STAROSTA_ID, GROUP_CHAT_ID
 from keyboards import MAIN_KB, CANCEL_KB
 
 router = Router()
@@ -242,3 +242,36 @@ async def cmd_sync_sdo(message: Message):
     await wait.edit_text(
         f"✅ Готово!\n\nДобавлено: {result['added']}\nУже было: {result['skipped']}"
     )
+
+# ── Публикация дедлайнов в группу (ручная модерация старостой) ─────────────
+# scheduler.send_deadline_reminders шлёт старосте тот же текст, что ушёл
+# подписчикам лично, плюс эти две кнопки — потому что автосинк из СДО
+# не всегда достоверен (см. PLAN.md, Фаза 4), и светить непроверенное
+# в общий чат всей группы без подтверждения не стоит.
+
+@router.callback_query(F.data == "dlpost:yes")
+async def deadline_post_confirm(callback: CallbackQuery):
+    if STAROSTA_ID and callback.from_user.id != STAROSTA_ID:
+        await callback.answer("Только для старосты", show_alert=True)
+        return
+    if not GROUP_CHAT_ID:
+        await callback.answer("GROUP_CHAT_ID не настроен", show_alert=True)
+        return
+    text = callback.message.html_text
+    try:
+        await callback.bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+    except Exception as e:
+        await callback.answer(f"Ошибка отправки: {e}", show_alert=True)
+        return
+    await callback.message.edit_text(text + "\n\n✅ Опубликовано в группу.", parse_mode="HTML", reply_markup=None)
+    await callback.answer("Опубликовано!")
+
+
+@router.callback_query(F.data == "dlpost:no")
+async def deadline_post_decline(callback: CallbackQuery):
+    if STAROSTA_ID and callback.from_user.id != STAROSTA_ID:
+        await callback.answer("Только для старосты", show_alert=True)
+        return
+    text = callback.message.html_text
+    await callback.message.edit_text(text + "\n\n🚫 Не опубликовано.", parse_mode="HTML", reply_markup=None)
+    await callback.answer()

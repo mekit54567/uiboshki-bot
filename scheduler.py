@@ -5,9 +5,11 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 from config import (
     TIMEZONE, SCHEDULE_HOUR, SCHEDULE_MINUTE, DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE,
-    SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID, SCHEDULE_DIFF_CHECK_MINUTES,
+    SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID, SCHEDULE_DIFF_CHECK_MINUTES, GROUP_CHAT_ID,
 )
 from database import get_all_subscribed_users, get_deadlines_soon, get_user
 from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date
@@ -55,11 +57,23 @@ async def send_morning_schedule(bot: Bot):
             logger.warning(f"Не смог отправить {uid}: {e}")
 
 
-async def send_deadline_reminders(bot: Bot):
-    deadlines = await get_deadlines_soon(days=3)
-    if not deadlines:
+async def send_group_morning_digest(bot: Bot):
+    """Короткий утренний дайджест в общий чат группы (не в личку): расписание
+    на сегодня + пометки к парам, если есть. Без погоды — в группе это лишнее,
+    оставляем это личным рассылкам. Молчит, если GROUP_CHAT_ID не настроен —
+    это не критическая функция, чтобы падать при её отсутствии."""
+    if not GROUP_CHAT_ID:
         return
+    try:
+        from handlers.schedule import _notes_block
+        text = await get_today_schedule()
+        text += await _notes_block(date.today().isoformat())
+        await bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"Не смог отправить утренний дайджест в группу: {e}")
 
+
+def _format_deadline_reminders(deadlines: list[dict]) -> str:
     today = date.today()
     lines = ["⏳ <b>Ближайшие дедлайны группы:</b>\n"]
     for d in deadlines:
@@ -73,14 +87,41 @@ async def send_deadline_reminders(bot: Bot):
             f"  📅 {format_date(d['due_date'])}{tp} — {badge}\n"
             f"  {progress_bar(delta)}{desc}"
         )
+    return "\n\n".join(lines)
 
-    text  = "\n\n".join(lines)
+
+DEADLINE_POST_KB = InlineKeyboardMarkup(inline_keyboard=[[
+    InlineKeyboardButton(text="✅ Опубликовать в группу", callback_data="dlpost:yes"),
+    InlineKeyboardButton(text="🚫 Не публиковать", callback_data="dlpost:no"),
+]])
+
+
+async def send_deadline_reminders(bot: Bot):
+    deadlines = await get_deadlines_soon(days=3)
+    if not deadlines:
+        return
+
+    text  = _format_deadline_reminders(deadlines)
     users = await get_all_subscribed_users()
     for uid in users:
         try:
             await bot.send_message(uid, text, parse_mode="HTML")
         except Exception as e:
             logger.warning(f"Не смог отправить {uid}: {e}")
+
+    # Дедлайны (особенно из автосинка СДО) не всегда достоверны — прежде чем
+    # светить их в общем чате всей группы, спрашиваем старосту. Сама рассылка
+    # подписчикам выше это не блокирует — она была и раньше.
+    if STAROSTA_ID and GROUP_CHAT_ID:
+        try:
+            await bot.send_message(
+                STAROSTA_ID,
+                text + "\n\n👆 Опубликовать этот список в общий чат группы?",
+                parse_mode="HTML",
+                reply_markup=DEADLINE_POST_KB,
+            )
+        except Exception as e:
+            logger.warning(f"Не смог отправить старосте запрос на публикацию дедлайнов: {e}")
 
 
 async def check_lesson_reminders(bot: Bot):
@@ -169,7 +210,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     from schedule_diff import check_schedule_changes
 
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
-    scheduler.add_job(send_morning_schedule,   "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
+    scheduler.add_job(send_morning_schedule,       "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
+    scheduler.add_job(send_group_morning_digest,   "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
     scheduler.add_job(send_deadline_reminders, "cron", hour=DEADLINE_REMINDER_HOUR, minute=DEADLINE_REMINDER_MINUTE, args=[bot])
     scheduler.add_job(check_lesson_reminders,  "cron", minute="*",                  args=[bot])
     scheduler.add_job(sync_sdo_deadlines,      "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot])

@@ -18,6 +18,7 @@
 import logging
 from datetime import date, timedelta
 
+from config import GROUP_CHAT_ID
 from database import get_schedule_snapshot, save_schedule_snapshot, get_all_subscribed_users
 from schedule_parser import fetch_schedule_raw, parse_events_for_date
 
@@ -107,3 +108,12 @@ async def check_schedule_changes(bot):
                 await bot.send_message(uid, text, parse_mode="HTML")
             except Exception as e:
                 logger.warning(f"Не смог отправить diff расписания {uid}: {e}")
+
+        # Смена/отмена пары — это то, что реально должно долетать до общего
+        # чата, не только до лично подписавшихся: как правило, шлём это
+        # надёжнее, чем личка (не у всех она включена).
+        if GROUP_CHAT_ID:
+            try:
+                await bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+            except Exception as e:
+                logger.warning(f"Не смог отправить diff расписания в группу: {e}")
