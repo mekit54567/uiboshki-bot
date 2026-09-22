@@ -38,7 +38,10 @@ class FakeSession(BaseSession):
 
 @pytest.mark.asyncio
 async def test_handler_crash_alerts_starosta(monkeypatch):
-    monkeypatch.setattr(bot_module, "_LAST_ERROR_ALERT_AT", 0.0)
+    # -inf, не 0.0: на свежем процессе time.monotonic() сам может быть
+    # маленьким числом (реальный баг, пойманный CI — см. bot.py) — 0.0 тут
+    # маскировал бы регрессию обратно.
+    monkeypatch.setattr(bot_module, "_LAST_ERROR_ALERT_AT", float("-inf"))
 
     fake_bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=FakeSession())
     dp = Dispatcher(storage=MemoryStorage())

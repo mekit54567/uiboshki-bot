@@ -20,21 +20,24 @@ logger = logging.getLogger(__name__)
 # личку — иначе о падении фичи узнаёшь только от жалоб студентов через
 # день-два. Троттлинг на 5 минут, чтобы одна и та же повторяющаяся ошибка
 # (например упавшее внешнее API) не заспамила личку сотней сообщений подряд.
-_LAST_ERROR_ALERT_AT = 0.0
+#
+# Сентинел -inf, а не 0.0: time.monotonic() отсчитывается от старта процесса
+# (не от эпохи!) — на свежем контейнере/хосте в первые минуты жизни он сам
+# может быть маленьким числом (реально пойман на CI: now=106.58 на 106-й
+# секунде жизни джобы). C 0.0 в качестве "никогда не алертили" первый же
+# настоящий алерт в первые 5 минут работы бота молча проглатывался бы.
+_LAST_ERROR_ALERT_AT = float("-inf")
 _ERROR_ALERT_COOLDOWN_SECONDS = 5 * 60
 
 
 async def notify_starosta_on_error(event: ErrorEvent, bot: Bot):
     global _LAST_ERROR_ALERT_AT
     logger.exception(f"Необработанная ошибка в хендлере: {event.exception}")
-    logger.warning(f"DEBUG notify_starosta_on_error: STAROSTA_ID={STAROSTA_ID!r} _LAST_ERROR_ALERT_AT={_LAST_ERROR_ALERT_AT!r}")
 
     if not STAROSTA_ID:
-        logger.warning("DEBUG: возврат по STAROSTA_ID")
         return
     now = time.monotonic()
     if now - _LAST_ERROR_ALERT_AT < _ERROR_ALERT_COOLDOWN_SECONDS:
-        logger.warning(f"DEBUG: возврат по троттлингу, now={now!r}")
         return
     _LAST_ERROR_ALERT_AT = now
     try:
