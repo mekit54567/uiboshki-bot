@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>УИБО-03-24</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg:        #0f1115;
+    --bg-card:   #181b22;
+    --bg-raised: #21242e;
+    --text:      #f2f3f7;
+    --hint:      #9aa0ac;
+    --accent:    #7c7ff5;
+    --accent-2:  #43c6ac;
+    --danger:    #ff6363;
+    --warn:      #ffb238;
+    --ok:        #3ddc84;
+    --border:    #2a2e3a;
+    --radius:    18px;
+    --radius-sm: 12px;
+    --shadow:    0 8px 24px rgba(0,0,0,0.35);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    padding-bottom: 84px;
+    overscroll-behavior-y: contain;
+  }
+  ::-webkit-scrollbar { display: none; }
+
+  header.top {
+    padding: 18px 18px 10px;
+    position: sticky; top: 0; z-index: 5;
+    background: linear-gradient(180deg, var(--bg) 60%, transparent);
+  }
+  header.top h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  header.top p {
+    margin: 2px 0 0;
+    color: var(--hint);
+    font-size: 13px;
+  }
+
+  main { padding: 6px 14px 20px; }
+
+  .view { display: none; animation: fadein .18s ease; }
+  .view.active { display: block; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none; } }
+
+  .bento {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .bento .wide { grid-column: 1 / -1; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+  }
+  .card.tap { cursor: pointer; transition: transform .12s ease, background .12s ease; }
+  .card.tap:active { transform: scale(0.97); background: var(--bg-raised); }
+
+  .card .eyebrow {
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--accent-2);
+    margin: 0 0 6px;
+  }
+  .card .big { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
+  .card .sub { color: var(--hint); font-size: 13px; margin: 0; }
+
+  .schedule-html { font-size: 14.5px; }
+  .schedule-html b { color: var(--accent-2); }
+
+  .chip {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    background: var(--bg-raised);
+    color: var(--hint);
+    border: 1px solid var(--border);
+  }
+  .chip.ok      { background: rgba(61,220,132,.14); color: var(--ok); border-color: rgba(61,220,132,.3); }
+  .chip.warn    { background: rgba(255,178,56,.14); color: var(--warn); border-color: rgba(255,178,56,.3); }
+  .chip.danger  { background: rgba(255,99,99,.14);  color: var(--danger); border-color: rgba(255,99,99,.3); }
+
+  nav.tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav.tabs button {
+    flex: 1;
+    background: none; border: none; color: var(--hint);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 11px; font-weight: 600;
+    padding: 6px 2px;
+    border-radius: var(--radius-sm);
+    transition: color .15s ease, background .15s ease;
+  }
+  nav.tabs button .ic { font-size: 20px; line-height: 1; }
+  nav.tabs button.active { color: var(--accent); background: rgba(124,127,245,.12); }
+
+  h2.section {
+    font-size: 15px;
+    font-weight: 800;
+    margin: 18px 2px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  h2.section .stat { font-size: 12px; color: var(--hint); font-weight: 600; }
+
+  .list { display: flex; flex-direction: column; gap: 8px; }
+
+  .deadline-card {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    transition: opacity .2s ease, transform .12s ease;
+  }
+  .deadline-card:active { transform: scale(0.985); }
+  .deadline-card.done { opacity: .45; }
+  .deadline-card.done .dl-title { text-decoration: line-through; }
+
+  .checkbox {
+    width: 24px; height: 24px; min-width: 24px;
+    border-radius: 8px;
+    border: 2px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 900;
+    margin-top: 1px;
+  }
+  .checkbox.checked { background: var(--accent); color: #fff; }
+
+  .dl-body { flex: 1; min-width: 0; }
+  .dl-title { font-weight: 700; margin: 0 0 3px; word-break: break-word; }
+  .dl-desc { color: var(--hint); font-size: 13px; margin: 0 0 6px; word-break: break-word; }
+  .dl-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .file-card {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+  }
+  .file-card .ic { font-size: 22px; }
+  .file-card .ft { font-weight: 700; }
+  .file-card .fs { color: var(--hint); font-size: 12.5px; }
+  .file-card button {
+    margin-left: auto;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 7px 13px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+
+  input.searchbox, select.filter {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  input.searchbox::placeholder { color: var(--hint); }
+
+  .empty {
+    text-align: center;
+    color: var(--hint);
+    padding: 30px 10px;
+    font-size: 13.5px;
+  }
+
+  /* Чат */
+  .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 180px); min-height: 320px; }
+  .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+  .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+  .msg.bot  { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+  .msg.bot.pending { color: var(--hint); }
+
+  .think {
+    margin-top: 8px;
+    border-top: 1px dashed var(--border);
+    padding-top: 8px;
+  }
+  .think summary {
+    cursor: pointer;
+    color: var(--accent-2);
+    font-size: 12px;
+    font-weight: 700;
+    list-style: none;
+  }
+  .think summary::-webkit-details-marker { display: none; }
+  .think summary::before { content: "🧠 "; }
+  .think[open] summary::after { content: " ▲"; }
+  .think:not([open]) summary::after { content: " ▼"; }
+  .think .think-body {
+    margin-top: 6px;
+    color: var(--hint);
+    font-size: 12.5px;
+    white-space: pre-wrap;
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+  }
+
+  .chat-input-row {
+    display: flex; gap: 8px;
+    padding-top: 8px;
+  }
+  .chat-input-row textarea {
+    flex: 1;
+    resize: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    font-size: 14px;
+    max-height: 100px;
+  }
+  .chat-input-row button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0 18px;
+    font-weight: 800;
+    font-size: 14px;
+  }
+  .chat-input-row button:disabled { opacity: .5; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1 id="greeting">УИБО-03-24</h1>
+  <p id="subtitle">открываю…</p>
+</header>
+
+<main>
+
+  <!-- ── Сегодня ───────────────────────────────────────────────────── -->
+  <section class="view active" id="view-today">
+    <div class="bento">
+      <div class="card wide">
+        <p class="eyebrow">Сегодня</p>
+        <div class="schedule-html" id="today-schedule">Загружаю…</div>
+      </div>
+      <div class="card tap" onclick="switchTab('deadlines')">
+        <p class="eyebrow">Дедлайны</p>
+        <p class="big" id="today-deadline-count">—</p>
+        <p class="sub">ближайшие</p>
+      </div>
+      <div class="card tap" onclick="loadWeek()">
+        <p class="eyebrow">Неделя</p>
+        <p class="big">📆</p>
+        <p class="sub">открыть расписание</p>
+      </div>
+      <div class="card wide" id="week-card" style="display:none;">
+        <p class="eyebrow">Неделя целиком</p>
+        <div class="schedule-html" id="week-schedule"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Дедлайны / ДЗ ─────────────────────────────────────────────── -->
+  <section class="view" id="view-deadlines">
+    <h2 class="section">Дедлайны и ДЗ <span class="stat" id="deadline-stat"></span></h2>
+    <div class="list" id="deadline-list"><div class="empty">Загружаю…</div></div>
+  </section>
+
+  <!-- ── Файлы ─────────────────────────────────────────────────────── -->
+  <section class="view" id="view-files">
+    <h2 class="section">Файлы</h2>
+    <input class="searchbox" id="file-search" placeholder="Поиск по названию, предмету, файлу…">
+    <div class="list" id="file-list"><div class="empty">Загружаю…</div></div>
+  </section>
+
+  <!-- ── Чат ───────────────────────────────────────────────────────── -->
+  <section class="view" id="view-chat">
+    <h2 class="section">Чат с DeepSeek 🐋</h2>
+    <div class="chat-wrap">
+      <div class="chat-log" id="chat-log">
+        <div class="msg bot">Привет! Спроси что угодно по учёбе — ход рассуждений можно развернуть под ответом 🧠</div>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" rows="1" placeholder="Напиши сообщение…"></textarea>
+        <button id="chat-send" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
+  <button data-tab="deadlines" onclick="switchTab('deadlines')"><span class="ic">📋</span>Дедлайны</button>
+  <button data-tab="files" onclick="switchTab('files')"><span class="ic">📁</span>Файлы</button>
+  <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">🐋</span>Чат</button>
+</nav>
+
+<script>
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+const BOT_USERNAME = "uiboshkibot"; // если бот переименуют — поменять тут
+
+if (tg) {
+  tg.ready();
+  tg.expand();
+  try { tg.setHeaderColor("secondary_bg_color"); } catch (e) {}
+  const tp = tg.themeParams || {};
+  const root = document.documentElement.style;
+  if (tp.bg_color)            root.setProperty("--bg", tp.bg_color);
+  if (tp.secondary_bg_color)  root.setProperty("--bg-card", tp.secondary_bg_color);
+  if (tp.text_color)          root.setProperty("--text", tp.text_color);
+  if (tp.hint_color)          root.setProperty("--hint", tp.hint_color);
+  if (tp.button_color)        root.setProperty("--accent", tp.button_color);
+}
+
+function initData() {
+  return tg ? tg.initData : "";
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({
+    "X-Telegram-Init-Data": initData(),
+    "Content-Type": "application/json",
+  }, opts.headers || {});
+  const resp = await fetch(path, opts);
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error("HTTP " + resp.status + ": " + body);
+  }
+  return resp.json();
+}
+
+function haptic(kind) {
+  if (tg && tg.HapticFeedback) {
+    try {
+      if (kind === "success") tg.HapticFeedback.notificationOccurred("success");
+      else tg.HapticFeedback.impactOccurred("light");
+    } catch (e) {}
+  }
+}
+
+// ── Табы ──────────────────────────────────────────────────────────────────
+
+function switchTab(name) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-" + name).classList.add("active");
+  document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  haptic();
+  if (name === "deadlines") loadDeadlines();
+  if (name === "files") loadFiles();
+}
+
+// ── Сегодня ───────────────────────────────────────────────────────────────
+
+async function loadToday() {
+  try {
+    const me = await api("/api/me");
+    document.getElementById("greeting").textContent = "Привет, " + (me.first_name || "!");
+    document.getElementById("subtitle").textContent = "УИБО-03-24 · сегодня";
+  } catch (e) {
+    document.getElementById("subtitle").textContent = "Не удалось авторизоваться: " + e.message;
+  }
+  try {
+    const data = await api("/api/schedule/today");
+    document.getElementById("today-schedule").innerHTML = data.html || "Пар нет 🎉";
+  } catch (e) {
+    document.getElementById("today-schedule").textContent = "Не загрузилось: " + e.message;
+  }
+  try {
+    const dl = await api("/api/deadlines");
+    document.getElementById("today-deadline-count").textContent = dl.stats.active;
+  } catch (e) {}
+}
+
+let weekLoaded = false;
+async function loadWeek() {
+  const card = document.getElementById("week-card");
+  card.style.display = "block";
+  if (weekLoaded) return;
+  weekLoaded = true;
+  try {
+    const data = await api("/api/schedule/week");
+    document.getElementById("week-schedule").innerHTML = data.html;
+  } catch (e) {
+    document.getElementById("week-schedule").textContent = "Не загрузилось: " + e.message;
+  }
+}
+
+// ── Дедлайны ──────────────────────────────────────────────────────────────
+
+function dueBadge(item) {
+  if (item.done) return '<span class="chip ok">✓ готово</span>';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(item.due_date + "T00:00:00");
+  const days = Math.round((due - today) / 86400000);
+  let cls = "ok", label;
+  if (days < 0) { cls = "danger"; label = "просрочено"; }
+  else if (days === 0) { cls = "danger"; label = "сегодня"; }
+  else if (days === 1) { cls = "warn"; label = "завтра"; }
+  else if (days <= 3) { cls = "warn"; label = "через " + days + " дн."; }
+  else { label = item.due_date; }
+  return '<span class="chip ' + cls + '">' + label + '</span>';
+}
+
+async function loadDeadlines() {
+  const list = document.getElementById("deadline-list");
+  try {
+    const data = await api("/api/deadlines?include_done=true");
+    const stat = data.stats;
+    document.getElementById("deadline-stat").textContent =
+      stat.active + " активных · " + stat.overdue + " просрочено";
+    if (!data.items.length) {
+      list.innerHTML = '<div class="empty">Дедлайнов пока нет 🎉</div>';
+      return;
+    }
+    list.innerHTML = data.items.map(renderDeadline).join("");
+  } catch (e) {
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+  }
+}
+
+function renderDeadline(item) {
+  return (
+    '<div class="deadline-card ' + (item.done ? "done" : "") + '" onclick="toggleDeadline(' + item.id + ', ' + (!item.done) + ')">' +
+      '<div class="checkbox ' + (item.done ? "checked" : "") + '">' + (item.done ? "✓" : "") + '</div>' +
+      '<div class="dl-body">' +
+        '<p class="dl-title">' + escapeHtml(item.subject) + '</p>' +
+        (item.description ? '<p class="dl-desc">' + escapeHtml(item.description) + '</p>' : '') +
+        '<div class="dl-meta">' + dueBadge(item) + '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function toggleDeadline(id, done) {
+  haptic("success");
+  try {
+    await api("/api/deadlines/" + id + "/toggle", { method: "POST", body: JSON.stringify({ done: done }) });
+    loadDeadlines();
+    loadToday();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  }
+}
+
+// ── Файлы ─────────────────────────────────────────────────────────────────
+
+let fileSearchTimer = null;
+document.getElementById("file-search").addEventListener("input", (e) => {
+  clearTimeout(fileSearchTimer);
+  fileSearchTimer = setTimeout(() => loadFiles(e.target.value), 300);
+});
+
+async function loadFiles(q) {
+  const list = document.getElementById("file-list");
+  try {
+    const data = await api("/api/files?q=" + encodeURIComponent(q || ""));
+    if (!data.items.length) {
+      list.innerHTML = '<div class="empty">Ничего не нашлось</div>';
+      return;
+    }
+    list.innerHTML = data.items.map(f =>
+      '<div class="file-card">' +
+        '<span class="ic">📄</span>' +
+        '<div><div class="ft">' + escapeHtml(f.title) + '</div>' +
+        '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
+        '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
+      '</div>'
+    ).join("");
+  } catch (e) {
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+  }
+}
+
+function openFile(id) {
+  const link = "https://t.me/" + BOT_USERNAME + "?start=file_" + id;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(link);
+  else window.open(link, "_blank");
+}
+
+// ── Чат ───────────────────────────────────────────────────────────────────
+
+const chatHistory = [];
+
+function appendMsg(role, content, reasoning) {
+  const log = document.getElementById("chat-log");
+  const div = document.createElement("div");
+  div.className = "msg " + (role === "user" ? "user" : "bot");
+  const textNode = document.createElement("div");
+  textNode.textContent = content;
+  div.appendChild(textNode);
+  if (reasoning) {
+    const det = document.createElement("details");
+    det.className = "think";
+    det.innerHTML = '<summary>Ход мыслей</summary><div class="think-body"></div>';
+    det.querySelector(".think-body").textContent = reasoning;
+    div.appendChild(det);
+  }
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  const btn = document.getElementById("chat-send");
+  btn.disabled = true;
+
+  appendMsg("user", text);
+  chatHistory.push({ role: "user", content: text });
+  const pending = appendMsg("bot", "Думаю…");
+  pending.classList.add("pending");
+
+  try {
+    const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ history: chatHistory }) });
+    pending.remove();
+    appendMsg("bot", data.content, data.reasoning);
+    chatHistory.push({ role: "assistant", content: data.content });
+  } catch (e) {
+    pending.remove();
+    appendMsg("bot", "⚠️ " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+
+// ── Утилиты ───────────────────────────────────────────────────────────────
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
+loadToday();
+</script>
+
+</body>
+</html>

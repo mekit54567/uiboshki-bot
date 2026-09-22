@@ -6,3 +6,5 @@ icalendar==5.0.13
 recurring-ical-events==3.3.0
 python-dateutil==2.9.0
 beautifulsoup4==4.15.0
+fastapi==0.115.0
+uvicorn[standard]==0.30.6

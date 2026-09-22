@@ -15,6 +15,7 @@ DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 MODEL_TEXT      = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_PHOTO     = "meta-llama/llama-4-scout-17b-16e-instruct"
 MODEL_DEEPSEEK  = "deepseek-chat"
+MODEL_DEEPSEEK_REASONER = "deepseek-reasoner"
 
 # Фото понимает только Groq (llama-4-scout умеет в vision, DeepSeek chat — нет),
 # поэтому solve_image всегда идёт через Groq вне зависимости от backend.
@@ -100,6 +101,39 @@ async def solve_with_history(history: list, subject: str = "", backend: str = "g
         resp = await client.post(url, headers=get_headers(backend), content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
+
+
+async def chat_with_reasoning(history: list, subject: str = "") -> dict:
+    """Для WebApp-чата: в отличие от solve_text/solve_with_history (модель
+    deepseek-chat, без видимого мышления), тут всегда deepseek-reasoner —
+    единственная модель DeepSeek, которая отдаёт отдельное поле
+    reasoning_content ("как думала") в дополнение к обычному content
+    ("что ответила"). Раздельно, чтобы фронт мог свернуть/развернуть трейс
+    независимо от самого ответа — см. PLAN.md, идея владельца про "мышление"
+    как в приложениях DeepSeek/ChatGPT/Claude.
+    Фолбэк не нужен (в отличие от solve_text) — чат в WebApp это отдельная,
+    опциональная фича, а не подмена решалки в боте: если DEEPSEEK_API_KEY не
+    задан, честно кидаем исключение, WebApp покажет пользователю понятную
+    ошибку вместо того, чтобы тихо подсунуть другую модель под тем же UI.
+    Возвращает {"content": str, "reasoning": str}."""
+    if not DEEPSEEK_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY не настроен на сервере")
+    messages = [{"role": "system", "content": build_system_prompt(subject)}]
+    messages.extend(history)
+    payload = {
+        "model": MODEL_DEEPSEEK_REASONER,
+        "messages": messages,
+        "max_tokens": 4096,
+    }
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    async with httpx.AsyncClient(timeout=90) as client:
+        resp = await client.post(DEEPSEEK_URL, headers=get_headers("deepseek"), content=body)
+        resp.raise_for_status()
+        msg = resp.json()["choices"][0]["message"]
+        return {
+            "content": msg.get("content", ""),
+            "reasoning": msg.get("reasoning_content", ""),
+        }
 
 
 async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str = "") -> str:

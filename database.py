@@ -250,6 +250,21 @@ async def mark_deadline_done(did: int):
         await db.execute("UPDATE deadlines SET done=1 WHERE id=?", (did,))
         await db.commit()
 
+async def set_deadline_done(did: int, done: bool):
+    """В отличие от mark_deadline_done (только 0→1, используется в боте для
+    кнопки "Готово") — тут можно и обратно, нужно для чекбоксов в WebApp,
+    где случайный клик надо уметь отменить."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE deadlines SET done=? WHERE id=?", (1 if done else 0, did))
+        await db.commit()
+
+async def get_deadline(did: int) -> dict | None:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM deadlines WHERE id=?", (did,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
 async def delete_deadline(did: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM deadlines WHERE id=?", (did,))

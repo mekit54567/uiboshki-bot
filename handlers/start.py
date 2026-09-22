@@ -1,12 +1,45 @@
 from aiogram import Router, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import Message, CallbackQuery
 
 from database import upsert_user, set_subscription, get_user
-from config import GROUP_NAME, STAROSTA_ID
-from keyboards import MAIN_KB, ACTIONS_KB
+from config import GROUP_NAME, STAROSTA_ID, WEBAPP_URL
+from keyboards import MAIN_KB, ACTIONS_KB, webapp_keyboard
 
 router = Router()
+
+
+@router.message(CommandStart(deep_link=True))
+async def cmd_start_deeplink(message: Message, command: CommandObject):
+    """Диплинк с параметром — сейчас единственный кейс: t.me/bot?start=file_<id>,
+    им бьёт кнопка "Открыть в Telegram" у файла в WebApp (WebApp не может сама
+    отдать файл по file_id — это может только сам бот). Всё остальное (просто
+    /start без параметра) идёт в обычный cmd_start ниже."""
+    user = message.from_user
+    await upsert_user(user.id, user.username or "", user.full_name or "")
+    payload = command.args or ""
+    if payload.startswith("file_"):
+        from database import get_files
+        try:
+            fid = int(payload.removeprefix("file_"))
+        except ValueError:
+            fid = None
+        target = None
+        if fid is not None:
+            for f in await get_files():
+                if f["id"] == fid:
+                    target = f
+                    break
+        if target:
+            await message.bot.send_document(
+                user.id, target["file_id"],
+                caption=f"📄 <b>{target['title']}</b>" + (f" ({target['subject']})" if target.get('subject') else ""),
+                parse_mode="HTML",
+            )
+        else:
+            await message.answer("❌ Файл не найден (возможно, его удалили).")
+        return
+    await cmd_start(message)
 
 
 @router.message(CommandStart())
@@ -31,6 +64,21 @@ async def cmd_start(message: Message):
         "бот попробует понять и ответить без команд.",
         parse_mode="HTML",
         reply_markup=MAIN_KB
+    )
+    kb = webapp_keyboard()
+    if kb:
+        await message.answer("Или открой всё сразу в приложении 👇", reply_markup=kb)
+
+
+@router.message(Command("app"))
+async def cmd_app(message: Message):
+    kb = webapp_keyboard()
+    if not kb:
+        await message.answer("🚧 Приложение ещё не развёрнуто (WEBAPP_URL не настроен).")
+        return
+    await message.answer(
+        "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.",
+        reply_markup=kb,
     )
 
 
@@ -98,6 +146,7 @@ async def handle_action(callback: CallbackQuery):
 async def cmd_help(message: Message):
     text = (
         "📖 <b>Команды:</b>\n\n"
+        "/app — открыть WebApp (расписание/ДЗ/дедлайны/файлы/чат в одном окне)\n"
         "/schedule — расписание сегодня\n"
         "/tomorrow — завтра\n"
         "/week — неделя\n"

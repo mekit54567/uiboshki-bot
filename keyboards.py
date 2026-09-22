@@ -18,6 +18,19 @@ MENU_BUTTON_TEXTS — источник правды для всех тексто
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 
+def webapp_keyboard(text: str = "🚀 Открыть приложение") -> InlineKeyboardMarkup | None:
+    """Кнопка запуска Mini App. Возвращает None, если WEBAPP_URL не настроен —
+    Telegram не даёт зарегистрировать WebAppInfo с пустым/не-https url, поэтому
+    вызывающий код должен сам проверить на None перед показом кнопки."""
+    from aiogram.types import WebAppInfo
+    from config import WEBAPP_URL
+    if not WEBAPP_URL:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=text, web_app=WebAppInfo(url=WEBAPP_URL))]
+    ])
+
+
 MAIN_KB = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text="📅 Сегодня"),    KeyboardButton(text="📆 Неделя"),     KeyboardButton(text="🌅 Завтра")],
     [KeyboardButton(text="⏭ Следующая"),   KeyboardButton(text="📋 Дедлайны"),   KeyboardButton(text="🤖 Решить")],
