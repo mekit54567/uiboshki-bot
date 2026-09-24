@@ -45,9 +45,23 @@ HTTP-бэкенд (FastAPI) + статический фронтенд для б�
 - `POST /api/deadlines/{id}/toggle` `{"done": true|false}`
 - `GET  /api/files?q=&subject=`
 - `GET  /api/notes?date=YYYY-MM-DD`
+- `GET  /api/calendar/link` — возвращает `{"token", "ics_path"}` для личной
+  ICS-подписки (см. ниже)
 - `POST /api/chat` `{"history": [{"role":"user","content":"..."}]}` →
   `{"content": "...", "reasoning": "..."}` — DeepSeek `deepseek-reasoner`,
   `reasoning` — трейс "мышления" для сворачиваемого блока на фронте.
+
+## Личный ICS-календарь
+
+`GET /ics/{token}` — **БЕЗ** `X-Telegram-Init-Data` (календарные приложения
+не умеют слать кастомные заголовки при периодической автоподписке).
+Токен — случайная непредсказуемая строка на студента (`/calendar` в самом
+боте её выдаёт, генерится лениво при первом обращении), секретность держится
+на непредсказуемости токена в пути, как у обычных calendar-share ссылок.
+Отдаёт `.ics` с конкретными `VEVENT` на каждую пару (не `RRULE`) на 45 дней
+вперёд, с ДЗ/заметками в `DESCRIPTION`, если они привязаны к этой дате и
+предмету (см. `webapp/calendar_feed.py`, `handlers/announce.py:
+parse_lesson_date`).
 
 Файлы отдаются не напрямую (Telegram `file_id` не резолвится в URL без похода
 через `getFile` от лица бота) — кнопка "Открыть" в WebApp делает

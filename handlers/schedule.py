@@ -11,8 +11,9 @@ from schedule_parser import (
     get_next_week_schedule, list_upcoming_events, format_search_results,
 )
 from mirea_schedule_api import search_targets, get_baseinfo, fetch_ical, TARGET_TEACHER, TARGET_ROOM
-from database import upsert_user, add_lesson_note, get_lesson_notes
+from database import upsert_user, add_lesson_note, get_lesson_notes, get_or_create_calendar_token
 from keyboards import CANCEL_KB, MAIN_KB
+from config import WEBAPP_URL
 
 router = Router()
 
@@ -86,6 +87,38 @@ async def cmd_next_week(message: Message):
 async def cmd_next(message: Message):
     wait = await message.answer("⏳ Смотрю...")
     await wait.edit_text(await get_next_lesson(), parse_mode="HTML")
+
+
+# ── Личная ссылка на ICS-календарь (Фаза 12) ────────────────────────────────
+# Подписка (не разовый экспорт) — календарь студента сам подтягивает
+# изменения расписания/ДЗ по этой ссылке (Google/Apple/Outlook кэшируют и
+# переопрашивают её сами, обычно раз в несколько часов — это поведение
+# самого календарного приложения, бот на него не влияет). Ссылка приватная
+# и своя у каждого (см. database.get_or_create_calendar_token) — генерируется
+# лениво при первом /calendar, не при /start.
+@router.message(Command("calendar"))
+async def cmd_calendar(message: Message):
+    if not WEBAPP_URL:
+        await message.answer(
+            "📅 Личный календарь пока не настроен старостой — для него нужен "
+            "поднятый WebApp-бэкенд (WEBAPP_URL), см. webapp/README.md. "
+            "Без этого ссылку выдать не могу."
+        )
+        return
+    token = await get_or_create_calendar_token(message.from_user.id)
+    https_url  = f"{WEBAPP_URL.rstrip('/')}/ics/{token}"
+    webcal_url = https_url.replace("https://", "webcal://", 1).replace("http://", "webcal://", 1)
+    await message.answer(
+        "📅 <b>Твоя личная ссылка на календарь</b>\n\n"
+        "Добавляет пары как события — с ДЗ и заметками к каждой паре, если они "
+        "есть (ДЗ, привязанное к дате: см. /addhw). Ссылка приватная, не делись ей.\n\n"
+        f"<code>{https_url}</code>\n\n"
+        "<b>Google Calendar:</b> «Другие календари» → «+» → «По URL» → вставить ссылку.\n"
+        "<b>Apple Calendar:</b> Файл → «Новая подписка» → вставить ссылку "
+        f"(или открой <code>{webcal_url}</code> на iPhone/Mac напрямую).\n"
+        "<b>Outlook:</b> «Добавить календарь» → «Подписаться из интернета» → вставить ссылку.",
+        parse_mode="HTML"
+    )
 
 
 # ── Поиск по преподавателю / аудитории (по всему университету) ─────────────

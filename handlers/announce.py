@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -130,6 +131,13 @@ async def init_hw_table():
                 created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        # lesson_date — привязка ДЗ к конкретной дате/паре (Фаза 12, календарь),
+        # а не только к предмету "вообще". NULL — старое поведение (общее ДЗ по
+        # предмету без даты), как было раньше и остаётся по умолчанию.
+        try:
+            await db.execute("ALTER TABLE homework ADD COLUMN lesson_date TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,
@@ -158,15 +166,50 @@ async def is_editor(user_id: int) -> bool:
     return user_id == STAROSTA_ID or user_id == zam_id
 
 
-async def add_hw(subject: str, content: str, file_id: str, file_type: str, created_by: int) -> int:
+async def add_hw(subject: str, content: str, file_id: str, file_type: str, created_by: int,
+                  lesson_date: str | None = None) -> int:
     await init_hw_table()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cur = await db.execute("""
-            INSERT INTO homework (subject, content, file_id, file_type, created_by)
-            VALUES (?, ?, ?, ?, ?)
-        """, (subject, content, file_id, file_type, created_by))
+            INSERT INTO homework (subject, content, file_id, file_type, created_by, lesson_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (subject, content, file_id, file_type, created_by, lesson_date))
         await db.commit()
         return cur.lastrowid
+
+
+def parse_lesson_date(raw: str) -> tuple[bool, str | None]:
+    """Разбор даты пары для привязки ДЗ (Фаза 12, календарь). Возвращает
+    (валидно, значение): (True, None) — пропущено ("–"/"-", ДЗ без даты, как
+    раньше), (True, "YYYY-MM-DD") — валидная дата, (False, None) — неверный
+    формат/несуществующая дата. Год по умолчанию — текущий (как в
+    handlers/deadlines.py: add_due_date), тот же формат ДД.ММ[.ГГГГ]."""
+    raw = raw.strip()
+    if raw in ("–", "-"):
+        return True, None
+    match = re.match(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$", raw)
+    if not match:
+        return False, None
+    day, month, year = match.groups()
+    year = year or str(datetime.now(TZ).year)
+    try:
+        parsed = datetime(int(year), int(month), int(day)).date()
+    except ValueError:
+        return False, None
+    return True, parsed.isoformat()
+
+
+async def get_hw_for_date(date_str: str) -> list[dict]:
+    """ДЗ, привязанные к конкретной дате (используется генератором ICS-фида,
+    см. webapp/calendar_feed.py — матчинг по дате + вхождению предмета в
+    название пары из расписания)."""
+    await init_hw_table()
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT * FROM homework WHERE lesson_date=? ORDER BY created_at", (date_str,)
+        )
+        return [dict(r) for r in await cur.fetchall()]
 
 
 async def get_hw_subjects() -> list[str]:
@@ -194,6 +237,7 @@ async def delete_hw(hw_id: int):
 class HWAdd(StatesGroup):
     subject = State()
     content = State()
+    lesson_date = State()
 
 
 @router.message(Command("hw"))
@@ -229,7 +273,11 @@ async def hw_subject(callback: CallbackQuery):
     lines = [f"📝 <b>{subject}</b>\n"]
     for item in items:
         dt = item["created_at"][:10]
-        lines.append(f"• {item['content'] or '[файл]'} <i>({dt})</i>")
+        lesson_badge = ""
+        if item.get("lesson_date"):
+            from datetime import date as date_cls
+            lesson_badge = f" 📅 к паре {date_cls.fromisoformat(item['lesson_date']).strftime('%d.%m')}"
+        lines.append(f"• {item['content'] or '[файл]'} <i>({dt})</i>{lesson_badge}")
 
     can_edit = await is_editor(callback.from_user.id)
     kb = None
@@ -293,7 +341,12 @@ async def cmd_addhw(message: Message, state: FSMContext):
         await message.answer("❌ Только для старосты и зама.")
         return
     await state.set_state(HWAdd.subject)
-    await message.answer("📚 Предмет?")
+    await message.answer(
+        "📚 Предмет? (если будешь привязывать к дате пары — пиши словом, "
+        "которое встречается в названии пары из расписания, например "
+        "«анализ», а не сокращением вроде «Матан» — иначе ДЗ не найдётся "
+        "в календаре)"
+    )
 
 
 @router.message(HWAdd.subject)
@@ -305,9 +358,6 @@ async def hw_subject_input(message: Message, state: FSMContext):
 
 @router.message(HWAdd.content)
 async def hw_content_input(message: Message, state: FSMContext):
-    data = await state.get_data()
-    await state.clear()
-
     file_id = file_type = None
     content = message.text or message.caption or ""
 
@@ -318,8 +368,37 @@ async def hw_content_input(message: Message, state: FSMContext):
         file_id   = message.document.file_id
         file_type = "document"
 
-    await add_hw(data["subject"], content, file_id, file_type, message.from_user.id)
-    await message.answer(f"✅ ДЗ добавлено в раздел <b>{data['subject']}</b>!", parse_mode="HTML")
+    await state.update_data(content=content, file_id=file_id, file_type=file_type)
+    await state.set_state(HWAdd.lesson_date)
+    await message.answer(
+        "📅 К какой паре относится? Дата в формате <b>ДД.ММ</b> или <b>ДД.ММ.ГГГГ</b> — "
+        "тогда ДЗ появится в личном календаре (см. /calendar) у карточки этой пары. "
+        "Или <i>–</i> — без привязки к дате, как раньше (только доска /hw).",
+        parse_mode="HTML"
+    )
+
+
+@router.message(HWAdd.lesson_date)
+async def hw_lesson_date_input(message: Message, state: FSMContext):
+    ok, lesson_date = parse_lesson_date(message.text or "")
+    if not ok:
+        await message.answer(
+            "❌ Неверный формат. Например: <b>30.05</b>, или <i>–</i> — без даты.",
+            parse_mode="HTML"
+        )
+        return
+    data = await state.get_data()
+    await state.clear()
+
+    await add_hw(data["subject"], data["content"], data["file_id"], data["file_type"],
+                 message.from_user.id, lesson_date)
+    date_note = ""
+    if lesson_date:
+        from datetime import date as date_cls
+        date_note = f"\n📅 Привязано к паре {date_cls.fromisoformat(lesson_date).strftime('%d.%m.%Y')}"
+    await message.answer(
+        f"✅ ДЗ добавлено в раздел <b>{data['subject']}</b>!{date_note}", parse_mode="HTML"
+    )
 
 
 @router.message(Command("setzam"))

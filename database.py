@@ -1,3 +1,5 @@
+import secrets
+
 import aiosqlite
 from config import DATABASE_PATH, STAROSTA_ID
 
@@ -39,6 +41,21 @@ async def init_db():
             await db.execute("ALTER TABLE deadlines ADD COLUMN external_id TEXT")
         except Exception:
             pass  # колонка уже есть
+
+        # Персональный токен подписки на ICS-календарь (Фаза 12) — каждому
+        # студенту своя приватная ссылка, не одна общая на группу. Генерится
+        # лениво при первом /calendar (см. get_or_create_calendar_token), не
+        # при регистрации — чтобы не плодить токены тем, кто им не пользуется.
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN calendar_token TEXT")
+        except Exception:
+            pass  # колонка уже есть
+        try:
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token)"
+            )
+        except Exception:
+            pass
 
         # Статус "выполнено" раньше был общим на всех (колонка deadlines.done),
         # теперь — персональный для каждого пользователя (свой чек-марк не влияет
@@ -212,6 +229,40 @@ async def get_all_subscribed_users() -> list[int]:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("SELECT user_id FROM users WHERE subscribed = 1")
         return [r[0] for r in await cursor.fetchall()]
+
+# ── Персональные ссылки на ICS-календарь ────────────────────────────────────
+# Токен — случайная непредсказуемая строка (не user_id), чтобы ссылку нельзя
+# было подобрать перебором и увидеть чужое расписание/ДЗ. Ссылка привязана к
+# конкретному студенту, но сам .ics-эндпоинт не требует initData (календарные
+# приложения не умеют слать кастомные заголовки при периодическом опросе
+# webcal-подписки) — секретность держится на непредсказуемости токена, как у
+# большинства calendar-share ссылок (Google/Apple делают так же).
+
+async def get_or_create_calendar_token(user_id: int) -> str:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT calendar_token FROM users WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if row and row[0]:
+            return row[0]
+        token = secrets.token_urlsafe(24)
+        # INSERT ... ON CONFLICT — а не UPDATE — потому что get_or_create_calendar_token
+        # может быть вызвана до /start (юзер ещё не встречался upsert_user), тогда
+        # обычный UPDATE тихо обновит 0 строк и токен нигде не сохранится.
+        await db.execute("""
+            INSERT INTO users (user_id, calendar_token) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET calendar_token = excluded.calendar_token
+        """, (user_id, token))
+        await db.commit()
+        return token
+
+async def get_user_by_calendar_token(token: str) -> dict | None:
+    if not token:
+        return None
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM users WHERE calendar_token = ?", (token,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
 async def set_subscription(user_id: int, value: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:

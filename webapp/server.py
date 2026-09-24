@@ -23,7 +23,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -200,6 +200,35 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
         logger.warning(f"webapp chat failed: {e}")
         raise HTTPException(status_code=502, detail="DeepSeek сейчас недоступен, попробуй чуть позже")
     return result
+
+
+# ── Персональный ICS-календарь (Фаза 12) ────────────────────────────────────
+# /api/calendar/link — за initData (фронт WebApp узнаёт свою ссылку и может
+# показать кнопку "скопировать"). /ics/{token} — БЕЗ initData: календарные
+# приложения (Google/Apple/Outlook) сами периодически переопрашивают
+# webcal-подписку и не умеют слать кастомные заголовки — секретность держится
+# на непредсказуемости токена в самом пути (см. database.get_or_create_calendar_token).
+
+@app.get("/api/calendar/link")
+async def api_calendar_link(user: dict = CurrentUser):
+    from database import get_or_create_calendar_token
+    token = await get_or_create_calendar_token(user["id"])
+    return {"token": token, "ics_path": f"/ics/{token}"}
+
+
+@app.get("/ics/{token}")
+async def ics_feed(token: str):
+    from database import get_user_by_calendar_token
+    from webapp.calendar_feed import build_ics_for_user
+    owner = await get_user_by_calendar_token(token)
+    if not owner:
+        raise HTTPException(status_code=404, detail="ссылка недействительна")
+    body = await build_ics_for_user(token)
+    return Response(
+        content=body,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": "inline; filename=schedule.ics"},
+    )
 
 
 # ── Статика фронтенда (должна идти последней — ловит всё остальное) ─────────

@@ -66,6 +66,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
 
         time_str = ""
         time_start = None
+        time_end = None
         if dtstart:
             t = dtstart.dt
             if isinstance(t, datetime):
@@ -79,12 +80,15 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
                     if isinstance(te, datetime):
                         if te.tzinfo is None:
                             te = te.replace(tzinfo=ZoneInfo("Europe/Moscow"))
-                        time_str += "–" + te.astimezone(TZ).strftime("%H:%M")
+                        te_msk = te.astimezone(TZ)
+                        time_end = te_msk
+                        time_str += "–" + te_msk.strftime("%H:%M")
 
         events.append({
             "summary":    summary,
             "time":       time_str,
             "time_start": time_start,
+            "time_end":   time_end,
             "location":   location,
             "teacher":    teacher,
         })
