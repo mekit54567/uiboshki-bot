@@ -34,3 +34,15 @@ async def db(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "DATABASE_PATH", db_path)
     await database.init_db()
     return database
+
+
+@pytest.fixture(autouse=True)
+def _no_schedule_network(monkeypatch):
+    """Кнопки предметов (/solve, /upload) строятся из расписания группы —
+    в тестах без сети: иначе каждый такой тест ходил бы за ical МИРЭА."""
+    import schedule_parser
+
+    async def no_subjects(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(schedule_parser, "get_group_subjects", no_subjects)

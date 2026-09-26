@@ -272,6 +272,27 @@ async def get_tomorrow_schedule() -> str:
         return "⚠️ Не удалось загрузить расписание."
 
 
+async def get_group_subjects(days_back: int = 14, days_ahead: int = 28) -> list[str]:
+    """Настоящие названия предметов группы (без «ЛК/ПР») из её расписания —
+    для кнопок выбора предмета при загрузке файлов и в решалке, чтобы файлы
+    лекций и решалка говорили на одном языке, а не «Математика» против
+    «Основы бизнес-анализа в ИТ-сфере». Пустой список, если расписание
+    не загрузилось."""
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception as e:
+        logger.warning(f"get_group_subjects: {e}")
+        return []
+    today = datetime.now(TZ).date()
+    names = set()
+    for i in range(-days_back, days_ahead):
+        for e in parse_events_for_date(raw, today + timedelta(days=i)):
+            title, _, _ = _split_kind(e["summary"])
+            if title:
+                names.add(title)
+    return sorted(names)
+
+
 def format_target_schedule(raw: bytes, target_type: int, days: int = 14) -> str:
     """Расписание найденного преподавателя/группы/аудитории на days дней
     вперёд, пустые дни пропускаются. У преподавателя и аудитории в строке —
