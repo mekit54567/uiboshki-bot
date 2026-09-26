@@ -240,3 +240,32 @@ async def test_files_have_categories_and_edit_permissions(db, client):
     assert (f["title"], f["category"]) == ("КР 1", "control")
     assert (await db.get_files("ОБА"))[0]["category"] == "method"
     assert c.patch("/api/files/9999", headers=_headers_for(STAROSTA_ID), json=body).status_code == 404
+
+
+def _week_ical(monday) -> bytes:
+    """Неделя как в ical МИРЭА: событие на весь день «4 неделя» + пары."""
+    end = (monday + timedelta(days=7)).strftime("%Y%m%d")
+    week = (f"BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:{monday.strftime('%Y%m%d')}\r\nDTEND;VALUE=DATE:{end}\r\n"
+            "SUMMARY:4 неделя\r\nTRANSP:TRANSPARENT\r\nUID:w4\r\nEND:VEVENT\r\n")
+    thursday = _ical(monday + timedelta(days=3)).decode()
+    return thursday.replace("END:VCALENDAR", week + "END:VCALENDAR").encode()
+
+
+@pytest.mark.asyncio
+async def test_api_week_number_and_dots(db, client, monkeypatch):
+    import schedule_parser
+    c, headers = client
+    monday = datetime(2026, 9, 21, tzinfo=TZ).date()
+
+    async def raw():
+        return _week_ical(monday)
+
+    monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", raw)
+    data = c.get("/api/week", params={"start": monday.isoformat()}, headers=headers).json()
+    assert data["week"] == 4
+    assert [d["date"] for d in data["days"]] == [(monday + timedelta(days=i)).isoformat() for i in range(6)]
+    # четверг: лекция + две пары практики подряд (одним блоком) — три точки
+    assert data["days"][3]["dots"] == ["лекция", "практика", "практика"]
+    assert all(not d["dots"] for i, d in enumerate(data["days"]) if i != 3)   # «4 неделя» — не пара
+    assert c.get("/api/week", params={"start": "21.09"}, headers=headers).status_code == 400
+    assert c.get("/api/week", params={"start": monday.isoformat()}).status_code == 401

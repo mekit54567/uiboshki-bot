@@ -190,6 +190,22 @@ async def api_day(date: str, user: dict = CurrentUser):
     return {**_day_label(d), "lessons": lessons_for_date(raw, d, now=now if d == now.date() else None)}
 
 
+@app.get("/api/week")
+async def api_week(start: str, user: dict = CurrentUser):
+    """Номер учебной недели и точки пар под днями (пн–сб от start)."""
+    from datetime import date as date_cls
+    from schedule_parser import fetch_schedule_raw, week_overview
+    try:
+        monday = date_cls.fromisoformat(start)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception:
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+    return week_overview(raw, monday)
+
+
 # ── Поиск расписания преподавателя / группы / аудитории ─────────────────────
 # Свой справочник (schedule_index.py, собран с зеркала english.mirea.ru):
 # официальный поиск МИРЭА из-за рубежа не отвечает. Пока справочник

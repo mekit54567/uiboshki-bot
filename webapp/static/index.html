@@ -147,6 +147,11 @@
   .daychips button.today b { color: var(--accent-2); }
   .daychips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .daychips button.active b { color: #fff; }
+  .daychips .dots { display: flex; justify-content: center; gap: 2px; height: 5px; margin-top: 4px; }
+  .daychips .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--hint); }
+  .daychips button.active .dots i { background: rgba(255,255,255,.9) !important; }
+  .kd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  #wk-num { margin-left: 6px; }
   .skel {
     border-radius: var(--radius-sm); margin-bottom: 8px;
     background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-raised) 50%, var(--bg-card) 75%);
@@ -502,7 +507,7 @@
     </div>
 
     <h2 class="section">
-      <span id="wk-label">Эта неделя</span>
+      <span><span id="wk-label">Эта неделя</span><span class="stat" id="wk-num"></span></span>
       <span class="week-nav">
         <button id="wk-prev" onclick="shiftWeek(-1)" aria-label="Предыдущая неделя">‹</button>
         <button id="wk-next" onclick="shiftWeek(1)" aria-label="Следующая неделя">›</button>
@@ -713,8 +718,21 @@ function humanMinutes(min) {
   return h + " ч" + (m ? " " + m + " мин" : "");
 }
 
+// Цвет типа пары — один и тот же у точек под днями и в карточке пары.
+const KIND_COLORS = {
+  "лекция": "#a78bfa", "практика": "#4fc3f7", "лабораторная": "#34d399",
+  "сам. работа": "#f28b82", "доп. занятие": "#fbbf24",
+  "экзамен": "#ff6363", "зачёт": "#ff6363", "консультация": "#ff9f6e",
+  "курсовой проект": "#ff9f6e", "курсовая работа": "#ff9f6e",
+};
+
+function kindDot(kind) {
+  return '<i class="kd" style="background:' + (KIND_COLORS[kind] || "var(--hint)") + '"></i>';
+}
+
 function lessonMeta(l) {
-  return [l.kind, l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml).join(" · ");
+  const rest = [l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml);
+  return (l.kind ? kindDot(l.kind) + escapeHtml(l.kind) + (rest.length ? " · " : "") : "") + rest.join(" · ");
 }
 
 function lessonRow(l, withStatus) {
@@ -861,13 +879,37 @@ function renderDayChips() {
     const d = new Date(monday); d.setDate(monday.getDate() + i);
     const b = document.createElement("button");
     const iso = isoDate(d);
-    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + "</b>";
+    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + '</b><span class="dots"></span>';
     b.dataset.date = iso;
     if (todayData && iso === todayData.date) { b.classList.add("today"); selected = b; }
     b.onclick = () => selectDay(b);
     box.appendChild(b);
   }
   selectDay(selected || box.children[0], true);
+  loadWeekDots(isoDate(monday));
+}
+
+// Точки под днями (по одной на пару, цвет — тип) и номер учебной недели,
+// как в официальном приложении МИРЭА. Неделя грузится одним запросом и
+// кэшируется: листать туда-обратно — мгновенно.
+const weekCache = {};
+
+async function loadWeekDots(mondayIso) {
+  const numEl = document.getElementById("wk-num");
+  numEl.textContent = "";
+  let data = weekCache[mondayIso];
+  if (!data) {
+    try { data = weekCache[mondayIso] = await api("/api/week?start=" + mondayIso); }
+    catch (e) { return; }  // без точек полоска дней всё равно работает
+  }
+  if (!document.querySelector('#daychips button[data-date="' + mondayIso + '"]')) return;  // уже листнули дальше
+  numEl.textContent = data.week ? "· " + data.week + " неделя" : "";
+  data.days.forEach(day => {
+    const box = document.querySelector('#daychips button[data-date="' + day.date + '"] .dots');
+    if (!box) return;
+    box.innerHTML = day.dots.slice(0, 7).map(k =>
+      '<i style="background:' + (KIND_COLORS[k] || "var(--hint)") + '"></i>').join("");
+  });
 }
 
 async function selectDay(btn, silent) {

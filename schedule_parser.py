@@ -311,6 +311,33 @@ def lessons_for_date(raw: bytes, target: date, now: datetime | None = None) -> l
     return out
 
 
+_WEEK_RE = re.compile(r"^\s*(\d{1,2})\s*неделя\s*$", re.I)
+
+
+def week_number(raw: bytes, target: date) -> int | None:
+    """Номер учебной недели: в ical МИРЭА есть события на весь день
+    «4 неделя» (в расписание пар они не попадают — см. parse_events_for_date)."""
+    for component in _calendar_query(raw).at(target):
+        m = _WEEK_RE.match(str(component.get("SUMMARY", "")))
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def week_overview(raw: bytes, monday: date, days: int = 6) -> dict:
+    """Для полоски дней в WebApp: номер недели и по точке на каждую пару
+    дня (тип пары — для цвета), как в официальном приложении МИРЭА."""
+    out, num = [], None
+    for i in range(days):
+        d = monday + timedelta(days=i)
+        num = num or week_number(raw, d)
+        dots = []
+        for lesson in lessons_for_date(raw, d):
+            dots += [lesson["kind"]] * lesson["pairs"]
+        out.append({"date": d.isoformat(), "dots": dots})
+    return {"week": num, "days": out}
+
+
 _subjects_cache: dict[tuple, list[str]] = {}
 
 
