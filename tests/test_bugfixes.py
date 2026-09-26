@@ -384,3 +384,48 @@ async def test_feed_post_published_but_reactions_failed_is_not_marked_deleted(db
     assert any("Опубликовано" in a for a in answers)
     post = await db.get_feed_post(1)
     assert post["deleted"] == 0 and post["message_id"] == 777
+
+
+@pytest.mark.asyncio
+async def test_sdo_sync_tells_missing_cookie_from_expired(db, monkeypatch):
+    # Живой тест: /syncsdo отвечал «кука протухла», хотя её просто не задали —
+    # а «протухла» значит, что СДО с сервера открылся и попросил вход.
+    import sdo_parser
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "")
+    res = await sdo_parser.sync_deadlines()
+    assert res["expired"] and res["missing"]
+
+    async def login_page():
+        raise sdo_parser.SdoSessionExpired("редирект на /login/index.php")
+
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "abc")
+    monkeypatch.setattr(sdo_parser, "fetch_upcoming_html", login_page)
+    res = await sdo_parser.sync_deadlines()
+    assert res["expired"] and not res["missing"]
+
+
+@pytest.mark.asyncio
+async def test_sdo_job_silent_without_cookie_and_reports_network_once(monkeypatch):
+    import scheduler
+    import sdo_parser
+    sent = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, **kw):
+            sent.append(text)
+
+    async def missing():
+        return {"added": 0, "updated": 0, "skipped": 0, "expired": True, "missing": True}
+
+    monkeypatch.setattr(sdo_parser, "sync_deadlines", missing)
+    monkeypatch.setattr(scheduler, "_sdo_error_notified", False)
+    await scheduler.sync_sdo_deadlines(FakeBot())
+    assert sent == []  # СДО не подключали — не пугаем «сессия протухла»
+
+    async def blocked():
+        return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": "ConnectError"}
+
+    monkeypatch.setattr(sdo_parser, "sync_deadlines", blocked)
+    await scheduler.sync_sdo_deadlines(FakeBot())
+    await scheduler.sync_sdo_deadlines(FakeBot())
+    assert len(sent) == 1 and "недоступен" in sent[0]

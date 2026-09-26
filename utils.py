@@ -43,6 +43,13 @@ def esc(value) -> str:
     return escape(str(value), quote=False)
 
 
+def esc_attr(value) -> str:
+    """Для значения HTML-атрибута (href="…"): в отличие от esc экранирует и
+    кавычки — иначе ссылка с " внутри рвёт атрибут, и Telegram отклоняет
+    сообщение целиком ("can't parse entities")."""
+    return escape(str(value or ""), quote=True)
+
+
 _DAY_MONTH_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$")
 
 # Насколько далеко в прошлое может быть дата без года, чтобы остаться в
@@ -80,6 +87,16 @@ def parse_day_month(raw: str, today: date) -> date | None:
             continue
         return parsed
     return None
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """plural(3, "задача", "задачи", "задач") -> "задачи" (1 задача, 3 задачи, 5 задач)."""
+    n10, n100 = n % 10, n % 100
+    if n10 == 1 and n100 != 11:
+        return one
+    if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        return few
+    return many
 
 
 def utc_to_msk_date(sqlite_ts: str) -> str:

@@ -144,10 +144,10 @@ async def test_help_hides_starosta_commands_from_students(db, bot):
 async def test_solver_hint_only_after_first_answer(db, bot, monkeypatch):
     import handlers.solver as solver
 
-    async def fake_solve_text(task, subject="", backend="gemini"):
+    async def fake_solve_text(task, subject="", backend="gemini", **kw):
         return "**Ответ:** 4"
 
-    async def fake_history(history, subject="", backend="gemini"):
+    async def fake_history(history, subject="", backend="gemini", **kw):
         return "**Ответ:** 5"
 
     monkeypatch.setattr(solver, "solve_text", fake_solve_text)
@@ -163,3 +163,65 @@ async def test_solver_hint_only_after_first_answer(db, bot, monkeypatch):
     texts = [t for t, _ in bot.session.sent]
     assert sum("уточняющий вопрос" in t for t in texts) == 1
     assert any("<b>Ответ:</b> 5" in t for t in texts)
+
+
+@pytest.mark.parametrize("n,word", [(1, "задача"), (3, "задачи"), (5, "задач"), (11, "задач"), (21, "задача"), (22, "задачи"), (112, "задач")])
+def test_plural(n, word):
+    from utils import plural
+    assert plural(n, "задача", "задачи", "задач") == word
+
+
+@pytest.mark.asyncio
+async def test_settings_buttons_toggle_and_reminder(db, bot):
+    from aiogram.types import CallbackQuery
+    from handlers.start import router
+    dp = _dp(router)
+    await db.upsert_user(USER.id, "", "Alice")
+
+    async def click(data):
+        msg = Message(message_id=77, date=0, chat=Chat(id=USER.id, type="private"), text="⚙️")
+        cb = CallbackQuery(id="1", from_user=USER, chat_instance="c", data=data, message=msg)
+        await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, callback_query=cb))
+
+    try:
+        await _feed(dp, bot, "/settings")
+        assert "Напоминать о паре за <b>15 мин</b>" in bot.session.sent[-1][0]
+        await click("set:rem:30")
+        await click("set:sub")
+        await click("set:rem:999")  # чужое значение — игнор
+    finally:
+        router._parent_router = None
+    user = await db.get_user(USER.id)
+    assert user["reminder_minutes"] == 30 and not user["subscribed"]
+    edits = [t for _, t in bot.session.sent_texts if "Настройки" in t]
+    assert "Напоминать о паре за <b>30 мин</b>" in edits[-1] and "выключены" in edits[-1]
+
+
+@pytest.mark.asyncio
+async def test_actions_send_clickable_hints(db, bot):
+    from aiogram.types import CallbackQuery
+    from handlers.start import router
+    dp = _dp(router)
+    msg = Message(message_id=78, date=0, chat=Chat(id=USER.id, type="private"), text="Выбери действие:")
+    cb = CallbackQuery(id="2", from_user=USER, chat_instance="c", data="act:upload", message=msg)
+    try:
+        await dp.feed_update(bot, Update(update_id=424242, callback_query=cb))
+    finally:
+        router._parent_router = None
+    assert "/upload" in bot.session.sent[-1][0] and "пачкой" in bot.session.sent[-1][0]
+
+
+def test_deadlines_grouped_by_urgency_with_safe_links():
+    from datetime import timedelta
+    from handlers.deadlines import format_deadlines
+    from utils import today_msk
+    t = today_msk()
+    mk = lambda i, s, d, by=0, desc="": {"id": i, "subject": s, "due_date": (t + timedelta(days=d)).isoformat(),
+                                         "due_time": None, "created_by": by, "description": desc}
+    text = format_deadlines([mk(1, "Эссе", -1), mk(2, "СР-2", 0, desc='https://sdo/x?a=1&b="2"'),
+                             mk(3, "Практика", 5), mk(4, "Своё", 12, by=222)])
+    order = [text.index(g) for g in ("💀 Просрочено", "🔥 Горит", "📅 На неделе", "🗓 Позже")]
+    assert order == sorted(order)
+    assert '<a href="https://sdo/x?a=1&amp;b=&quot;2&quot;">' in text   # кавычка в URL не рвёт атрибут
+    assert "━" not in text and "%" not in text                    # никаких загадочных «80%»
+    assert "<b>Своё</b> 👤" in text

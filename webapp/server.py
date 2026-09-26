@@ -117,6 +117,79 @@ async def api_schedule_next(user: dict = CurrentUser):
     return {"html": await get_next_lesson()}
 
 
+# ── Главная WebApp: структурой, а не готовым HTML ───────────────────────────
+
+WEEKDAYS_RU = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
+
+
+def _day_label(d) -> dict:
+    from schedule_parser import MONTHS_GEN
+    return {"date": d.isoformat(), "weekday": WEEKDAYS_RU[d.weekday()],
+            "label": f"{d.day} {MONTHS_GEN[d.month - 1]}"}
+
+
+@app.get("/api/today")
+async def api_today(user: dict = CurrentUser):
+    """Всё для главной одним запросом: пары сегодня со статусами, ближайшая
+    пара (или завтрашняя первая), погода строкой, дедлайны (сколько и
+    ближайшие три), заметки к парам."""
+    from datetime import datetime, timedelta, date as date_cls
+    from database import get_active_deadlines, get_lesson_notes
+    from handlers.weather import get_weather_for_morning
+    from schedule_parser import fetch_schedule_raw, lessons_for_date
+    from utils import TZ
+
+    now = datetime.now(TZ)
+    today = now.date()
+    lessons, tomorrow_first, schedule_ok = [], None, True
+    try:
+        raw = await fetch_schedule_raw()
+        lessons = lessons_for_date(raw, today, now=now)
+        tomorrow = lessons_for_date(raw, today + timedelta(days=1))
+        tomorrow_first = tomorrow[0] if tomorrow else None
+    except Exception as e:
+        logger.warning(f"api_today: расписание недоступно: {e}")
+        schedule_ok = False
+
+    try:
+        weather = await get_weather_for_morning()
+    except Exception:
+        weather = ""
+
+    items = await get_active_deadlines(user["id"])
+    soon = []
+    for d in items[:3]:
+        days = (date_cls.fromisoformat(d["due_date"]) - today).days
+        soon.append({"id": d["id"], "subject": d["subject"], "due_date": d["due_date"],
+                     "due_time": d.get("due_time") or "", "days": days})
+    notes = await get_lesson_notes(today.isoformat())
+    return {
+        **_day_label(today), "now": now.isoformat(), "hour": now.hour,
+        "lessons": lessons, "tomorrow_first": tomorrow_first, "schedule_ok": schedule_ok,
+        "weather": weather,
+        "deadlines": {"active": len(items), "soon": soon},
+        "notes": [{"subject": n.get("subject") or "", "text": n["text"]} for n in notes],
+    }
+
+
+@app.get("/api/day")
+async def api_day(date: str, user: dict = CurrentUser):
+    """Пары любого дня (для выбора дня недели на главной)."""
+    from datetime import date as date_cls, datetime
+    from schedule_parser import fetch_schedule_raw, lessons_for_date
+    from utils import TZ
+    try:
+        d = date_cls.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception:
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+    now = datetime.now(TZ)
+    return {**_day_label(d), "lessons": lessons_for_date(raw, d, now=now if d == now.date() else None)}
+
+
 # ── Поиск расписания преподавателя / группы / аудитории ─────────────────────
 # Свой справочник (schedule_index.py, собран с зеркала english.mirea.ru):
 # официальный поиск МИРЭА из-за рубежа не отвечает. Пока справочник
@@ -132,6 +205,12 @@ async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
         return {"items": [], "ready": await schedule_index.is_ready()}
     items = await schedule_index.search(q, types, limit=30)
     ready = await schedule_index.is_ready()
+    if items:
+        from mirea_schedule_api import add_hints_for_namesakes
+        hinted = await add_hints_for_namesakes(
+            [{"id": i["id"], "fullTitle": i["title"], "scheduleTarget": i["type"]} for i in items])
+        items = [{"type": h["scheduleTarget"], "id": h["id"], "title": h["fullTitle"],
+                  **({"hint": h["hint"]} if h.get("hint") else {})} for h in hinted]
     if not items and not ready:
         for t in types:
             try:
@@ -163,10 +242,70 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
 
 @app.get("/api/deadlines")
 async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
-    from database import get_active_deadlines, get_deadline_stats
+    from database import get_active_deadlines, get_deadline_stats, is_shared_deadline
     items = await get_active_deadlines(user["id"], include_done=include_done)
+    for d in items:
+        d["personal"] = not is_shared_deadline(d)
+        d["mine"] = d.get("created_by") == user["id"]
     stats = await get_deadline_stats(user["id"])
     return {"items": items, "stats": stats}
+
+
+class NewDeadline(BaseModel):
+    subject: str
+    due_date: str
+    due_time: str = ""
+    description: str = ""
+
+
+@app.post("/api/deadlines")
+async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
+    """Свой (личный) дедлайн из WebApp — как /add в боте: виден только
+    автору. Общие дедлайны группы по-прежнему заводит староста/СДО."""
+    from datetime import date as date_cls
+    from database import add_deadline
+    from handlers.deadlines import parse_due_time
+    subject = body.subject.strip()
+    if not subject or len(subject) > 200:
+        raise HTTPException(status_code=400, detail="название — от 1 до 200 символов")
+    try:
+        due = date_cls.fromisoformat(body.due_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    due_time = None
+    if body.due_time.strip():
+        ok, due_time = parse_due_time(body.due_time)
+        if not ok:
+            raise HTTPException(status_code=400, detail="время в формате ЧЧ:ММ")
+    did = await add_deadline(subject, body.description.strip()[:1500], due.isoformat(), due_time, user["id"])
+    return {"ok": True, "id": did}
+
+
+@app.delete("/api/deadlines/{deadline_id}")
+async def api_deadline_delete(deadline_id: int, user: dict = CurrentUser):
+    """Удалить можно только свой личный дедлайн (общие — староста в боте)."""
+    from database import delete_deadline, get_deadline, is_shared_deadline
+    existing = await get_deadline(deadline_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="дедлайн не найден")
+    if is_shared_deadline(existing) or existing["created_by"] != user["id"]:
+        raise HTTPException(status_code=403, detail="удалить можно только свой личный дедлайн")
+    await delete_deadline(deadline_id)
+    return {"ok": True}
+
+
+@app.get("/api/homework")
+async def api_homework(user: dict = CurrentUser):
+    """Доска ДЗ (/addhw в боте): свежие сверху. Файл ДЗ WebApp открывает
+    диплинком в бота (t.me/<бот>?start=hw_<id>) — file_id наружу не отдаём."""
+    from group_context import list_homework
+    items = await list_homework(60)
+    return {"items": [
+        {"id": h["id"], "subject": h["subject"], "content": h.get("content") or "",
+         "lesson_date": h.get("lesson_date") or "", "created_at": (h.get("created_at") or "")[:10],
+         "has_file": bool(h.get("file_id"))}
+        for h in items
+    ]}
 
 
 class ToggleBody(BaseModel):
@@ -201,8 +340,11 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
     # бота, а светить его в браузерном JS не хочется. Вместо этого фронт
     # открывает диплинк на сам бот (t.me/<bot>?start=file_<id>), который уже
     # шлёт документ — см. handlers/start.py: cmd_start_deeplink.
+    from database import get_file_ids_with_text
+    with_text = await get_file_ids_with_text()
     return {"items": [
-        {"id": f["id"], "title": f["title"], "subject": f.get("subject") or "", "file_name": f.get("file_name") or ""}
+        {"id": f["id"], "title": f["title"], "subject": f.get("subject") or "", "file_name": f.get("file_name") or "",
+         "has_text": f["id"] in with_text}
         for f in items
     ]}
 
@@ -225,20 +367,90 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatAttachment(BaseModel):
+    name: str = "файл"
+    mime: str = ""
+    data: str  # base64
+
+
 class ChatBody(BaseModel):
     history: list[ChatMessage]
     subject: str = ""
+    attachment: ChatAttachment | None = None
+
+
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+DOC_TEXT_LIMIT = 60_000
+
+
+@app.get("/api/subjects")
+async def api_subjects(user: dict = CurrentUser):
+    """Предметы для чата: с загруженными лекциями (чат будет опираться на
+    них) — сверху, дальше остальные предметы группы из расписания."""
+    from database import get_subjects_with_lecture_text
+    from schedule_parser import get_group_subjects
+    with_lectures = await get_subjects_with_lecture_text()
+    rest = [s for s in await get_group_subjects() if s not in with_lectures]
+    return {"subjects": [{"name": s, "lectures": True} for s in with_lectures]
+                        + [{"name": s, "lectures": False} for s in rest]}
 
 
 @app.post("/api/chat")
 async def api_chat(body: ChatBody, user: dict = CurrentUser):
-    from ai_solver import chat_with_reasoning
+    """Чат WebApp: история (последние 20), по желанию предмет (если по нему
+    есть лекции — ответ опирается на них) и одно вложение — фото (решает
+    Gemini по картинке) или документ PDF/DOCX/PPTX/TXT (его текст уходит в
+    сообщение). В системный промпт — контекст группы: пары, дедлайны, ДЗ."""
+    import asyncio
+    import base64
+    from ai_solver import chat_with_reasoning, solve_image
+    from database import get_subject_lecture_context, get_subjects_with_lecture_text
+    from file_text import SUPPORTED_EXTENSIONS, extract_text
+    from group_context import build_group_context
+    from utils import md_to_tg_html_chunks
+
     if not body.history:
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]
-    from utils import md_to_tg_html_chunks
+    subject = body.subject.strip()
+    lectures = ""
+    if subject and subject in await get_subjects_with_lecture_text():
+        lectures = await get_subject_lecture_context(subject)
+    context = await build_group_context(user["id"])
+
     try:
-        result = await chat_with_reasoning(history, subject=body.subject)
+        if body.attachment:
+            try:
+                raw = base64.b64decode(body.attachment.data, validate=False)
+            except Exception:
+                raise HTTPException(status_code=400, detail="вложение повреждено")
+            if len(raw) > MAX_ATTACHMENT_BYTES:
+                raise HTTPException(status_code=413, detail="файл больше 10 МБ")
+            name = body.attachment.name or "файл"
+            if body.attachment.mime.startswith("image/"):
+                question = history[-1]["content"].strip() or "Реши задание на фото с подробным объяснением."
+                earlier = "\n".join(f"{'Студент' if m['role'] == 'user' else 'Ты'}: {m['content'][:500]}"
+                                     for m in history[-7:-1])
+                prompt = (f"Предыдущий разговор:\n{earlier}\n\n" if earlier else "") + f"Сообщение студента: {question}"
+                content = await solve_image(raw, body.attachment.mime, subject=subject,
+                                            lectures=lectures, prompt=prompt + "\n\n" + context)
+                result = {"content": content, "reasoning": ""}
+            else:
+                if not name.lower().endswith(SUPPORTED_EXTENSIONS):
+                    raise HTTPException(status_code=415, detail="умею читать PDF, DOCX, PPTX и TXT, а ещё фото")
+                text = (await asyncio.to_thread(extract_text, raw, name)).strip()
+                if not text:
+                    raise HTTPException(status_code=422, detail="не смог достать текст из файла (скан без текстового слоя?)")
+                note = "\n\n(файл обрезан — слишком длинный)" if len(text) > DOC_TEXT_LIMIT else ""
+                history[-1]["content"] = (
+                    (history[-1]["content"].strip() or "Разбери этот файл.")
+                    + f"\n\n=== Файл «{name}» ===\n{text[:DOC_TEXT_LIMIT]}{note}"
+                )
+                result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+        else:
+            result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"webapp chat failed: {e}")
         raise HTTPException(status_code=502, detail="ИИ сейчас недоступен, попробуй чуть позже")

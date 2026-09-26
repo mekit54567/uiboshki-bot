@@ -22,6 +22,31 @@ SUBJECT_KB = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text=s)] for s in SUBJECTS],
     resize_keyboard=True, one_time_keyboard=True
 )
+LECTURE_MARK = "📖 "
+
+
+async def solve_subject_kb() -> ReplyKeyboardMarkup:
+    """Кнопки предметов для /solve: сначала те, по которым загружены лекции
+    (📖 — решалка будет опираться на них), потом остальные предметы группы
+    из расписания, в конце «Другое». Раньше был фиксированный список
+    «Математика/Экономика/…», который не совпадал ни с одним предметом, по
+    которому есть лекции, — и лекции в обычной решалке не участвовали."""
+    from schedule_parser import get_group_subjects
+    with_lectures = await get_subjects_with_lecture_text()
+    rest = [s for s in await get_group_subjects() if s not in with_lectures]
+    if not with_lectures and not rest:
+        return SUBJECT_KB
+    rows = [[KeyboardButton(text=LECTURE_MARK + s)] for s in with_lectures]
+    rows += [[KeyboardButton(text=s)] for s in rest]
+    rows.append([KeyboardButton(text="Другое")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, one_time_keyboard=True)
+
+
+async def _lectures_for(data: dict) -> str:
+    """Текст лекций выбранного предмета (пусто — если их нет или это DeepSeek)."""
+    if not data.get("has_lectures"):
+        return ""
+    return await get_subject_lecture_context(data.get("subject", ""))
 
 
 class SolverState(StatesGroup):
@@ -49,7 +74,7 @@ async def cmd_solve(message: Message, state: FSMContext):
     await state.update_data(backend=backend)
     await state.set_state(SolverState.choose_subject)
     label = " (🐋 DeepSeek)" if backend == "deepseek" else ""
-    await message.answer(f"📚 Выбери предмет{label}:", reply_markup=SUBJECT_KB)
+    await message.answer(f"📚 Выбери предмет{label}:", reply_markup=await solve_subject_kb())
 
 
 @router.message(SolverState.choose_subject, F.text)
@@ -62,11 +87,15 @@ async def choose_subject(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     backend = data.get("backend", "gemini")
-    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend, hinted=False)
+    subject = message.text.strip().removeprefix(LECTURE_MARK.strip()).strip()
+    has_lectures = backend == "gemini" and subject in await get_subjects_with_lecture_text()
+    await state.update_data(subject=subject, history=[], msg_ids=[], backend=backend, hinted=False,
+                            has_lectures=has_lectures)
     await state.set_state(SolverState.waiting_task)
     note = "\n\n(фото — всегда через Gemini, у DeepSeek нет зрения)" if backend == "deepseek" else ""
+    lectures_note = "\n📖 Буду опираться на загруженные лекции по этому предмету." if has_lectures else ""
     msg = await message.answer(
-        f"✅ Предмет: <b>{esc(message.text)}</b>\n\nПришли задачу — текстом или фото 📸{note}",
+        f"✅ Предмет: <b>{esc(subject)}</b>{lectures_note}\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
     await state.update_data(msg_ids=[msg.message_id])
@@ -140,7 +169,7 @@ async def handle_first_task(message: Message, state: FSMContext):
     backend = data.get("backend", "gemini")
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
-        answer = await solve_text(message.text, subject, backend=backend)
+        answer = await solve_text(message.text, subject, backend=backend, lectures=await _lectures_for(data))
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог обработать. Попробуй переформулировать.")
             return
@@ -168,7 +197,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
         photo      = message.photo[-1]
         file       = await bot.get_file(photo.file_id)
         file_bytes = await bot.download_file(file.file_path)
-        answer     = await solve_image(file_bytes.read(), subject=subject)
+        answer     = await solve_image(file_bytes.read(), subject=subject, lectures=await _lectures_for(data))
 
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text(
@@ -206,7 +235,7 @@ async def handle_dialog(message: Message, state: FSMContext):
 
     wait = await message.answer("🧠 Думаю...")
     try:
-        answer = await solve_with_history(history, subject, backend=backend)
+        answer = await solve_with_history(history, subject, backend=backend, lectures=await _lectures_for(data))
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог ответить. Попробуй иначе.")
             return

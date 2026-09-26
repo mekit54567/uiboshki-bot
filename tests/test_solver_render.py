@@ -140,7 +140,7 @@ async def _feed(dp, bot, text):
 async def test_solve_answer_goes_out_as_html(db, dp, bot, monkeypatch):
     import handlers.solver as solver
 
-    async def fake_solve_text(task, subject="", backend="gemini"):
+    async def fake_solve_text(task, subject="", backend="gemini", **kw):
         return GEMINI_ANSWER
 
     monkeypatch.setattr(solver, "solve_text", fake_solve_text)

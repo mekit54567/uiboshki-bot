@@ -82,9 +82,35 @@ async def _deepseek_chat(messages: list[dict], model: str = MODEL_DEEPSEEK, **pa
         return resp.json()["choices"][0]["message"]
 
 
-async def solve_with_history(history: list, subject: str = "", backend: str = "gemini") -> str:
-    """history — [{"role": "user"|"assistant", "content": str}, ...]."""
-    system = build_system_prompt(subject)
+def lecture_system_prompt(subject: str, lectures: str) -> str:
+    """Промпт решалки + материалы лекций предмета (обрезанные по бюджету
+    Gemini целыми лекциями, см. gemini_solver._fit_context_budget). Раньше
+    лекции подключались только отдельной командой /solve_lectures и только
+    к первому сообщению — обычная решалка про них не знала."""
+    fitted, truncated = gemini_solver._fit_context_budget(lectures)
+    note = " (часть последних лекций не влезла в лимит)" if truncated else ""
+    return (
+        build_system_prompt(subject) + "\n\n"
+        "Ниже — материалы лекций этого предмета, загруженные группой" + note + ". Опирайся на них "
+        "в первую очередь: их определения, методы, обозначения и формулировки. Если какой-то части "
+        "задания в лекциях нет — реши сам и пометь её «(не из лекций)».\n\n"
+        f"=== Лекции ===\n{fitted}"
+    )
+
+
+async def solve_with_history(history: list, subject: str = "", backend: str = "gemini",
+                             lectures: str = "", extra_system: str = "") -> str:
+    """history — [{"role": "user"|"assistant", "content": str}, ...].
+    lectures — текст лекций предмета (только для Gemini: у DeepSeek окно
+    меньше); extra_system — доп. контекст в конец системного промпта
+    (например, дедлайны группы для чата WebApp)."""
+    if lectures.strip():
+        backend = "gemini"
+        system = lecture_system_prompt(subject, lectures)
+    else:
+        system = build_system_prompt(subject)
+    if extra_system:
+        system += "\n\n" + extra_system
     if _resolve_backend(backend) == "deepseek":
         msg = await _deepseek_chat(
             [{"role": "system", "content": system}, *history], max_tokens=2048, temperature=0.3,
@@ -93,15 +119,18 @@ async def solve_with_history(history: list, subject: str = "", backend: str = "g
     return await gemini_solver.generate_text(history, system)
 
 
-async def solve_text(task: str, subject: str = "", backend: str = "gemini") -> str:
-    return await solve_with_history([{"role": "user", "content": f"Задание:\n{task}"}], subject, backend)
+async def solve_text(task: str, subject: str = "", backend: str = "gemini", lectures: str = "") -> str:
+    return await solve_with_history([{"role": "user", "content": f"Задание:\n{task}"}], subject, backend,
+                                    lectures=lectures)
 
 
-async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str = "") -> str:
+async def solve_image(image_bytes: bytes, mime: str = "image/jpeg", subject: str = "",
+                      lectures: str = "", prompt: str = "") -> str:
+    system = lecture_system_prompt(subject, lectures) if lectures.strip() else build_system_prompt(subject)
     return await gemini_solver.generate_from_image(
         image_bytes, mime,
-        "Реши задание на фото с подробным объяснением. Не используй LaTeX.",
-        build_system_prompt(subject),
+        prompt or "Реши задание на фото с подробным объяснением. Не используй LaTeX.",
+        system,
     )
 
 
@@ -117,7 +146,8 @@ async def extract_text_from_image(image_bytes: bytes, mime: str = "image/jpeg") 
     )
 
 
-async def chat_with_reasoning(history: list, subject: str = "") -> dict:
+async def chat_with_reasoning(history: list, subject: str = "", extra_system: str = "",
+                              lectures: str = "") -> dict:
     """Для WebApp-чата: всегда deepseek-reasoner — единственная модель
     DeepSeek, которая отдаёт отдельное поле reasoning_content ("как думала")
     в дополнение к обычному content ("что ответила"). Раздельно, чтобы фронт
@@ -126,11 +156,13 @@ async def chat_with_reasoning(history: list, subject: str = "") -> dict:
     Без DEEPSEEK_API_KEY — тот же Gemini, что и у решалки в боте (без
     трейса рассуждений): иначе чат в WebApp просто не работал бы у тех, кто
     не заводил ключ DeepSeek. Возвращает {"content": str, "reasoning": str}."""
-    if not DEEPSEEK_API_KEY:
-        content = await solve_with_history(history, subject, backend="gemini")
+    if not DEEPSEEK_API_KEY or lectures.strip():
+        content = await solve_with_history(history, subject, backend="gemini",
+                                           lectures=lectures, extra_system=extra_system)
         return {"content": content, "reasoning": ""}
+    system = build_system_prompt(subject) + (f"\n\n{extra_system}" if extra_system else "")
     msg = await _deepseek_chat(
-        [{"role": "system", "content": build_system_prompt(subject)}, *history],
+        [{"role": "system", "content": system}, *history],
         model=MODEL_DEEPSEEK_REASONER, max_tokens=4096,
     )
     return {

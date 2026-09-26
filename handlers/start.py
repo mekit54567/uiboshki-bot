@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command, CommandObject
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import upsert_user, set_subscription, get_user
 from config import GROUP_NAME, STAROSTA_ID, WEBAPP_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
@@ -40,6 +40,20 @@ async def cmd_start_deeplink(message: Message, command: CommandObject):
         else:
             await message.answer("❌ Файл не найден (возможно, его удалили).")
         return
+    if payload.startswith("hw_"):
+        # Кнопка «Открыть файл» у ДЗ в WebApp — файл может отдать только бот.
+        from group_context import list_homework
+        hw_id = payload.removeprefix("hw_")
+        item = next((h for h in await list_homework(500) if str(h["id"]) == hw_id), None)
+        if not item or not item.get("file_id"):
+            await message.answer("❌ Файл ДЗ не найден (возможно, его удалили).")
+            return
+        caption = f"📝 <b>{esc(item['subject'])}</b>" + (f"\n{esc(item['content'][:900])}" if item.get("content") else "")
+        if item.get("file_type") == "photo":
+            await message.bot.send_photo(user.id, item["file_id"], caption=caption, parse_mode="HTML")
+        else:
+            await message.bot.send_document(user.id, item["file_id"], caption=caption, parse_mode="HTML")
+        return
     await cmd_start(message)
 
 
@@ -48,27 +62,25 @@ async def cmd_start(message: Message):
     user = message.from_user
     await upsert_user(user.id, user.username or "", user.full_name or "")
     await message.answer(
-        f"👋 Привет, <b>{esc(user.first_name)}</b>!\n\n"
-        f"Я бот группы <b>{GROUP_NAME}</b> 🎓\n\n"
-        "━━━━━━━━━━━━━━━━━━━\n"
-        "📅 Расписание — сегодня, завтра, неделя\n"
-        "📋 Дедлайны — трекер группы\n"
-        "🤖 Решалка — текст или фото задачи\n"
-        "📁 Файлы — лекции и методички\n"
-        "📝 ДЗ — доска домашних заданий\n"
-        "🌤 Погода — прямо сейчас\n"
-        "🗣 Подслушано — анонимная лента группы\n"
-        "⋯ Действия — всё остальное\n"
-        "━━━━━━━━━━━━━━━━━━━\n\n"
-        "Кстати, можно просто написать вопрос своими словами — "
-        "например «когда следующая пара» или «какие дедлайны на неделе» — "
-        "бот попробует понять и ответить без команд.",
+        f"👋 Привет, <b>{esc(user.first_name)}</b>! Я бот группы <b>{GROUP_NAME}</b> 🎓\n\n"
+        "📅 <b>Расписание</b> — сегодня, неделя, следующая пара, напоминания\n"
+        "📋 <b>Дедлайны и ДЗ</b> — общие группы и свои\n"
+        "🤖 <b>Решалка</b> — текст или фото задачи, по лекциям предмета\n"
+        "📁 <b>Файлы</b> — лекции и методички группы\n"
+        "🔍 <b>Любое расписание МИРЭА</b> — препод, группа, аудитория\n\n"
+        "💡 Пиши и своими словами: «когда следующая пара», «что сдавать на неделе» "
+        "или просто условие задачи.\n"
+        "Все команды — /help",
         parse_mode="HTML",
         reply_markup=MAIN_KB
     )
     kb = webapp_keyboard()
     if kb:
-        await message.answer("Или открой всё сразу в приложении 👇", reply_markup=kb)
+        await message.answer(
+            "🚀 Всё то же — в приложении: главная с ближайшей парой, дедлайны, поиск и чат с ИИ "
+            "(можно кидать фото и файлы). Ещё оно всегда под кнопкой «Приложение» слева от поля ввода.",
+            reply_markup=kb,
+        )
 
 
 @router.message(Command("app"))
@@ -88,31 +100,45 @@ async def cmd_actions(message: Message):
     await message.answer("Выбери действие:", reply_markup=ACTIONS_KB)
 
 
+# Кнопка «Действия» не может сама «нажать» команду за пользователя — раньше
+# бот просто присылал голое "/add". Теперь — понятная подсказка, в которой
+# команда кликабельна: одно касание, и понятно, что будет дальше.
+ACTION_HINTS = {
+    "add_deadline":   "➕ Свой дедлайн — нажми /add\n(видишь только ты; общие добавляет староста)",
+    "upload":         "📤 Загрузить лекции и методички пачкой — нажми /upload\n"
+                      "Выберешь предмет и пересылай файлы — ИИ их прочитает.",
+    "lookup":         "🔍 Чужое расписание по всему МИРЭА:\n"
+                      "/teacher Фамилия — преподаватель\n/group УИБО-02-24 — группа\n/room А-18 — аудитория",
+    "solve_lectures": "📖 Решить строго по лекциям предмета — нажми /solve_lectures\n"
+                      "(обычная /solve тоже опирается на лекции, если они загружены)",
+    "history":        "📜 Прошлые решения — /history",
+    "feed":           "🗣 Анонимный пост в «Подслушано» — нажми /feed",
+    "anon":           "❓ Анонимный вопрос старосте — нажми /anon",
+    "add_hw":         "📝 Добавить ДЗ на доску (староста и зам) — /addhw",
+    "solve_ds":       "🐋 Решить через DeepSeek — нажми /solve_ds",
+}
+
+
 @router.callback_query(F.data.startswith("act:"))
 async def handle_action(callback: CallbackQuery):
     action = callback.data.split(":")[1]
-    await callback.message.delete()
+    uid = callback.from_user.id
+    await callback.answer()
 
-    if action == "add_deadline":
-        await callback.bot.send_message(callback.from_user.id, "/add")
-
-    elif action == "solve_ds":
-        await callback.bot.send_message(callback.from_user.id, "/solve_ds")
-
-    elif action == "solve_lectures":
-        await callback.bot.send_message(callback.from_user.id, "/solve_lectures")
+    if action in ACTION_HINTS:
+        await callback.bot.send_message(uid, ACTION_HINTS[action])
 
     elif action == "nextweek":
         from schedule_parser import get_next_week_schedule
-        wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
+        wait = await callback.bot.send_message(uid, "⏳ Загружаю следующую неделю...")
         text = await get_next_week_schedule()
-        await callback.bot.delete_message(callback.from_user.id, wait.message_id)
+        await callback.bot.delete_message(uid, wait.message_id)
         for chunk in split_by_lines(text):
-            await callback.bot.send_message(callback.from_user.id, chunk, parse_mode="HTML")
+            await callback.bot.send_message(uid, chunk, parse_mode="HTML")
 
     elif action == "vote":
         await callback.bot.send_message(
-            callback.from_user.id,
+            uid,
             "🗳 <b>Голосование</b>\n\n"
             "Создать: /vote Твой вопрос\n"
             "Например: <code>/vote Идём на пары в пятницу?</code>\n\n"
@@ -120,30 +146,17 @@ async def handle_action(callback: CallbackQuery):
             parse_mode="HTML"
         )
 
-    elif action == "feed":
-        await callback.bot.send_message(callback.from_user.id, "/feed")
+    elif action == "settings":
+        await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
+        text, kb = _settings_view(await get_user(uid))
+        await callback.bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
 
-    elif action == "anon":
-        await callback.bot.send_message(callback.from_user.id, "/anon")
-
-    elif action == "add_hw":
-        await callback.bot.send_message(callback.from_user.id, "/addhw")
-
-    elif action == "history":
-        await callback.bot.send_message(callback.from_user.id, "/history")
-
-    elif action == "subscribe":
-        await upsert_user(callback.from_user.id, callback.from_user.username or "", callback.from_user.full_name or "")
-        user = await get_user(callback.from_user.id)
+    elif action == "subscribe":  # старая кнопка в уже отправленных сообщениях
+        await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
+        user = await get_user(uid)
         is_sub = user and user.get("subscribed")
-        if is_sub:
-            await set_subscription(callback.from_user.id, 0)
-            await callback.bot.send_message(callback.from_user.id, "🔕 Отписался от уведомлений.")
-        else:
-            await set_subscription(callback.from_user.id, 1)
-            await callback.bot.send_message(callback.from_user.id, "✅ Подписан на уведомления!")
-
-    await callback.answer()
+        await set_subscription(uid, 0 if is_sub else 1)
+        await callback.bot.send_message(uid, "🔕 Отписался от уведомлений." if is_sub else "✅ Подписан на уведомления!")
 
 
 HELP_TEXT = (
@@ -164,7 +177,7 @@ HELP_TEXT = (
     "/solve_ds — через DeepSeek · /history — прошлые решения\n\n"
     "📁 <b>Файлы</b>\n"
     "/files — лекции и методички · /search запрос — поиск\n"
-    "/upload — загрузить файл · /delfile ID — удалить свой\n\n"
+    "/upload — загрузить файлы, можно пачкой · /delfile ID — удалить свой\n\n"
     "💬 <b>Группа</b>\n"
     "/feed — анонимный пост в «Подслушано»\n"
     "/anon — анонимный вопрос старосте\n"
@@ -229,20 +242,53 @@ async def cmd_setreminder(message: Message):
     await message.answer(f"✅ Буду напоминать за <b>{mins} минут</b> до пары!", parse_mode="HTML")
 
 
+REMINDER_CHOICES = (5, 10, 15, 30)
+
+
+def _settings_view(user: dict | None) -> tuple[str, InlineKeyboardMarkup]:
+    """Настройки — кнопками, а не «напиши /setreminder 15»: одно касание."""
+    mins = (user or {}).get("reminder_minutes", 15) or 15
+    sub = bool((user or {}).get("subscribed"))
+    text = (
+        "⚙️ <b>Настройки</b>\n\n"
+        f"🔔 Утренняя рассылка и напоминания: <b>{'включены' if sub else 'выключены'}</b>\n"
+        f"⏰ Напоминать о паре за <b>{mins} мин</b>\n\n"
+        f"Рассылка приходит каждое утро в {SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d}: расписание и погода."
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔕 Выключить уведомления" if sub else "🔔 Включить уведомления",
+                              callback_data="set:sub")],
+        [InlineKeyboardButton(text=("✓ " if m == mins else "") + f"за {m} мин", callback_data=f"set:rem:{m}")
+         for m in REMINDER_CHOICES],
+    ])
+    return text, kb
+
+
 @router.message(Command("settings"))
 @router.message(F.text == "⚙️ Настройки")
 async def cmd_settings(message: Message):
-    user = await get_user(message.from_user.id)
-    mins = user.get("reminder_minutes", 15) if user else 15
-    sub  = "✅ включены" if (user and user.get("subscribed")) else "❌ выключены"
-    await message.answer(
-        f"⚙️ <b>Настройки</b>\n\n"
-        f"🔔 Уведомления: {sub}\n"
-        f"⏰ Напоминание до пары: <b>{mins} мин</b>\n\n"
-        f"Изменить: /setreminder 15\n"
-        f"Уведомления: /subscribe или /unsubscribe",
-        parse_mode="HTML"
-    )
+    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    text, kb = _settings_view(await get_user(message.from_user.id))
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("set:"))
+async def settings_change(callback: CallbackQuery):
+    from database import set_reminder_minutes
+    uid = callback.from_user.id
+    await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
+    parts = callback.data.split(":")
+    if parts[1] == "sub":
+        user = await get_user(uid)
+        await set_subscription(uid, 0 if (user and user.get("subscribed")) else 1)
+    elif parts[1] == "rem" and len(parts) == 3 and parts[2].isdigit() and int(parts[2]) in REMINDER_CHOICES:
+        await set_reminder_minutes(uid, int(parts[2]))
+    text, kb = _settings_view(await get_user(uid))
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except Exception:
+        pass  # «message is not modified» — нажали уже выбранное
+    await callback.answer("Сохранено ✓")
 
 
 @router.message(F.text == "🏆 Рейтинг")

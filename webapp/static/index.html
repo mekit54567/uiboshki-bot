@@ -38,8 +38,7 @@
 
   header.top {
     padding: 18px 18px 10px;
-    position: sticky; top: 0; z-index: 5;
-    background: linear-gradient(180deg, var(--bg) 60%, transparent);
+    background: var(--bg);
   }
   header.top h1 {
     margin: 0;
@@ -91,6 +90,61 @@
   .card .sub { color: var(--hint); font-size: 13px; margin: 0; }
 
   .schedule-html { font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+
+  /* Главная: погода, «следующая пара», пары карточками, выбор дня */
+  .weather-pill {
+    display: inline-block; margin: 0 0 10px; padding: 7px 12px; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--hint); font-size: 13px;
+  }
+  .hero {
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 4px; color: #fff;
+    background: linear-gradient(135deg, var(--accent) 0%, #5a5fe0 55%, var(--accent-2) 130%);
+    box-shadow: 0 10px 28px rgba(92, 96, 230, .35);
+  }
+  .hero .h-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; opacity: .85; }
+  .hero .h-big { font-size: 28px; font-weight: 900; letter-spacing: -.5px; margin: 4px 0 2px; }
+  .hero .h-title { font-size: 16px; font-weight: 700; margin: 2px 0; }
+  .hero .h-meta { font-size: 13px; opacity: .9; }
+  .hero .h-bar { height: 6px; background: rgba(255,255,255,.25); border-radius: 99px; margin-top: 12px; overflow: hidden; }
+  .hero .h-bar i { display: block; height: 100%; background: #fff; border-radius: 99px; transition: width .6s ease; }
+  .hero.calm { background: linear-gradient(135deg, #2f9e7e 0%, var(--accent-2) 100%); box-shadow: 0 10px 28px rgba(67,198,172,.3); }
+  .lessons { display: flex; flex-direction: column; gap: 8px; }
+  .lesson {
+    display: flex; gap: 12px; align-items: stretch;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 11px 13px; position: relative;
+  }
+  .lesson.now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .lesson.past { opacity: .5; }
+  .lesson .l-time { min-width: 46px; display: flex; flex-direction: column; font-size: 13px; color: var(--hint); }
+  .lesson .l-time b { color: var(--text); font-size: 15px; }
+  .lesson .l-body { flex: 1; min-width: 0; }
+  .lesson .l-title { font-weight: 700; line-height: 1.3; }
+  .lesson .l-meta { color: var(--hint); font-size: 12.5px; margin-top: 3px; }
+  .lesson .l-num {
+    align-self: flex-start; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 8px;
+    background: var(--bg-raised); color: var(--hint); font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lesson.now .l-num { background: var(--accent); color: #fff; }
+  .lesson .l-now { color: var(--ok); font-weight: 800; font-size: 12px; }
+  .note-card { margin-top: 8px; padding: 10px 13px; border-radius: var(--radius-sm);
+               background: rgba(255,178,56,.1); border: 1px solid rgba(255,178,56,.3); font-size: 13.5px; }
+  .daychips { display: flex; gap: 6px; margin-bottom: 10px; }
+  .daychips button {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--hint);
+    border-radius: 12px; padding: 7px 0; font-size: 11.5px; font-weight: 700; line-height: 1.2;
+  }
+  .daychips button b { display: block; font-size: 16px; color: var(--text); }
+  .daychips button.today b { color: var(--accent-2); }
+  .daychips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .daychips button.active b { color: #fff; }
+  .skel {
+    border-radius: var(--radius-sm); margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-raised) 50%, var(--bg-card) 75%);
+    background-size: 200% 100%; animation: shimmer 1.2s infinite linear;
+  }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   .schedule-html s { color: var(--hint); }
   .schedule-html b { color: var(--accent-2); }
 
@@ -136,6 +190,44 @@
   h2.section .stat { font-size: 12px; color: var(--hint); font-weight: 600; }
 
   .list { display: flex; flex-direction: column; gap: 8px; }
+
+  .seg { display: flex; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 3px; margin: 4px 0 4px; }
+  .seg button { flex: 1; background: none; border: none; color: var(--hint); font-weight: 700; font-size: 13.5px; padding: 8px 0; border-radius: 9px; }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .group-title { color: var(--hint); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; margin: 14px 2px 8px; }
+  .group-title.danger { color: var(--danger); }
+  details.done-group summary { cursor: pointer; list-style: none; }
+  details.done-group summary::-webkit-details-marker { display: none; }
+  .dl-actions { display: flex; gap: 12px; margin-top: 6px; }
+  .dl-actions button, .dl-actions a { background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 700; padding: 0; text-decoration: none; }
+  .dl-actions button.del { color: var(--danger); }
+  .fab {
+    position: fixed; right: 18px; bottom: calc(var(--nav-h, 64px) + 16px); z-index: 8;
+    width: 54px; height: 54px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 28px; line-height: 1;
+    box-shadow: 0 8px 22px rgba(92, 96, 230, .45);
+  }
+  #view-deadlines { padding-bottom: 80px; }
+  .sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.5); display: none; align-items: flex-end; }
+  .sheet-backdrop.open { display: flex; animation: fadein .15s ease; }
+  .sheet {
+    width: 100%; background: var(--bg); border-radius: 20px 20px 0 0; padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); animation: slideup .2s ease;
+  }
+  @keyframes slideup { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+  .sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 10px; }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
+  .sheet .row2 { display: flex; gap: 8px; }
+  .sheet textarea { resize: none; font-family: inherit; font-size: 15px; }
+  .sheet input { font-size: 16px; }
+  .sheet-hint { color: var(--hint); font-size: 12.5px; margin: 0 0 12px; }
+  button.primary { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 13px; font-size: 15px; font-weight: 800; }
+  button.primary:disabled { opacity: .5; }
+  .hw-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .hw-card .hw-subj { font-weight: 800; margin-bottom: 4px; }
+  .hw-card .hw-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .hw-card .dl-meta { margin-top: 8px; }
+  .file-card .badge { font-size: 11px; font-weight: 800; color: var(--accent-2); margin-left: 6px; }
 
   .deadline-card {
     display: flex; align-items: flex-start; gap: 12px;
@@ -185,7 +277,7 @@
     font-weight: 700;
   }
 
-  input.searchbox, select.filter {
+  input.searchbox, select.filter, textarea.searchbox {
     width: 100%;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -230,8 +322,12 @@
   }
 
   /* Чат */
-  .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 180px); min-height: 320px; }
-  .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+  /* Поле ввода закреплено над панелью вкладок, как в мессенджерах. Раньше
+     чат был высотой calc(100vh - 180px): внутри Telegram 100vh не равен
+     видимой высоте окна, и поле ввода уезжало под панель вкладок — писать
+     было нельзя (живой тест). --nav-h выставляет JS по реальной высоте панели. */
+  .chat-wrap { padding-bottom: calc(var(--nav-h, 64px) + var(--dock-h, 60px) + 20px); }
+  .chat-log { display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
   .msg.bot  { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
@@ -262,10 +358,52 @@
     padding-left: 10px;
   }
 
-  .chat-input-row {
-    display: flex; gap: 8px;
-    padding-top: 8px;
+  .chat-dock {
+    position: fixed; left: 0; right: 0; z-index: 9;
+    bottom: var(--nav-h, 64px);
+    padding: 8px 14px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
   }
+  .chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+  body.typing nav.tabs { display: none; }
+  body.typing .chat-dock { bottom: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .chat-input-row button.attach {
+    background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
+    padding: 0 12px; font-size: 18px; min-height: 42px;
+  }
+  #attach-preview:empty { display: none; }
+  #attach-preview { margin-bottom: 8px; }
+  .attach-chip {
+    display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 6px 8px 6px 6px; font-size: 13px;
+  }
+  .attach-chip img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
+  .attach-chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+  .attach-chip button { background: none; border: none; color: var(--hint); font-size: 16px; padding: 0 2px; }
+  .msg img.att { display: block; max-width: 220px; max-height: 220px; border-radius: 12px; margin-bottom: 6px; }
+  .msg .file-att { display: inline-block; background: rgba(255,255,255,.18); border-radius: 10px;
+                   padding: 4px 9px; margin-bottom: 6px; font-size: 13px; }
+  .msg .msg-tools { margin-top: 6px; display: flex; gap: 10px; }
+  .msg .msg-tools button { background: none; border: none; color: var(--hint); font-size: 12px; font-weight: 700; padding: 0; }
+  .msg.typing-dots { display: inline-flex; gap: 4px; padding: 14px 16px; }
+  .msg.typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--hint);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .msg.typing-dots span:nth-child(2) { animation-delay: .2s; }
+  .msg.typing-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  .chat-empty { text-align: center; color: var(--hint); padding: 22px 8px 6px; }
+  .chat-empty .big-emoji { font-size: 40px; }
+  .chat-empty p { margin: 6px 0 14px; font-size: 14px; }
+  .suggest { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+  .suggest button {
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--text);
+    border-radius: 14px; padding: 10px 12px; font-size: 14px; text-align: left;
+  }
+  .link-btn { background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 700; padding: 0; }
   .chat-input-row textarea {
     flex: 1;
     resize: none;
@@ -273,8 +411,10 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: var(--radius-sm);
-    padding: 11px 14px;
-    font-size: 14px;
+    padding: 10px 14px;
+    font-family: inherit;
+    min-height: 42px; line-height: 1.3;
+    font-size: 16px; /* меньше 16px — iOS при фокусе приближает страницу */
     max-height: 100px;
   }
   .chat-input-row button {
@@ -284,7 +424,8 @@
     border-radius: var(--radius-sm);
     padding: 0 18px;
     font-weight: 800;
-    font-size: 14px;
+    font-size: 16px;
+    min-height: 42px;
   }
   .chat-input-row button:disabled { opacity: .5; }
 </style>
@@ -300,32 +441,48 @@
 
   <!-- ── Сегодня ───────────────────────────────────────────────────── -->
   <section class="view active" id="view-today">
-    <div class="bento">
-      <div class="card wide">
-        <p class="eyebrow">Сегодня</p>
-        <div class="schedule-html" id="today-schedule">Загружаю…</div>
-      </div>
+    <div class="weather-pill" id="weather" style="display:none;"></div>
+    <div id="hero"><div class="skel" style="height:118px"></div></div>
+
+    <h2 class="section"><span>Сегодня</span><span class="stat" id="today-count"></span></h2>
+    <div class="lessons" id="today-lessons">
+      <div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div>
+    </div>
+    <div id="today-notes"></div>
+
+    <div class="bento" style="margin-top:14px;">
       <div class="card tap" onclick="switchTab('deadlines')">
         <p class="eyebrow">Дедлайны</p>
         <p class="big" id="today-deadline-count">—</p>
-        <p class="sub">ближайшие</p>
+        <p class="sub" id="today-deadline-next">ближайшие</p>
       </div>
-      <div class="card tap" onclick="loadWeek()">
-        <p class="eyebrow">Неделя</p>
-        <p class="big">📆</p>
-        <p class="sub">открыть расписание</p>
-      </div>
-      <div class="card wide" id="week-card" style="display:none;">
-        <p class="eyebrow">Неделя целиком</p>
-        <div class="schedule-html" id="week-schedule"></div>
+      <div class="card tap" onclick="switchTab('search')">
+        <p class="eyebrow">Поиск</p>
+        <p class="big">🔍</p>
+        <p class="sub">препод, группа, аудитория</p>
       </div>
     </div>
+
+    <h2 class="section">Неделя</h2>
+    <div class="daychips" id="daychips"></div>
+    <div class="lessons" id="day-lessons"></div>
   </section>
 
   <!-- ── Дедлайны / ДЗ ─────────────────────────────────────────────── -->
   <section class="view" id="view-deadlines">
-    <h2 class="section">Дедлайны и ДЗ <span class="stat" id="deadline-stat"></span></h2>
-    <div class="list" id="deadline-list"><div class="empty">Загружаю…</div></div>
+    <div class="seg" id="dl-seg">
+      <button class="active" data-seg="dl">📋 Дедлайны</button>
+      <button data-seg="hw">📝 ДЗ</button>
+    </div>
+    <div id="seg-dl">
+      <h2 class="section">Дедлайны <span class="stat" id="deadline-stat"></span></h2>
+      <div id="deadline-list"><div class="skel" style="height:70px"></div><div class="skel" style="height:70px"></div></div>
+    </div>
+    <div id="seg-hw" style="display:none;">
+      <h2 class="section">Домашние задания</h2>
+      <div class="list" id="hw-list"><div class="skel" style="height:70px"></div></div>
+    </div>
+    <button class="fab" id="fab-add" onclick="openAddSheet()" aria-label="Добавить дедлайн">＋</button>
   </section>
 
   <!-- ── Поиск расписания ─────────────────────────────────────────── -->
@@ -356,24 +513,47 @@
   <section class="view" id="view-files">
     <h2 class="section">Файлы</h2>
     <input class="searchbox" id="file-search" placeholder="Поиск по названию, предмету, файлу…">
-    <div class="list" id="file-list"><div class="empty">Загружаю…</div></div>
+    <div class="chips-row" id="file-subjects"></div>
+    <div class="list" id="file-list"><div class="skel" style="height:60px"></div><div class="skel" style="height:60px"></div></div>
+    <p class="sheet-hint" style="margin-top:14px;">📖 — ИИ уже прочитал файл и отвечает по нему. Загрузить новые: /upload в боте.</p>
   </section>
 
   <!-- ── Чат ───────────────────────────────────────────────────────── -->
   <section class="view" id="view-chat">
-    <h2 class="section">Чат с ИИ 🤖</h2>
+    <h2 class="section">Чат с ИИ 🤖 <button class="link-btn" onclick="newChat()">＋ Новый чат</button></h2>
+    <select class="filter" id="chat-subject">
+      <option value="">📚 Предмет: любой</option>
+    </select>
     <div class="chat-wrap">
-      <div class="chat-log" id="chat-log">
-        <div class="msg bot">Привет! Спроси что угодно по учёбе или пришли условие задачи 🧠</div>
-      </div>
-      <div class="chat-input-row">
-        <textarea id="chat-input" rows="1" placeholder="Напиши сообщение…"></textarea>
-        <button id="chat-send" onclick="sendChat()">➤</button>
+      <div class="chat-log" id="chat-log"></div>
+      <div class="chat-dock">
+        <div id="attach-preview"></div>
+        <div class="chat-input-row">
+          <button class="attach" onclick="document.getElementById('chat-file').click()" aria-label="Прикрепить">📎</button>
+          <textarea id="chat-input" rows="1" placeholder="Сообщение…"></textarea>
+          <button id="chat-send" onclick="sendChat()" aria-label="Отправить">➤</button>
+        </div>
+        <input type="file" id="chat-file" accept="image/*,.pdf,.docx,.pptx,.txt" hidden>
       </div>
     </div>
   </section>
 
 </main>
+
+<div class="sheet-backdrop" id="add-sheet" onclick="if (event.target === this) closeAddSheet()">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <h3>Новый дедлайн</h3>
+    <input class="searchbox" id="nd-subject" placeholder="Что сдать? Например: лаба 3 по анализу данных" maxlength="200">
+    <div class="row2">
+      <input class="searchbox" type="date" id="nd-date">
+      <input class="searchbox" type="time" id="nd-time">
+    </div>
+    <textarea class="searchbox" id="nd-desc" rows="2" placeholder="Описание — необязательно"></textarea>
+    <p class="sheet-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
+    <button class="primary" id="nd-submit" onclick="submitDeadline()">Добавить</button>
+  </div>
+</div>
 
 <nav class="tabs">
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
@@ -398,6 +578,15 @@ if (tg) {
   if (tp.text_color)          root.setProperty("--text", tp.text_color);
   if (tp.hint_color)          root.setProperty("--hint", tp.hint_color);
   if (tp.button_color)        root.setProperty("--accent", tp.button_color);
+  // Светлая тема Telegram: тёмные рамки и тяжёлая тень из тёмной палитры
+  // смотрелись грубо (замечено в живом тесте) — делаем их светлыми.
+  if (tg.colorScheme === "light") {
+    root.setProperty("--border", tp.section_separator_color || "#e4e6ea");
+    root.setProperty("--bg-raised", "#eceef1");
+    root.setProperty("--shadow", "0 2px 10px rgba(0,0,0,0.06)");
+  } else if (tp.section_separator_color) {
+    root.setProperty("--border", tp.section_separator_color);
+  }
 }
 
 function initData() {
@@ -413,7 +602,9 @@ async function api(path, opts) {
   const resp = await fetch(path, opts);
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error("HTTP " + resp.status + ": " + body);
+    let detail = "";
+    try { detail = JSON.parse(body).detail; } catch (e) {}
+    throw new Error(typeof detail === "string" && detail ? detail : "ошибка сервера (" + resp.status + ")");
   }
   return resp.json();
 }
@@ -437,60 +628,211 @@ function switchTab(name) {
   if (name === "deadlines") loadDeadlines();
   if (name === "files") loadFiles();
   if (name === "search") renderRecent();
+  if (name === "chat") requestAnimationFrame(syncNavHeight);
   if (name !== "search" && tg && tg.BackButton) tg.BackButton.hide();
 }
 
 // ── Сегодня ───────────────────────────────────────────────────────────────
 
+let todayData = null;
+
+function greetingFor(hour) {
+  if (hour >= 5 && hour < 12) return "Доброе утро";
+  if (hour >= 12 && hour < 17) return "Добрый день";
+  if (hour >= 17 && hour < 23) return "Добрый вечер";
+  return "Доброй ночи";
+}
+
+function humanMinutes(min) {
+  min = Math.max(0, Math.round(min));
+  if (min < 60) return min + " мин";
+  const h = Math.floor(min / 60), m = min % 60;
+  return h + " ч" + (m ? " " + m + " мин" : "");
+}
+
+function lessonMeta(l) {
+  return [l.kind, l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml).join(" · ");
+}
+
+function lessonRow(l, withStatus) {
+  const cls = withStatus && l.status ? " " + l.status : "";
+  const now = withStatus && l.status === "now" ? '<div class="l-now">● идёт сейчас</div>' : "";
+  const pairs = l.pairs > 1 ? " · " + l.pairs + " пары подряд" : "";
+  return '<div class="lesson' + cls + '">' +
+    '<div class="l-time"><b>' + escapeHtml(l.start) + '</b><span>' + escapeHtml(l.end) + '</span></div>' +
+    '<div class="l-body"><div class="l-title">' + escapeHtml(l.title) + '</div>' +
+    '<div class="l-meta">' + lessonMeta(l) + escapeHtml(pairs) + '</div>' + now + '</div>' +
+    '<div class="l-num">' + escapeHtml(String(l.num)) + '</div></div>';
+}
+
+// Статусы и отсчёт пересчитываются на клиенте раз в 30 с — главная
+// «живая», даже если WebApp долго открыт.
+function refreshStatuses() {
+  if (!todayData) return;
+  const now = Date.now();
+  todayData.lessons.forEach(l => {
+    if (!l.start_iso) return;
+    const s = Date.parse(l.start_iso), e = Date.parse(l.end_iso || l.start_iso);
+    l.status = now >= e ? "past" : (now >= s ? "now" : "later");
+  });
+  renderHero();
+  document.getElementById("today-lessons").innerHTML = todayData.lessons.length
+    ? todayData.lessons.map(l => lessonRow(l, true)).join("")
+    : '<div class="empty">' + (todayData.schedule_ok ? "Сегодня пар нет 🎉" : "Расписание сейчас не загрузилось") + '</div>';
+}
+
+function renderHero() {
+  const hero = document.getElementById("hero");
+  const d = todayData, now = Date.now();
+  const cur = d.lessons.find(l => l.status === "now");
+  const next = d.lessons.find(l => l.status === "later");
+  hero.className = "hero";
+  if (cur) {
+    const s = Date.parse(cur.start_iso), e = Date.parse(cur.end_iso);
+    const pct = Math.min(100, Math.max(0, (now - s) / (e - s) * 100));
+    hero.innerHTML = '<div class="h-eyebrow">Идёт сейчас · до ' + escapeHtml(cur.end) + '</div>' +
+      '<div class="h-big">ещё ' + humanMinutes((e - now) / 60000) + '</div>' +
+      '<div class="h-title">' + escapeHtml(cur.title) + '</div><div class="h-meta">' + lessonMeta(cur) + '</div>' +
+      '<div class="h-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+  } else if (next) {
+    hero.innerHTML = '<div class="h-eyebrow">Следующая пара · ' + escapeHtml(next.start) + '</div>' +
+      '<div class="h-big">через ' + humanMinutes((Date.parse(next.start_iso) - now) / 60000) + '</div>' +
+      '<div class="h-title">' + escapeHtml(next.title) + '</div><div class="h-meta">' + lessonMeta(next) + '</div>';
+  } else {
+    hero.className = "hero calm";
+    const t = d.tomorrow_first;
+    const head = d.lessons.length ? "На сегодня всё 🎉" : "Сегодня пар нет 🎉";
+    hero.innerHTML = '<div class="h-eyebrow">' + head + '</div>' + (t
+      ? '<div class="h-big">завтра в ' + escapeHtml(t.start) + '</div><div class="h-title">' + escapeHtml(t.title) +
+        '</div><div class="h-meta">' + lessonMeta(t) + '</div>'
+      : '<div class="h-big">отдыхай</div><div class="h-meta">завтра тоже без пар</div>');
+  }
+}
+
+function dueText(days) {
+  if (days < 0) return "просрочен";
+  if (days === 0) return "сегодня";
+  if (days === 1) return "завтра";
+  return "через " + days + " дн.";
+}
+
 async function loadToday() {
   try {
     const me = await api("/api/me");
-    document.getElementById("greeting").textContent = "Привет, " + (me.first_name || "!");
-    document.getElementById("subtitle").textContent = "УИБО-03-24 · сегодня";
+    const hour = new Date().getHours();
+    document.getElementById("greeting").textContent = greetingFor(hour) + (me.first_name ? ", " + me.first_name : "") + " 👋";
   } catch (e) {
     document.getElementById("subtitle").textContent = "Не удалось авторизоваться: " + e.message;
+    return;
   }
   try {
-    const data = await api("/api/schedule/today");
-    document.getElementById("today-schedule").innerHTML = data.html || "Пар нет 🎉";
+    todayData = await api("/api/today");
+    document.getElementById("subtitle").textContent = todayData.weekday + ", " + todayData.label + " · УИБО-03-24";
+    if (todayData.weather) {
+      const w = document.getElementById("weather");
+      w.textContent = todayData.weather; w.style.display = "inline-block";
+    }
+    const n = todayData.lessons.reduce((a, l) => a + (l.pairs || 1), 0);
+    document.getElementById("today-count").textContent = n ? n + " " + plural(n, "пара", "пары", "пар") : "";
+    refreshStatuses();
+    const dl = todayData.deadlines;
+    document.getElementById("today-deadline-count").textContent = dl.active;
+    document.getElementById("today-deadline-next").textContent = dl.soon.length
+      ? dl.soon[0].subject.slice(0, 40) + " · " + dueText(dl.soon[0].days) : "ничего не горит 🎉";
+    document.getElementById("today-notes").innerHTML = todayData.notes.map(x =>
+      '<div class="note-card">📌 ' + (x.subject ? "<b>" + escapeHtml(x.subject) + ":</b> " : "") + escapeHtml(x.text) + '</div>').join("");
   } catch (e) {
-    document.getElementById("today-schedule").textContent = "Не загрузилось: " + e.message;
+    const hero = document.getElementById("hero");
+    hero.className = "hero calm";
+    hero.innerHTML = '<div class="h-eyebrow">Расписание</div><div class="h-title">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    document.getElementById("today-lessons").innerHTML = "";
   }
-  try {
-    const dl = await api("/api/deadlines");
-    document.getElementById("today-deadline-count").textContent = dl.stats.active;
-  } catch (e) {}
+  renderDayChips();
 }
 
-let weekLoaded = false;
-async function loadWeek() {
-  const card = document.getElementById("week-card");
-  card.style.display = "block";
-  if (weekLoaded) return;
-  weekLoaded = true;
+function plural(n, one, few, many) {
+  const n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
+}
+
+setInterval(refreshStatuses, 30000);
+
+// ── Неделя: выбор дня ─────────────────────────────────────────────────────
+
+const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+function isoDate(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function renderDayChips() {
+  const base = todayData ? new Date(todayData.date + "T12:00:00") : new Date();
+  const wd = (base.getDay() + 6) % 7;             // 0 = понедельник
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - wd + (wd === 6 ? 7 : 0));  // в воскресенье — следующая неделя
+  const box = document.getElementById("daychips");
+  box.innerHTML = "";
+  let selected = null;
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const b = document.createElement("button");
+    const iso = isoDate(d);
+    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + "</b>";
+    b.dataset.date = iso;
+    if (todayData && iso === todayData.date) { b.classList.add("today"); selected = b; }
+    b.onclick = () => selectDay(b);
+    box.appendChild(b);
+  }
+  selectDay(selected || box.children[0], true);
+}
+
+async function selectDay(btn, silent) {
+  document.querySelectorAll("#daychips button").forEach(b => b.classList.toggle("active", b === btn));
+  if (!silent) haptic();
+  const list = document.getElementById("day-lessons");
+  list.innerHTML = '<div class="skel" style="height:64px"></div>';
   try {
-    const data = await api("/api/schedule/week");
-    document.getElementById("week-schedule").innerHTML = data.html;
+    const data = await api("/api/day?date=" + btn.dataset.date);
+    if (btn.classList.contains("active")) {
+      list.innerHTML = data.lessons.length
+        ? data.lessons.map(l => lessonRow(l, !!l.status)).join("")
+        : '<div class="empty">' + data.weekday + ' — пар нет 🎉</div>';
+    }
   } catch (e) {
-    document.getElementById("week-schedule").textContent = "Не загрузилось: " + e.message;
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
 // ── Дедлайны ──────────────────────────────────────────────────────────────
 
+function daysUntil(iso) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(iso + "T00:00:00") - today) / 86400000);
+}
+
 function dueBadge(item) {
   if (item.done) return '<span class="chip ok">✓ готово</span>';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const due = new Date(item.due_date + "T00:00:00");
-  const days = Math.round((due - today) / 86400000);
+  const days = daysUntil(item.due_date);
   let cls = "ok", label;
   if (days < 0) { cls = "danger"; label = "просрочено"; }
   else if (days === 0) { cls = "danger"; label = "сегодня"; }
   else if (days === 1) { cls = "warn"; label = "завтра"; }
   else if (days <= 3) { cls = "warn"; label = "через " + days + " дн."; }
-  else { label = item.due_date; }
-  return '<span class="chip ' + cls + '">' + label + '</span>';
+  else { const d = new Date(item.due_date + "T00:00:00"); label = d.getDate() + "." + String(d.getMonth() + 1).padStart(2, "0"); }
+  return '<span class="chip ' + cls + '">' + label + (item.due_time ? " · " + escapeHtml(item.due_time) : "") + '</span>';
 }
+
+document.querySelectorAll("#dl-seg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#dl-seg button").forEach(x => x.classList.toggle("active", x === b));
+  const hw = b.dataset.seg === "hw";
+  document.getElementById("seg-dl").style.display = hw ? "none" : "block";
+  document.getElementById("seg-hw").style.display = hw ? "block" : "none";
+  document.getElementById("fab-add").style.display = hw ? "none" : "block";
+  haptic();
+  if (hw) loadHomework();
+}));
 
 async function loadDeadlines() {
   const list = document.getElementById("deadline-list");
@@ -498,28 +840,54 @@ async function loadDeadlines() {
     const data = await api("/api/deadlines?include_done=true");
     const stat = data.stats;
     document.getElementById("deadline-stat").textContent =
-      stat.active + " активных · " + stat.overdue + " просрочено";
+      stat.active + " активных" + (stat.overdue ? " · " + stat.overdue + " просрочено" : "");
     if (!data.items.length) {
-      list.innerHTML = '<div class="empty">Дедлайнов пока нет 🎉</div>';
+      list.innerHTML = '<div class="empty">Дедлайнов нет 🎉<br>Свой можно добавить кнопкой ＋</div>';
       return;
     }
-    list.innerHTML = data.items.map(renderDeadline).join("");
+    const groups = { overdue: [], week: [], later: [], done: [] };
+    data.items.forEach(it => {
+      const days = daysUntil(it.due_date);
+      if (it.done) groups.done.push(it);
+      else if (days < 0) groups.overdue.push(it);
+      else if (days <= 7) groups.week.push(it);
+      else groups.later.push(it);
+    });
+    const block = (title, items, cls) => items.length
+      ? '<p class="group-title ' + (cls || "") + '">' + title + ' · ' + items.length + '</p><div class="list">' + items.map(renderDeadline).join("") + '</div>'
+      : "";
+    list.innerHTML =
+      block("Просрочено", groups.overdue, "danger") +
+      block("На этой неделе", groups.week) +
+      block("Позже", groups.later) +
+      (groups.done.length ? '<details class="done-group"><summary><p class="group-title">Выполнено · ' + groups.done.length +
+        ' ▾</p></summary><div class="list">' + groups.done.map(renderDeadline).join("") + '</div></details>' : "");
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
 function renderDeadline(item) {
+  const desc = item.description || "";
+  const isLink = /^https?:\/\//.test(desc);
+  const actions = [];
+  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Открыть задание</a>');
+  if (item.mine && item.personal) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
   return (
     '<div class="deadline-card ' + (item.done ? "done" : "") + '" onclick="toggleDeadline(' + item.id + ', ' + (!item.done) + ')">' +
       '<div class="checkbox ' + (item.done ? "checked" : "") + '">' + (item.done ? "✓" : "") + '</div>' +
       '<div class="dl-body">' +
         '<p class="dl-title">' + escapeHtml(item.subject) + '</p>' +
-        (item.description ? '<p class="dl-desc">' + escapeHtml(item.description) + '</p>' : '') +
-        '<div class="dl-meta">' + dueBadge(item) + '</div>' +
+        (desc && !isLink ? '<p class="dl-desc">' + escapeHtml(desc) + '</p>' : '') +
+        '<div class="dl-meta">' + dueBadge(item) + (item.personal ? '<span class="chip">👤 личный</span>' : '') + '</div>' +
+        (actions.length ? '<div class="dl-actions">' + actions.join("") + '</div>' : '') +
       '</div>' +
     '</div>'
   );
+}
+
+function openLink(url) {
+  if (tg && tg.openLink) tg.openLink(url); else window.open(url, "_blank");
 }
 
 async function toggleDeadline(id, done) {
@@ -533,6 +901,83 @@ async function toggleDeadline(id, done) {
   }
 }
 
+async function deleteDeadline(id) {
+  const ok = await confirmDialog("Удалить этот дедлайн?");
+  if (!ok) return;
+  try {
+    await api("/api/deadlines/" + id, { method: "DELETE" });
+    haptic("success");
+    loadDeadlines(); loadToday();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  }
+}
+
+function confirmDialog(text) {
+  return new Promise(resolve => {
+    if (tg && tg.showConfirm) { try { tg.showConfirm(text, resolve); return; } catch (e) {} }
+    resolve(window.confirm(text));
+  });
+}
+
+function openAddSheet() {
+  haptic();
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  document.getElementById("nd-date").value = isoDate(d);
+  document.getElementById("nd-time").value = "23:59";
+  document.getElementById("add-sheet").classList.add("open");
+  setTimeout(() => document.getElementById("nd-subject").focus(), 150);
+}
+
+function closeAddSheet() {
+  document.getElementById("add-sheet").classList.remove("open");
+}
+
+async function submitDeadline() {
+  const subject = document.getElementById("nd-subject").value.trim();
+  if (!subject) { document.getElementById("nd-subject").focus(); return; }
+  const btn = document.getElementById("nd-submit");
+  btn.disabled = true;
+  try {
+    await api("/api/deadlines", { method: "POST", body: JSON.stringify({
+      subject: subject,
+      due_date: document.getElementById("nd-date").value,
+      due_time: document.getElementById("nd-time").value,
+      description: document.getElementById("nd-desc").value.trim(),
+    }) });
+    haptic("success");
+    ["nd-subject", "nd-desc"].forEach(id => document.getElementById(id).value = "");
+    closeAddSheet();
+    loadDeadlines(); loadToday();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadHomework() {
+  const list = document.getElementById("hw-list");
+  try {
+    const data = await api("/api/homework");
+    if (!data.items.length) { list.innerHTML = '<div class="empty">Доска ДЗ пока пустая</div>'; return; }
+    list.innerHTML = data.items.map(h => {
+      const when = h.lesson_date ? '<span class="chip warn">к ' + h.lesson_date.slice(8, 10) + "." + h.lesson_date.slice(5, 7) + '</span>' : "";
+      const file = h.has_file ? '<div class="dl-actions"><button onclick="openHwFile(' + h.id + ')">📎 Открыть файл</button></div>' : "";
+      return '<div class="hw-card"><div class="hw-subj">' + escapeHtml(h.subject) + '</div>' +
+        (h.content ? '<div class="hw-text">' + escapeHtml(h.content) + '</div>' : '') +
+        '<div class="dl-meta">' + when + '</div>' + file + '</div>';
+    }).join("");
+  } catch (e) {
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function openHwFile(id) {
+  const link = "https://t.me/" + BOT_USERNAME + "?start=hw_" + id;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(link); else window.open(link, "_blank");
+}
+
 // ── Файлы ─────────────────────────────────────────────────────────────────
 
 let fileSearchTimer = null;
@@ -541,24 +986,62 @@ document.getElementById("file-search").addEventListener("input", (e) => {
   fileSearchTimer = setTimeout(() => loadFiles(e.target.value), 300);
 });
 
+let fileItems = [];
+let fileSubject = "";
+
+function fileIcon(name) {
+  const n = (name || "").toLowerCase();
+  if (n.endsWith(".pdf")) return "📕";
+  if (n.endsWith(".docx") || n.endsWith(".doc")) return "📘";
+  if (n.endsWith(".pptx") || n.endsWith(".ppt")) return "📙";
+  if (/\.(jpg|jpeg|png|webp)$/.test(n)) return "🖼";
+  if (/\.(xlsx|xls|csv)$/.test(n)) return "📗";
+  return "📄";
+}
+
+function renderFiles() {
+  const list = document.getElementById("file-list");
+  const items = fileSubject ? fileItems.filter(f => f.subject === fileSubject) : fileItems;
+  if (!items.length) { list.innerHTML = '<div class="empty">Ничего не нашлось</div>'; return; }
+  list.innerHTML = items.map(f =>
+    '<div class="file-card">' +
+      '<span class="ic">' + fileIcon(f.file_name) + '</span>' +
+      '<div style="min-width:0"><div class="ft">' + escapeHtml(f.title) + (f.has_text ? '<span class="badge">📖</span>' : '') + '</div>' +
+      '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
+      '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
+    '</div>'
+  ).join("");
+}
+
+function renderFileSubjects() {
+  const box = document.getElementById("file-subjects");
+  const subjects = [...new Set(fileItems.map(f => f.subject).filter(Boolean))].sort();
+  if (subjects.length < 2) { box.innerHTML = ""; return; }
+  box.innerHTML = "";
+  ["", ...subjects].forEach(s => {
+    const b = document.createElement("button");
+    b.textContent = s || "Все";
+    b.classList.toggle("active", s === fileSubject);
+    b.onclick = () => { fileSubject = s; haptic(); renderFileSubjects(); renderFiles(); };
+    box.appendChild(b);
+  });
+}
+
 async function loadFiles(q) {
   const list = document.getElementById("file-list");
   try {
     const data = await api("/api/files?q=" + encodeURIComponent(q || ""));
-    if (!data.items.length) {
-      list.innerHTML = '<div class="empty">Ничего не нашлось</div>';
+    fileItems = data.items;
+    if (fileSubject && !fileItems.some(f => f.subject === fileSubject)) fileSubject = "";
+    if (!fileItems.length) {
+      list.innerHTML = '<div class="empty">' + (q ? "Ничего не нашлось" : "Файлов пока нет — загрузи их в боте: /upload") + '</div>';
+      document.getElementById("file-subjects").innerHTML = "";
       return;
     }
-    list.innerHTML = data.items.map(f =>
-      '<div class="file-card">' +
-        '<span class="ic">📄</span>' +
-        '<div><div class="ft">' + escapeHtml(f.title) + '</div>' +
-        '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
-        '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
-      '</div>'
-    ).join("");
+    renderFileSubjects();
+    renderFiles();
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
@@ -591,7 +1074,8 @@ function targetItem(t) {
   const kind = TARGET_KIND[t.type] || ["📅", ""];
   return '<div class="target-item" onclick="openTarget(' + t.type + ',' + t.id + ',' + escapeHtml(JSON.stringify(t.title)) + ')">' +
     '<span class="ic">' + kind[0] + '</span>' +
-    '<div><div class="tt">' + escapeHtml(t.title) + '</div><div class="ts">' + kind[1] + '</div></div>' +
+    '<div style="min-width:0"><div class="tt">' + escapeHtml(t.title) + '</div><div class="ts">' + kind[1] +
+    (t.hint ? ' · ' + escapeHtml(t.hint) : '') + '</div></div>' +
     '<span class="go">›</span></div>';
 }
 
@@ -665,16 +1149,79 @@ function closeTarget() {
 
 // ── Чат ───────────────────────────────────────────────────────────────────
 
-const chatHistory = [];
+// История чата живёт в localStorage этого устройства (только текст, без
+// вложений): закрыл WebApp — открыл — разговор на месте. «Новый чат» — чистит.
+const CHAT_KEY = "chatLog.v1";
+let chatLog = loadChatLog();          // [{role, content, html, att}]
+let pendingAttachment = null;         // {name, mime, data(base64), url}
 
-function appendMsg(role, content, reasoning, html) {
+function loadChatLog() {
+  try { return JSON.parse(localStorage.getItem(CHAT_KEY) || "[]"); } catch (e) { return []; }
+}
+function saveChatLog() {
+  try { localStorage.setItem(CHAT_KEY, JSON.stringify(chatLog.slice(-40))); } catch (e) {}
+}
+
+const SUGGESTIONS = [
+  "Что сдавать на этой неделе?",
+  "Какие у нас пары завтра?",
+  "Объясни простыми словами, что такое NPV",
+  "📷 Прикрепи фото задачи — решу по шагам",
+];
+
+function renderChat() {
   const log = document.getElementById("chat-log");
+  log.innerHTML = "";
+  if (!chatLog.length) {
+    const empty = document.createElement("div");
+    empty.className = "chat-empty";
+    empty.innerHTML = '<div class="big-emoji">🤖</div><p>Спрашивай про учёбу, присылай фото задач и файлы лекций.<br>Я знаю ваше расписание, дедлайны и ДЗ.</p><div class="suggest"></div>';
+    const box = empty.querySelector(".suggest");
+    SUGGESTIONS.forEach(t => {
+      const b = document.createElement("button");
+      b.textContent = t;
+      b.onclick = () => {
+        if (t.startsWith("📷")) { document.getElementById("chat-file").click(); return; }
+        document.getElementById("chat-input").value = t;
+        sendChat();
+      };
+      box.appendChild(b);
+    });
+    log.appendChild(empty);
+    return;
+  }
+  chatLog.forEach(m => appendMsg(m.role, m.content, "", m.html, m.att, false));
+}
+
+function newChat() {
+  haptic();
+  chatLog = [];
+  saveChatLog();
+  clearAttachment();
+  renderChat();
+}
+
+function appendMsg(role, content, reasoning, html, att, scroll = true) {
+  const log = document.getElementById("chat-log");
+  const empty = log.querySelector(".chat-empty");
+  if (empty) empty.remove();
   const div = document.createElement("div");
   div.className = "msg " + (role === "user" ? "user" : "bot");
-  const textNode = document.createElement("div");
-  // html собирает сервер (utils.md_to_tg_html_chunks): всё, кроме <b>/<i>/<code>/<pre>, экранировано
-  if (html) textNode.innerHTML = html; else textNode.textContent = content;
-  div.appendChild(textNode);
+  if (att && att.url) {
+    const img = document.createElement("img");
+    img.className = "att"; img.src = att.url; img.alt = att.name || "фото";
+    div.appendChild(img);
+  } else if (att && att.name) {
+    const chip = document.createElement("div");
+    chip.className = "file-att"; chip.textContent = (att.image ? "🖼 " : "📄 ") + att.name;
+    div.appendChild(chip);
+  }
+  if (content || html) {
+    const textNode = document.createElement("div");
+    // html собирает сервер (utils.md_to_tg_html_chunks): всё, кроме <b>/<i>/<code>/<pre>, экранировано
+    if (html) textNode.innerHTML = html; else textNode.textContent = content;
+    div.appendChild(textNode);
+  }
   if (reasoning) {
     const det = document.createElement("details");
     det.className = "think";
@@ -682,36 +1229,163 @@ function appendMsg(role, content, reasoning, html) {
     det.querySelector(".think-body").textContent = reasoning;
     div.appendChild(det);
   }
+  if (role !== "user" && content && !content.startsWith("⚠️")) {
+    const tools = document.createElement("div");
+    tools.className = "msg-tools";
+    const copy = document.createElement("button");
+    copy.textContent = "⧉ Копировать";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(content); } catch (e) {
+        const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta);
+        ta.select(); try { document.execCommand("copy"); } catch (e2) {} ta.remove();
+      }
+      haptic("success");
+      copy.textContent = "✓ Скопировано";
+      setTimeout(() => { copy.textContent = "⧉ Копировать"; }, 1500);
+    };
+    tools.appendChild(copy);
+    div.appendChild(tools);
+  }
   log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
+  if (scroll) requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
   return div;
+}
+
+function typingBubble() {
+  const log = document.getElementById("chat-log");
+  const div = document.createElement("div");
+  div.className = "msg bot typing-dots";
+  div.innerHTML = "<span></span><span></span><span></span>";
+  log.appendChild(div);
+  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  return div;
+}
+
+// ── вложения ──
+const MAX_FILE_MB = 10;
+document.getElementById("chat-file").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > MAX_FILE_MB * 1024 * 1024) { alert("Файл больше " + MAX_FILE_MB + " МБ — не пролезет"); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = String(reader.result);
+    const image = (file.type || "").startsWith("image/");
+    pendingAttachment = {
+      name: file.name || (image ? "фото.jpg" : "файл"),
+      mime: file.type || "",
+      data: dataUrl.slice(dataUrl.indexOf(",") + 1),
+      url: image ? dataUrl : "",
+      image: image,
+    };
+    renderAttachment();
+    haptic();
+  };
+  reader.readAsDataURL(file);
+});
+
+function renderAttachment() {
+  const box = document.getElementById("attach-preview");
+  box.innerHTML = "";
+  if (!pendingAttachment) return;
+  const chip = document.createElement("div");
+  chip.className = "attach-chip";
+  if (pendingAttachment.url) {
+    const img = document.createElement("img"); img.src = pendingAttachment.url; chip.appendChild(img);
+  } else {
+    const ic = document.createElement("span"); ic.textContent = "📄"; chip.appendChild(ic);
+  }
+  const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = pendingAttachment.name; chip.appendChild(nm);
+  const x = document.createElement("button"); x.textContent = "✕"; x.setAttribute("aria-label", "Убрать"); x.onclick = clearAttachment;
+  chip.appendChild(x);
+  box.appendChild(chip);
+  syncNavHeight();
+}
+
+function clearAttachment() {
+  pendingAttachment = null;
+  renderAttachment();
+  syncNavHeight();
+}
+
+// ── предметы (с лекциями — чат опирается на них) ──
+async function loadChatSubjects() {
+  try {
+    const data = await api("/api/subjects");
+    const sel = document.getElementById("chat-subject");
+    data.subjects.forEach(s => {
+      const o = document.createElement("option");
+      o.value = s.name; o.textContent = (s.lectures ? "📖 " : "") + s.name;
+      sel.appendChild(o);
+    });
+  } catch (e) {}
 }
 
 async function sendChat() {
   const input = document.getElementById("chat-input");
   const text = input.value.trim();
-  if (!text) return;
+  const att = pendingAttachment;
+  if (!text && !att) return;
   input.value = "";
+  input.style.height = "auto";
+  clearAttachment();
   const btn = document.getElementById("chat-send");
   btn.disabled = true;
 
-  appendMsg("user", text);
-  chatHistory.push({ role: "user", content: text });
-  const pending = appendMsg("bot", "Думаю…");
-  pending.classList.add("pending");
+  const shownAtt = att ? { name: att.name, url: att.url, image: att.image } : null;
+  appendMsg("user", text, "", "", shownAtt);
+  // В истории для сервера — только текст; само вложение уходит отдельным полем.
+  const content = text || (att ? (att.image ? "Реши задание на фото." : "Разбери этот файл.") : "");
+  chatLog.push({ role: "user", content: content, att: shownAtt ? { name: shownAtt.name, image: shownAtt.image } : null });
+  saveChatLog();
+  const pending = typingBubble();
 
+  const history = chatLog.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
+  const body = { history: history, subject: document.getElementById("chat-subject").value };
+  if (att) body.attachment = { name: att.name, mime: att.mime, data: att.data };
   try {
-    const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ history: chatHistory }) });
+    const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
     pending.remove();
-    appendMsg("bot", data.content, data.reasoning, data.html);
-    chatHistory.push({ role: "assistant", content: data.content });
+    appendMsg("assistant", data.content, data.reasoning, data.html);
+    chatLog.push({ role: "assistant", content: data.content, html: data.html });
+    saveChatLog();
+    haptic("success");
   } catch (e) {
     pending.remove();
-    appendMsg("bot", "⚠️ " + e.message);
+    appendMsg("assistant", "⚠️ " + e.message);
   } finally {
     btn.disabled = false;
   }
 }
+
+// Высота панели вкладок (с учётом «безопасной зоны» внизу iPhone) — для
+// поля ввода чата, которое стоит прямо над ней.
+function syncNavHeight() {
+  const nav = document.querySelector("nav.tabs");
+  if (nav && nav.offsetHeight) document.documentElement.style.setProperty("--nav-h", nav.offsetHeight + "px");
+  const dock = document.querySelector(".chat-dock");
+  if (dock && dock.offsetHeight) document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + "px");
+}
+syncNavHeight();
+window.addEventListener("resize", syncNavHeight);
+if (tg && tg.onEvent) tg.onEvent("viewportChanged", syncNavHeight);
+
+// Пока открыта клавиатура — панель вкладок прячем, поле ввода опускаем вниз.
+const chatInput = document.getElementById("chat-input");
+chatInput.addEventListener("focus", () => document.body.classList.add("typing"));
+chatInput.addEventListener("blur", () => setTimeout(() => {
+  document.body.classList.remove("typing");
+  syncNavHeight();
+  // панель вкладок вернулась и подняла поле ввода — докручиваем, чтобы
+  // последний ответ не остался под ним
+  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+}, 150));
+chatInput.addEventListener("input", () => {
+  chatInput.style.height = "auto";
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + "px";
+  syncNavHeight();
+});
 
 document.getElementById("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -729,6 +1403,8 @@ function escapeHtml(s) {
 }
 
 loadToday();
+renderChat();
+loadChatSubjects();
 </script>
 
 </body>

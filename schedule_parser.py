@@ -60,9 +60,24 @@ def _extract_groups(component) -> str:
     return ", ".join(parts)
 
 
+# Разобранный календарь последних ical-байт: Calendar.from_ical + разворот
+# повторов — чистый CPU в event loop. get_group_subjects дёргал разбор 42 раза
+# подряд (1,6 с блокировки всего бота на каждый /solve и /upload), главная
+# WebApp — ещё дважды на запрос. Кэш по самим байтам (кэш fetch_schedule_raw
+# отдаёт тот же объект, пока не протухнет) — чужие ical (поиск препода)
+# просто вытесняют его, ничего не ломая.
+_parsed_cal: tuple[bytes, object] | None = None
+
+
+def _calendar_query(ical_data: bytes):
+    global _parsed_cal
+    if _parsed_cal is None or _parsed_cal[0] is not ical_data and _parsed_cal[0] != ical_data:
+        _parsed_cal = (ical_data, recurring_ical_events.of(Calendar.from_ical(ical_data)))
+    return _parsed_cal[1]
+
+
 def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
-    cal = Calendar.from_ical(ical_data)
-    events_raw = recurring_ical_events.of(cal).at(target)
+    events_raw = _calendar_query(ical_data).at(target)
     events = []
 
     for component in events_raw:
@@ -270,6 +285,79 @@ async def get_tomorrow_schedule() -> str:
     except Exception as e:
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
+
+
+def lessons_for_date(raw: bytes, target: date, now: datetime | None = None) -> list[dict]:
+    """Пары дня структурой (для WebApp, который рисует их сам, а не
+    вставляет готовый HTML бота): номер по звонку, время, название, тип,
+    аудитория, преподаватель, статус past/now/later (при заданном now)."""
+    out = []
+    for r in _merge_runs(parse_events_for_date(raw, target)):
+        title, kind, _ = _split_kind(r["summary"])
+        status = ""
+        if now and r.get("time_start"):
+            end = r.get("time_end") or r["time_start"]
+            status = "now" if r["time_start"] <= now < end else ("past" if end <= now else "later")
+        out.append({
+            "num": r["first"] if r["first"] == r["last"] else f"{r['first']}–{r['last']}",
+            "pairs": r["last"] - r["first"] + 1,
+            "start": r["start_str"], "end": r["end_str"],
+            "title": title, "kind": kind,
+            "room": r.get("location") or "", "teacher": _short_teacher(r.get("teacher") or ""),
+            "status": status,
+            "start_iso": r["time_start"].isoformat() if r.get("time_start") else None,
+            "end_iso": r["time_end"].isoformat() if r.get("time_end") else None,
+        })
+    return out
+
+
+_subjects_cache: dict[tuple, list[str]] = {}
+
+
+async def get_group_subjects(days_back: int = 14, days_ahead: int = 28) -> list[str]:
+    """Настоящие названия предметов группы (без «ЛК/ПР») из её расписания —
+    для кнопок выбора предмета при загрузке файлов и в решалке, чтобы файлы
+    лекций и решалка говорили на одном языке, а не «Математика» против
+    «Основы бизнес-анализа в ИТ-сфере». Пустой список, если расписание
+    не загрузилось."""
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception as e:
+        logger.warning(f"get_group_subjects: {e}")
+        return []
+    today = datetime.now(TZ).date()
+    key = (id(raw), today, days_back, days_ahead)
+    if key in _subjects_cache:
+        return _subjects_cache[key]
+    start = datetime.combine(today - timedelta(days=days_back), datetime.min.time(), TZ)
+    end = datetime.combine(today + timedelta(days=days_ahead), datetime.min.time(), TZ)
+    names = set()
+    for component in _calendar_query(raw).between(start, end):
+        summary = str(component.get("SUMMARY", ""))
+        if not summary or summary.strip().endswith("неделя"):
+            continue
+        title, _, _ = _split_kind(summary)
+        if title:
+            names.add(title)
+    _subjects_cache.clear()
+    _subjects_cache[key] = sorted(names)
+    return _subjects_cache[key]
+
+
+def summarize_target(raw: bytes, days: int = 14) -> tuple[str, int]:
+    """(главный предмет, сколько пар) за days дней вперёд — подпись, чтобы
+    отличить однофамильцев: в справочнике МИРЭА у преподавателей только
+    инициалы, и «Морозов В. А.» бывает трижды."""
+    from collections import Counter
+    today = datetime.now(TZ).date()
+    subjects: Counter = Counter()
+    pairs = 0
+    for i in range(days):
+        for e in parse_events_for_date(raw, today + timedelta(days=i)):
+            title, _, _ = _split_kind(e["summary"])
+            subjects[title] += 1
+            pairs += 1
+    return (subjects.most_common(1)[0][0] if subjects else ""), pairs
 
 
 def format_target_schedule(raw: bytes, target_type: int, days: int = 14) -> str:

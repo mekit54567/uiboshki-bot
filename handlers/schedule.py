@@ -141,7 +141,10 @@ SEARCH_BUILDING_TEXT = (
 
 def _target_pick_kb(results: list[dict], target_type: int) -> InlineKeyboardMarkup:
     prefix = _TARGET_CB_PREFIX[target_type]
-    buttons = [[InlineKeyboardButton(text=r["fullTitle"], callback_data=f"{prefix}:{r['id']}")] for r in results]
+    buttons = []
+    for r in results:
+        label = r["fullTitle"] + (f" · {r['hint']}" if r.get("hint") else "")
+        buttons.append([InlineKeyboardButton(text=label[:64], callback_data=f"{prefix}:{r['id']}")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -173,6 +176,8 @@ async def _handle_target_search(message: Message, query: str, target_type: int, 
             else:
                 await message.answer(chunk, parse_mode="HTML")
         return
+    from mirea_schedule_api import add_hints_for_namesakes
+    results = await add_hints_for_namesakes(results)
     await wait.edit_text(
         f"{_TARGET_EMOJI[target_type]} Нашёл несколько совпадений — выбери:",
         reply_markup=_target_pick_kb(results, target_type)
