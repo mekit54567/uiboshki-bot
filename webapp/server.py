@@ -236,10 +236,70 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
 
 @app.get("/api/deadlines")
 async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
-    from database import get_active_deadlines, get_deadline_stats
+    from database import get_active_deadlines, get_deadline_stats, is_shared_deadline
     items = await get_active_deadlines(user["id"], include_done=include_done)
+    for d in items:
+        d["personal"] = not is_shared_deadline(d)
+        d["mine"] = d.get("created_by") == user["id"]
     stats = await get_deadline_stats(user["id"])
     return {"items": items, "stats": stats}
+
+
+class NewDeadline(BaseModel):
+    subject: str
+    due_date: str
+    due_time: str = ""
+    description: str = ""
+
+
+@app.post("/api/deadlines")
+async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
+    """Свой (личный) дедлайн из WebApp — как /add в боте: виден только
+    автору. Общие дедлайны группы по-прежнему заводит староста/СДО."""
+    from datetime import date as date_cls
+    from database import add_deadline
+    from handlers.deadlines import parse_due_time
+    subject = body.subject.strip()
+    if not subject or len(subject) > 200:
+        raise HTTPException(status_code=400, detail="название — от 1 до 200 символов")
+    try:
+        due = date_cls.fromisoformat(body.due_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    due_time = None
+    if body.due_time.strip():
+        ok, due_time = parse_due_time(body.due_time)
+        if not ok:
+            raise HTTPException(status_code=400, detail="время в формате ЧЧ:ММ")
+    did = await add_deadline(subject, body.description.strip()[:1500], due.isoformat(), due_time, user["id"])
+    return {"ok": True, "id": did}
+
+
+@app.delete("/api/deadlines/{deadline_id}")
+async def api_deadline_delete(deadline_id: int, user: dict = CurrentUser):
+    """Удалить можно только свой личный дедлайн (общие — староста в боте)."""
+    from database import delete_deadline, get_deadline, is_shared_deadline
+    existing = await get_deadline(deadline_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="дедлайн не найден")
+    if is_shared_deadline(existing) or existing["created_by"] != user["id"]:
+        raise HTTPException(status_code=403, detail="удалить можно только свой личный дедлайн")
+    await delete_deadline(deadline_id)
+    return {"ok": True}
+
+
+@app.get("/api/homework")
+async def api_homework(user: dict = CurrentUser):
+    """Доска ДЗ (/addhw в боте): свежие сверху. Файл ДЗ WebApp открывает
+    диплинком в бота (t.me/<бот>?start=hw_<id>) — file_id наружу не отдаём."""
+    from group_context import list_homework
+    items = await list_homework(60)
+    return {"items": [
+        {"id": h["id"], "subject": h["subject"], "content": h.get("content") or "",
+         "lesson_date": h.get("lesson_date") or "", "created_at": (h.get("created_at") or "")[:10],
+         "has_file": bool(h.get("file_id"))}
+        for h in items
+    ]}
 
 
 class ToggleBody(BaseModel):
@@ -274,8 +334,11 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
     # бота, а светить его в браузерном JS не хочется. Вместо этого фронт
     # открывает диплинк на сам бот (t.me/<bot>?start=file_<id>), который уже
     # шлёт документ — см. handlers/start.py: cmd_start_deeplink.
+    from database import get_file_ids_with_text
+    with_text = await get_file_ids_with_text()
     return {"items": [
-        {"id": f["id"], "title": f["title"], "subject": f.get("subject") or "", "file_name": f.get("file_name") or ""}
+        {"id": f["id"], "title": f["title"], "subject": f.get("subject") or "", "file_name": f.get("file_name") or "",
+         "has_text": f["id"] in with_text}
         for f in items
     ]}
 

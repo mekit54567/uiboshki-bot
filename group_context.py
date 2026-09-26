@@ -32,7 +32,7 @@ async def list_homework(limit: int = 30) -> list[dict]:
         async with aiosqlite.connect(database.DATABASE_PATH) as db:
             db.row_factory = aiosqlite.Row
             cur = await db.execute(
-                "SELECT id, subject, content, lesson_date, created_at, file_id FROM homework "
+                "SELECT id, subject, content, lesson_date, created_at, file_id, file_type FROM homework "
                 "ORDER BY COALESCE(lesson_date, substr(created_at, 1, 10)) DESC, id DESC LIMIT ?",
                 (limit,),
             )

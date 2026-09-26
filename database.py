@@ -536,6 +536,14 @@ async def get_subject_lecture_context(subject: str) -> str:
         rows = await cursor.fetchall()
     return "\n\n".join(f"=== {r['title']} ===\n{r['content']}" for r in rows)
 
+async def get_file_ids_with_text() -> set[int]:
+    """id файлов, текст которых извлечён (участвуют в контексте ИИ) — для
+    отметки 📖 в списке файлов WebApp."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT file_id FROM file_text WHERE char_count > 0")
+        return {r[0] for r in await cursor.fetchall()}
+
+
 async def get_subjects_with_lecture_text() -> list[str]:
     """Предметы, по которым есть хоть один файл с извлечённым текстом — решалка
     по лекциям предлагает выбор только из них (иначе можно было бы выбрать

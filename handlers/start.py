@@ -40,6 +40,20 @@ async def cmd_start_deeplink(message: Message, command: CommandObject):
         else:
             await message.answer("❌ Файл не найден (возможно, его удалили).")
         return
+    if payload.startswith("hw_"):
+        # Кнопка «Открыть файл» у ДЗ в WebApp — файл может отдать только бот.
+        from group_context import list_homework
+        hw_id = payload.removeprefix("hw_")
+        item = next((h for h in await list_homework(500) if str(h["id"]) == hw_id), None)
+        if not item or not item.get("file_id"):
+            await message.answer("❌ Файл ДЗ не найден (возможно, его удалили).")
+            return
+        caption = f"📝 <b>{esc(item['subject'])}</b>" + (f"\n{esc(item['content'][:900])}" if item.get("content") else "")
+        if item.get("file_type") == "photo":
+            await message.bot.send_photo(user.id, item["file_id"], caption=caption, parse_mode="HTML")
+        else:
+            await message.bot.send_document(user.id, item["file_id"], caption=caption, parse_mode="HTML")
+        return
     await cmd_start(message)
 
 

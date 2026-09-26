@@ -191,6 +191,44 @@
 
   .list { display: flex; flex-direction: column; gap: 8px; }
 
+  .seg { display: flex; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 3px; margin: 4px 0 4px; }
+  .seg button { flex: 1; background: none; border: none; color: var(--hint); font-weight: 700; font-size: 13.5px; padding: 8px 0; border-radius: 9px; }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .group-title { color: var(--hint); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; margin: 14px 2px 8px; }
+  .group-title.danger { color: var(--danger); }
+  details.done-group summary { cursor: pointer; list-style: none; }
+  details.done-group summary::-webkit-details-marker { display: none; }
+  .dl-actions { display: flex; gap: 12px; margin-top: 6px; }
+  .dl-actions button, .dl-actions a { background: none; border: none; color: var(--accent); font-size: 12.5px; font-weight: 700; padding: 0; text-decoration: none; }
+  .dl-actions button.del { color: var(--danger); }
+  .fab {
+    position: fixed; right: 18px; bottom: calc(var(--nav-h, 64px) + 16px); z-index: 8;
+    width: 54px; height: 54px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 28px; line-height: 1;
+    box-shadow: 0 8px 22px rgba(92, 96, 230, .45);
+  }
+  #view-deadlines { padding-bottom: 80px; }
+  .sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.5); display: none; align-items: flex-end; }
+  .sheet-backdrop.open { display: flex; animation: fadein .15s ease; }
+  .sheet {
+    width: 100%; background: var(--bg); border-radius: 20px 20px 0 0; padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border); animation: slideup .2s ease;
+  }
+  @keyframes slideup { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+  .sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 0 auto 10px; }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
+  .sheet .row2 { display: flex; gap: 8px; }
+  .sheet textarea { resize: none; font-family: inherit; font-size: 15px; }
+  .sheet input { font-size: 16px; }
+  .sheet-hint { color: var(--hint); font-size: 12.5px; margin: 0 0 12px; }
+  button.primary { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 13px; font-size: 15px; font-weight: 800; }
+  button.primary:disabled { opacity: .5; }
+  .hw-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .hw-card .hw-subj { font-weight: 800; margin-bottom: 4px; }
+  .hw-card .hw-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .hw-card .dl-meta { margin-top: 8px; }
+  .file-card .badge { font-size: 11px; font-weight: 800; color: var(--accent-2); margin-left: 6px; }
+
   .deadline-card {
     display: flex; align-items: flex-start; gap: 12px;
     background: var(--bg-card);
@@ -239,7 +277,7 @@
     font-weight: 700;
   }
 
-  input.searchbox, select.filter {
+  input.searchbox, select.filter, textarea.searchbox {
     width: 100%;
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -432,8 +470,19 @@
 
   <!-- ── Дедлайны / ДЗ ─────────────────────────────────────────────── -->
   <section class="view" id="view-deadlines">
-    <h2 class="section">Дедлайны и ДЗ <span class="stat" id="deadline-stat"></span></h2>
-    <div class="list" id="deadline-list"><div class="empty">Загружаю…</div></div>
+    <div class="seg" id="dl-seg">
+      <button class="active" data-seg="dl">📋 Дедлайны</button>
+      <button data-seg="hw">📝 ДЗ</button>
+    </div>
+    <div id="seg-dl">
+      <h2 class="section">Дедлайны <span class="stat" id="deadline-stat"></span></h2>
+      <div id="deadline-list"><div class="skel" style="height:70px"></div><div class="skel" style="height:70px"></div></div>
+    </div>
+    <div id="seg-hw" style="display:none;">
+      <h2 class="section">Домашние задания</h2>
+      <div class="list" id="hw-list"><div class="skel" style="height:70px"></div></div>
+    </div>
+    <button class="fab" id="fab-add" onclick="openAddSheet()" aria-label="Добавить дедлайн">＋</button>
   </section>
 
   <!-- ── Поиск расписания ─────────────────────────────────────────── -->
@@ -464,7 +513,9 @@
   <section class="view" id="view-files">
     <h2 class="section">Файлы</h2>
     <input class="searchbox" id="file-search" placeholder="Поиск по названию, предмету, файлу…">
-    <div class="list" id="file-list"><div class="empty">Загружаю…</div></div>
+    <div class="chips-row" id="file-subjects"></div>
+    <div class="list" id="file-list"><div class="skel" style="height:60px"></div><div class="skel" style="height:60px"></div></div>
+    <p class="sheet-hint" style="margin-top:14px;">📖 — ИИ уже прочитал файл и отвечает по нему. Загрузить новые: /upload в боте.</p>
   </section>
 
   <!-- ── Чат ───────────────────────────────────────────────────────── -->
@@ -488,6 +539,21 @@
   </section>
 
 </main>
+
+<div class="sheet-backdrop" id="add-sheet" onclick="if (event.target === this) closeAddSheet()">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <h3>Новый дедлайн</h3>
+    <input class="searchbox" id="nd-subject" placeholder="Что сдать? Например: лаба 3 по анализу данных" maxlength="200">
+    <div class="row2">
+      <input class="searchbox" type="date" id="nd-date">
+      <input class="searchbox" type="time" id="nd-time">
+    </div>
+    <textarea class="searchbox" id="nd-desc" rows="2" placeholder="Описание — необязательно"></textarea>
+    <p class="sheet-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
+    <button class="primary" id="nd-submit" onclick="submitDeadline()">Добавить</button>
+  </div>
+</div>
 
 <nav class="tabs">
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
@@ -741,19 +807,32 @@ async function selectDay(btn, silent) {
 
 // ── Дедлайны ──────────────────────────────────────────────────────────────
 
+function daysUntil(iso) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(iso + "T00:00:00") - today) / 86400000);
+}
+
 function dueBadge(item) {
   if (item.done) return '<span class="chip ok">✓ готово</span>';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const due = new Date(item.due_date + "T00:00:00");
-  const days = Math.round((due - today) / 86400000);
+  const days = daysUntil(item.due_date);
   let cls = "ok", label;
   if (days < 0) { cls = "danger"; label = "просрочено"; }
   else if (days === 0) { cls = "danger"; label = "сегодня"; }
   else if (days === 1) { cls = "warn"; label = "завтра"; }
   else if (days <= 3) { cls = "warn"; label = "через " + days + " дн."; }
-  else { label = item.due_date; }
-  return '<span class="chip ' + cls + '">' + label + '</span>';
+  else { const d = new Date(item.due_date + "T00:00:00"); label = d.getDate() + "." + String(d.getMonth() + 1).padStart(2, "0"); }
+  return '<span class="chip ' + cls + '">' + label + (item.due_time ? " · " + escapeHtml(item.due_time) : "") + '</span>';
 }
+
+document.querySelectorAll("#dl-seg button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#dl-seg button").forEach(x => x.classList.toggle("active", x === b));
+  const hw = b.dataset.seg === "hw";
+  document.getElementById("seg-dl").style.display = hw ? "none" : "block";
+  document.getElementById("seg-hw").style.display = hw ? "block" : "none";
+  document.getElementById("fab-add").style.display = hw ? "none" : "block";
+  haptic();
+  if (hw) loadHomework();
+}));
 
 async function loadDeadlines() {
   const list = document.getElementById("deadline-list");
@@ -761,28 +840,54 @@ async function loadDeadlines() {
     const data = await api("/api/deadlines?include_done=true");
     const stat = data.stats;
     document.getElementById("deadline-stat").textContent =
-      stat.active + " активных · " + stat.overdue + " просрочено";
+      stat.active + " активных" + (stat.overdue ? " · " + stat.overdue + " просрочено" : "");
     if (!data.items.length) {
-      list.innerHTML = '<div class="empty">Дедлайнов пока нет 🎉</div>';
+      list.innerHTML = '<div class="empty">Дедлайнов нет 🎉<br>Свой можно добавить кнопкой ＋</div>';
       return;
     }
-    list.innerHTML = data.items.map(renderDeadline).join("");
+    const groups = { overdue: [], week: [], later: [], done: [] };
+    data.items.forEach(it => {
+      const days = daysUntil(it.due_date);
+      if (it.done) groups.done.push(it);
+      else if (days < 0) groups.overdue.push(it);
+      else if (days <= 7) groups.week.push(it);
+      else groups.later.push(it);
+    });
+    const block = (title, items, cls) => items.length
+      ? '<p class="group-title ' + (cls || "") + '">' + title + ' · ' + items.length + '</p><div class="list">' + items.map(renderDeadline).join("") + '</div>'
+      : "";
+    list.innerHTML =
+      block("Просрочено", groups.overdue, "danger") +
+      block("На этой неделе", groups.week) +
+      block("Позже", groups.later) +
+      (groups.done.length ? '<details class="done-group"><summary><p class="group-title">Выполнено · ' + groups.done.length +
+        ' ▾</p></summary><div class="list">' + groups.done.map(renderDeadline).join("") + '</div></details>' : "");
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
 function renderDeadline(item) {
+  const desc = item.description || "";
+  const isLink = /^https?:\/\//.test(desc);
+  const actions = [];
+  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Открыть задание</a>');
+  if (item.mine && item.personal) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
   return (
     '<div class="deadline-card ' + (item.done ? "done" : "") + '" onclick="toggleDeadline(' + item.id + ', ' + (!item.done) + ')">' +
       '<div class="checkbox ' + (item.done ? "checked" : "") + '">' + (item.done ? "✓" : "") + '</div>' +
       '<div class="dl-body">' +
         '<p class="dl-title">' + escapeHtml(item.subject) + '</p>' +
-        (item.description ? '<p class="dl-desc">' + escapeHtml(item.description) + '</p>' : '') +
-        '<div class="dl-meta">' + dueBadge(item) + '</div>' +
+        (desc && !isLink ? '<p class="dl-desc">' + escapeHtml(desc) + '</p>' : '') +
+        '<div class="dl-meta">' + dueBadge(item) + (item.personal ? '<span class="chip">👤 личный</span>' : '') + '</div>' +
+        (actions.length ? '<div class="dl-actions">' + actions.join("") + '</div>' : '') +
       '</div>' +
     '</div>'
   );
+}
+
+function openLink(url) {
+  if (tg && tg.openLink) tg.openLink(url); else window.open(url, "_blank");
 }
 
 async function toggleDeadline(id, done) {
@@ -796,6 +901,83 @@ async function toggleDeadline(id, done) {
   }
 }
 
+async function deleteDeadline(id) {
+  const ok = await confirmDialog("Удалить этот дедлайн?");
+  if (!ok) return;
+  try {
+    await api("/api/deadlines/" + id, { method: "DELETE" });
+    haptic("success");
+    loadDeadlines(); loadToday();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  }
+}
+
+function confirmDialog(text) {
+  return new Promise(resolve => {
+    if (tg && tg.showConfirm) { try { tg.showConfirm(text, resolve); return; } catch (e) {} }
+    resolve(window.confirm(text));
+  });
+}
+
+function openAddSheet() {
+  haptic();
+  const d = new Date(); d.setDate(d.getDate() + 7);
+  document.getElementById("nd-date").value = isoDate(d);
+  document.getElementById("nd-time").value = "23:59";
+  document.getElementById("add-sheet").classList.add("open");
+  setTimeout(() => document.getElementById("nd-subject").focus(), 150);
+}
+
+function closeAddSheet() {
+  document.getElementById("add-sheet").classList.remove("open");
+}
+
+async function submitDeadline() {
+  const subject = document.getElementById("nd-subject").value.trim();
+  if (!subject) { document.getElementById("nd-subject").focus(); return; }
+  const btn = document.getElementById("nd-submit");
+  btn.disabled = true;
+  try {
+    await api("/api/deadlines", { method: "POST", body: JSON.stringify({
+      subject: subject,
+      due_date: document.getElementById("nd-date").value,
+      due_time: document.getElementById("nd-time").value,
+      description: document.getElementById("nd-desc").value.trim(),
+    }) });
+    haptic("success");
+    ["nd-subject", "nd-desc"].forEach(id => document.getElementById(id).value = "");
+    closeAddSheet();
+    loadDeadlines(); loadToday();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadHomework() {
+  const list = document.getElementById("hw-list");
+  try {
+    const data = await api("/api/homework");
+    if (!data.items.length) { list.innerHTML = '<div class="empty">Доска ДЗ пока пустая</div>'; return; }
+    list.innerHTML = data.items.map(h => {
+      const when = h.lesson_date ? '<span class="chip warn">к ' + h.lesson_date.slice(8, 10) + "." + h.lesson_date.slice(5, 7) + '</span>' : "";
+      const file = h.has_file ? '<div class="dl-actions"><button onclick="openHwFile(' + h.id + ')">📎 Открыть файл</button></div>' : "";
+      return '<div class="hw-card"><div class="hw-subj">' + escapeHtml(h.subject) + '</div>' +
+        (h.content ? '<div class="hw-text">' + escapeHtml(h.content) + '</div>' : '') +
+        '<div class="dl-meta">' + when + '</div>' + file + '</div>';
+    }).join("");
+  } catch (e) {
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function openHwFile(id) {
+  const link = "https://t.me/" + BOT_USERNAME + "?start=hw_" + id;
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(link); else window.open(link, "_blank");
+}
+
 // ── Файлы ─────────────────────────────────────────────────────────────────
 
 let fileSearchTimer = null;
@@ -804,24 +986,62 @@ document.getElementById("file-search").addEventListener("input", (e) => {
   fileSearchTimer = setTimeout(() => loadFiles(e.target.value), 300);
 });
 
+let fileItems = [];
+let fileSubject = "";
+
+function fileIcon(name) {
+  const n = (name || "").toLowerCase();
+  if (n.endsWith(".pdf")) return "📕";
+  if (n.endsWith(".docx") || n.endsWith(".doc")) return "📘";
+  if (n.endsWith(".pptx") || n.endsWith(".ppt")) return "📙";
+  if (/\.(jpg|jpeg|png|webp)$/.test(n)) return "🖼";
+  if (/\.(xlsx|xls|csv)$/.test(n)) return "📗";
+  return "📄";
+}
+
+function renderFiles() {
+  const list = document.getElementById("file-list");
+  const items = fileSubject ? fileItems.filter(f => f.subject === fileSubject) : fileItems;
+  if (!items.length) { list.innerHTML = '<div class="empty">Ничего не нашлось</div>'; return; }
+  list.innerHTML = items.map(f =>
+    '<div class="file-card">' +
+      '<span class="ic">' + fileIcon(f.file_name) + '</span>' +
+      '<div style="min-width:0"><div class="ft">' + escapeHtml(f.title) + (f.has_text ? '<span class="badge">📖</span>' : '') + '</div>' +
+      '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
+      '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
+    '</div>'
+  ).join("");
+}
+
+function renderFileSubjects() {
+  const box = document.getElementById("file-subjects");
+  const subjects = [...new Set(fileItems.map(f => f.subject).filter(Boolean))].sort();
+  if (subjects.length < 2) { box.innerHTML = ""; return; }
+  box.innerHTML = "";
+  ["", ...subjects].forEach(s => {
+    const b = document.createElement("button");
+    b.textContent = s || "Все";
+    b.classList.toggle("active", s === fileSubject);
+    b.onclick = () => { fileSubject = s; haptic(); renderFileSubjects(); renderFiles(); };
+    box.appendChild(b);
+  });
+}
+
 async function loadFiles(q) {
   const list = document.getElementById("file-list");
   try {
     const data = await api("/api/files?q=" + encodeURIComponent(q || ""));
-    if (!data.items.length) {
-      list.innerHTML = '<div class="empty">Ничего не нашлось</div>';
+    fileItems = data.items;
+    if (fileSubject && !fileItems.some(f => f.subject === fileSubject)) fileSubject = "";
+    if (!fileItems.length) {
+      list.innerHTML = '<div class="empty">' + (q ? "Ничего не нашлось" : "Файлов пока нет — загрузи их в боте: /upload") + '</div>';
+      document.getElementById("file-subjects").innerHTML = "";
       return;
     }
-    list.innerHTML = data.items.map(f =>
-      '<div class="file-card">' +
-        '<span class="ic">📄</span>' +
-        '<div><div class="ft">' + escapeHtml(f.title) + '</div>' +
-        '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
-        '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
-      '</div>'
-    ).join("");
+    renderFileSubjects();
+    renderFiles();
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + e.message + '</div>';
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 

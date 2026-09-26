@@ -100,3 +100,47 @@ def test_api_day(db, client, monkeypatch):
     assert data["weekday"] == "Четверг" and data["label"] == "24 сентября"
     assert len(data["lessons"]) == 2
     assert c.get("/api/day", params={"date": "24.09"}, headers=headers).status_code == 400
+
+
+# ── дедлайны, ДЗ и файлы в WebApp ────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_add_and_delete_personal_deadline(db, client):
+    c, headers = client
+    resp = c.post("/api/deadlines", headers=headers,
+                  json={"subject": "Лаба 3", "due_date": "2099-10-03", "due_time": "23:59", "description": "в СДО"})
+    assert resp.status_code == 200
+    did = resp.json()["id"]
+    items = c.get("/api/deadlines", headers=headers).json()["items"]
+    mine = next(i for i in items if i["id"] == did)
+    assert mine["personal"] and mine["mine"] and mine["due_time"] == "23:59"
+
+    assert c.post("/api/deadlines", headers=headers, json={"subject": "", "due_date": "2099-10-03"}).status_code == 400
+    assert c.post("/api/deadlines", headers=headers, json={"subject": "x", "due_date": "03.10"}).status_code == 400
+    assert c.post("/api/deadlines", headers=headers,
+                  json={"subject": "x", "due_date": "2099-10-03", "due_time": "25:00"}).status_code == 400
+
+    shared = await db.add_deadline("Общий", "", "2099-10-01", None, 0)
+    assert c.delete(f"/api/deadlines/{shared}", headers=headers).status_code == 403  # общий — только староста
+    assert c.delete(f"/api/deadlines/{did}", headers=headers).json() == {"ok": True}
+    assert await db.get_deadline(did) is None
+
+
+@pytest.mark.asyncio
+async def test_homework_and_files_api(db, client):
+    import aiosqlite
+    async with aiosqlite.connect(db.DATABASE_PATH) as con:
+        await con.execute("CREATE TABLE homework (id INTEGER PRIMARY KEY, subject TEXT, content TEXT, file_id TEXT, "
+                          "file_type TEXT, created_by INTEGER, created_at TEXT DEFAULT (datetime('now')), lesson_date TEXT)")
+        await con.execute("INSERT INTO homework (subject, content, file_id, lesson_date) VALUES ('Анализ', 'задачи 1–5', 'tg', '2099-09-29')")
+        await con.commit()
+    fid = await db.add_file("Лекция 1", "Анализ", "tg1", "l1.pdf", 1)
+    await db.save_file_text(fid, "текст")
+    await db.add_file("Фото", "Анализ", "tg2", "p.jpg", 1)
+
+    c, headers = client
+    hw = c.get("/api/homework", headers=headers).json()["items"]
+    assert hw == [{"id": 1, "subject": "Анализ", "content": "задачи 1–5", "lesson_date": "2099-09-29",
+                   "created_at": hw[0]["created_at"], "has_file": True}]
+    files = {f["title"]: f["has_text"] for f in c.get("/api/files", headers=headers).json()["items"]}
+    assert files == {"Лекция 1": True, "Фото": False}
