@@ -209,12 +209,13 @@ async def test_sync_keeps_only_courses_from_schedule(db, monkeypatch):
         mk = lambda n, course: {"external_id": f"sdo:{n}", "course": course, "subject": f"ПР {n} ({course})",
                                 "description": "", "due_date": "2099-10-01", "due_time": "23:59"}
         return [mk(1, "Анализ данных (УИБО-03-24)"), mk(2, "Архитектура_Экзамен [I.26-27]"),
-                mk(3, "Методы принятия управленческих решений"), mk(4, "Физическая культура и спорт 3/3")]
+                mk(3, "Методы принятия управленческих решений"), mk(4, "Физическая культура и спорт 3/3"),
+                mk(5, "Учебный отдел ИТУ")]                     # нет в расписании, но владелец просил оставить
 
     monkeypatch.setattr(schedule_parser, "get_group_subjects", subjects)
     monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", calendar)
     res = await sdo_parser.sync_deadlines()
-    assert (res["added"], res["old_semester"]) == (2, 2)
+    assert (res["added"], res["old_semester"]) == (3, 2)
     assert res["old_courses"] == ["Методы принятия управленческих решений", "Физическая культура и спорт 3/3"]
 
     async def no_schedule():

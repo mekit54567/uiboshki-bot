@@ -29,6 +29,7 @@ Moodle по умолчанию — только 21 день вперёд и не
 """
 
 import html as html_lib
+import os
 import re
 import logging
 from datetime import datetime
@@ -172,12 +173,20 @@ def course_of(subject: str) -> str:
     return ""
 
 
+# Курсы не из расписания, которые всё равно нужны (владелец: «оставь
+# Учебный отдел»): приказы, объявления, документы института. Через запятую,
+# по вхождению без учёта регистра; переопределяется SDO_KEEP_COURSES.
+KEEP_COURSES = [c.strip().lower() for c in os.getenv("SDO_KEEP_COURSES", "Учебный отдел").split(",") if c.strip()]
+
+
 def off_schedule(course: str, subjects: list[str]) -> bool:
     """Курса нет среди предметов нынешнего расписания группы. Живой тест:
     «Методы принятия управленческих решений», «Физкультура 3/3» и т.п.
     прошлых семестров были без метки «[II.25-26]». Нет расписания или
     курса — не выбрасываем (лучше лишний дедлайн, чем пропущенный)."""
     if not course or not subjects:
+        return False
+    if any(k in course.lower() for k in KEEP_COURSES):
         return False
     from sdo_files import match_subject
     return match_subject(course, subjects) not in subjects
