@@ -13,7 +13,7 @@ from database import (
 )
 from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
-from utils import esc, utc_to_msk_date
+from utils import esc, md_to_tg_html_chunks, split_by_lines, utc_to_msk_date
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -62,7 +62,7 @@ async def choose_subject(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     backend = data.get("backend", "gemini")
-    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend)
+    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend, hinted=False)
     await state.set_state(SolverState.waiting_task)
     note = "\n\n(фото — всегда через Gemini, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
@@ -99,27 +99,38 @@ async def cancel_solve(message: Message, state: FSMContext):
     await message.answer("Отменено.", reply_markup=MAIN_KB)
 
 
+async def answer_model_text(message: Message, answer: str) -> list[Message]:
+    """Ответ модели -> сообщения с HTML-разметкой (см. md_to_tg_html_chunks).
+    Если Telegram всё же не принял разметку куска — тот же кусок без неё."""
+    sent = []
+    plain_chunks = split_by_lines(answer)
+    for i, chunk in enumerate(md_to_tg_html_chunks(answer)):
+        try:
+            sent.append(await message.answer(chunk, parse_mode="HTML"))
+        except Exception as e:
+            logger.warning(f"Ответ модели не прошёл как HTML, шлю текстом: {e}")
+            fallback = plain_chunks[i] if i < len(plain_chunks) else chunk
+            sent.append(await message.answer(fallback))
+    return sent
+
+
 async def send_answer(message: Message, state: FSMContext, answer: str):
     """Отправляем ответ и сохраняем msg_id."""
     data = await state.get_data()
     msg_ids = data.get("msg_ids", [])
 
-    chunks = [answer[i:i+4000] for i in range(0, len(answer), 4000)]
-    for chunk in chunks:
-        try:
-            msg = await message.answer(chunk, parse_mode="Markdown")
-        except:
-            msg = await message.answer(chunk)
+    for msg in await answer_model_text(message, answer):
         msg_ids.append(msg.message_id)
 
-    # Подсказка
-    hint = await message.answer(
-        "💬 Можешь уточнить или задать следующий вопрос.\n"
-        "Нажми <b>🛑 Завершить диалог</b> чтобы выйти.",
-        parse_mode="HTML"
-    )
-    msg_ids.append(hint.message_id)
-    await state.update_data(msg_ids=msg_ids)
+    # Подсказка — один раз за диалог, а не после каждого ответа
+    if not data.get("hinted"):
+        hint = await message.answer(
+            "💬 Можно задать уточняющий вопрос — я помню условие.\n"
+            "Закончил — жми <b>🛑 Завершить диалог</b>.",
+            parse_mode="HTML"
+        )
+        msg_ids.append(hint.message_id)
+    await state.update_data(msg_ids=msg_ids, hinted=True)
 
 
 @router.message(SolverState.waiting_task, F.text)
@@ -269,11 +280,7 @@ async def handle_plain_text(message: Message, state: FSMContext):
             return
         await wait.delete()
         await add_solver_history(message.from_user.id, text, answer)
-        for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
-            try:
-                await message.answer(chunk, parse_mode="Markdown")
-            except:
-                await message.answer(chunk)
+        await answer_model_text(message, answer)
     except Exception as e:
         logger.error(e)
         await wait.delete()
@@ -333,11 +340,7 @@ async def lecture_handle_task(message: Message, state: FSMContext):
         answer = await solve_with_lecture_context(message.text, subject, context_text)
         await wait.delete()
         await add_solver_history(message.from_user.id, message.text, answer, subject)
-        for chunk in [answer[i:i+4000] for i in range(0, len(answer), 4000)]:
-            try:
-                await message.answer(chunk, parse_mode="Markdown")
-            except Exception:
-                await message.answer(chunk)
+        await answer_model_text(message, answer)
         await message.answer("Готово ✅ (/solve_lectures — ещё раз по этому или другому предмету)", reply_markup=MAIN_KB)
     except Exception as e:
         logger.error(e)

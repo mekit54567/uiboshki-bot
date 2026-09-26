@@ -8,9 +8,11 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from schedule_parser import (
     get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson,
-    get_next_week_schedule, list_upcoming_events, format_search_results,
+    get_next_week_schedule, format_target_schedule,
 )
-from mirea_schedule_api import search_targets, get_baseinfo, fetch_ical, TARGET_TEACHER, TARGET_ROOM
+from mirea_schedule_api import (
+    search_targets, get_baseinfo, fetch_ical, SearchUnavailable, TARGET_GROUP, TARGET_TEACHER, TARGET_ROOM,
+)
 from database import upsert_user, add_lesson_note, get_lesson_notes, get_or_create_calendar_token
 from keyboards import CANCEL_KB, MAIN_KB
 from config import WEBAPP_URL
@@ -101,9 +103,8 @@ async def cmd_next(message: Message):
 async def cmd_calendar(message: Message):
     if not WEBAPP_URL:
         await message.answer(
-            "📅 Личный календарь пока не настроен старостой — для него нужен "
-            "поднятый WebApp-бэкенд (WEBAPP_URL), см. webapp/README.md. "
-            "Без этого ссылку выдать не могу."
+            "📅 Личный календарь скоро появится — его ещё не включили "
+            "(нужен WebApp бота). Как заработает, /calendar сразу выдаст ссылку."
         )
         return
     token = await get_or_create_calendar_token(message.from_user.id)
@@ -129,8 +130,13 @@ async def cmd_calendar(message: Message):
 # при нескольких совпадениях — уточняем инлайн-кнопками, дальше тянем ical
 # именно этого препода/аудитории (не только пары с моей группой) на 2 недели.
 
-_TARGET_EMOJI = {TARGET_TEACHER: "👤", TARGET_ROOM: "🚪"}
-_TARGET_CB_PREFIX = {TARGET_TEACHER: "sst", TARGET_ROOM: "ssr"}
+_TARGET_EMOJI = {TARGET_GROUP: "👥", TARGET_TEACHER: "👤", TARGET_ROOM: "🚪"}
+_TARGET_CB_PREFIX = {TARGET_GROUP: "ssg", TARGET_TEACHER: "sst", TARGET_ROOM: "ssr"}
+_CB_PREFIX_TARGET = {v: k for k, v in _TARGET_CB_PREFIX.items()}
+SEARCH_BUILDING_TEXT = (
+    "⏳ Справочник преподавателей и групп ещё собирается — бот делает это сам "
+    "после запуска, примерно полчаса. Попробуй чуть позже."
+)
 
 
 def _target_pick_kb(results: list[dict], target_type: int) -> InlineKeyboardMarkup:
@@ -139,27 +145,33 @@ def _target_pick_kb(results: list[dict], target_type: int) -> InlineKeyboardMark
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def _render_target_schedule(target_id: int, target_type: int, title: str) -> str:
+async def render_target_schedule(target_id: int, target_type: int, title: str) -> str:
     emoji = _TARGET_EMOJI[target_type]
     title = esc(title)
     ical = await fetch_ical(target_id, target_type)
     if ical is None:
         return f"{emoji} <b>{title}</b>\n\n⚠️ Не удалось получить расписание."
-    events = list_upcoming_events(ical, days_ahead=14)
-    text = format_search_results(events, "Пар в ближайшие 2 недели не нашёл.")
-    return f"{emoji} <b>{title}</b>\n{text}"
+    return f"{emoji} <b>{title}</b> · 2 недели\n\n{format_target_schedule(ical, target_type)}"
 
 
 async def _handle_target_search(message: Message, query: str, target_type: int, label: str):
     wait = await message.answer("⏳ Ищу...")
-    results = await search_targets(query, target_type)
+    try:
+        results = await search_targets(query, target_type)
+    except SearchUnavailable:
+        await wait.edit_text(SEARCH_BUILDING_TEXT)
+        return
     if not results:
         await wait.edit_text(f"{_TARGET_EMOJI[target_type]} {label} «{query}» не нашёл.")
         return
     if len(results) == 1:
         r = results[0]
-        text = await _render_target_schedule(r["id"], target_type, r["fullTitle"])
-        await wait.edit_text(text, parse_mode="HTML")
+        text = await render_target_schedule(r["id"], target_type, r["fullTitle"])
+        for i, chunk in enumerate(split_by_lines(text)):
+            if i == 0:
+                await wait.edit_text(chunk, parse_mode="HTML")
+            else:
+                await message.answer(chunk, parse_mode="HTML")
         return
     await wait.edit_text(
         f"{_TARGET_EMOJI[target_type]} Нашёл несколько совпадений — выбери:",
@@ -176,6 +188,15 @@ async def cmd_teacher(message: Message):
     await _handle_target_search(message, parts[1].strip(), TARGET_TEACHER, "Препода")
 
 
+@router.message(Command("group"))
+async def cmd_group(message: Message):
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("👥 Использование: <code>/group УИБО-03-24</code>", parse_mode="HTML")
+        return
+    await _handle_target_search(message, parts[1].strip(), TARGET_GROUP, "Группу")
+
+
 @router.message(Command("room"))
 async def cmd_room(message: Message):
     parts = (message.text or "").split(maxsplit=1)
@@ -185,24 +206,19 @@ async def cmd_room(message: Message):
     await _handle_target_search(message, parts[1].strip(), TARGET_ROOM, "Аудиторию")
 
 
-@router.callback_query(F.data.startswith("sst:"))
-async def teacher_pick(callback: CallbackQuery):
-    target_id = int(callback.data.split(":", 1)[1])
-    info = await get_baseinfo(target_id, TARGET_TEACHER)
-    title = info["fullTitle"] if info else str(target_id)
-    text = await _render_target_schedule(target_id, TARGET_TEACHER, title)
-    await callback.message.edit_text(text, parse_mode="HTML")
+@router.callback_query(F.data.regexp(r"^ss[gtr]:\d+$"))
+async def target_pick(callback: CallbackQuery):
+    prefix, raw_id = callback.data.split(":", 1)
+    target_type, target_id = _CB_PREFIX_TARGET[prefix], int(raw_id)
     await callback.answer()
-
-
-@router.callback_query(F.data.startswith("ssr:"))
-async def room_pick(callback: CallbackQuery):
-    target_id = int(callback.data.split(":", 1)[1])
-    info = await get_baseinfo(target_id, TARGET_ROOM)
+    info = await get_baseinfo(target_id, target_type)
     title = info["fullTitle"] if info else str(target_id)
-    text = await _render_target_schedule(target_id, TARGET_ROOM, title)
-    await callback.message.edit_text(text, parse_mode="HTML")
-    await callback.answer()
+    text = await render_target_schedule(target_id, target_type, title)
+    for i, chunk in enumerate(split_by_lines(text)):
+        if i == 0:
+            await callback.message.edit_text(chunk, parse_mode="HTML")
+        else:
+            await callback.message.answer(chunk, parse_mode="HTML")
 
 
 # ── Заметки на пару ─────────────────────────────────────────────────────────

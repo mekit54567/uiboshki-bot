@@ -75,7 +75,7 @@ async def cmd_start(message: Message):
 async def cmd_app(message: Message):
     kb = webapp_keyboard()
     if not kb:
-        await message.answer("🚧 Приложение ещё не развёрнуто (WEBAPP_URL не настроен).")
+        await message.answer("🚧 Приложение скоро появится — его ещё не включили.")
         return
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.",
@@ -146,52 +146,57 @@ async def handle_action(callback: CallbackQuery):
     await callback.answer()
 
 
+HELP_TEXT = (
+    "📖 <b>Что умеет бот</b>\n\n"
+    "📅 <b>Расписание</b>\n"
+    "/schedule · /tomorrow — сегодня и завтра\n"
+    "/week · /nextweek — эта и следующая неделя\n"
+    "/next — следующая пара\n"
+    "/teacher Фамилия · /group УИБО-03-24 · /room А-18 — чужое расписание\n"
+    "/note — заметка к паре · /calendar — расписание в свой календарь\n\n"
+    "📋 <b>Дедлайны и ДЗ</b>\n"
+    "/deadlines — список · /add — добавить свой\n"
+    "/done ID — выполнено · /del ID — удалить · /stats — прогресс\n"
+    "/hw — доска домашних заданий\n\n"
+    "🤖 <b>Решалка</b>\n"
+    "/solve — задача текстом или фото\n"
+    "/solve_lectures — по загруженным лекциям предмета\n"
+    "/solve_ds — через DeepSeek · /history — прошлые решения\n\n"
+    "📁 <b>Файлы</b>\n"
+    "/files — лекции и методички · /search запрос — поиск\n"
+    "/upload — загрузить файл · /delfile ID — удалить свой\n\n"
+    "💬 <b>Группа</b>\n"
+    "/feed — анонимный пост в «Подслушано»\n"
+    "/anon — анонимный вопрос старосте\n"
+    "/vote Вопрос — голосование · /closevote — закрыть своё\n"
+    "/rating — рейтинг\n\n"
+    "⚙️ <b>Настройки</b>\n"
+    "/settings — уведомления · /setreminder N — напомнить за N мин\n"
+    "/subscribe · /unsubscribe — утренняя рассылка\n"
+    "/weather — погода · /app — приложение\n\n"
+    "💡 Можно писать и своими словами: «когда следующая пара», "
+    "«какие дедлайны на неделе» или просто условие задачи."
+)
+
+STAROSTA_HELP = (
+    "\n\n👑 <b>Для старосты</b>\n"
+    "/announce — рассылка · /addhw — добавить ДЗ\n"
+    "/setzam ID — назначить зама\n"
+    "/syncfiles — загрузить файлы\n"
+    "/importdeadlines · /syncsdo — дедлайны из СДО\n"
+    "/delpost ID — удалить пост из ленты\n"
+    "/clearsem — сбросить всё под новый семестр"
+)
+
+
 @router.message(Command("help"))
 async def cmd_help(message: Message):
-    text = (
-        "📖 <b>Команды:</b>\n\n"
-        "/app — открыть WebApp (расписание/ДЗ/дедлайны/файлы/чат в одном окне)\n"
-        "/schedule — расписание сегодня\n"
-        "/tomorrow — завтра\n"
-        "/week — неделя\n"
-        "/nextweek — следующая неделя\n"
-        "/next — следующая пара\n"
-        "/teacher ФИО — расписание препода (по всему университету)\n"
-        "/room номер — расписание аудитории (по всему университету)\n"
-        "/deadlines — дедлайны\n"
-        "/done ID — выполнено\n"
-        "/del ID — удалить дедлайн\n"
-        "/solve — решить задачу\n"
-        "/solve_ds — решить через DeepSeek\n"
-        "/solve_lectures — решить опираясь на загруженные лекции предмета (Gemini)\n"
-        "/history — история решений\n"
-        "/rating — рейтинг\n"
-        "/hw — доска ДЗ\n"
-        "/weather — погода\n"
-        "/files — файлы\n"
-        "/search запрос — поиск по файлам\n"
-        "/vote Вопрос — голосование\n"
-        "/feed — анонимный пост в общую ленту группы\n"
-        "/note — заметка на пару (сегодня/завтра)\n"
-        "/anon — анонимный вопрос лично старосте\n"
-        "/setreminder N — напоминание за N мин\n"
-        "/subscribe — уведомления вкл\n"
-        "/unsubscribe — уведомления выкл\n\n"
-        "💬 Можно писать и обычным текстом без команд — бот попробует понять,\n"
-        "что ты хочешь (расписание, дедлайны, файлы и т.д.)."
-    )
-    if STAROSTA_ID:
-        text += (
-            "\n<b>Только для старосты:</b>\n"
-            "/announce — рассылка\n"
-            "/addhw — добавить ДЗ\n"
-            "/setzam ID — установить зама\n"
-            "/syncfiles — загрузить файлы\n"
-            "/importdeadlines — импорт дедлайнов\n"
-            "/syncsdo — вручную синхронизировать дедлайны из СДО\n"
-            "/delpost ID — удалить пост из ленты\n"
-            "/clearsem — сбросить дедлайны/ДЗ/файлы/голосования (новый семестр)\n"
-        )
+    # Команды старосты видит только староста (и зам): остальным они только
+    # мешали — и всё равно отвечали бы «только для старосты».
+    from handlers.announce import is_editor
+    text = HELP_TEXT
+    if await is_editor(message.from_user.id):
+        text += STAROSTA_HELP
     await message.answer(text, parse_mode="HTML")
 
 

@@ -89,15 +89,8 @@ async def format_weather() -> str:
     if precip > 0:
         text += f"🌧 Осадки {precip} мм\n"
 
-    # Совет по одежде
-    if temp < 0:
-        text += "\n🧥 Оденься потеплее!"
-    elif temp < 10:
-        text += "\n🧣 Куртка не помешает"
-    elif temp < 18:
-        text += "\n👕 Лёгкая куртка"
-    else:
-        text += "\n😎 Можно налегке"
+    tip = _clothes_tip(temp)
+    text += f"\n{tip[0]} {tip[2:].capitalize()}"
 
     return text
 
@@ -110,6 +103,26 @@ async def cmd_weather(message: Message):
     await wait.edit_text(text, parse_mode="HTML")
 
 
+def _clothes_tip(temp: int) -> str:
+    if temp < 0:
+        return "🧥 оденься потеплее"
+    if temp < 10:
+        return "🧣 куртка не помешает"
+    if temp < 18:
+        return "👕 лёгкая куртка"
+    return "😎 можно налегке"
+
+
 async def get_weather_for_morning() -> str:
-    """Для утренней рассылки."""
-    return await format_weather()
+    """Для утренней рассылки — одна строка над расписанием. Если погоду не
+    получили — пустая строка: "⚠️ Не удалось получить погоду" каждое утро
+    сверху рассылки только мешало (замечено в живом тесте)."""
+    data = await fetch_weather()
+    if not data:
+        return ""
+    c = data["current"]
+    temp, feels = round(c["temperature_2m"]), round(c["apparent_temperature"])
+    sign = lambda t: f"+{t}" if t > 0 else str(t)
+    code = c["weathercode"]
+    return (f"{weather_emoji(code)} {sign(temp)}°, {weather_desc(code).lower()}, "
+            f"ощущается {sign(feels)}° · {_clothes_tip(temp)}")

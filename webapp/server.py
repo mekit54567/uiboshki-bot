@@ -1,8 +1,8 @@
 """
 HTTP-бэкенд для Telegram WebApp (Mini App) бота УИБО-03-24.
 
-Отдельный процесс от bot.py (тот — чистый long polling, без HTTP), поднимается
-рядом: `uvicorn webapp.server:app --host 0.0.0.0 --port 8000`. Общая с ботом
+Поднимается в том же процессе, что и бот (bot.py: run_webapp, порт — $PORT),
+а локально можно и отдельно: `uvicorn webapp.server:app --port 8000`. Общая с ботом
 SQLite-база (config.DATABASE_PATH) и все существующие модули (database.py,
 schedule_parser.py, ai_solver.py) переиспользуются как есть — WebApp не
 дублирует логику, а просто даёт ей HTTP-фасад.
@@ -117,6 +117,48 @@ async def api_schedule_next(user: dict = CurrentUser):
     return {"html": await get_next_lesson()}
 
 
+# ── Поиск расписания преподавателя / группы / аудитории ─────────────────────
+# Свой справочник (schedule_index.py, собран с зеркала english.mirea.ru):
+# официальный поиск МИРЭА из-за рубежа не отвечает. Пока справочник
+# собирается — пробуем официальный, иначе честно говорим «ещё собирается».
+
+@app.get("/api/search")
+async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
+    import schedule_index
+    from mirea_schedule_api import _official_search
+    types = (type,) if type in schedule_index.TYPES else schedule_index.TYPES
+    q = q.strip()
+    if len(q) < 2:
+        return {"items": [], "ready": await schedule_index.is_ready()}
+    items = await schedule_index.search(q, types, limit=30)
+    ready = await schedule_index.is_ready()
+    if not items and not ready:
+        for t in types:
+            try:
+                items += [{"type": t, "id": d["id"], "title": d["fullTitle"]}
+                          for d in await _official_search(q, t, 10)]
+            except Exception:
+                break
+    return {"items": items, "ready": ready}
+
+
+@app.get("/api/target/{target_type}/{target_id}")
+async def api_target(target_type: int, target_id: int, user: dict = CurrentUser):
+    from mirea_schedule_api import get_baseinfo, fetch_ical
+    from schedule_parser import format_target_schedule
+    if target_type not in (1, 2, 3):
+        raise HTTPException(status_code=404, detail="нет такого типа")
+    info = await get_baseinfo(target_id, target_type)
+    ical = await fetch_ical(target_id, target_type)
+    if ical is None:
+        raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
+    return {
+        "type": target_type, "id": target_id,
+        "title": info["fullTitle"] if info else str(target_id),
+        "html": format_target_schedule(ical, target_type),
+    }
+
+
 # ── Дедлайны (общие + личные, "done" персональный для каждого) ──────────────
 
 @app.get("/api/deadlines")
@@ -176,7 +218,7 @@ async def api_notes(date: str = "", user: dict = CurrentUser):
     return {"date": date_str, "items": items}
 
 
-# ── Чат с DeepSeek (с трейсом рассуждений) ──────────────────────────────────
+# ── Чат с ИИ (DeepSeek с трейсом рассуждений, без его ключа — Gemini) ─────
 
 class ChatMessage(BaseModel):
     role: str
@@ -194,11 +236,14 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
     if not body.history:
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]
+    from utils import md_to_tg_html_chunks
     try:
         result = await chat_with_reasoning(history, subject=body.subject)
     except Exception as e:
         logger.warning(f"webapp chat failed: {e}")
-        raise HTTPException(status_code=502, detail="DeepSeek сейчас недоступен, попробуй чуть позже")
+        raise HTTPException(status_code=502, detail="ИИ сейчас недоступен, попробуй чуть позже")
+    # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
+    result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
     return result
 
 
