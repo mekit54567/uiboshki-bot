@@ -69,6 +69,10 @@ GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # Пока не задан — кнопки "Открыть приложение" в боте просто не показываются,
 # это не критическая функция, ничего не падает без неё.
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
+# Порт HTTP-сервера WebApp внутри того же процесса, что и бот (см. bot.py).
+# Railway сам кладёт PORT в окружение сервиса и проксирует на него публичный
+# домен. 0 — WebApp не поднимаем (локальный запуск без WEBAPP_URL и PORT).
+WEBAPP_PORT = int(os.getenv("PORT") or os.getenv("WEBAPP_PORT") or (8080 if WEBAPP_URL else 0))
 
 # ─── Расписание рассылок ──────────────────────────────────────────────────────
 SCHEDULE_HOUR   = 7

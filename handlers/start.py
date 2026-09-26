@@ -75,7 +75,7 @@ async def cmd_start(message: Message):
 async def cmd_app(message: Message):
     kb = webapp_keyboard()
     if not kb:
-        await message.answer("🚧 Приложение ещё не развёрнуто (WEBAPP_URL не настроен).")
+        await message.answer("🚧 Приложение скоро появится — его ещё не включили.")
         return
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.",

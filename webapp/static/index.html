@@ -90,7 +90,8 @@
   .card .big { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
   .card .sub { color: var(--hint); font-size: 13px; margin: 0; }
 
-  .schedule-html { font-size: 14.5px; }
+  .schedule-html { font-size: 14.5px; white-space: pre-wrap; }
+  .schedule-html s { color: var(--hint); }
   .schedule-html b { color: var(--accent-2); }
 
   .chip {
@@ -311,10 +312,10 @@
 
   <!-- ── Чат ───────────────────────────────────────────────────────── -->
   <section class="view" id="view-chat">
-    <h2 class="section">Чат с DeepSeek 🐋</h2>
+    <h2 class="section">Чат с ИИ 🤖</h2>
     <div class="chat-wrap">
       <div class="chat-log" id="chat-log">
-        <div class="msg bot">Привет! Спроси что угодно по учёбе — ход рассуждений можно развернуть под ответом 🧠</div>
+        <div class="msg bot">Привет! Спроси что угодно по учёбе или пришли условие задачи 🧠</div>
       </div>
       <div class="chat-input-row">
         <textarea id="chat-input" rows="1" placeholder="Напиши сообщение…"></textarea>
@@ -329,7 +330,7 @@
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
   <button data-tab="deadlines" onclick="switchTab('deadlines')"><span class="ic">📋</span>Дедлайны</button>
   <button data-tab="files" onclick="switchTab('files')"><span class="ic">📁</span>Файлы</button>
-  <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">🐋</span>Чат</button>
+  <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">🤖</span>Чат</button>
 </nav>
 
 <script>
@@ -519,12 +520,13 @@ function openFile(id) {
 
 const chatHistory = [];
 
-function appendMsg(role, content, reasoning) {
+function appendMsg(role, content, reasoning, html) {
   const log = document.getElementById("chat-log");
   const div = document.createElement("div");
   div.className = "msg " + (role === "user" ? "user" : "bot");
   const textNode = document.createElement("div");
-  textNode.textContent = content;
+  // html собирает сервер (utils.md_to_tg_html_chunks): всё, кроме <b>/<i>/<code>/<pre>, экранировано
+  if (html) textNode.innerHTML = html; else textNode.textContent = content;
   div.appendChild(textNode);
   if (reasoning) {
     const det = document.createElement("details");
@@ -554,7 +556,7 @@ async function sendChat() {
   try {
     const data = await api("/api/chat", { method: "POST", body: JSON.stringify({ history: chatHistory }) });
     pending.remove();
-    appendMsg("bot", data.content, data.reasoning);
+    appendMsg("bot", data.content, data.reasoning, data.html);
     chatHistory.push({ role: "assistant", content: data.content });
   } catch (e) {
     pending.remove();

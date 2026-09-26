@@ -123,12 +123,12 @@ async def chat_with_reasoning(history: list, subject: str = "") -> dict:
     в дополнение к обычному content ("что ответила"). Раздельно, чтобы фронт
     мог свернуть/развернуть трейс независимо от самого ответа — см. PLAN.md,
     идея владельца про "мышление" как в приложениях DeepSeek/ChatGPT/Claude.
-    Фолбэка нет — чат в WebApp это отдельная, опциональная фича: если
-    DEEPSEEK_API_KEY не задан, честно кидаем исключение, WebApp покажет
-    понятную ошибку вместо того, чтобы тихо подсунуть другую модель под тем
-    же UI. Возвращает {"content": str, "reasoning": str}."""
+    Без DEEPSEEK_API_KEY — тот же Gemini, что и у решалки в боте (без
+    трейса рассуждений): иначе чат в WebApp просто не работал бы у тех, кто
+    не заводил ключ DeepSeek. Возвращает {"content": str, "reasoning": str}."""
     if not DEEPSEEK_API_KEY:
-        raise RuntimeError("DEEPSEEK_API_KEY не настроен на сервере")
+        content = await solve_with_history(history, subject, backend="gemini")
+        return {"content": content, "reasoning": ""}
     msg = await _deepseek_chat(
         [{"role": "system", "content": build_system_prompt(subject)}, *history],
         model=MODEL_DEEPSEEK_REASONER, max_tokens=4096,

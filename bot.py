@@ -1,11 +1,12 @@
 import asyncio
+import contextlib
 import logging
 import time
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import ErrorEvent
+from aiogram.types import BotCommand, ErrorEvent, MenuButtonWebApp, WebAppInfo
 
-from config import BOT_TOKEN, STAROSTA_ID
+from config import BOT_TOKEN, STAROSTA_ID, WEBAPP_PORT, WEBAPP_URL
 from database import init_db
 from handlers import register_handlers
 from scheduler import start_scheduler
@@ -50,6 +51,69 @@ async def notify_starosta_on_error(event: ErrorEvent, bot: Bot):
         logger.warning(f"Не смог отправить алерт старосте: {e}")
 
 
+# Команды в меню «/» клиента Telegram — самые нужные, остальное в /help.
+BOT_COMMANDS = [
+    BotCommand(command="schedule", description="📅 Расписание на сегодня"),
+    BotCommand(command="week", description="📆 Расписание на неделю"),
+    BotCommand(command="next", description="⏭ Следующая пара"),
+    BotCommand(command="deadlines", description="📋 Дедлайны"),
+    BotCommand(command="solve", description="🤖 Решить задачу"),
+    BotCommand(command="hw", description="📝 Домашние задания"),
+    BotCommand(command="files", description="📁 Файлы и лекции"),
+    BotCommand(command="app", description="🚀 Открыть приложение"),
+    BotCommand(command="help", description="📖 Все команды"),
+]
+
+
+async def setup_bot_menu(bot: Bot):
+    """Список команд и кнопка меню слева от поля ввода. Если WebApp поднят —
+    кнопка меню открывает его сразу (как у приложений-ботов), без отдельной
+    настройки в BotFather. Не критично: при ошибке бот работает дальше."""
+    try:
+        await bot.set_my_commands(BOT_COMMANDS)
+        if WEBAPP_URL:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Приложение", web_app=WebAppInfo(url=WEBAPP_URL))
+            )
+    except Exception as e:
+        logger.warning(f"Не смог настроить меню бота: {e}")
+
+
+def start_webapp(port: int):
+    """WebApp (webapp/server.py) в том же процессе, что и бот: одна служба на
+    Railway, один том с SQLite — отдельный процесс не видел бы ту же базу.
+    Сигналы (SIGTERM при редеплое) ловит aiogram, uvicorn свои не ставит —
+    останавливаем его сами (stop_webapp) после выхода из polling. Падение
+    WebApp не роняет бота. Возвращает (server, task) или (None, None)."""
+    try:
+        import uvicorn
+        from webapp.server import app
+    except Exception as e:
+        logger.error(f"WebApp не запустился: {e}")
+        return None, None
+    server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
+    server.capture_signals = contextlib.nullcontext
+
+    async def serve():
+        try:
+            logger.info(f"🌐 WebApp слушает порт {port}")
+            await server.serve()
+        except Exception as e:
+            logger.error(f"WebApp упал: {e}")
+
+    return server, asyncio.create_task(serve())
+
+
+async def stop_webapp(server, task):
+    if not task:
+        return
+    server.should_exit = True
+    try:
+        await asyncio.wait_for(task, timeout=10)
+    except Exception:
+        task.cancel()
+
+
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp  = Dispatcher(storage=MemoryStorage())
@@ -67,6 +131,9 @@ async def main():
     scheduler = start_scheduler(bot)
     scheduler.start()
 
+    await setup_bot_menu(bot)
+    webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
+
     logger.info("🚀 Бот УИБО-03-24 запущен!")
     try:
         await dp.start_polling(bot, skip_updates=True)
@@ -83,6 +150,7 @@ async def main():
                 pass
         raise
     finally:
+        await stop_webapp(webapp_server, webapp_task)
         scheduler.shutdown()
         await bot.session.close()
 
