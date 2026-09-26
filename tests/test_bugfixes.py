@@ -211,6 +211,7 @@ async def test_sdo_sync_updates_moved_deadline(db, monkeypatch):
     async def fake_fetch():
         return html["value"]
 
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
     monkeypatch.setattr(sdo_parser, "fetch_upcoming_html", fake_fetch)
 
     first = await sdo_parser.sync_deadlines()

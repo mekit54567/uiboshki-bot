@@ -1,0 +1,124 @@
+"""
+Дедлайны СДО из календаря по месяцам. Владелец: «дедлайнов маловато — или
+они только самые близкие?». Да: «Предстоящие события» Moodle — 21 день
+вперёд и не больше 10 событий, а закрытия тестов не проходили фильтр.
+Теперь — core_calendar_get_calendar_monthly_view на CALENDAR_MONTHS
+месяцев. СДО имитируется httpx.MockTransport.
+"""
+import json
+from datetime import datetime, timedelta
+
+import httpx
+import pytest
+
+import sdo_parser
+
+BASE = "https://online-edu.mirea.ru"
+TZ = sdo_parser.TZ
+
+
+def _ts(days: int, hour: int = 23, minute: int = 59) -> int:
+    d = datetime.now(TZ).replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=days)
+    return int(d.timestamp())
+
+
+def _event(eid, name, component, eventtype, days, course="Анализ данных"):
+    return {"id": eid, "name": name, "component": component, "modulename": component.removeprefix("mod_"),
+            "eventtype": eventtype, "timestart": _ts(days), "url": f"{BASE}/mod/x/view.php?id={eid}",
+            "course": {"id": 7, "fullname": course}}
+
+
+# по месяцу — своё; 11 заданий — больше, чем влезло бы в «Предстоящие»
+MONTHS = {
+    0: [_event(1, "Практика 1 - срок сдачи", "mod_assign", "due", 2),
+        _event(2, "Тест 1 закрывается", "mod_quiz", "close", 3),
+        _event(3, "Опрос о курсе закрывается", "mod_feedback", "close", 4),
+        _event(4, "Старое задание", "mod_assign", "due", -3),
+        _event(5, "Лекция в Zoom", "", "course", 5)],
+    1: [_event(10 + i, f"ПР {i} - срок сдачи", "mod_assign", "due", 40 + i,
+               course="Архитектура &amp; ЭВМ [I.26-27]") for i in range(11)],
+    2: [_event(1, "Практика 1 - срок сдачи", "mod_assign", "due", 2)],  # то же событие ещё раз — один дедлайн
+}
+
+
+def _sdo(calls, error=False):
+    def handler(request: httpx.Request):
+        path = request.url.path
+        if path == "/my/":
+            return httpx.Response(200, text='<script>M.cfg = {"sesskey":"sk1"};</script>')
+        if path == "/lib/ajax/service.php":
+            assert request.url.params["sesskey"] == "sk1"
+            body = json.loads(request.content)[0]
+            assert body["methodname"] == "core_calendar_get_calendar_monthly_view"
+            calls.append((body["args"]["year"], body["args"]["month"]))
+            if error:
+                return httpx.Response(200, json=[{"error": True, "exception": {"message": "нет доступа"}}])
+            events = MONTHS.get(len(calls) - 1, [])
+            return httpx.Response(200, json=[{"error": False, "data": {"weeks": [
+                {"days": [{"events": events[:2]}, {"events": events[2:]}]}, {"days": [{"events": []}]}]}}])
+        return httpx.Response(404)
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+@pytest.mark.asyncio
+async def test_calendar_months_give_all_deadlines_including_quizzes():
+    calls = []
+    async with _sdo(calls) as client:
+        events = await sdo_parser.fetch_calendar_events(client)
+    items = sdo_parser.parse_calendar_events(events)
+
+    assert len(calls) == sdo_parser.CALENDAR_MONTHS
+    today = datetime.now(TZ).date()
+    y, m = calls[0]
+    assert (y, m) == (today.year, today.month)
+    assert calls[1] == ((y + 1, 1) if m == 12 else (y, m + 1))
+
+    names = [i["subject"] for i in items]
+    assert names[:2] == ["Практика 1 - срок сдачи (Анализ данных)", "Тест 1 закрывается (Анализ данных)"]
+    assert len(items) == 2 + 11                      # опрос, событие курса и прошедшее — мимо, повтор — один раз
+    assert "ПР 0 - срок сдачи (Архитектура & ЭВМ [I.26-27])" in names
+    first = items[0]
+    assert (first["external_id"], first["due_time"]) == ("sdo:1", "23:59")
+    assert first["due_date"] == (today + timedelta(days=2)).isoformat()
+
+
+@pytest.mark.asyncio
+async def test_calendar_error_means_fallback():
+    async with _sdo([], error=True) as client:
+        assert await sdo_parser.fetch_calendar_events(client) is None
+
+
+@pytest.mark.asyncio
+async def test_sync_uses_calendar_and_keeps_ids(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
+
+    async def calendar():
+        async with _sdo(calls) as client:
+            return sdo_parser.parse_calendar_events(await sdo_parser.fetch_calendar_events(client))
+
+    async def upcoming_must_not_be_used():
+        raise AssertionError("календарь ответил — «Предстоящие» не нужны")
+
+    monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", calendar)
+    monkeypatch.setattr(sdo_parser, "fetch_upcoming_html", upcoming_must_not_be_used)
+    res = await sdo_parser.sync_deadlines()
+    assert (res["added"], res["updated"]) == (13, 0)
+    assert (await db.get_deadline_by_external_id("sdo:2"))["subject"] == "Тест 1 закрывается (Анализ данных)"
+
+    calls.clear()
+    again = await sdo_parser.sync_deadlines()
+    assert (again["added"], again["skipped"]) == (0, 13)
+
+
+def test_upcoming_page_also_takes_quizzes():
+    html = f"""
+    <div data-type="event" data-event-component="mod_quiz" data-event-eventtype="close"
+         data-event-id="77" data-event-title="КР 1 закрывается">
+      <a href="{BASE}/calendar/view.php?view=day&amp;time=4102444800">Когда</a>
+      <a href="{BASE}/course/view.php?id=7">Анализ данных</a>
+    </div>
+    <div data-type="event" data-event-component="mod_feedback" data-event-eventtype="close"
+         data-event-id="78" data-event-title="Опрос"><a href="{BASE}/x?time=4102444800">Когда</a></div>"""
+    assert [d["external_id"] for d in sdo_parser.parse_deadlines(html)] == ["sdo:77"]
