@@ -597,6 +597,21 @@ async def get_subject_lecture_context(subject: str) -> str:
         rows = await cursor.fetchall()
     return "\n\n".join(f"=== {r['title']} ===\n{r['content']}" for r in rows)
 
+async def get_all_lecture_context() -> str:
+    """Тексты лекций всех предметов — для подбора под вопрос в чате без
+    выбранного предмета (lecture_picker). Заголовок блока — «предмет: файл»."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT f.title, f.subject, ft.content
+            FROM file_text ft
+            JOIN files f ON f.id = ft.file_id
+            ORDER BY f.subject, f.id
+        """)
+        rows = await cursor.fetchall()
+    return "\n\n".join(f"=== {r['subject'] or 'Без предмета'}: {r['title']} ===\n{r['content']}" for r in rows)
+
+
 async def get_file_ids_with_text() -> set[int]:
     """id файлов, текст которых извлечён (участвуют в контексте ИИ) — для
     отметки 📖 в списке файлов WebApp."""

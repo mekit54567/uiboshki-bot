@@ -545,9 +545,18 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]
     subject = body.subject.strip()
+    # Лекции — только подходящие к вопросу (lecture_picker): после выгрузки
+    # СДО их у предмета сотни тысяч символов. Без выбранного предмета — из
+    # всех предметов, но только при явном совпадении с вопросом.
+    import lecture_picker
+    from database import get_all_lecture_context
+    query = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
     lectures = ""
     if subject and subject in await get_subjects_with_lecture_text():
-        lectures = await get_subject_lecture_context(subject)
+        lectures = lecture_picker.pick(await get_subject_lecture_context(subject), query)
+    elif not subject and query.strip():
+        lectures = await asyncio.to_thread(lecture_picker.pick, await get_all_lecture_context(), query,
+                                           lecture_picker.AUTO_BUDGET, lecture_picker.AUTO_MIN_SCORE)
     context = await build_group_context(user["id"])
 
     try:

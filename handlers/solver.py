@@ -42,11 +42,13 @@ async def solve_subject_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, one_time_keyboard=True)
 
 
-async def _lectures_for(data: dict) -> str:
-    """Текст лекций выбранного предмета (пусто — если их нет или это DeepSeek)."""
+async def _lectures_for(data: dict, query: str = "") -> str:
+    """Лекции выбранного предмета, подходящие к вопросу (lecture_picker;
+    пусто — если лекций нет или это DeepSeek)."""
     if not data.get("has_lectures"):
         return ""
-    return await get_subject_lecture_context(data.get("subject", ""))
+    import lecture_picker
+    return lecture_picker.pick(await get_subject_lecture_context(data.get("subject", "")), query)
 
 
 class SolverState(StatesGroup):
@@ -169,7 +171,7 @@ async def handle_first_task(message: Message, state: FSMContext):
     backend = data.get("backend", "gemini")
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
-        answer = await solve_text(message.text, subject, backend=backend, lectures=await _lectures_for(data))
+        answer = await solve_text(message.text, subject, backend=backend, lectures=await _lectures_for(data, message.text))
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог обработать. Попробуй переформулировать.")
             return
@@ -197,7 +199,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
         photo      = message.photo[-1]
         file       = await bot.get_file(photo.file_id)
         file_bytes = await bot.download_file(file.file_path)
-        answer     = await solve_image(file_bytes.read(), subject=subject, lectures=await _lectures_for(data))
+        answer     = await solve_image(file_bytes.read(), subject=subject, lectures=await _lectures_for(data, message.caption or ""))
 
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text(
@@ -235,7 +237,7 @@ async def handle_dialog(message: Message, state: FSMContext):
 
     wait = await message.answer("🧠 Думаю...")
     try:
-        answer = await solve_with_history(history, subject, backend=backend, lectures=await _lectures_for(data))
+        answer = await solve_with_history(history, subject, backend=backend, lectures=await _lectures_for(data, message.text))
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог ответить. Попробуй иначе.")
             return
@@ -365,7 +367,8 @@ async def lecture_handle_task(message: Message, state: FSMContext):
     subject = data.get("subject", "")
     wait = await message.answer("📖 Читаю лекции и решаю — с большим контекстом это может занять чуть больше времени...")
     try:
-        context_text = await get_subject_lecture_context(subject)
+        import lecture_picker
+        context_text = lecture_picker.pick(await get_subject_lecture_context(subject), message.text)
         answer = await solve_with_lecture_context(message.text, subject, context_text)
         await wait.delete()
         await add_solver_history(message.from_user.id, message.text, answer, subject)
