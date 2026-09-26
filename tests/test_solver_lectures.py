@@ -115,3 +115,11 @@ async def test_subject_without_lectures_solves_plainly(db, dp, bot, monkeypatch)
     await _feed(dp, bot, "Математика")
     await _feed(dp, bot, "2 + 2")
     assert seen == [""]
+
+
+def test_style_prompt_keeps_sections_only_for_tasks():
+    # Живой тест чата WebApp: на «Какие у нас пары завтра?» ИИ отвечал
+    # по шаблону задачи — «Ответ: …  Решение: 1. Согласно расписанию…».
+    prompt = ai_solver.build_system_prompt("")
+    assert "Если это задача" in prompt
+    assert "без разделов" in prompt
