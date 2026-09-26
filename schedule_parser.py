@@ -98,32 +98,142 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
     return events
 
 
-def format_day(events: list[dict], target: date, show_date=True) -> str:
-    weekday  = DAY_NAMES[target.weekday()]
-    date_fmt = target.strftime("%d.%m.%Y")
+MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+              "августа", "сентября", "октября", "ноября", "декабря"]
+_KEYCAPS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
 
-    header = f"📅 <b>{weekday}</b>"
-    if show_date:
-        header += f", {date_fmt}"
+# Тип занятия — первым словом в SUMMARY ical МИРЭА ("ЛК Матан", "ПР ...").
+_KINDS = {
+    "ЛК": ("лекция", "лк"), "ПР": ("практика", "пр"), "ЛАБ": ("лабораторная", "лаб"),
+    "ЛР": ("лабораторная", "лаб"), "СР": ("сам. работа", "ср"), "ДОП": ("доп. занятие", "доп"),
+    "ЭКЗ": ("экзамен", "экз"), "ЗАЧ": ("зачёт", "зач"), "КОНС": ("консультация", "конс"),
+    "КП": ("курсовой проект", "кп"), "КР": ("курсовая работа", "кр"),
+}
+
+
+def _human_date(d: date) -> str:
+    return f"{d.day} {MONTHS_GEN[d.month - 1]}"
+
+
+def _keycap(n: int) -> str:
+    return _KEYCAPS[n] if 0 <= n < len(_KEYCAPS) else f"{n}."
+
+
+def _pairs_word(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n} пара"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return f"{n} пары"
+    return f"{n} пар"
+
+
+def _split_kind(summary: str) -> tuple[str, str, str]:
+    """"ЛК Основы бизнес-анализа" -> ("Основы бизнес-анализа", "лекция", "лк")."""
+    head, _, rest = summary.strip().partition(" ")
+    kind = _KINDS.get(head.upper())
+    if kind and rest.strip():
+        return rest.strip(), kind[0], kind[1]
+    return summary.strip(), "", ""
+
+
+def _short_teacher(name: str) -> str:
+    """"Иванов Иван Иванович" -> "Иванов И. И."."""
+    parts = (name or "").split()
+    if len(parts) < 2:
+        return name or ""
+    return parts[0] + " " + " ".join(p[0] + "." for p in parts[1:3] if p)
+
+
+def _merge_runs(events: list[dict]) -> list[dict]:
+    """Подряд идущие одинаковые пары (5 пар практики, 4 пары военки) —
+    одним блоком «1️⃣–4️⃣ 09:00–15:50», а не четырьмя копиями подряд."""
+    runs: list[dict] = []
+    for i, e in enumerate(events, 1):
+        prev = runs[-1] if runs else None
+        if prev and prev["summary"] == e["summary"] and prev["location"] == e["location"]:
+            prev["last"] = i
+            prev["time_end"] = e.get("time_end")
+            prev["end_str"] = (e.get("time") or "").split("–")[-1]
+            continue
+        runs.append({**e, "first": i, "last": i,
+                     "start_str": (e.get("time") or "").split("–")[0],
+                     "end_str": (e.get("time") or "").split("–")[-1]})
+    return runs
+
+
+def _run_time(r: dict) -> str:
+    if not r["start_str"]:
+        return ""
+    return r["start_str"] if r["start_str"] == r["end_str"] else f"{r['start_str']}–{r['end_str']}"
+
+
+def _run_num(r: dict) -> str:
+    return _keycap(r["first"]) if r["first"] == r["last"] else f"{_keycap(r['first'])}–{_keycap(r['last'])}"
+
+
+def format_lesson(e: dict, num: str = "", now: datetime | None = None) -> str:
+    """Одна пара (или блок подряд идущих) — три строки: время и аудитория,
+    название, тип и преподаватель. Без рамок ┌│└: в Telegram шрифт не
+    моноширинный, и они съезжали."""
+    r = e if "start_str" in e else {**e, "start_str": (e.get("time") or "").split("–")[0],
+                                     "end_str": (e.get("time") or "").split("–")[-1]}
+    title, kind, _ = _split_kind(e["summary"])
+    time_str = _run_time(r)
+    status, past = "", False
+    if now and e.get("time_start"):
+        end = r.get("time_end") or e["time_start"]
+        if e["time_start"] <= now < end:
+            status = " · 🟢 <b>сейчас</b>"
+        elif end <= now:
+            past = True
+    if time_str:
+        time_str = f"<s>{time_str}</s>" if past else f"<b>{time_str}</b>"
+    head = " ".join(x for x in (num, time_str) if x)
+    loc = esc(e.get("location") or "")
+    line1 = head + (f"  📍 {loc}" if loc else "") + status
+    extra = [kind] if kind else []
+    if e.get("teacher"):
+        extra.append(esc(_short_teacher(e["teacher"])))
+    if "first" in r and r["last"] > r["first"]:
+        extra.append(f"{_pairs_word(r['last'] - r['first'] + 1)} подряд")
+    lines = [line1, esc(title)]
+    if extra:
+        lines.append(f"<i>{' · '.join(extra)}</i>")
+    return "\n".join(lines)
+
+
+def format_day(events: list[dict], target: date, show_date=True,
+               now: datetime | None = None, compact: bool = False) -> str:
+    weekday = DAY_NAMES[target.weekday()]
+    title = f"{weekday}, {_human_date(target)}" if show_date else weekday
+
+    if compact:
+        if not events:
+            return f"<b>{title}</b> — пар нет 🎉"
+        lines = [f"<b>{title}</b>"]
+        for r in _merge_runs(events):
+            name, _, short = _split_kind(r["summary"])
+            name = esc(name) + (f" ({short})" if short else "")
+            loc = f" · {esc(r['location'])}" if r.get("location") else ""
+            lines.append(f"{_run_num(r)} {_run_time(r)} · {name}{loc}")
+        return "\n".join(lines)
 
     if not events:
-        return f"{header}\n🎉 Пар нет!"
-
-    lines = [header]
-    for i, e in enumerate(events, 1):
-        lines.append(
-            f"┌ <b>Пара {i}</b>  ⏰ {e['time']}\n"
-            f"│ 📖 {esc(e['summary'])}\n"
-            f"└ 📍 {esc(e['location']) or '—'}"
-        )
-    return "\n\n".join(lines)
+        return f"📅 <b>{title}</b>\n🎉 Пар нет!"
+    runs = _merge_runs(events)
+    first = runs[0]["start_str"]
+    last = runs[-1]["end_str"]
+    span = f" · {first}–{last}" if first and last else ""
+    blocks = [f"📅 <b>{title}</b>\n{_pairs_word(len(events))}{span}"]
+    blocks += [format_lesson(r, _run_num(r), now) for r in runs]
+    return "\n\n".join(blocks)
 
 
 async def get_today_schedule() -> str:
     try:
         raw   = await fetch_schedule_raw()
-        today = datetime.now(TZ).date()
-        return format_day(parse_events_for_date(raw, today), today)
+        now   = datetime.now(TZ)
+        return format_day(parse_events_for_date(raw, now.date()), now.date(), now=now)
     except Exception as e:
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
@@ -139,20 +249,22 @@ async def get_tomorrow_schedule() -> str:
         return "⚠️ Не удалось загрузить расписание."
 
 
+def _format_week(raw: bytes, monday: date, label: str) -> str:
+    saturday = monday + timedelta(days=5)
+    span = (f"{monday.day}–{_human_date(saturday)}" if monday.month == saturday.month
+            else f"{_human_date(monday)} – {_human_date(saturday)}")
+    days = [format_day(parse_events_for_date(raw, monday + timedelta(days=i)), monday + timedelta(days=i), compact=True)
+            for i in range(6)]
+    return f"📆 <b>{label}</b> · {span}\n\n" + "\n\n".join(days)
+
+
 async def get_week_schedule() -> str:
     try:
         raw   = await fetch_schedule_raw()
         today = datetime.now(TZ).date()
         monday = today - timedelta(days=today.weekday())
 
-        lines = ["📆 <b>Расписание на эту неделю</b>\n"]
-        for i in range(6):
-            day    = monday + timedelta(days=i)
-            events = parse_events_for_date(raw, day)
-            lines.append(format_day(events, day))
-            lines.append("─────────────────")
-
-        return "\n".join(lines)
+        return _format_week(raw, monday, "Эта неделя")
     except Exception as e:
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
@@ -165,14 +277,7 @@ async def get_next_week_schedule() -> str:
         days_until_monday = (7 - today.weekday()) % 7 or 7
         next_monday = today + timedelta(days=days_until_monday)
 
-        lines = ["📆 <b>Расписание на следующую неделю</b>\n"]
-        for i in range(6):
-            day    = next_monday + timedelta(days=i)
-            events = parse_events_for_date(raw, day)
-            lines.append(format_day(events, day))
-            lines.append("─────────────────")
-
-        return "\n".join(lines)
+        return _format_week(raw, next_monday, "Следующая неделя")
     except Exception as e:
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
@@ -191,13 +296,11 @@ async def get_next_lesson() -> str:
                 mins  = int(delta.total_seconds() // 60)
                 hrs   = mins // 60
                 mins  = mins % 60
-                time_left = f"{hrs}ч {mins}мин" if hrs else f"{mins} мин"
+                time_left = f"{hrs} ч {mins} мин" if hrs else f"{mins} мин"
+                num = _keycap(events.index(e) + 1)
                 return (
-                    f"⏭ <b>Следующая пара</b>\n\n"
-                    f"┌ ⏰ {e['time']}\n"
-                    f"│ 📖 {esc(e['summary'])}\n"
-                    f"└ 📍 {esc(e['location']) or '—'}\n\n"
-                    f"⏳ Через {time_left}"
+                    f"⏭ <b>Следующая пара — через {time_left}</b>\n\n"
+                    + format_lesson(e, num)
                 )
 
         tomorrow = today + timedelta(days=1)
@@ -205,11 +308,9 @@ async def get_next_lesson() -> str:
         if t_events:
             e = t_events[0]
             return (
-                f"✅ На сегодня пары закончились!\n\n"
-                f"<b>Завтра первая пара:</b>\n"
-                f"┌ ⏰ {e['time']}\n"
-                f"│ 📖 {esc(e['summary'])}\n"
-                f"└ 📍 {esc(e['location']) or '—'}"
+                "✅ На сегодня пары закончились!\n\n"
+                "<b>Завтра первая пара:</b>\n"
+                + format_lesson(e, _keycap(1))
             )
         return "✅ Пар больше нет ни сегодня, ни завтра!"
     except Exception as e:

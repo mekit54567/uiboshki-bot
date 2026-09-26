@@ -12,7 +12,7 @@ from aiogram.types import Message, CallbackQuery
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done,
-    delete_deadline, upsert_user, get_deadline_stats, get_deadline,
+    delete_deadline, upsert_user, get_deadline_stats, get_deadline, is_shared_deadline,
 )
 from config import STAROSTA_ID, GROUP_CHAT_ID
 from scheduler import DEADLINE_POST_QUESTION
@@ -72,7 +72,7 @@ def format_deadlines(deadlines: list[dict]) -> str:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
     today = today_msk()
-    lines = ["📋 <b>Дедлайны группы</b>"]
+    lines = ["📋 <b>Дедлайны</b>"]
 
     for d in deadlines:
         due   = date.fromisoformat(d["due_date"])
@@ -87,8 +87,9 @@ def format_deadlines(deadlines: list[dict]) -> str:
         tp       = f" в {d['due_time']}" if d.get("due_time") else ""
         desc_str = f"\n   📝 {esc(d['description'])}" if d.get("description") and d["description"] not in ("", "-") else ""
 
+        mine = " · 👤 личный" if "created_by" in d and not is_shared_deadline(d) else ""
         lines.append(
-            f"[{d['id']}] <b>{esc(d['subject'])}</b>\n"
+            f"[{d['id']}] <b>{esc(d['subject'])}</b>{mine}\n"
             f"   📅 {format_date(d['due_date'])}{tp} — {badge}\n"
             f"   {progress_bar(delta)}{desc_str}"
         )

@@ -12,7 +12,7 @@ from config import (
     SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID, SCHEDULE_DIFF_CHECK_MINUTES, GROUP_CHAT_ID,
 )
 from database import get_all_subscribed_users, get_deadlines_soon, get_user
-from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date
+from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
 from utils import esc, today_msk
 
 logger = logging.getLogger(__name__)
@@ -46,14 +46,15 @@ def progress_bar(delta: int, max_days: int = 14) -> str:
 async def send_morning_schedule(bot: Bot):
     schedule_text = await get_today_schedule()
 
-    # Добавляем погоду
+    # Приветствие + погода одной строкой (если не получили — без неё)
     try:
         from handlers.weather import get_weather_for_morning
         weather_text = await get_weather_for_morning()
-        full_text = f"{weather_text}\n\n{schedule_text}"
     except Exception as e:
         logger.error(f"Weather error: {e}")
-        full_text = schedule_text
+        weather_text = ""
+    head = "☀️ <b>Доброе утро!</b>" + (f"\n{weather_text}" if weather_text else "")
+    full_text = f"{head}\n\n{schedule_text}"
 
     users = await get_all_subscribed_users()
     for uid in users:
@@ -169,10 +170,8 @@ async def check_lesson_reminders(bot: Bot):
                     try:
                         await bot.send_message(
                             uid,
-                            f"⏰ <b>Через {remind_mins} минут пара!</b>\n\n"
-                            f"┌ 📖 {esc(e['summary'])}\n"
-                            f"└ 📍 {esc(e['location']) or '—'}\n\n"
-                            f"Начало в <b>{e['time'].split('–')[0]}</b>",
+                            f"⏰ <b>Через {remind_mins} мин пара</b>\n\n"
+                            + format_lesson(e),
                             parse_mode="HTML"
                         )
                     except Exception as ex:

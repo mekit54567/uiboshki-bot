@@ -1,0 +1,157 @@
+"""
+Оформление по итогам живого теста в Telegram (26.09.2026): расписание без
+съезжающих рамок ┌│└, подряд идущие одинаковые пары одним блоком, текущая
+пара отмечена, неделя компактно, /help без команд старосты для остальных,
+утренняя рассылка без «⚠️ Не удалось получить погоду», подсказка решалки —
+один раз за диалог.
+"""
+import time
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Message, Chat, User, Update
+
+from schedule_parser import format_day, format_lesson
+from tests.conftest import STAROSTA_ID
+from tests.test_solver_render import RecordingSession
+
+TZ = ZoneInfo("Europe/Moscow")
+
+
+def _ev(start, end, summary, location="А-18", teacher=""):
+    hs, ms = map(int, start.split(":"))
+    he, me = map(int, end.split(":"))
+    return {
+        "summary": summary, "time": f"{start}–{end}", "location": location, "teacher": teacher,
+        "time_start": datetime(2026, 9, 26, hs, ms, tzinfo=TZ),
+        "time_end": datetime(2026, 9, 26, he, me, tzinfo=TZ),
+    }
+
+
+DAY = [
+    _ev("09:00", "10:30", "ЛК Основы бизнес-анализа", "А-18", "Иванов Иван Иванович"),
+    _ev("10:40", "12:10", "ПР Предпринимательство", "А-215"),
+    _ev("12:40", "14:10", "ДОП Военная кафедра", "ВУЦ"),
+    _ev("14:20", "15:50", "ДОП Военная кафедра", "ВУЦ"),
+]
+
+
+def test_day_has_no_box_drawing_and_readable_kind_and_teacher():
+    text = format_day(DAY, date(2026, 9, 26))
+    assert "┌" not in text and "│" not in text and "└" not in text
+    assert text.startswith("📅 <b>Суббота, 26 сентября</b>\n4 пары · 09:00–15:50")
+    assert "1️⃣ <b>09:00–10:30</b>  📍 А-18\nОсновы бизнес-анализа\n<i>лекция · Иванов И. И.</i>" in text
+
+
+def test_consecutive_identical_pairs_are_merged():
+    text = format_day(DAY, date(2026, 9, 26))
+    assert text.count("Военная кафедра") == 1
+    assert "3️⃣–4️⃣ <b>12:40–15:50</b>" in text
+    assert "2 пары подряд" in text
+
+
+def test_today_marks_current_and_past_pairs():
+    text = format_day(DAY, date(2026, 9, 26), now=datetime(2026, 9, 26, 11, 0, tzinfo=TZ))
+    assert "1️⃣ <s>09:00–10:30</s>" in text
+    assert "2️⃣ <b>10:40–12:10</b>  📍 А-215 · 🟢 <b>сейчас</b>" in text
+    assert "3️⃣–4️⃣ <b>12:40–15:50</b>" in text
+
+
+def test_week_day_is_compact():
+    text = format_day(DAY, date(2026, 9, 26), compact=True)
+    assert text.splitlines() == [
+        "<b>Суббота, 26 сентября</b>",
+        "1️⃣ 09:00–10:30 · Основы бизнес-анализа (лк) · А-18",
+        "2️⃣ 10:40–12:10 · Предпринимательство (пр) · А-215",
+        "3️⃣–4️⃣ 12:40–15:50 · Военная кафедра (доп) · ВУЦ",
+    ]
+    assert format_day([], date(2026, 9, 27), compact=True) == "<b>Воскресенье, 27 сентября</b> — пар нет 🎉"
+
+
+def test_lesson_escapes_html():
+    text = format_lesson(_ev("09:00", "10:30", "ЛК R&D <тест>", "A<1>"))
+    assert "R&amp;D &lt;тест&gt;" in text and "A&lt;1&gt;" in text
+
+
+@pytest.mark.asyncio
+async def test_morning_weather_line_is_empty_on_failure(monkeypatch):
+    import handlers.weather as weather
+
+    async def no_weather():
+        return None
+
+    monkeypatch.setattr(weather, "fetch_weather", no_weather)
+    assert await weather.get_weather_for_morning() == ""
+
+    async def some_weather():
+        return {"current": {"temperature_2m": 12.2, "apparent_temperature": 9.6, "weathercode": 3,
+                            "windspeed_10m": 7, "precipitation": 0}}
+
+    monkeypatch.setattr(weather, "fetch_weather", some_weather)
+    assert await weather.get_weather_for_morning() == "☁️ +12°, пасмурно, ощущается +10° · 👕 лёгкая куртка"
+
+
+# ── /help и подсказка решалки через настоящий Dispatcher ────────────────────
+
+USER = User(id=222, is_bot=False, first_name="Alice")
+STAROSTA = User(id=STAROSTA_ID, is_bot=False, first_name="Starosta")
+
+
+@pytest.fixture
+def bot():
+    return Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=RecordingSession())
+
+
+def _dp(router):
+    d = Dispatcher(storage=MemoryStorage())
+    d.include_router(router)
+    return d
+
+
+async def _feed(dp, bot, text, user=USER):
+    msg = Message(message_id=int(time.time() * 1000) % 1000000, date=0,
+                  chat=Chat(id=user.id, type="private"), from_user=user, text=text)
+    await dp.feed_update(bot, Update(update_id=int(time.time() * 1000000) % 10**9, message=msg))
+
+
+@pytest.mark.asyncio
+async def test_help_hides_starosta_commands_from_students(db, bot):
+    from handlers.start import router
+    dp = _dp(router)
+    try:
+        await _feed(dp, bot, "/help", USER)
+        student = bot.session.sent[-1][0]
+        await _feed(dp, bot, "/help", STAROSTA)
+        starosta = bot.session.sent[-1][0]
+    finally:
+        router._parent_router = None
+    assert "/announce" not in student and "Для старосты" not in student
+    assert "/announce" in starosta and "Для старосты" in starosta
+
+
+@pytest.mark.asyncio
+async def test_solver_hint_only_after_first_answer(db, bot, monkeypatch):
+    import handlers.solver as solver
+
+    async def fake_solve_text(task, subject="", backend="gemini"):
+        return "**Ответ:** 4"
+
+    async def fake_history(history, subject="", backend="gemini"):
+        return "**Ответ:** 5"
+
+    monkeypatch.setattr(solver, "solve_text", fake_solve_text)
+    monkeypatch.setattr(solver, "solve_with_history", fake_history)
+    dp = _dp(solver.router)
+    try:
+        await _feed(dp, bot, "/solve")
+        await _feed(dp, bot, "Математика")
+        await _feed(dp, bot, "2 + 2 = ?")
+        await _feed(dp, bot, "а 2 + 3?")
+    finally:
+        solver.router._parent_router = None
+    texts = [t for t, _ in bot.session.sent]
+    assert sum("уточняющий вопрос" in t for t in texts) == 1
+    assert any("<b>Ответ:</b> 5" in t for t in texts)

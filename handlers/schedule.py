@@ -101,9 +101,8 @@ async def cmd_next(message: Message):
 async def cmd_calendar(message: Message):
     if not WEBAPP_URL:
         await message.answer(
-            "📅 Личный календарь пока не настроен старостой — для него нужен "
-            "поднятый WebApp-бэкенд (WEBAPP_URL), см. webapp/README.md. "
-            "Без этого ссылку выдать не могу."
+            "📅 Личный календарь скоро появится — его ещё не включили "
+            "(нужен WebApp бота). Как заработает, /calendar сразу выдаст ссылку."
         )
         return
     token = await get_or_create_calendar_token(message.from_user.id)

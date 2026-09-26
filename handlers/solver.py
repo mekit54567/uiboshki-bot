@@ -62,7 +62,7 @@ async def choose_subject(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     backend = data.get("backend", "gemini")
-    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend)
+    await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend, hinted=False)
     await state.set_state(SolverState.waiting_task)
     note = "\n\n(фото — всегда через Gemini, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
@@ -122,14 +122,15 @@ async def send_answer(message: Message, state: FSMContext, answer: str):
     for msg in await answer_model_text(message, answer):
         msg_ids.append(msg.message_id)
 
-    # Подсказка
-    hint = await message.answer(
-        "💬 Можешь уточнить или задать следующий вопрос.\n"
-        "Нажми <b>🛑 Завершить диалог</b> чтобы выйти.",
-        parse_mode="HTML"
-    )
-    msg_ids.append(hint.message_id)
-    await state.update_data(msg_ids=msg_ids)
+    # Подсказка — один раз за диалог, а не после каждого ответа
+    if not data.get("hinted"):
+        hint = await message.answer(
+            "💬 Можно задать уточняющий вопрос — я помню условие.\n"
+            "Закончил — жми <b>🛑 Завершить диалог</b>.",
+            parse_mode="HTML"
+        )
+        msg_ids.append(hint.message_id)
+    await state.update_data(msg_ids=msg_ids, hinted=True)
 
 
 @router.message(SolverState.waiting_task, F.text)

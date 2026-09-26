@@ -93,7 +93,7 @@ def test_no_triple_newlines_under_headers():
     from scheduler import _format_deadline_reminders
 
     day = format_day([{"time": "09:00–10:30", "summary": "ЛК Матан", "location": "А-18"}], date(2026, 9, 26))
-    assert day.startswith("📅 <b>Суббота</b>, 26.09.2026\n\n┌ <b>Пара 1</b>")
+    assert day.startswith("📅 <b>Суббота, 26 сентября</b>\n1 пара · 09:00–10:30\n\n1️⃣ <b>09:00–10:30</b>")
     d = {"id": 1, "subject": "Лаба", "description": "", "due_date": "2099-01-01", "due_time": None}
     for text in (day, format_deadlines([d]), _format_deadline_reminders([d])):
         assert "\n\n\n" not in text
