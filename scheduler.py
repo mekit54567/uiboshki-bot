@@ -182,6 +182,7 @@ async def check_lesson_reminders(bot: Bot):
 # ── Автосинк дедлайнов из СДО ────────────────────────────────────────────────
 
 _sdo_expired_notified = False  # не спамим старосте одним и тем же каждые N часов
+_sdo_error_notified = False    # то же для сетевой недоступности СДО
 
 
 async def sync_sdo_deadlines(bot: Bot):
@@ -189,6 +190,29 @@ async def sync_sdo_deadlines(bot: Bot):
     from sdo_parser import sync_deadlines
 
     result = await sync_deadlines()
+
+    if result.get("missing"):
+        return  # СДО не подключали (нет SDO_SESSION_COOKIE) — не о чем напоминать
+
+    if "error" in result:
+        # Сетевой сбой, а не протухшая кука: например, online-edu.mirea.ru не
+        # пускает зарубежные IP (сервер Railway в US West). Раньше это молча
+        # глоталось, и никто не знал, что автосинк не работает вовсе.
+        global _sdo_error_notified
+        if not _sdo_error_notified and STAROSTA_ID:
+            try:
+                await bot.send_message(
+                    STAROSTA_ID,
+                    "⚠️ СДО недоступен с сервера бота — автосинк дедлайнов не работает.\n\n"
+                    f"Ошибка: {result['error'][:300]}\n\n"
+                    "Если так будет и дальше, скорее всего online-edu.mirea.ru не пускает "
+                    "зарубежные адреса (сервер бота — в США).",
+                )
+                _sdo_error_notified = True
+            except Exception as e:
+                logger.warning(f"Не смог уведомить старосту о недоступности СДО: {e}")
+        return
+    _sdo_error_notified = False
 
     if result.get("expired"):
         if not _sdo_expired_notified and STAROSTA_ID:
