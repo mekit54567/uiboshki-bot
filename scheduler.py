@@ -233,4 +233,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(check_lesson_reminders,  "cron", minute="*",                  args=[bot])
     scheduler.add_job(sync_sdo_deadlines,      "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot])
     scheduler.add_job(check_schedule_changes,  "interval", minutes=SCHEDULE_DIFF_CHECK_MINUTES, args=[bot])
+    # Справочник для поиска преподавателей/групп/аудиторий: достроить, если
+    # обход прервался (редеплой), и обновлять раз в месяц (см. schedule_index).
+    import schedule_index
+    scheduler.add_job(schedule_index.ensure_fresh, "cron", hour=4, minute=10)
     return scheduler

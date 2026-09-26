@@ -50,6 +50,16 @@ def _extract_teacher(component) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _extract_groups(component) -> str:
+    """У ical преподавателя/аудитории в DESCRIPTION — группы ("КСБО-11-26
+    1 п/г"), а не "Преподаватель: …" как у ical группы."""
+    desc = str(component.get("DESCRIPTION", ""))
+    if TEACHER_RE.search(desc):
+        return ""
+    parts = [p.strip() for p in re.split(r"\\n|\n", desc) if p.strip()]
+    return ", ".join(parts)
+
+
 def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
     cal = Calendar.from_ical(ical_data)
     events_raw = recurring_ical_events.of(cal).at(target)
@@ -62,6 +72,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
 
         location = str(component.get("LOCATION", ""))
         teacher  = _extract_teacher(component)
+        groups   = _extract_groups(component)
         dtstart  = component.get("DTSTART")
         dtend    = component.get("DTEND")
 
@@ -92,6 +103,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
             "time_end":   time_end,
             "location":   location,
             "teacher":    teacher,
+            "groups":     groups,
         })
 
     events.sort(key=lambda e: e["time"] or "99:99")
@@ -101,6 +113,10 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
 MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
               "августа", "сентября", "октября", "ноября", "декабря"]
 _KEYCAPS = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"]
+DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+# Номер пары — по времени звонка, а не по месту в списке дня: у преподавателя
+# (или у группы в день с «окном» с утра) первая пара дня бывает третьей.
+PAIR_SLOTS = {"09:00": 1, "10:40": 2, "12:40": 3, "14:20": 4, "16:20": 5, "18:00": 6, "19:40": 7}
 
 # Тип занятия — первым словом в SUMMARY ical МИРЭА ("ЛК Матан", "ПР ...").
 _KINDS = {
@@ -148,9 +164,11 @@ def _merge_runs(events: list[dict]) -> list[dict]:
     """Подряд идущие одинаковые пары (5 пар практики, 4 пары военки) —
     одним блоком «1️⃣–4️⃣ 09:00–15:50», а не четырьмя копиями подряд."""
     runs: list[dict] = []
-    for i, e in enumerate(events, 1):
+    for pos, e in enumerate(events, 1):
+        i = PAIR_SLOTS.get((e.get("time") or "").split("–")[0], pos)
         prev = runs[-1] if runs else None
-        if prev and prev["summary"] == e["summary"] and prev["location"] == e["location"]:
+        same = ("summary", "location", "teacher", "groups")
+        if prev and all(prev.get(k) == e.get(k) for k in same):
             prev["last"] = i
             prev["time_end"] = e.get("time_end")
             prev["end_str"] = (e.get("time") or "").split("–")[-1]
@@ -203,7 +221,7 @@ def format_lesson(e: dict, num: str = "", now: datetime | None = None) -> str:
 
 
 def format_day(events: list[dict], target: date, show_date=True,
-               now: datetime | None = None, compact: bool = False) -> str:
+               now: datetime | None = None, compact: bool = False, extra: str = "") -> str:
     weekday = DAY_NAMES[target.weekday()]
     title = f"{weekday}, {_human_date(target)}" if show_date else weekday
 
@@ -215,7 +233,12 @@ def format_day(events: list[dict], target: date, show_date=True,
             name, _, short = _split_kind(r["summary"])
             name = esc(name) + (f" ({short})" if short else "")
             loc = f" · {esc(r['location'])}" if r.get("location") else ""
-            lines.append(f"{_run_num(r)} {_run_time(r)} · {name}{loc}")
+            who = ""
+            if extra == "groups" and r.get("groups"):
+                who = f" · 👥 {esc(r['groups'])}"
+            elif extra == "teacher" and r.get("teacher"):
+                who = f" · 👤 {esc(_short_teacher(r['teacher']))}"
+            lines.append(f"{_run_num(r)} {_run_time(r)} · {name}{loc}{who}")
         return "\n".join(lines)
 
     if not events:
@@ -247,6 +270,24 @@ async def get_tomorrow_schedule() -> str:
     except Exception as e:
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
+
+
+def format_target_schedule(raw: bytes, target_type: int, days: int = 14) -> str:
+    """Расписание найденного преподавателя/группы/аудитории на days дней
+    вперёд, пустые дни пропускаются. У преподавателя и аудитории в строке —
+    группы, у группы — преподаватель (target_type как в API МИРЭА: 1 группа,
+    2 преподаватель, 3 аудитория)."""
+    extra = "teacher" if target_type == 1 else "groups"
+    today = datetime.now(TZ).date()
+    blocks = []
+    for i in range(days):
+        d = today + timedelta(days=i)
+        events = parse_events_for_date(raw, d)
+        if events:
+            blocks.append(format_day(events, d, compact=True, extra=extra))
+    if not blocks:
+        return f"Пар в ближайшие {days} дней нет."
+    return "\n\n".join(blocks)
 
 
 def _format_week(raw: bytes, monday: date, label: str) -> str:
@@ -342,24 +383,3 @@ def list_upcoming_events(raw: bytes, days_ahead: int = 14) -> list[dict]:
         for e in parse_events_for_date(raw, d):
             results.append({**e, "date": d})
     return results
-
-# ── Форматирование результатов поиска (преподаватель/аудитория) ────────────
-# Раньше здесь же жили search_by_teacher/search_by_room, искавшие только
-# в рамках расписания своей группы — заменены на mirea_schedule_api.py
-# (нашёлся настоящий публичный поиск по всему университету). Форматирование
-# результатов осталось общим — им пользуется handlers/schedule.py.
-
-def format_search_results(results: list[dict], empty_text: str) -> str:
-    if not results:
-        return empty_text
-    lines = []
-    last_date = None
-    for e in results[:15]:
-        if e["date"] != last_date:
-            lines.append(f"\n📅 <b>{DAY_NAMES[e['date'].weekday()]}, {e['date'].strftime('%d.%m')}</b>")
-            last_date = e["date"]
-        teacher_part = f" · {esc(e['teacher'])}" if e.get("teacher") else ""
-        lines.append(f"⏰ {e['time']} — {esc(e['summary'])}{teacher_part}\n📍 {esc(e['location']) or '—'}")
-    if len(results) > 15:
-        lines.append(f"\n… и ещё {len(results) - 15}")
-    return "\n".join(lines).strip()

@@ -53,6 +53,14 @@ def test_consecutive_identical_pairs_are_merged():
     assert "2 пары подряд" in text
 
 
+def test_pairs_with_different_groups_are_not_merged():
+    a = {**_ev("12:40", "14:10", "ЛАБ Физика", "В-328"), "groups": "КСБО-11-26"}
+    b = {**_ev("14:20", "15:50", "ЛАБ Физика", "В-328"), "groups": "ЭКБО-01-26"}
+    text = format_day([a, b], date(2026, 9, 26), compact=True, extra="groups")
+    assert "КСБО-11-26" in text and "ЭКБО-01-26" in text
+    assert "3️⃣ 12:40–14:10" in text and "4️⃣ 14:20–15:50" in text
+
+
 def test_today_marks_current_and_past_pairs():
     text = format_day(DAY, date(2026, 9, 26), now=datetime(2026, 9, 26, 11, 0, tzinfo=TZ))
     assert "1️⃣ <s>09:00–10:30</s>" in text

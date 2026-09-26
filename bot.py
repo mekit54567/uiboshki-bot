@@ -133,6 +133,10 @@ async def main():
 
     await setup_bot_menu(bot)
     webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
+    # Справочник для /teacher, /group, /room и поиска в WebApp — в фоне:
+    # первый обход ~полчаса, дальше продолжается с места остановки.
+    import schedule_index
+    index_task = asyncio.create_task(schedule_index.ensure_fresh())
 
     logger.info("🚀 Бот УИБО-03-24 запущен!")
     try:
@@ -150,6 +154,7 @@ async def main():
                 pass
         raise
     finally:
+        index_task.cancel()
         await stop_webapp(webapp_server, webapp_task)
         scheduler.shutdown()
         await bot.session.close()

@@ -90,7 +90,7 @@
   .card .big { font-size: 17px; font-weight: 700; margin: 0 0 4px; }
   .card .sub { color: var(--hint); font-size: 13px; margin: 0; }
 
-  .schedule-html { font-size: 14.5px; white-space: pre-wrap; }
+  .schedule-html { font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
   .schedule-html s { color: var(--hint); }
   .schedule-html b { color: var(--accent-2); }
 
@@ -196,6 +196,31 @@
     margin-bottom: 10px;
   }
   input.searchbox::placeholder { color: var(--hint); }
+
+  /* Поиск расписания */
+  .chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+  .chips-row button {
+    flex: none; background: var(--bg-card); color: var(--hint);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 12px; font-size: 12.5px; font-weight: 700;
+  }
+  .chips-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .target-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; cursor: pointer;
+  }
+  .target-item:active { transform: scale(0.985); background: var(--bg-raised); }
+  .target-item .ic { font-size: 20px; }
+  .target-item .tt { font-weight: 700; }
+  .target-item .ts { color: var(--hint); font-size: 12px; }
+  .target-item .go { margin-left: auto; color: var(--hint); font-size: 18px; }
+  .recent-title { color: var(--hint); font-size: 12px; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: .05em; margin: 4px 2px 8px; }
+  button.back {
+    background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 700; padding: 4px 2px 10px;
+  }
 
   .empty {
     text-align: center;
@@ -303,6 +328,30 @@
     <div class="list" id="deadline-list"><div class="empty">Загружаю…</div></div>
   </section>
 
+  <!-- ── Поиск расписания ─────────────────────────────────────────── -->
+  <section class="view" id="view-search">
+    <div id="search-pane">
+      <h2 class="section">Расписание МИРЭА <span class="stat" id="index-stat"></span></h2>
+      <input class="searchbox" id="target-search" placeholder="Фамилия, группа или аудитория" autocomplete="off">
+      <div class="chips-row" id="target-types">
+        <button class="active" data-type="0">Все</button>
+        <button data-type="2">👤 Преподаватели</button>
+        <button data-type="1">👥 Группы</button>
+        <button data-type="3">🚪 Аудитории</button>
+      </div>
+      <div id="target-recent"></div>
+      <div class="list" id="target-list"></div>
+    </div>
+    <div id="target-view" style="display:none;">
+      <button class="back" onclick="closeTarget()">← к поиску</button>
+      <div class="card">
+        <p class="eyebrow" id="target-kind"></p>
+        <p class="big" id="target-title"></p>
+        <div class="schedule-html" id="target-schedule">Загружаю…</div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Файлы ─────────────────────────────────────────────────────── -->
   <section class="view" id="view-files">
     <h2 class="section">Файлы</h2>
@@ -329,6 +378,7 @@
 <nav class="tabs">
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
   <button data-tab="deadlines" onclick="switchTab('deadlines')"><span class="ic">📋</span>Дедлайны</button>
+  <button data-tab="search" onclick="switchTab('search')"><span class="ic">🔍</span>Поиск</button>
   <button data-tab="files" onclick="switchTab('files')"><span class="ic">📁</span>Файлы</button>
   <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">🤖</span>Чат</button>
 </nav>
@@ -386,6 +436,8 @@ function switchTab(name) {
   haptic();
   if (name === "deadlines") loadDeadlines();
   if (name === "files") loadFiles();
+  if (name === "search") renderRecent();
+  if (name !== "search" && tg && tg.BackButton) tg.BackButton.hide();
 }
 
 // ── Сегодня ───────────────────────────────────────────────────────────────
@@ -514,6 +566,101 @@ function openFile(id) {
   const link = "https://t.me/" + BOT_USERNAME + "?start=file_" + id;
   if (tg && tg.openTelegramLink) tg.openTelegramLink(link);
   else window.open(link, "_blank");
+}
+
+// ── Поиск расписания: преподаватель / группа / аудитория ──────────────────
+
+const TARGET_KIND = { 1: ["👥", "Группа"], 2: ["👤", "Преподаватель"], 3: ["🚪", "Аудитория"] };
+let targetType = 0;
+let targetTimer = null;
+let targetSeq = 0;
+
+document.querySelectorAll("#target-types button").forEach(b => b.addEventListener("click", () => {
+  targetType = Number(b.dataset.type);
+  document.querySelectorAll("#target-types button").forEach(x => x.classList.toggle("active", x === b));
+  haptic();
+  searchTargets(document.getElementById("target-search").value);
+}));
+
+document.getElementById("target-search").addEventListener("input", (e) => {
+  clearTimeout(targetTimer);
+  targetTimer = setTimeout(() => searchTargets(e.target.value), 250);
+});
+
+function targetItem(t) {
+  const kind = TARGET_KIND[t.type] || ["📅", ""];
+  return '<div class="target-item" onclick="openTarget(' + t.type + ',' + t.id + ',' + escapeHtml(JSON.stringify(t.title)) + ')">' +
+    '<span class="ic">' + kind[0] + '</span>' +
+    '<div><div class="tt">' + escapeHtml(t.title) + '</div><div class="ts">' + kind[1] + '</div></div>' +
+    '<span class="go">›</span></div>';
+}
+
+async function searchTargets(q) {
+  const list = document.getElementById("target-list");
+  q = (q || "").trim();
+  document.getElementById("target-recent").style.display = q ? "none" : "block";
+  if (q.length < 2) { list.innerHTML = ""; renderRecent(); return; }
+  const seq = ++targetSeq;
+  list.innerHTML = '<div class="empty">Ищу…</div>';
+  try {
+    const data = await api("/api/search?q=" + encodeURIComponent(q) + "&type=" + targetType);
+    if (seq !== targetSeq) return;  // пришёл ответ на старый запрос — пользователь уже печатает дальше
+    if (!data.items.length) {
+      list.innerHTML = '<div class="empty">' + (data.ready
+        ? "Ничего не нашлось"
+        : "Справочник ещё собирается (первый запуск, около получаса) — попробуй чуть позже") + '</div>';
+      return;
+    }
+    list.innerHTML = data.items.map(targetItem).join("");
+  } catch (e) {
+    if (seq === targetSeq) list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function recentTargets() {
+  try { return JSON.parse(localStorage.getItem("recentTargets") || "[]"); } catch (e) { return []; }
+}
+
+function rememberTarget(t) {
+  try {
+    const rest = recentTargets().filter(x => !(x.type === t.type && x.id === t.id));
+    localStorage.setItem("recentTargets", JSON.stringify([t].concat(rest).slice(0, 6)));
+  } catch (e) {}
+}
+
+function renderRecent() {
+  const box = document.getElementById("target-recent");
+  const items = recentTargets();
+  box.innerHTML = items.length
+    ? '<p class="recent-title">Недавние</p><div class="list">' + items.map(targetItem).join("") + '</div>'
+    : '<div class="empty">Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03»</div>';
+}
+
+async function openTarget(type, id, title) {
+  haptic();
+  rememberTarget({ type: type, id: id, title: title });
+  const kind = TARGET_KIND[type] || ["📅", ""];
+  document.getElementById("search-pane").style.display = "none";
+  document.getElementById("target-view").style.display = "block";
+  document.getElementById("target-kind").textContent = kind[0] + " " + kind[1] + " · 2 недели";
+  document.getElementById("target-title").textContent = title;
+  const box = document.getElementById("target-schedule");
+  box.textContent = "Загружаю…";
+  window.scrollTo(0, 0);
+  if (tg && tg.BackButton) { tg.BackButton.show(); tg.BackButton.onClick(closeTarget); }
+  try {
+    const data = await api("/api/target/" + type + "/" + id);
+    box.innerHTML = data.html;  // собран сервером из экранированных строк (schedule_parser)
+  } catch (e) {
+    box.textContent = "Не загрузилось: " + e.message;
+  }
+}
+
+function closeTarget() {
+  document.getElementById("target-view").style.display = "none";
+  document.getElementById("search-pane").style.display = "block";
+  if (tg && tg.BackButton) { tg.BackButton.offClick(closeTarget); tg.BackButton.hide(); }
+  renderRecent();
 }
 
 // ── Чат ───────────────────────────────────────────────────────────────────
