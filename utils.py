@@ -18,6 +18,8 @@ today_msk() — "сегодня" по Москве, а не по часам се
 
 parse_day_month() — общий разбор даты ДД.ММ[.ГГГГ] для дедлайнов (/add) и
 привязки ДЗ к паре (/addhw).
+
+md_to_tg_html_chunks() — ответ модели (Markdown) -> куски HTML для Telegram.
 """
 
 import re
@@ -110,3 +112,84 @@ def split_by_lines(text: str, limit: int = 3500) -> list[str]:
     if current:
         chunks.append(current)
     return chunks
+
+
+# ── Ответ модели: Markdown -> HTML Telegram ─────────────────────────────────
+
+_FENCE_RE   = re.compile(r"^\s*```")
+_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
+_RULE_RE    = re.compile(r"^\s{0,3}([-*_])(\s*\1){2,}\s*$")
+_BULLET_RE  = re.compile(r"^(\s*)[*+-]\s+")
+_BOLD_RE    = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*|__(?=\S)(.+?)(?<=\S)__")
+# Одиночные *…* — курсив, только если звёздочка не прилипла к слову/цифре
+# с внешней стороны и не отбита пробелом изнутри: "3 * x^2 * ln(x)" и
+# "2*3" остаются умножением, "*важно*" становится курсивом. Внутрь курсива
+# не пускаем теги (уже расставленный <b>), чтобы они не пересеклись.
+_ITALIC_RE  = re.compile(r"(?<![\w*])\*(?=[^\s*<])([^*\n<]+?)(?<=[^\s*>])\*(?![\w*])")
+
+
+def _md_inline(line: str) -> str:
+    """Одна строка вне блока кода: экранирование + `код`, **жирный**, *курсив*."""
+    parts = line.split("`")
+    if len(parts) % 2 == 0:            # непарный бэктик — оставляем как текст
+        parts = [line]
+    out = []
+    for i, part in enumerate(parts):
+        if i % 2:
+            out.append(f"<code>{esc(part)}</code>")
+            continue
+        part = esc(part)
+        part = _BOLD_RE.sub(lambda m: f"<b>{m.group(1) or m.group(2)}</b>", part)
+        part = _ITALIC_RE.sub(r"<i>\1</i>", part)
+        out.append(part)
+    return "".join(out)
+
+
+def _md_to_tg_html(text: str) -> str:
+    lines, code, in_code = [], [], False
+    for line in text.split("\n"):
+        if _FENCE_RE.match(line):
+            if in_code:
+                lines.append(f"<pre>{esc(chr(10).join(code))}</pre>")
+                code = []
+            in_code = not in_code
+            continue
+        if in_code:
+            code.append(line)
+            continue
+        heading = _HEADING_RE.match(line)
+        if heading:
+            lines.append(f"<b>{_md_inline(heading.group(1))}</b>")
+        elif _RULE_RE.match(line):
+            lines.append("──────────")
+        else:
+            lines.append(_md_inline(_BULLET_RE.sub(r"\1• ", line)))
+    if in_code:                        # модель не закрыла блок кода
+        lines.append(f"<pre>{esc(chr(10).join(code))}</pre>")
+    return "\n".join(lines)
+
+
+def md_to_tg_html_chunks(text: str, limit: int = 3500) -> list[str]:
+    """Ответ модели (обычный Markdown: **жирный**, ### заголовки, ```код```)
+    -> куски HTML для parse_mode="HTML".
+
+    Раньше ответ уходил с parse_mode="Markdown" — это старый Markdown
+    Telegram, где одиночная * — жирный, а заголовков нет вовсе. Gemini
+    пишет умножение звёздочкой ("3 * x^2 * ln(x)"), поэтому знаки умножения
+    исчезали, жирный растекался на пол-ответа, а "### 3. Итог" выводились
+    как есть (поймано живым тестом в Telegram). Здесь всё, что не разметка,
+    экранируется, так что Telegram не отклонит кусок. Режем по строкам
+    исходного текста; если разрез попал внутрь ```-блока, блок закрывается
+    в конце куска и открывается заново в следующем."""
+    chunks = split_by_lines(text or "", limit)
+    in_code = False
+    fixed = []
+    for chunk in chunks:
+        if in_code:
+            chunk = "```\n" + chunk
+        fences = sum(1 for line in chunk.split("\n") if _FENCE_RE.match(line))
+        in_code = fences % 2 == 1
+        if in_code:
+            chunk += "\n```"
+        fixed.append(chunk)
+    return [_md_to_tg_html(chunk) for chunk in fixed]
