@@ -237,21 +237,66 @@ async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
     return {"items": items, "ready": ready}
 
 
+TARGET_WEEKS = 8
+
+
 @app.get("/api/target/{target_type}/{target_id}")
 async def api_target(target_type: int, target_id: int, user: dict = CurrentUser):
+    """Расписание группы/преподавателя/аудитории на TARGET_WEEKS недель с
+    текущей (в воскресенье — со следующей): WebApp рисует его так же, как
+    главную, — недели, точки под днями, карточки пар."""
+    from datetime import datetime, timedelta
+    from database import get_pins
     from mirea_schedule_api import get_baseinfo, fetch_ical
-    from schedule_parser import format_target_schedule
+    from schedule_parser import target_weeks
+    from utils import TZ
     if target_type not in (1, 2, 3):
         raise HTTPException(status_code=404, detail="нет такого типа")
     info = await get_baseinfo(target_id, target_type)
     ical = await fetch_ical(target_id, target_type)
     if ical is None:
         raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
+    now = datetime.now(TZ)
+    today = now.date()
+    monday = today - timedelta(days=today.weekday()) + timedelta(days=7 if today.weekday() == 6 else 0)
+    pinned = any(p["type"] == target_type and p["id"] == target_id for p in await get_pins(user["id"]))
     return {
         "type": target_type, "id": target_id,
         "title": info["fullTitle"] if info else str(target_id),
-        "html": format_target_schedule(ical, target_type),
+        "pinned": pinned,
+        "today": today.isoformat(),
+        "weeks": target_weeks(ical, monday, TARGET_WEEKS, now=now),
     }
+
+
+# ── Закреплённые группы / преподаватели / аудитории ─────────────────────────
+
+class PinBody(BaseModel):
+    title: str
+
+
+@app.get("/api/pins")
+async def api_pins(user: dict = CurrentUser):
+    from database import get_pins
+    return {"items": await get_pins(user["id"])}
+
+
+@app.put("/api/pins/{target_type}/{target_id}")
+async def api_pin(target_type: int, target_id: int, body: PinBody, user: dict = CurrentUser):
+    from database import MAX_PINS, pin_target
+    title = body.title.strip()[:120]
+    if target_type not in (1, 2, 3) or not title:
+        raise HTTPException(status_code=400, detail="нужны тип цели и название")
+    if not await pin_target(user["id"], target_type, target_id, title):
+        raise HTTPException(status_code=400, detail=f"закрепить можно до {MAX_PINS}")
+    return {"ok": True}
+
+
+@app.delete("/api/pins/{target_type}/{target_id}")
+async def api_unpin(target_type: int, target_id: int, user: dict = CurrentUser):
+    from database import unpin_target
+    await unpin_target(user["id"], target_type, target_id)
+    return {"ok": True}
 
 
 # ── Дедлайны (общие + личные, "done" персональный для каждого) ──────────────

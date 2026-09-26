@@ -151,8 +151,36 @@ async def test_webapp_search_and_target_endpoints(db, monkeypatch):
 
     resp = client.get("/api/target/2/100", headers=headers)
     data = resp.json()
-    assert data["title"] == "Блеко В. В."
-    assert "👥 КСБО-11-26 1 п/г" in data["html"]
+    assert data["title"] == "Блеко В. В." and data["pinned"] is False
+    assert len(data["weeks"]) == server.TARGET_WEEKS
+    lessons = [l for w in data["weeks"] for d in w["days"] for l in d["lessons"]]
+    # как на главной — карточкой: 3-я пара по звонку, лаба, у преподавателя — группа
+    assert [(l["num"], l["start"], l["title"], l["kind"], l["room"], l["groups"]) for l in lessons] == [
+        (3, "12:40", "Физика 1 п/г", "лабораторная", "В-328 (В-78)", "КСБО-11-26 1 п/г")]
+
+
+@pytest.mark.asyncio
+async def test_pins_are_per_user_and_limited(db):
+    import webapp.server as server
+    client = TestClient(server.app)
+    me = {"X-Telegram-Init-Data": _make_init_data()}
+    other = {"X-Telegram-Init-Data": _make_init_data(user={"id": 333, "first_name": "Bob"})}
+
+    assert client.put("/api/pins/2/100", json={"title": "Блеко В. В."}, headers=me).json() == {"ok": True}
+    assert client.put("/api/pins/1/4928", json={"title": "УИБО-03-24"}, headers=me).json() == {"ok": True}
+    assert client.put("/api/pins/2/100", json={"title": "Блеко В. В."}, headers=me).json() == {"ok": True}  # повтор — не дубль
+    assert client.get("/api/pins", headers=me).json()["items"] == [
+        {"type": 1, "id": 4928, "title": "УИБО-03-24"}, {"type": 2, "id": 100, "title": "Блеко В. В."}]
+    assert client.get("/api/pins", headers=other).json()["items"] == []        # у каждого свои
+    assert client.put("/api/pins/9/1", json={"title": "x"}, headers=me).status_code == 400
+    assert client.get("/api/pins").status_code == 401
+
+    assert client.delete("/api/pins/1/4928", headers=me).json() == {"ok": True}
+    assert [p["id"] for p in client.get("/api/pins", headers=me).json()["items"]] == [100]
+
+    for i in range(db.MAX_PINS - 1):
+        assert client.put(f"/api/pins/3/{i}", json={"title": f"А-{i}"}, headers=me).status_code == 200
+    assert client.put("/api/pins/3/999", json={"title": "лишняя"}, headers=me).status_code == 400
 
 
 @pytest.mark.asyncio

@@ -118,6 +118,18 @@ async def init_db():
             await db.execute("ALTER TABLE files ADD COLUMN source TEXT")
         except Exception:
             pass  # колонка уже есть
+        # Закреплённые в поиске WebApp группы/преподаватели/аудитории —
+        # в базе, а не в браузере: видны с телефона и с компьютера.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pinned_targets (
+                user_id     INTEGER NOT NULL,
+                target_type INTEGER NOT NULL,
+                target_id   INTEGER NOT NULL,
+                title       TEXT NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, target_type, target_id)
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS file_text (
                 file_id      INTEGER PRIMARY KEY,
@@ -785,4 +797,40 @@ async def get_lesson_notes(date_str: str) -> list[dict]:
 async def delete_lesson_note(note_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM lesson_notes WHERE id=?", (note_id,))
+        await db.commit()
+
+
+# ── Закреплённое в поиске расписания (WebApp) ────────────────────────────────
+
+MAX_PINS = 20
+
+
+async def get_pins(user_id: int) -> list[dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT target_type, target_id, title FROM pinned_targets WHERE user_id=? ORDER BY created_at, rowid",
+            (user_id,))
+        return [{"type": t, "id": i, "title": title} for t, i, title in await cursor.fetchall()]
+
+
+async def pin_target(user_id: int, target_type: int, target_id: int, title: str) -> bool:
+    """False — уже MAX_PINS закреплённых (повторное закрепление — не ошибка)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*), SUM(target_type=? AND target_id=?) FROM pinned_targets WHERE user_id=?",
+            (target_type, target_id, user_id))
+        count, exists = await cursor.fetchone()
+        if not exists and count >= MAX_PINS:
+            return False
+        await db.execute(
+            "INSERT OR REPLACE INTO pinned_targets (user_id, target_type, target_id, title) VALUES (?, ?, ?, ?)",
+            (user_id, target_type, target_id, title))
+        await db.commit()
+        return True
+
+
+async def unpin_target(user_id: int, target_type: int, target_id: int):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM pinned_targets WHERE user_id=? AND target_type=? AND target_id=?",
+                         (user_id, target_type, target_id))
         await db.commit()

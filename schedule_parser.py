@@ -304,6 +304,7 @@ def lessons_for_date(raw: bytes, target: date, now: datetime | None = None) -> l
             "start": r["start_str"], "end": r["end_str"],
             "title": title, "kind": kind,
             "room": r.get("location") or "", "teacher": _short_teacher(r.get("teacher") or ""),
+            "groups": r.get("groups") or "",   # у преподавателя и аудитории — чьи это пары
             "status": status,
             "start_iso": r["time_start"].isoformat() if r.get("time_start") else None,
             "end_iso": r["time_end"].isoformat() if r.get("time_end") else None,
@@ -336,6 +337,23 @@ def week_overview(raw: bytes, monday: date, days: int = 6) -> dict:
             dots += [lesson["kind"]] * lesson["pairs"]
         out.append({"date": d.isoformat(), "dots": dots})
     return {"week": num, "days": out}
+
+
+def target_weeks(raw: bytes, first_monday: date, weeks: int = 8, now: datetime | None = None) -> list[dict]:
+    """Расписание найденной группы/преподавателя/аудитории по неделям для
+    WebApp — сразу на weeks недель одним ответом (разбор ~0,1 с), чтобы
+    листать недели без запросов. Как у главной: номер недели и пары по дням."""
+    out = []
+    for w in range(weeks):
+        monday = first_monday + timedelta(weeks=w)
+        days, num = [], None
+        for i in range(7):   # воскресенье тоже: бывают и в этот день (WebApp покажет его, только если есть пары)
+            d = monday + timedelta(days=i)
+            num = num or week_number(raw, d)
+            days.append({"date": d.isoformat(),
+                         "lessons": lessons_for_date(raw, d, now=now if now and d == now.date() else None)})
+        out.append({"monday": monday.isoformat(), "week": num, "days": days})
+    return out
 
 
 _subjects_cache: dict[tuple, list[str]] = {}
