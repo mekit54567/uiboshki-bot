@@ -4,7 +4,7 @@ HTTP-бэкенд для Telegram WebApp (Mini App) бота УИБО-03-24.
 Отдельный процесс от bot.py (тот — чистый long polling, без HTTP), поднимается
 рядом: `uvicorn webapp.server:app --host 0.0.0.0 --port 8000`. Общая с ботом
 SQLite-база (config.DATABASE_PATH) и все существующие модули (database.py,
-schedule_parser.py, groq_solver.py) переиспользуются как есть — WebApp не
+schedule_parser.py, ai_solver.py) переиспользуются как есть — WebApp не
 дублирует логику, а просто даёт ей HTTP-фасад.
 
 Каждый запрос обязан нести initData (см. webapp/auth.py) в заголовке
@@ -91,11 +91,11 @@ async def api_me(user: dict = CurrentUser):
 
 @app.get("/api/schedule/today")
 async def api_schedule_today(user: dict = CurrentUser):
-    from datetime import date
     from schedule_parser import get_today_schedule
     from handlers.schedule import _notes_block
+    from utils import today_msk
     html = await get_today_schedule()
-    html += await _notes_block(date.today().isoformat())
+    html += await _notes_block(today_msk().isoformat())
     return {"html": html}
 
 
@@ -169,9 +169,9 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
 
 @app.get("/api/notes")
 async def api_notes(date: str = "", user: dict = CurrentUser):
-    from datetime import date as date_cls
     from database import get_lesson_notes
-    date_str = date or date_cls.today().isoformat()
+    from utils import today_msk
+    date_str = date or today_msk().isoformat()
     items = await get_lesson_notes(date_str)
     return {"date": date_str, "items": items}
 
@@ -190,7 +190,7 @@ class ChatBody(BaseModel):
 
 @app.post("/api/chat")
 async def api_chat(body: ChatBody, user: dict = CurrentUser):
-    from groq_solver import chat_with_reasoning
+    from ai_solver import chat_with_reasoning
     if not body.history:
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]

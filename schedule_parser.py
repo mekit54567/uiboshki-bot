@@ -9,6 +9,7 @@ from icalendar import Calendar
 import recurring_ical_events
 
 from config import ICAL_URL, TIMEZONE, SCHEDULE_CACHE_TTL_SECONDS
+from utils import esc
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -112,8 +113,8 @@ def format_day(events: list[dict], target: date, show_date=True) -> str:
     for i, e in enumerate(events, 1):
         lines.append(
             f"┌ <b>Пара {i}</b>  ⏰ {e['time']}\n"
-            f"│ 📖 {e['summary']}\n"
-            f"└ 📍 {e['location'] or '—'}"
+            f"│ 📖 {esc(e['summary'])}\n"
+            f"└ 📍 {esc(e['location']) or '—'}"
         )
     return "\n\n".join(lines)
 
@@ -194,8 +195,8 @@ async def get_next_lesson() -> str:
                 return (
                     f"⏭ <b>Следующая пара</b>\n\n"
                     f"┌ ⏰ {e['time']}\n"
-                    f"│ 📖 {e['summary']}\n"
-                    f"└ 📍 {e['location'] or '—'}\n\n"
+                    f"│ 📖 {esc(e['summary'])}\n"
+                    f"└ 📍 {esc(e['location']) or '—'}\n\n"
                     f"⏳ Через {time_left}"
                 )
 
@@ -207,8 +208,8 @@ async def get_next_lesson() -> str:
                 f"✅ На сегодня пары закончились!\n\n"
                 f"<b>Завтра первая пара:</b>\n"
                 f"┌ ⏰ {e['time']}\n"
-                f"│ 📖 {e['summary']}\n"
-                f"└ 📍 {e['location'] or '—'}"
+                f"│ 📖 {esc(e['summary'])}\n"
+                f"└ 📍 {esc(e['location']) or '—'}"
             )
         return "✅ Пар больше нет ни сегодня, ни завтра!"
     except Exception as e:
@@ -256,8 +257,8 @@ def format_search_results(results: list[dict], empty_text: str) -> str:
         if e["date"] != last_date:
             lines.append(f"\n📅 <b>{DAY_NAMES[e['date'].weekday()]}, {e['date'].strftime('%d.%m')}</b>")
             last_date = e["date"]
-        teacher_part = f" · {e['teacher']}" if e.get("teacher") else ""
-        lines.append(f"⏰ {e['time']} — {e['summary']}{teacher_part}\n📍 {e['location'] or '—'}")
+        teacher_part = f" · {esc(e['teacher'])}" if e.get("teacher") else ""
+        lines.append(f"⏰ {e['time']} — {esc(e['summary'])}{teacher_part}\n📍 {esc(e['location']) or '—'}")
     if len(results) > 15:
         lines.append(f"\n… и ещё {len(results) - 15}")
     return "\n".join(lines).strip()

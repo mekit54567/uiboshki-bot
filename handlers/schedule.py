@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -14,6 +14,7 @@ from mirea_schedule_api import search_targets, get_baseinfo, fetch_ical, TARGET_
 from database import upsert_user, add_lesson_note, get_lesson_notes, get_or_create_calendar_token
 from keyboards import CANCEL_KB, MAIN_KB
 from config import WEBAPP_URL
+from utils import esc, split_by_lines, today_msk
 
 router = Router()
 
@@ -38,8 +39,8 @@ async def _notes_block(date_str: str) -> str:
         return ""
     lines = ["\n\n📌 <b>Заметки:</b>"]
     for n in notes:
-        subj = f"[{n['subject']}] " if n.get("subject") else ""
-        lines.append(f"• {subj}{n['text']}")
+        subj = f"[{esc(n['subject'])}] " if n.get("subject") else ""
+        lines.append(f"• {subj}{esc(n['text'])}")
     return "\n".join(lines)
 
 
@@ -49,7 +50,7 @@ async def cmd_today(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
     wait = await message.answer("⏳ Загружаю...")
     text = await get_today_schedule()
-    text += await _notes_block(date.today().isoformat())
+    text += await _notes_block(today_msk().isoformat())
     await wait.edit_text(text, parse_mode="HTML")
 
 
@@ -58,7 +59,7 @@ async def cmd_today(message: Message):
 async def cmd_tomorrow(message: Message):
     wait = await message.answer("⏳ Загружаю...")
     text = await get_tomorrow_schedule()
-    text += await _notes_block((date.today() + timedelta(days=1)).isoformat())
+    text += await _notes_block((today_msk() + timedelta(days=1)).isoformat())
     await wait.edit_text(text, parse_mode="HTML")
 
 
@@ -68,7 +69,7 @@ async def cmd_week(message: Message):
     wait = await message.answer("⏳ Загружаю неделю...")
     text = await get_week_schedule()
     await wait.delete()
-    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+    for chunk in split_by_lines(text):
         await message.answer(chunk, parse_mode="HTML")
 
 
@@ -78,7 +79,7 @@ async def cmd_next_week(message: Message):
     wait = await message.answer("⏳ Загружаю следующую неделю...")
     text = await get_next_week_schedule()
     await wait.delete()
-    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+    for chunk in split_by_lines(text):
         await message.answer(chunk, parse_mode="HTML")
 
 
@@ -140,6 +141,7 @@ def _target_pick_kb(results: list[dict], target_type: int) -> InlineKeyboardMark
 
 async def _render_target_schedule(target_id: int, target_type: int, title: str) -> str:
     emoji = _TARGET_EMOJI[target_type]
+    title = esc(title)
     ical = await fetch_ical(target_id, target_type)
     if ical is None:
         return f"{emoji} <b>{title}</b>\n\n⚠️ Не удалось получить расписание."
@@ -219,9 +221,9 @@ def _parse_quick_note(text: str) -> tuple[str, str, str] | None:
     _, day_word, rest = parts
     day_word = day_word.lower().strip()
     if day_word in ("сегодня", "today"):
-        d = date.today()
+        d = today_msk()
     elif day_word in ("завтра", "tomorrow"):
-        d = date.today() + timedelta(days=1)
+        d = today_msk() + timedelta(days=1)
     else:
         return None
     subject = ""
@@ -266,7 +268,7 @@ async def note_choose_day(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    day = date.today() if choice == "today" else date.today() + timedelta(days=1)
+    day = today_msk() if choice == "today" else today_msk() + timedelta(days=1)
     await state.update_data(note_date=day.isoformat())
     await state.set_state(NoteAdd.waiting_text)
     await callback.bot.send_message(

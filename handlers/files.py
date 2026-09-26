@@ -8,6 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from database import add_file, get_files, delete_file, search_files
 from config import STAROSTA_ID
 from keyboards import MAIN_KB, CANCEL_KB
+from utils import esc, today_msk
 
 router = Router()
 
@@ -97,10 +98,11 @@ async def files_by_subject(callback: CallbackQuery):
         return
 
     await callback.message.edit_text(
-        f"📁 <b>{title}</b> ({len(files)} файлов):",
+        f"📁 <b>{esc(title)}</b> ({len(files)} файлов):",
         parse_mode="HTML",
         reply_markup=files_keyboard(files)
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "fbk")
@@ -112,6 +114,7 @@ async def files_back(callback: CallbackQuery):
         parse_mode="HTML",
         reply_markup=subjects_keyboard(subjects)
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("fget:"))
@@ -126,7 +129,7 @@ async def send_file(callback: CallbackQuery, bot: Bot):
         await bot.send_document(
             callback.message.chat.id,
             f["file_id"],
-            caption=f"📄 {f['title']}\n📚 {f['subject']}"
+            caption=f"📄 {f['title']}" + (f"\n📚 {f['subject']}" if f.get("subject") else "")
         )
         await callback.answer()
     except Exception as e:
@@ -184,7 +187,7 @@ async def receive_subject(message: Message, state: FSMContext):
     lecture_note = "\n📖 Добавлен в контекст лекций для решалки." if got_text else ""
 
     await message.answer(
-        f"✅ Файл сохранён! (ID: {fid})\n📄 <b>{data['title']}</b>{lecture_note}",
+        f"✅ Файл сохранён! (ID: {fid})\n📄 <b>{esc(data['title'])}</b>{lecture_note}",
         parse_mode="HTML", reply_markup=MAIN_KB
     )
 
@@ -195,8 +198,22 @@ async def cmd_delfile(message: Message):
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /delfile ID")
         return
-    await delete_file(int(parts[1]))
-    await message.answer(f"🗑 Файл #{parts[1]} удалён.")
+    fid = int(parts[1])
+    f = next((x for x in await get_files() if x["id"] == fid), None)
+    if not f:
+        await message.answer("❌ Файл с таким ID не найден.")
+        return
+    # Раньше проверки не было вообще: любой участник мог удалить любой файл
+    # группы — и вместе с ним текст лекции из контекста решалки (delete_file
+    # чистит и file_text). Теперь — только тот, кто загрузил, или староста/зам.
+    # STAROSTA_ID не задан — как и у остальных админ-команд, без ограничений.
+    from handlers.announce import is_editor
+    if (STAROSTA_ID and f.get("uploaded_by") != message.from_user.id
+            and not await is_editor(message.from_user.id)):
+        await message.answer("❌ Удалить файл может только тот, кто его загрузил, или староста.")
+        return
+    await delete_file(fid)
+    await message.answer(f"🗑 Файл #{fid} удалён.")
 
 
 # ── Синхронизация файлов из локальной базы ────────────────────────────────────
@@ -222,10 +239,10 @@ async def cmd_syncfiles(message: Message):
 async def handle_sync_json(message: Message):
     if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
         return
-    if not message.document.file_name.endswith('.json'):
+    fname = (message.document.file_name or "").lower()
+    if not fname.endswith('.json'):
         return
 
-    fname = message.document.file_name.lower()
     is_files_sync     = 'files' in fname or 'export' in fname
     is_deadline_sync  = 'deadline' in fname
 
@@ -248,8 +265,7 @@ async def handle_sync_json(message: Message):
             else:
                 assignments = deadlines
 
-            from datetime import date
-            today = date.today().isoformat()
+            today = today_msk().isoformat()
 
             added = skipped = 0
             for d in assignments:

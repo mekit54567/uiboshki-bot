@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
-from groq_solver import solve_text, solve_image, solve_with_history, SUBJECTS
+from ai_solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from gemini_solver import solve_with_lecture_context
 from database import (
     upsert_user, add_solver_history, get_solver_history,
@@ -13,6 +13,7 @@ from database import (
 )
 from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
+from utils import esc, utc_to_msk_date
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -44,7 +45,7 @@ class LectureSolverState(StatesGroup):
 @router.message(F.text == "🤖 Решить")
 async def cmd_solve(message: Message, state: FSMContext):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    backend = "deepseek" if (message.text or "").startswith("/solve_ds") else "groq"
+    backend = "deepseek" if (message.text or "").startswith("/solve_ds") else "gemini"
     await state.update_data(backend=backend)
     await state.set_state(SolverState.choose_subject)
     label = " (🐋 DeepSeek)" if backend == "deepseek" else ""
@@ -60,12 +61,12 @@ async def choose_subject(message: Message, state: FSMContext):
         await state.clear()
         return
     data = await state.get_data()
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend)
     await state.set_state(SolverState.waiting_task)
-    note = "\n\n(фото — всегда через Groq, у DeepSeek нет зрения)" if backend == "deepseek" else ""
+    note = "\n\n(фото — всегда через Gemini, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
-        f"✅ Предмет: <b>{message.text}</b>\n\nПришли задачу — текстом или фото 📸{note}",
+        f"✅ Предмет: <b>{esc(message.text)}</b>\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
     await state.update_data(msg_ids=[msg.message_id])
@@ -125,7 +126,7 @@ async def send_answer(message: Message, state: FSMContext, answer: str):
 async def handle_first_task(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
         answer = await solve_text(message.text, subject, backend=backend)
@@ -184,7 +185,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
 async def handle_dialog(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     history = data.get("history", [])
     msg_ids = data.get("msg_ids", [])
 
@@ -219,9 +220,12 @@ async def cmd_history(message: Message):
         return
     lines = ["📜 <b>Последние 5 задач:</b>\n"]
     for i, h in enumerate(history, 1):
-        subj = f" [{h['subject']}]" if h.get("subject") else ""
-        task = h["task_text"][:80] + ("..." if len(h["task_text"]) > 80 else "")
-        lines.append(f"{i}.{subj} {task}\n   <i>{h['created_at'][:10]}</i>")
+        # Экранирование обязательно: в условиях задач постоянно встречаются
+        # "<"/">" ("x < 5"), и одна такая задача среди последних пяти
+        # раньше навсегда ломала /history ("can't parse entities").
+        subj = f" [{esc(h['subject'])}]" if h.get("subject") else ""
+        task = esc(h["task_text"][:80]) + ("..." if len(h["task_text"]) > 80 else "")
+        lines.append(f"{i}.{subj} {task}\n   <i>{utc_to_msk_date(h['created_at'])}</i>")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 
@@ -248,7 +252,7 @@ async def handle_plain_text(message: Message, state: FSMContext):
             return
 
     text = message.text
-    backend = "groq"
+    backend = "gemini"
     for prefix in ("дипсик:", "deepseek:", "через дипсик:"):
         if text.lower().startswith(prefix):
             backend = "deepseek"
@@ -309,7 +313,7 @@ async def lecture_choose_subject(message: Message, state: FSMContext):
     await state.update_data(subject=subject)
     await state.set_state(LectureSolverState.waiting_task)
     await message.answer(
-        f"✅ Предмет: <b>{subject}</b>\n\nПришли текст задания (практики) — решу, опираясь на лекции этого предмета.",
+        f"✅ Предмет: <b>{esc(subject)}</b>\n\nПришли текст задания (практики) — решу, опираясь на лекции этого предмета.",
         parse_mode="HTML", reply_markup=CANCEL_KB
     )
 

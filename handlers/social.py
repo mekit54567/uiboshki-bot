@@ -6,6 +6,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from database import create_vote, get_active_vote, add_vote_answer, get_vote_results, close_vote
 from config import STAROSTA_ID
+from utils import esc
 
 router = Router()
 
@@ -30,15 +31,9 @@ async def cmd_vote(message: Message):
         # Создать новое голосование
         question = parts[1].strip()
         vote_id  = await create_vote(question, message.from_user.id)
-        from database import get_all_subscribed_users
-        from aiogram import Bot
-        # Рассылаем всем
         kb = vote_keyboard(vote_id)
-        users = await get_all_subscribed_users()
-
-        # Сначала отвечаем создателю
         await message.answer(
-            f"🗳 <b>Голосование создано!</b>\n\n❓ {question}",
+            f"🗳 <b>Голосование создано!</b>\n\n❓ {esc(question)}",
             parse_mode="HTML", reply_markup=kb
         )
     else:
@@ -53,7 +48,7 @@ async def cmd_vote(message: Message):
             return
         results = await get_vote_results(vote["id"])
         total   = sum(results.values())
-        lines   = [f"🗳 <b>{vote['question']}</b>\n"]
+        lines   = [f"🗳 <b>{esc(vote['question'])}</b>\n"]
         for ans, cnt in results.items():
             pct  = int(cnt / total * 100) if total else 0
             bar  = "▓" * (pct // 10) + "░" * (10 - pct // 10)
@@ -76,7 +71,7 @@ async def handle_vote(callback: CallbackQuery):
 
     results = await get_vote_results(vote_id)
     total   = sum(results.values())
-    lines   = [f"🗳 <b>{vote['question']}</b>\n"]
+    lines   = [f"🗳 <b>{esc(vote['question'])}</b>\n"]
     for ans, cnt in results.items():
         pct  = int(cnt / total * 100) if total else 0
         bar  = "▓" * (pct // 10) + "░" * (10 - pct // 10)
@@ -92,6 +87,10 @@ async def cmd_closevote(message: Message):
     vote = await get_active_vote()
     if not vote:
         await message.answer("Нет активного голосования.")
+        return
+    # Раньше закрыть чужое голосование мог кто угодно.
+    if STAROSTA_ID and message.from_user.id not in (vote["created_by"], STAROSTA_ID):
+        await message.answer("❌ Закрыть голосование может только его автор или староста.")
         return
     await close_vote(vote["id"])
     await message.answer("✅ Голосование закрыто.")
@@ -131,7 +130,7 @@ async def send_anon(message: Message, state: FSMContext):
         bot = message.bot
         await bot.send_message(
             STAROSTA_ID,
-            f"❓ <b>Анонимный вопрос от группы:</b>\n\n{message.text}",
+            f"❓ <b>Анонимный вопрос от группы:</b>\n\n{esc(message.text)}",
             parse_mode="HTML"
         )
         await message.answer("✅ Вопрос отправлен старосте анонимно!")

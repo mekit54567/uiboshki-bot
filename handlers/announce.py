@@ -1,7 +1,4 @@
-import json
-import re
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import date
 
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
@@ -10,10 +7,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from database import get_all_subscribed_users, upsert_user
-from config import STAROSTA_ID, TIMEZONE
+from config import STAROSTA_ID
+from utils import esc, parse_day_month, today_msk, utc_to_msk_date
 
 router = Router()
-TZ = ZoneInfo(TIMEZONE)
 
 # ── Рассылка объявлений ───────────────────────────────────────────────────────
 
@@ -63,9 +60,15 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
             elif message.document:
                 await bot.send_document(uid, message.document.file_id,
                                         caption=f"📢 {message.caption or ''}")
-            else:
-                await bot.send_message(uid, f"📢 <b>Объявление от старосты:</b>\n\n{message.text}",
+            elif message.text:
+                # html_text, а не text: сохраняет форматирование старосты
+                # (жирный, ссылки) и экранирует "<", "&" — с сырым text любое
+                # "<3" или "R&D" в объявлении валило рассылку ВСЕМ получателям.
+                await bot.send_message(uid, f"📢 <b>Объявление от старосты:</b>\n\n{message.html_text}",
                                        parse_mode="HTML")
+            else:
+                # Голосовое, видео, стикер и т.п. — раньше уходило текстом "None".
+                await bot.copy_message(uid, message.chat.id, message.message_id)
             sent += 1
         except Exception:
             failed += 1
@@ -148,6 +151,9 @@ async def init_hw_table():
 
 
 async def get_setting(key: str) -> str | None:
+    # settings создаётся лениво в init_hw_table — без этого вызова is_editor
+    # на свежей базе (первый /addhw до любого /hw) падал с "no such table".
+    await init_hw_table()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cur = await db.execute("SELECT value FROM settings WHERE key=?", (key,))
         row = await cur.fetchone()
@@ -162,7 +168,10 @@ async def set_setting(key: str, value: str):
 
 async def is_editor(user_id: int) -> bool:
     zam = await get_setting("zam_id")
-    zam_id = int(zam) if zam else 0
+    # Без isdigit() одно кривое значение (например "/setzam @username" до
+    # появления проверки в cmd_setzam) навсегда роняло ValueError в каждом
+    # /hw и /addhw у всех.
+    zam_id = int(zam) if zam and zam.isdigit() else 0
     return user_id == STAROSTA_ID or user_id == zam_id
 
 
@@ -178,23 +187,17 @@ async def add_hw(subject: str, content: str, file_id: str, file_type: str, creat
         return cur.lastrowid
 
 
-def parse_lesson_date(raw: str) -> tuple[bool, str | None]:
+def parse_lesson_date(raw: str, today: date | None = None) -> tuple[bool, str | None]:
     """Разбор даты пары для привязки ДЗ (Фаза 12, календарь). Возвращает
     (валидно, значение): (True, None) — пропущено ("–"/"-", ДЗ без даты, как
     раньше), (True, "YYYY-MM-DD") — валидная дата, (False, None) — неверный
-    формат/несуществующая дата. Год по умолчанию — текущий (как в
-    handlers/deadlines.py: add_due_date), тот же формат ДД.ММ[.ГГГГ]."""
+    формат/несуществующая дата. Формат и выбор года без явного указания —
+    как у дедлайнов (/add), см. utils.parse_day_month."""
     raw = raw.strip()
     if raw in ("–", "-"):
         return True, None
-    match = re.match(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$", raw)
-    if not match:
-        return False, None
-    day, month, year = match.groups()
-    year = year or str(datetime.now(TZ).year)
-    try:
-        parsed = datetime(int(year), int(month), int(day)).date()
-    except ValueError:
+    parsed = parse_day_month(raw, today or today_msk())
+    if parsed is None:
         return False, None
     return True, parsed.isoformat()
 
@@ -270,14 +273,14 @@ async def hw_subject(callback: CallbackQuery):
     subject = subjects[idx]
     items = await get_hw_by_subject(subject)
 
-    lines = [f"📝 <b>{subject}</b>\n"]
+    lines = [f"📝 <b>{esc(subject)}</b>\n"]
     for item in items:
-        dt = item["created_at"][:10]
+        dt = utc_to_msk_date(item["created_at"])
         lesson_badge = ""
         if item.get("lesson_date"):
             from datetime import date as date_cls
             lesson_badge = f" 📅 к паре {date_cls.fromisoformat(item['lesson_date']).strftime('%d.%m')}"
-        lines.append(f"• {item['content'] or '[файл]'} <i>({dt})</i>{lesson_badge}")
+        lines.append(f"• {esc(item['content']) or '[файл]'} <i>({dt})</i>{lesson_badge}")
 
     can_edit = await is_editor(callback.from_user.id)
     kb = None
@@ -292,6 +295,7 @@ async def hw_subject(callback: CallbackQuery):
         ]])
 
     await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=kb)
+    await callback.answer()
 
     # Отправляем файлы если есть
     for item in items:
@@ -314,6 +318,7 @@ async def hw_back(callback: CallbackQuery):
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
     )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("hwdel:"))
@@ -351,6 +356,9 @@ async def cmd_addhw(message: Message, state: FSMContext):
 
 @router.message(HWAdd.subject)
 async def hw_subject_input(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("📚 Предмет пришли текстом.")
+        return
     await state.update_data(subject=message.text.strip())
     await state.set_state(HWAdd.content)
     await message.answer("📝 Текст ДЗ или прикрепи файл/фото:")
@@ -397,7 +405,7 @@ async def hw_lesson_date_input(message: Message, state: FSMContext):
         from datetime import date as date_cls
         date_note = f"\n📅 Привязано к паре {date_cls.fromisoformat(lesson_date).strftime('%d.%m.%Y')}"
     await message.answer(
-        f"✅ ДЗ добавлено в раздел <b>{data['subject']}</b>!{date_note}", parse_mode="HTML"
+        f"✅ ДЗ добавлено в раздел <b>{esc(data['subject'])}</b>!{date_note}", parse_mode="HTML"
     )
 
 
@@ -407,8 +415,11 @@ async def cmd_setzam(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     parts = message.text.split()
-    if len(parts) < 2:
-        await message.answer("Использование: /setzam ID\nНапример: /setzam 123456789")
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "Использование: /setzam ID (числовой Telegram ID, не @username)\n"
+            "Например: /setzam 123456789"
+        )
         return
     await init_hw_table()
     await set_setting("zam_id", parts[1])
@@ -440,7 +451,9 @@ async def cmd_rating(message: Message):
     lines = ["🏆 <b>Рейтинг активности</b>\n(по количеству решённых задач)\n"]
 
     for i, r in enumerate(rows):
-        name = r["full_name"] or f"@{r['username']}" or "Аноним"
-        lines.append(f"{medals[i]} {name} — {r['cnt']} задач")
+        # f"@{username}" всегда truthy (даже "@None"/"@"), поэтому "Аноним"
+        # раньше не показывался никогда — вместо него было "@None".
+        name = r["full_name"] or (f"@{r['username']}" if r["username"] else "Аноним")
+        lines.append(f"{medals[i]} {esc(name)} — {r['cnt']} задач")
 
     await message.answer("\n".join(lines), parse_mode="HTML")
