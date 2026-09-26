@@ -6,9 +6,15 @@
 такие фразы автоматически и роутить на существующие обработчики. Команды
 и кнопки остаются как раньше — это дополнительный, а не единственный путь.
 
-Использует маленькую быструю модель Groq отдельно от groq_solver.py
-(там модель заточена под решение задач с полным объяснением — сюда
-это не нужно, нужен один короткий токен-ответ).
+Использует Gemini (тот же gemini_solver._generate, что и решалка, но со
+своим коротким промптом — нужен один токен-ответ, а не решение). Раньше
+здесь был Groq — его API у владельца больше не работает.
+
+Каждый вызов тратит запрос из дневного лимита Gemini (общего с решалкой),
+поэтому длинные сообщения не классифицируем вовсе: "покажи дедлайны" и
+"когда следующая пара" — это короткие фразы, а текст длиннее
+MAX_CLASSIFY_CHARS — почти наверняка условие задачи, и он сразу идёт в
+решалку без лишнего запроса.
 
 Fail-safe: при любой ошибке (нет ключа, таймаут, неожиданный ответ) —
 возвращает "none", и вызывающий код просто ведёт себя как раньше
@@ -16,14 +22,12 @@ Fail-safe: при любой ошибке (нет ключа, таймаут, н
 """
 
 import logging
-import httpx
 
-from config import GROQ_API_KEY
+import gemini_solver
 
 logger = logging.getLogger(__name__)
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-CLASSIFIER_MODEL = "llama-3.1-8b-instant"
+MAX_CLASSIFY_CHARS = 300
 
 INTENTS = [
     "schedule_today", "schedule_tomorrow", "schedule_week", "schedule_next_week",
@@ -52,27 +56,22 @@ SYSTEM_PROMPT = (
 
 
 async def classify_intent(text: str) -> str:
-    if not GROQ_API_KEY or not text or len(text.strip()) < 3:
+    text = (text or "").strip()
+    if not gemini_solver.GEMINI_API_KEY or len(text) < 3 or len(text) > MAX_CLASSIFY_CHARS:
         return "none"
     try:
-        payload = {
-            "model": CLASSIFIER_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text[:500]},
-            ],
-            "max_tokens": 10,
-            "temperature": 0,
-        }
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.post(GROQ_URL, headers=headers, json=payload)
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"].strip().lower()
-            for intent in INTENTS:
-                if intent in raw:
-                    return intent
-            return "none"
+        # max_output_tokens не задаём: у моделей с "мышлением" служебные
+        # токены считаются в тот же лимит, и крошечный лимит дал бы пустой
+        # ответ. Одно слово на выходе модель и так вернёт по промпту.
+        raw = await gemini_solver.generate_text(
+            [{"role": "user", "content": text}], SYSTEM_PROMPT,
+            temperature=0, max_output_tokens=None, timeout=10,
+        )
+        raw = raw.strip().lower()
+        for intent in INTENTS:
+            if intent in raw:
+                return intent
+        return "none"
     except Exception as e:
         logger.warning(f"intent classify failed: {e}")
         return "none"

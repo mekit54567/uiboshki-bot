@@ -4,7 +4,7 @@ HTTP-бэкенд для Telegram WebApp (Mini App) бота УИБО-03-24.
 Отдельный процесс от bot.py (тот — чистый long polling, без HTTP), поднимается
 рядом: `uvicorn webapp.server:app --host 0.0.0.0 --port 8000`. Общая с ботом
 SQLite-база (config.DATABASE_PATH) и все существующие модули (database.py,
-schedule_parser.py, groq_solver.py) переиспользуются как есть — WebApp не
+schedule_parser.py, ai_solver.py) переиспользуются как есть — WebApp не
 дублирует логику, а просто даёт ей HTTP-фасад.
 
 Каждый запрос обязан нести initData (см. webapp/auth.py) в заголовке
@@ -190,7 +190,7 @@ class ChatBody(BaseModel):
 
 @app.post("/api/chat")
 async def api_chat(body: ChatBody, user: dict = CurrentUser):
-    from groq_solver import chat_with_reasoning
+    from ai_solver import chat_with_reasoning
     if not body.history:
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]

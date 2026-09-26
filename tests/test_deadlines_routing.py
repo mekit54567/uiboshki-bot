@@ -83,12 +83,12 @@ async def _feed(dp, bot, msg):
 
 @pytest.mark.asyncio
 async def test_add_flow_with_photo_description_and_strict_time(db, dp, bot, monkeypatch):
-    import groq_solver
+    import ai_solver
 
     async def fake_ocr(image_bytes, mime="image/jpeg"):
         return "Распознанный текст с фото задания"
 
-    monkeypatch.setattr(groq_solver, "extract_text_from_image", fake_ocr)
+    monkeypatch.setattr(ai_solver, "extract_text_from_image", fake_ocr)
 
     sess = bot.session
     await _feed(dp, bot, _make_message(text="/add"))

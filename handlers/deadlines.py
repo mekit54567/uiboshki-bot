@@ -154,7 +154,7 @@ async def add_subject(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.description, F.photo)
 async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
-    from groq_solver import extract_text_from_image
+    from ai_solver import extract_text_from_image
     from html import escape as html_escape
 
     wait = await message.answer("🔎 Распознаю текст с фото...")

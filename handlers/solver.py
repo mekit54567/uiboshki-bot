@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 
-from groq_solver import solve_text, solve_image, solve_with_history, SUBJECTS
+from ai_solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from gemini_solver import solve_with_lecture_context
 from database import (
     upsert_user, add_solver_history, get_solver_history,
@@ -45,7 +45,7 @@ class LectureSolverState(StatesGroup):
 @router.message(F.text == "🤖 Решить")
 async def cmd_solve(message: Message, state: FSMContext):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    backend = "deepseek" if (message.text or "").startswith("/solve_ds") else "groq"
+    backend = "deepseek" if (message.text or "").startswith("/solve_ds") else "gemini"
     await state.update_data(backend=backend)
     await state.set_state(SolverState.choose_subject)
     label = " (🐋 DeepSeek)" if backend == "deepseek" else ""
@@ -61,10 +61,10 @@ async def choose_subject(message: Message, state: FSMContext):
         await state.clear()
         return
     data = await state.get_data()
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     await state.update_data(subject=message.text.strip(), history=[], msg_ids=[], backend=backend)
     await state.set_state(SolverState.waiting_task)
-    note = "\n\n(фото — всегда через Groq, у DeepSeek нет зрения)" if backend == "deepseek" else ""
+    note = "\n\n(фото — всегда через Gemini, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
         f"✅ Предмет: <b>{esc(message.text)}</b>\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
@@ -126,7 +126,7 @@ async def send_answer(message: Message, state: FSMContext, answer: str):
 async def handle_first_task(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
         answer = await solve_text(message.text, subject, backend=backend)
@@ -185,7 +185,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
 async def handle_dialog(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
-    backend = data.get("backend", "groq")
+    backend = data.get("backend", "gemini")
     history = data.get("history", [])
     msg_ids = data.get("msg_ids", [])
 
@@ -252,7 +252,7 @@ async def handle_plain_text(message: Message, state: FSMContext):
             return
 
     text = message.text
-    backend = "groq"
+    backend = "gemini"
     for prefix in ("дипсик:", "deepseek:", "через дипсик:"):
         if text.lower().startswith(prefix):
             backend = "deepseek"
