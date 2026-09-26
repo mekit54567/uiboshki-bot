@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, Chat, User, Update
 
 from tests.test_deadlines_routing import FakeSession
-from utils import md_to_tg_html_chunks
+from utils import md_to_tg_html_chunks, pretty_math
 
 USER = User(id=222, is_bot=False, first_name="Alice")
 CHAT = Chat(id=222, type="private")
@@ -34,16 +34,41 @@ GEMINI_ANSWER = (
 
 def test_multiplication_asterisks_survive():
     html = md_to_tg_html_chunks("f'(x) = 3 * x^2 * ln(x) + x^2, а 2*3 = 6")[0]
-    assert html == "f'(x) = 3 * x^2 * ln(x) + x^2, а 2*3 = 6"
+    assert html == "f'(x) = 3 · x² · ln(x) + x², а 2·3 = 6"
+
+
+# ── читаемая математика ──────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("raw,expected", [
+    ("6^7", "6⁷"),
+    ("x^2 + y^(n+1)", "x² + yⁿ⁺¹"),
+    ("e^(-x), 10^-3, 10^{-3}", "e⁻ˣ, 10⁻³, 10⁻³"),
+    ("x**2 + y**2", "x² + y²"),
+    ("2^(1/3)", "2^(1/3)"),                       # "/" надстрочным не пишется — не трогаем
+    ("sqrt(x) и sqrt(x+1)", "√x и √(x+1)"),
+    ("x_1 + x_2 = a_n", "x₁ + x₂ = aₙ"),
+    ("file_name и snake_case", "file_name и snake_case"),
+    ("a <= b, c >= d, e != f, x -> 0, +-3", "a ≤ b, c ≥ d, e ≠ f, x → 0, ±3"),
+    (r"$\frac{a+b}{2}$ и \sqrt{16} = 4", "(a+b)/2 и √16 = 4"),
+    (r"\pi \approx 3.14, 5 \cdot 3 \times 2, \( x^{2} \)", "π ≈ 3.14, 5 · 3 × 2, x²"),
+    ("стоимость $100 и $200", "стоимость $100 и $200"),  # доллары — не формула
+])
+def test_pretty_math(raw, expected):
+    assert pretty_math(raw) == expected
+
+
+def test_code_keeps_raw_math():
+    html = md_to_tg_html_chunks("Итог: x^2 <= 4, в Python: `x**2 <= 4`")[0]
+    assert html == "Итог: x² ≤ 4, в Python: <code>x**2 &lt;= 4</code>"
 
 
 def test_headings_bold_rules_bullets_italic():
     html = md_to_tg_html_chunks(GEMINI_ANSWER)[0]
     assert "<b>1. Краткий ответ</b>" in html
     assert "###" not in html
-    assert "<b>f'(e) = 4 * e^2</b>" in html
+    assert "<b>f'(e) = 4 · e²</b>" in html
     assert "──────────" in html and "---" not in html
-    assert "• правило: (u * v)' = u' * v + u * v'" in html
+    assert "• правило: (u · v)' = u' · v + u · v'" in html
     assert "<i>отрицательный</i>" in html
     assert "x &lt; 1" in html
 
@@ -129,5 +154,5 @@ async def test_solve_answer_goes_out_as_html(db, dp, bot, monkeypatch):
     assert len(answers) == 1
     text, parse_mode = answers[0]
     assert parse_mode == "HTML"
-    assert "3 * x^2 * ln(x)" in text
+    assert "3 · x² · ln(x)" in text
     assert "<b>1. Краткий ответ</b>" in text
