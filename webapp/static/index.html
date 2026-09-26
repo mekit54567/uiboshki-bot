@@ -398,6 +398,15 @@ if (tg) {
   if (tp.text_color)          root.setProperty("--text", tp.text_color);
   if (tp.hint_color)          root.setProperty("--hint", tp.hint_color);
   if (tp.button_color)        root.setProperty("--accent", tp.button_color);
+  // Светлая тема Telegram: тёмные рамки и тяжёлая тень из тёмной палитры
+  // смотрелись грубо (замечено в живом тесте) — делаем их светлыми.
+  if (tg.colorScheme === "light") {
+    root.setProperty("--border", tp.section_separator_color || "#e4e6ea");
+    root.setProperty("--bg-raised", "#eceef1");
+    root.setProperty("--shadow", "0 2px 10px rgba(0,0,0,0.06)");
+  } else if (tp.section_separator_color) {
+    root.setProperty("--border", tp.section_separator_color);
+  }
 }
 
 function initData() {
