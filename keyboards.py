@@ -47,16 +47,18 @@ STOP_DIALOG_KB = ReplyKeyboardMarkup(
 )
 
 ACTIONS_KB = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="➕ Добавить дедлайн",     callback_data="act:add_deadline")],
-    [InlineKeyboardButton(text="🐋 Решить через DeepSeek",  callback_data="act:solve_ds")],
-    [InlineKeyboardButton(text="📖 Решить по лекциям",     callback_data="act:solve_lectures")],
-    [InlineKeyboardButton(text="📆 След. неделя",          callback_data="act:nextweek")],
-    [InlineKeyboardButton(text="🗳 Голосование",           callback_data="act:vote")],
-    [InlineKeyboardButton(text="🗣 Подслушано (на группу)", callback_data="act:feed")],
-    [InlineKeyboardButton(text="❓ Вопрос старосте (лично)", callback_data="act:anon")],
-    [InlineKeyboardButton(text="➕ Добавить ДЗ",           callback_data="act:add_hw")],
-    [InlineKeyboardButton(text="📜 История решений",       callback_data="act:history")],
-    [InlineKeyboardButton(text="🔔 Подписка вкл/выкл",     callback_data="act:subscribe")],
+    [InlineKeyboardButton(text="➕ Дедлайн",             callback_data="act:add_deadline"),
+     InlineKeyboardButton(text="📤 Загрузить файлы",     callback_data="act:upload")],
+    [InlineKeyboardButton(text="📆 След. неделя",        callback_data="act:nextweek"),
+     InlineKeyboardButton(text="🔍 Чужое расписание",    callback_data="act:lookup")],
+    [InlineKeyboardButton(text="📖 Решить по лекциям",   callback_data="act:solve_lectures"),
+     InlineKeyboardButton(text="📜 История решений",     callback_data="act:history")],
+    [InlineKeyboardButton(text="🗳 Голосование",         callback_data="act:vote"),
+     InlineKeyboardButton(text="🗣 Подслушано",          callback_data="act:feed")],
+    [InlineKeyboardButton(text="❓ Вопрос старосте",      callback_data="act:anon"),
+     InlineKeyboardButton(text="➕ ДЗ (староста)",        callback_data="act:add_hw")],
+    [InlineKeyboardButton(text="🐋 Через DeepSeek",      callback_data="act:solve_ds"),
+     InlineKeyboardButton(text="⚙️ Настройки",           callback_data="act:settings")],
 ])
 
 # Все тексты, которые появляются хоть на одной клавиатуре бота (reply-кнопки).

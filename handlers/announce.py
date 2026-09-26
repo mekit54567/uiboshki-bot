@@ -8,7 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from database import get_all_subscribed_users, upsert_user
 from config import STAROSTA_ID
-from utils import esc, parse_day_month, today_msk, utc_to_msk_date
+from utils import esc, parse_day_month, today_msk, utc_to_msk_date, plural
 
 router = Router()
 
@@ -454,6 +454,6 @@ async def cmd_rating(message: Message):
         # f"@{username}" всегда truthy (даже "@None"/"@"), поэтому "Аноним"
         # раньше не показывался никогда — вместо него было "@None".
         name = r["full_name"] or (f"@{r['username']}" if r["username"] else "Аноним")
-        lines.append(f"{medals[i]} {esc(name)} — {r['cnt']} задач")
+        lines.append(f"{medals[i]} {esc(name)} — {r['cnt']} {plural(r['cnt'], 'задача', 'задачи', 'задач')}")
 
     await message.answer("\n".join(lines), parse_mode="HTML")

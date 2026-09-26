@@ -82,6 +82,16 @@ def parse_day_month(raw: str, today: date) -> date | None:
     return None
 
 
+def plural(n: int, one: str, few: str, many: str) -> str:
+    """plural(3, "задача", "задачи", "задач") -> "задачи" (1 задача, 3 задачи, 5 задач)."""
+    n10, n100 = n % 10, n % 100
+    if n10 == 1 and n100 != 11:
+        return one
+    if 2 <= n10 <= 4 and not 12 <= n100 <= 14:
+        return few
+    return many
+
+
 def utc_to_msk_date(sqlite_ts: str) -> str:
     """created_at из SQLite (datetime('now') — это UTC без таймзоны) ->
     дата "YYYY-MM-DD" по Москве, для показа пользователю. Иначе запись,
