@@ -230,8 +230,12 @@
   }
 
   /* Чат */
-  .chat-wrap { display: flex; flex-direction: column; height: calc(100vh - 180px); min-height: 320px; }
-  .chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+  /* Поле ввода закреплено над панелью вкладок, как в мессенджерах. Раньше
+     чат был высотой calc(100vh - 180px): внутри Telegram 100vh не равен
+     видимой высоте окна, и поле ввода уезжало под панель вкладок — писать
+     было нельзя (живой тест). --nav-h выставляет JS по реальной высоте панели. */
+  .chat-wrap { padding-bottom: calc(var(--nav-h, 64px) + 80px); }
+  .chat-log { display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
   .msg.bot  { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
@@ -264,8 +268,14 @@
 
   .chat-input-row {
     display: flex; gap: 8px;
-    padding-top: 8px;
+    position: fixed; left: 0; right: 0; z-index: 9;
+    bottom: var(--nav-h, 64px);
+    padding: 8px 14px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
   }
+  body.typing nav.tabs { display: none; }
+  body.typing .chat-input-row { bottom: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
   .chat-input-row textarea {
     flex: 1;
     resize: none;
@@ -273,8 +283,9 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: var(--radius-sm);
-    padding: 11px 14px;
-    font-size: 14px;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 16px; /* меньше 16px — iOS при фокусе приближает страницу */
     max-height: 100px;
   }
   .chat-input-row button {
@@ -692,7 +703,7 @@ function appendMsg(role, content, reasoning, html) {
     div.appendChild(det);
   }
   log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
+  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
   return div;
 }
 
@@ -701,6 +712,7 @@ async function sendChat() {
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
+  input.style.height = "auto";
   const btn = document.getElementById("chat-send");
   btn.disabled = true;
 
@@ -721,6 +733,31 @@ async function sendChat() {
     btn.disabled = false;
   }
 }
+
+// Высота панели вкладок (с учётом «безопасной зоны» внизу iPhone) — для
+// поля ввода чата, которое стоит прямо над ней.
+function syncNavHeight() {
+  const nav = document.querySelector("nav.tabs");
+  if (nav && nav.offsetHeight) document.documentElement.style.setProperty("--nav-h", nav.offsetHeight + "px");
+}
+syncNavHeight();
+window.addEventListener("resize", syncNavHeight);
+if (tg && tg.onEvent) tg.onEvent("viewportChanged", syncNavHeight);
+
+// Пока открыта клавиатура — панель вкладок прячем, поле ввода опускаем вниз.
+const chatInput = document.getElementById("chat-input");
+chatInput.addEventListener("focus", () => document.body.classList.add("typing"));
+chatInput.addEventListener("blur", () => setTimeout(() => {
+  document.body.classList.remove("typing");
+  syncNavHeight();
+  // панель вкладок вернулась и подняла поле ввода — докручиваем, чтобы
+  // последний ответ не остался под ним
+  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+}, 150));
+chatInput.addEventListener("input", () => {
+  chatInput.style.height = "auto";
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + "px";
+});
 
 document.getElementById("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
