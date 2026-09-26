@@ -131,6 +131,29 @@ def parse_deadlines(html: str) -> list[dict]:
     return results
 
 
+# Метка семестра в названии курса СДО: «Архитектура_Экзамен [I.26-27]» —
+# первый (осенний) семестр 2026/27, «[II.25-26]» — весенний 2025/26.
+# Владелец: дедлайны курсов прошлого семестра не нужны.
+_SEM_TAG = re.compile(r"\[\s*(I{1,2})\s*\.\s*(\d{2})\s*-\s*(\d{2})\s*\]")
+
+
+def current_semester_tag(today=None) -> str:
+    """Сентябрь–январь (с сессией) — «I.26-27», февраль–июль — «II.25-26».
+    С августа — уже осенний: курсы на новый год открывают заранее."""
+    d = today or datetime.now(TZ).date()
+    if d.month >= 8:
+        return f"I.{d.year % 100:02d}-{(d.year + 1) % 100:02d}"
+    if d.month == 1:
+        return f"I.{(d.year - 1) % 100:02d}-{d.year % 100:02d}"
+    return f"II.{(d.year - 1) % 100:02d}-{d.year % 100:02d}"
+
+
+def is_old_semester(text: str, today=None) -> bool:
+    """Есть метка семестра, и она не нынешняя. Без метки — не знаем, не трогаем."""
+    tags = [f"{a}.{b}-{c}" for a, b, c in _SEM_TAG.findall(text or "")]
+    return bool(tags) and current_semester_tag(today) not in tags
+
+
 async def fetch_calendar_events(client: httpx.AsyncClient, months: int = CALENDAR_MONTHS) -> list[dict] | None:
     """Все события календаря за months месяцев начиная с текущего (JSON
     Moodle). None — AJAX недоступен, пусть работает запасной путь."""
@@ -235,6 +258,8 @@ async def sync_deadlines() -> dict:
         return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": str(e)}
 
     added = updated = skipped = 0
+    old = [i for i in items if is_old_semester(i["subject"])]
+    items = [i for i in items if not is_old_semester(i["subject"])]
 
     for item in items:
         existing = await get_deadline_by_external_id(item["external_id"])
@@ -259,5 +284,5 @@ async def sync_deadlines() -> dict:
         )
         added += 1
 
-    logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}")
-    return {"added": added, "updated": updated, "skipped": skipped, "expired": False}
+    logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}, прошлый семестр {len(old)}")
+    return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old), "expired": False}

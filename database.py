@@ -491,6 +491,15 @@ async def get_deadline(did: int) -> dict | None:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
+async def get_sdo_deadlines() -> list[dict]:
+    """Все дедлайны, пришедшие из СДО (для /sdoclean)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM deadlines WHERE external_id LIKE 'sdo:%' ORDER BY due_date, due_time")
+        return [dict(r) for r in await cursor.fetchall()]
+
+
 async def delete_deadline(did: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM deadline_done WHERE deadline_id=?", (did,))

@@ -429,8 +429,11 @@ def _sdo_report(courses, known: set[str]) -> tuple[list[str], int]:
         f"{total} {plural(total, 'файл', 'файла', 'файлов')}</b> (новых: {new})",
         "Это пробный прогон — ничего не сохранил. Проверь, куда что ляжет:",
     ]
-    empty = []
+    empty, old = [], []
     for c in courses:
+        if c.old:
+            old.append(c.name)
+            continue
         if c.error:
             lines.append(f"\n⚠️ <b>{esc(c.name)}</b> — не прочиталось: {esc(c.error[:120])}")
             continue
@@ -446,6 +449,8 @@ def _sdo_report(courses, known: set[str]) -> tuple[list[str], int]:
         lines.append(f"\n<b>{esc(c.name)}</b>\n→ 📁 {esc(c.subject)} · {len(c.files)}: {by_type}{state}")
     if empty:
         lines.append(f"\nБез файлов: {esc(', '.join(empty))}")
+    if old:
+        lines.append(f"\nПрошлый семестр — пропустил: {esc(', '.join(old))}")
     lines.append("\nПредмет и тип потом можно поправить в WebApp (✏️ у файла).")
     chunks, cur = [], ""
     for line in lines:

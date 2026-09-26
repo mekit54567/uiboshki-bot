@@ -122,3 +122,68 @@ def test_upcoming_page_also_takes_quizzes():
     <div data-type="event" data-event-component="mod_feedback" data-event-eventtype="close"
          data-event-id="78" data-event-title="Опрос"><a href="{BASE}/x?time=4102444800">Когда</a></div>"""
     assert [d["external_id"] for d in sdo_parser.parse_deadlines(html)] == ["sdo:77"]
+
+
+# ── прошлый семестр ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("day,tag", [
+    ("2026-09-26", "I.26-27"), ("2026-12-30", "I.26-27"), ("2027-01-20", "I.26-27"),
+    ("2027-02-10", "II.26-27"), ("2027-06-30", "II.26-27"), ("2027-08-25", "I.27-28"),
+])
+def test_current_semester_tag(day, tag):
+    from datetime import date
+    assert sdo_parser.current_semester_tag(date.fromisoformat(day)) == tag
+
+
+def test_is_old_semester():
+    from datetime import date
+    d = date(2026, 9, 26)
+    assert sdo_parser.is_old_semester("ПР 3 (Анализ данных [II.25-26])", d)
+    assert not sdo_parser.is_old_semester("ПР 1 (Архитектура_Экзамен [I.26-27])", d)
+    assert not sdo_parser.is_old_semester("Тест (Физкультура)", d)          # без метки — не трогаем
+
+
+@pytest.mark.asyncio
+async def test_sync_skips_old_semester_and_sdoclean_removes_them(db, monkeypatch):
+    import time
+    from aiogram import Dispatcher
+    from aiogram.fsm.storage.memory import MemoryStorage
+    from aiogram.types import CallbackQuery, Chat, Message, Update, User
+    from handlers.deadlines import router
+    from tests.conftest import STAROSTA_ID
+    from tests.test_sdo_files import _BotSession
+    from aiogram import Bot
+
+    cur, old = sdo_parser.current_semester_tag(), "II.10-11"
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
+
+    async def calendar():
+        return [
+            {"external_id": "sdo:1", "subject": f"ПР 1 (Анализ [{cur}])", "description": "", "due_date": "2099-10-01", "due_time": "23:59"},
+            {"external_id": "sdo:2", "subject": f"ПР 9 (Старое [{old}])", "description": "", "due_date": "2099-10-02", "due_time": "23:59"},
+        ]
+
+    monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", calendar)
+    res = await sdo_parser.sync_deadlines()
+    assert (res["added"], res["old_semester"]) == (1, 1)
+    assert await db.get_deadline_by_external_id("sdo:2") is None
+
+    # а уже заведённые раньше — чистит /sdoclean после подтверждения
+    stale = await db.add_deadline(f"Тест 3 (Старое [{old}])", "", "2099-10-05", "23:59", 0, external_id="sdo:3")
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_BotSession())
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(router)
+    user = User(id=STAROSTA_ID, is_bot=False, first_name="С")
+    chat = Chat(id=STAROSTA_ID, type="private")
+    try:
+        msg = Message(message_id=1, date=0, chat=chat, from_user=user, text="/sdoclean")
+        await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, message=msg))
+        assert "Дедлайны прошлых семестров: 1" in bot.session.sent_texts[-1][1]
+        assert await db.get_deadline(stale)                                   # до кнопки — на месте
+        cb = CallbackQuery(id="1", from_user=user, chat_instance="c", data="sdoclean:go",
+                           message=Message(message_id=2, date=0, chat=chat, text="…"))
+        await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9 + 1, callback_query=cb))
+    finally:
+        router._parent_router = None
+    assert await db.get_deadline(stale) is None
+    assert await db.get_deadline_by_external_id("sdo:1")                     # нынешний — не тронут

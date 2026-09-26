@@ -59,6 +59,7 @@ class SdoCourse:
     subject: str
     files: list[SdoFile] = field(default_factory=list)
     error: str = ""
+    old: bool = False               # курс прошлого семестра — не выгружаем
 
 
 def make_client(cookie: str) -> httpx.AsyncClient:
@@ -265,9 +266,13 @@ async def scan_course(client: httpx.AsyncClient, course: dict, subject: str) -> 
 
 
 async def scan(client: httpx.AsyncClient, subjects: list[str]) -> list[SdoCourse]:
+    from sdo_parser import is_old_semester
     courses = await list_courses(client)
     out = []
     for c in courses:
+        if is_old_semester(c["name"]):   # «…[II.25-26]» осенью — прошлый семестр, владельцу не нужен
+            out.append(SdoCourse(id=c["id"], name=c["name"], subject="", old=True))
+            continue
         out.append(await scan_course(client, c, match_subject(c["name"], subjects)))
     return out
 
