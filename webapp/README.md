@@ -45,6 +45,10 @@ WebApp вне Telegram покажет «Не удалось авторизова
   (поле `done` — это и есть чекбокс доски ДЗ, отдельной сущности "homework"
   в базе нет, см. PLAN.md)
 - `POST /api/deadlines/{id}/toggle` `{"done": true|false}`
+- `GET  /api/search?q=&type=` — преподаватели/группы/аудитории по
+  подстроке (`type`: 0 все, 1 группы, 2 преподаватели, 3 аудитории) из своего
+  справочника (`schedule_index.py`); `ready: false` — он ещё собирается
+- `GET  /api/target/{type}/{id}` — `{"title", "html"}`: расписание на 2 недели
 - `GET  /api/files?q=&subject=`
 - `GET  /api/notes?date=YYYY-MM-DD`
 - `GET  /api/calendar/link` — возвращает `{"token", "ics_path"}` для личной
