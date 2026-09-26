@@ -19,6 +19,7 @@ CORS открыт всем источникам (allow_origins=["*"]) — это
 """
 
 import logging
+import re
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -676,5 +677,25 @@ async def ics_feed(token: str):
 
 
 # ── Статика фронтенда (должна идти последней — ловит всё остальное) ─────────
+
+_ASSET_RE = re.compile(r'(src|href)="((?:js/[\w-]+\.js)|app\.css)"')
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def index_page():
+    """index.html со ссылками на стили и скрипты с меткой версии (?v=хэш
+    содержимого): WebApp Telegram держит старые файлы в кэше, и после
+    выкатки у части людей был бы новый HTML со старым JS."""
+    import hashlib
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    def versioned(m):
+        digest = hashlib.sha1((STATIC_DIR / m.group(2)).read_bytes()).hexdigest()[:10]
+        return f'{m.group(1)}="{m.group(2)}?v={digest}"'
+
+    return Response(_ASSET_RE.sub(versioned, html), media_type="text/html",
+                    headers={"Cache-Control": "no-cache"})
+
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
