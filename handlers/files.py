@@ -206,8 +206,10 @@ async def cmd_delfile(message: Message):
     # Раньше проверки не было вообще: любой участник мог удалить любой файл
     # группы — и вместе с ним текст лекции из контекста решалки (delete_file
     # чистит и file_text). Теперь — только тот, кто загрузил, или староста/зам.
+    # STAROSTA_ID не задан — как и у остальных админ-команд, без ограничений.
     from handlers.announce import is_editor
-    if f.get("uploaded_by") != message.from_user.id and not await is_editor(message.from_user.id):
+    if (STAROSTA_ID and f.get("uploaded_by") != message.from_user.id
+            and not await is_editor(message.from_user.id)):
         await message.answer("❌ Удалить файл может только тот, кто его загрузил, или староста.")
         return
     await delete_file(fid)

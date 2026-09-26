@@ -114,13 +114,6 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
             sent = await bot.send_photo(GROUP_CHAT_ID, photo_file_id, caption=caption, parse_mode="HTML")
         else:
             sent = await bot.send_message(GROUP_CHAT_ID, caption, parse_mode="HTML")
-
-        await set_feed_post_message_id(post_id, sent.message_id)
-        await bot.edit_message_reply_markup(
-            GROUP_CHAT_ID, sent.message_id,
-            reply_markup=feed_keyboard(post_id, {})
-        )
-        await message.answer("✅ Опубликовано анонимно!")
     except Exception as e:
         logger.error(f"Не удалось опубликовать в ленту: {e}")
         # Пост так и не появился в группе — помечаем удалённым, иначе
@@ -132,6 +125,19 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
             f"❌ Не смог опубликовать в группу ({e}). "
             "Возможно, бота нет в группе или у него нет прав постить."
         )
+        return
+
+    # Дальше пост уже в группе — сбой кнопок-реакций не делает его
+    # неопубликованным (иначе автор увидел бы "не смог" и запостил дубль).
+    await set_feed_post_message_id(post_id, sent.message_id)
+    try:
+        await bot.edit_message_reply_markup(
+            GROUP_CHAT_ID, sent.message_id,
+            reply_markup=feed_keyboard(post_id, {})
+        )
+    except Exception as e:
+        logger.warning(f"Пост #{post_id} опубликован, но кнопки реакций не повесились: {e}")
+    await message.answer("✅ Опубликовано анонимно!")
 
 
 @router.callback_query(F.data.startswith("freact:"))

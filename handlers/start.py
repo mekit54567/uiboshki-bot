@@ -5,7 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from database import upsert_user, set_subscription, get_user
 from config import GROUP_NAME, STAROSTA_ID, WEBAPP_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from keyboards import MAIN_KB, ACTIONS_KB, webapp_keyboard
-from utils import esc
+from utils import esc, split_by_lines
 
 router = Router()
 
@@ -107,7 +107,7 @@ async def handle_action(callback: CallbackQuery):
         wait = await callback.bot.send_message(callback.from_user.id, "⏳ Загружаю следующую неделю...")
         text = await get_next_week_schedule()
         await callback.bot.delete_message(callback.from_user.id, wait.message_id)
-        for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+        for chunk in split_by_lines(text):
             await callback.bot.send_message(callback.from_user.id, chunk, parse_mode="HTML")
 
     elif action == "vote":

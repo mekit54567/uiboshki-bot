@@ -13,7 +13,7 @@ from database import (
 )
 from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
-from utils import esc
+from utils import esc, utc_to_msk_date
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -225,7 +225,7 @@ async def cmd_history(message: Message):
         # раньше навсегда ломала /history ("can't parse entities").
         subj = f" [{esc(h['subject'])}]" if h.get("subject") else ""
         task = esc(h["task_text"][:80]) + ("..." if len(h["task_text"]) > 80 else "")
-        lines.append(f"{i}.{subj} {task}\n   <i>{h['created_at'][:10]}</i>")
+        lines.append(f"{i}.{subj} {task}\n   <i>{utc_to_msk_date(h['created_at'])}</i>")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 

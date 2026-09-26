@@ -15,7 +15,7 @@ from aiogram.types import Message, Chat, User, Update
 import handlers.announce as announce
 from tests.conftest import STAROSTA_ID
 from tests.test_deadlines_routing import FakeSession
-from utils import esc, parse_day_month
+from utils import esc, parse_day_month, split_by_lines, utc_to_msk_date
 
 USER = User(id=222, is_bot=False, first_name="Alice")
 STAROSTA = User(id=STAROSTA_ID, is_bot=False, first_name="Starosta")
@@ -35,12 +35,31 @@ def test_esc():
     ("30.05", date(2026, 9, 26), date(2026, 5, 30)),        # недавнее прошлое — текущий год
     ("1.3", date(2026, 9, 26), date(2027, 3, 1)),           # больше полугода назад → вперёд
     ("15.01.2026", date(2026, 12, 20), date(2026, 1, 15)),  # явный год не трогаем
+    ("29.02", date(2027, 12, 1), date(2028, 2, 29)),        # до високосного — следующий год
+    ("29.02", date(2028, 3, 1), date(2028, 2, 29)),         # вчерашнее 29.02 остаётся
+    ("29.02", date(2026, 9, 26), None),                     # ни в этом, ни в следующем году
     ("31.02", date(2026, 9, 26), None),
     ("30-05", date(2026, 9, 26), None),
     ("", date(2026, 9, 26), None),
 ])
 def test_parse_day_month(raw, today, expected):
     assert parse_day_month(raw, today) == expected
+
+
+def test_utc_to_msk_date():
+    assert utc_to_msk_date("2026-09-25 22:30:00") == "2026-09-26"  # 01:30 МСК
+    assert utc_to_msk_date("2026-09-25 12:00:00") == "2026-09-25"
+    assert utc_to_msk_date("мусор") == "мусор"
+
+
+def test_split_by_lines_never_cuts_inside_a_line():
+    line = "┌ <b>Пара 1</b>  ⏰ 09:00–10:30 │ 📖 R&amp;D"
+    text = "\n".join([line] * 300)
+    chunks = split_by_lines(text, limit=1000)
+    assert len(chunks) > 1
+    assert all(len(c) <= 1000 for c in chunks)
+    assert all(l == line for c in chunks for l in c.split("\n"))
+    assert "\n".join(chunks) == text
 
 
 # ── Экранирование HTML в форматтерах ────────────────────────────────────────
@@ -311,3 +330,41 @@ async def test_history_escapes_task_text(db, make_dp, bot):
     await _feed(dp, bot, "/history")
     text = next(t for _, t in sess.sent_texts if "Последние" in t)
     assert "x &lt; 5 &amp; y &gt; 2" in text
+
+
+@pytest.mark.asyncio
+async def test_feed_post_published_but_reactions_failed_is_not_marked_deleted(db, monkeypatch):
+    """Пост уже ушёл в группу, упало только навешивание кнопок — это не
+    "не смог опубликовать": иначе автор без кулдауна постит дубль."""
+    import handlers.feed as feed
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+
+    monkeypatch.setattr(feed, "GROUP_CHAT_ID", -100)
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, **kwargs):
+            class Sent:
+                message_id = 777
+            return Sent()
+
+        async def edit_message_reply_markup(self, *args, **kwargs):
+            raise RuntimeError("Too Many Requests: retry after 5")
+
+    answers = []
+
+    class FakeMessage:
+        text = "Кто-нибудь видел мои наушники?"
+        caption = None
+        photo = None
+        from_user = USER
+
+        async def answer(self, text, **kwargs):
+            answers.append(text)
+
+    state = FSMContext(storage=MemoryStorage(), key=StorageKey(bot_id=1, chat_id=USER.id, user_id=USER.id))
+    await feed.publish_feed_post(FakeMessage(), state, FakeBot())
+
+    assert any("Опубликовано" in a for a in answers)
+    post = await db.get_feed_post(1)
+    assert post["deleted"] == 0 and post["message_id"] == 777

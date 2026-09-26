@@ -14,7 +14,7 @@ from mirea_schedule_api import search_targets, get_baseinfo, fetch_ical, TARGET_
 from database import upsert_user, add_lesson_note, get_lesson_notes, get_or_create_calendar_token
 from keyboards import CANCEL_KB, MAIN_KB
 from config import WEBAPP_URL
-from utils import esc, today_msk
+from utils import esc, split_by_lines, today_msk
 
 router = Router()
 
@@ -69,7 +69,7 @@ async def cmd_week(message: Message):
     wait = await message.answer("⏳ Загружаю неделю...")
     text = await get_week_schedule()
     await wait.delete()
-    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+    for chunk in split_by_lines(text):
         await message.answer(chunk, parse_mode="HTML")
 
 
@@ -79,7 +79,7 @@ async def cmd_next_week(message: Message):
     wait = await message.answer("⏳ Загружаю следующую неделю...")
     text = await get_next_week_schedule()
     await wait.delete()
-    for chunk in [text[i:i+4000] for i in range(0, len(text), 4000)]:
+    for chunk in split_by_lines(text):
         await message.answer(chunk, parse_mode="HTML")
 
 

@@ -8,7 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from database import get_all_subscribed_users, upsert_user
 from config import STAROSTA_ID
-from utils import esc, parse_day_month, today_msk
+from utils import esc, parse_day_month, today_msk, utc_to_msk_date
 
 router = Router()
 
@@ -275,7 +275,7 @@ async def hw_subject(callback: CallbackQuery):
 
     lines = [f"📝 <b>{esc(subject)}</b>\n"]
     for item in items:
-        dt = item["created_at"][:10]
+        dt = utc_to_msk_date(item["created_at"])
         lesson_badge = ""
         if item.get("lesson_date"):
             from datetime import date as date_cls
