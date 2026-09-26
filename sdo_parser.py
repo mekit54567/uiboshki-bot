@@ -143,6 +143,9 @@ async def sync_deadlines() -> dict:
 
     for item in items:
         existing = await get_deadline_by_external_id(item["external_id"])
+        if existing and existing.get("manual_edit"):
+            skipped += 1  # староста поправил вручную — его версия главнее СДО
+            continue
         if existing:
             fresh = (item["subject"], item["due_date"], item["due_time"])
             if (existing["subject"], existing["due_date"], existing["due_time"]) != fresh:

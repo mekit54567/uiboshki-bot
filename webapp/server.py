@@ -243,10 +243,14 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
 @app.get("/api/deadlines")
 async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
     from database import get_active_deadlines, get_deadline_stats, is_shared_deadline
+    from handlers.announce import is_editor
     items = await get_active_deadlines(user["id"], include_done=include_done)
+    editor = await is_editor(user["id"])
     for d in items:
         d["personal"] = not is_shared_deadline(d)
         d["mine"] = d.get("created_by") == user["id"]
+        # Править/удалять: свой личный — автор, общий — староста и зам.
+        d["can_edit"] = (d["personal"] and d["mine"]) or (not d["personal"] and editor)
     stats = await get_deadline_stats(user["id"])
     return {"items": items, "stats": stats}
 
@@ -258,12 +262,8 @@ class NewDeadline(BaseModel):
     description: str = ""
 
 
-@app.post("/api/deadlines")
-async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
-    """Свой (личный) дедлайн из WebApp — как /add в боте: виден только
-    автору. Общие дедлайны группы по-прежнему заводит староста/СДО."""
+def _validate_deadline(body: NewDeadline) -> tuple[str, str, str | None, str]:
     from datetime import date as date_cls
-    from database import add_deadline
     from handlers.deadlines import parse_due_time
     subject = body.subject.strip()
     if not subject or len(subject) > 200:
@@ -277,19 +277,51 @@ async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
         ok, due_time = parse_due_time(body.due_time)
         if not ok:
             raise HTTPException(status_code=400, detail="время в формате ЧЧ:ММ")
-    did = await add_deadline(subject, body.description.strip()[:1500], due.isoformat(), due_time, user["id"])
+    return subject, due.isoformat(), due_time, body.description.strip()[:1500]
+
+
+async def _can_edit_deadline(existing: dict, user_id: int) -> bool:
+    from database import is_shared_deadline
+    from handlers.announce import is_editor
+    if is_shared_deadline(existing):
+        return await is_editor(user_id)
+    return existing["created_by"] == user_id
+
+
+@app.post("/api/deadlines")
+async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
+    """Свой (личный) дедлайн из WebApp — как /add в боте: виден только
+    автору. Общие дедлайны группы по-прежнему заводит староста/СДО."""
+    from database import add_deadline
+    subject, due, due_time, desc = _validate_deadline(body)
+    did = await add_deadline(subject, desc, due, due_time, user["id"])
     return {"ok": True, "id": did}
+
+
+@app.patch("/api/deadlines/{deadline_id}")
+async def api_deadline_edit(deadline_id: int, body: NewDeadline, user: dict = CurrentUser):
+    """Правка дедлайна: свой личный — автор, общий (в т.ч. из СДО) —
+    староста и зам. Отредактированный общий автосинк СДО больше не трогает."""
+    from database import edit_deadline, get_deadline
+    existing = await get_deadline(deadline_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="дедлайн не найден")
+    if not await _can_edit_deadline(existing, user["id"]):
+        raise HTTPException(status_code=403, detail="общий дедлайн правит староста, личный — автор")
+    subject, due, due_time, desc = _validate_deadline(body)
+    await edit_deadline(deadline_id, subject, desc, due, due_time)
+    return {"ok": True, "id": deadline_id}
 
 
 @app.delete("/api/deadlines/{deadline_id}")
 async def api_deadline_delete(deadline_id: int, user: dict = CurrentUser):
-    """Удалить можно только свой личный дедлайн (общие — староста в боте)."""
-    from database import delete_deadline, get_deadline, is_shared_deadline
+    """Свой личный — автор, общий — староста и зам."""
+    from database import delete_deadline, get_deadline
     existing = await get_deadline(deadline_id)
     if not existing:
         raise HTTPException(status_code=404, detail="дедлайн не найден")
-    if is_shared_deadline(existing) or existing["created_by"] != user["id"]:
-        raise HTTPException(status_code=403, detail="удалить можно только свой личный дедлайн")
+    if not await _can_edit_deadline(existing, user["id"]):
+        raise HTTPException(status_code=403, detail="общий дедлайн удаляет староста, личный — автор")
     await delete_deadline(deadline_id)
     return {"ok": True}
 

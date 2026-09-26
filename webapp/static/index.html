@@ -231,6 +231,17 @@
   .sheet-hint { color: var(--hint); font-size: 12.5px; margin: 0 0 12px; }
   button.primary { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 13px; font-size: 15px; font-weight: 800; }
   button.primary:disabled { opacity: .5; }
+  .toast {
+    position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav-h, 64px) + 12px); z-index: 15;
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: #23262f; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    font-size: 14px; transform: translateY(20px); opacity: 0; pointer-events: none;
+    transition: transform .2s ease, opacity .2s ease;
+  }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast span { flex: 1; }
+  .toast button { background: none; border: none; color: #9ea2ff; font-weight: 800; font-size: 14px; padding: 0; }
+  .toast button:empty { display: none; }
   .hw-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
   .hw-card .hw-subj { font-weight: 800; margin-bottom: 4px; }
   .hw-card .hw-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
@@ -562,17 +573,19 @@
 <div class="sheet-backdrop" id="add-sheet" onclick="if (event.target === this) closeAddSheet()">
   <div class="sheet">
     <div class="sheet-grip"></div>
-    <h3>Новый дедлайн</h3>
+    <h3 id="nd-title">Новый дедлайн</h3>
     <input class="searchbox" id="nd-subject" placeholder="Что сдать? Например: лаба 3 по анализу данных" maxlength="200">
     <div class="row2">
       <input class="searchbox" type="date" id="nd-date">
       <input class="searchbox" type="time" id="nd-time">
     </div>
     <textarea class="searchbox" id="nd-desc" rows="2" placeholder="Описание — необязательно"></textarea>
-    <p class="sheet-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
+    <p class="sheet-hint" id="nd-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
     <button class="primary" id="nd-submit" onclick="submitDeadline()">Добавить</button>
   </div>
 </div>
+
+<div class="toast" id="toast"><span id="toast-text"></span><button id="toast-action"></button></div>
 
 <nav class="tabs">
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
@@ -899,18 +912,24 @@ async function loadDeadlines() {
       block("На этой неделе", groups.week) +
       block("Позже", groups.later) +
       (groups.done.length ? '<details class="done-group"><summary><p class="group-title">Выполнено · ' + groups.done.length +
-        ' ▾</p></summary><div class="list">' + groups.done.map(renderDeadline).join("") + '</div></details>' : "");
+        ' ▾ <span style="text-transform:none;font-weight:600">— нажми, чтобы вернуть</span></p></summary><div class="list">' +
+        groups.done.map(renderDeadline).join("") + '</div></details>' : "");
   } catch (e) {
     list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
+let deadlineIndex = {};
+
 function renderDeadline(item) {
+  deadlineIndex[item.id] = item;
   const desc = item.description || "";
   const isLink = /^https?:\/\//.test(desc);
   const actions = [];
-  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Открыть задание</a>');
-  if (item.mine && item.personal) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
+  if (item.done) actions.push('<button onclick="event.stopPropagation(); toggleDeadline(' + item.id + ', false)">↩ Вернуть в активные</button>');
+  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Задание</a>');
+  if (item.can_edit) actions.push('<button onclick="event.stopPropagation(); openAddSheet(' + item.id + ')">✏️ Изменить</button>');
+  if (item.can_edit) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
   return (
     '<div class="deadline-card ' + (item.done ? "done" : "") + '" onclick="toggleDeadline(' + item.id + ', ' + (!item.done) + ')">' +
       '<div class="checkbox ' + (item.done ? "checked" : "") + '">' + (item.done ? "✓" : "") + '</div>' +
@@ -928,12 +947,28 @@ function openLink(url) {
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, "_blank");
 }
 
+let toastTimer = null;
+function showToast(text, actionLabel, onAction) {
+  const t = document.getElementById("toast");
+  document.getElementById("toast-text").textContent = text;
+  const btn = document.getElementById("toast-action");
+  btn.textContent = actionLabel || "";
+  btn.onclick = () => { t.classList.remove("show"); if (onAction) onAction(); };
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 4500);
+}
+
+// Отметил случайно — «Отменить» в тосте или «↩ Вернуть» у выполненного
+// (раньше выполненный уезжал в свёрнутый список, и вернуть его было неочевидно).
 async function toggleDeadline(id, done) {
   haptic("success");
   try {
     await api("/api/deadlines/" + id + "/toggle", { method: "POST", body: JSON.stringify({ done: done }) });
     loadDeadlines();
     loadToday();
+    if (done) showToast("✓ Отмечено выполненным", "Отменить", () => toggleDeadline(id, false));
+    else showToast("↩ Вернул в активные");
   } catch (e) {
     alert("Не получилось: " + e.message);
   }
@@ -958,11 +993,31 @@ function confirmDialog(text) {
   });
 }
 
-function openAddSheet() {
+let editingId = null;
+
+// Одна форма на «добавить» и «изменить»: openAddSheet() — новый личный,
+// openAddSheet(id) — правка (свой личный или, для старосты, общий).
+function openAddSheet(id) {
   haptic();
-  const d = new Date(); d.setDate(d.getDate() + 7);
-  document.getElementById("nd-date").value = isoDate(d);
-  document.getElementById("nd-time").value = "23:59";
+  const item = id ? deadlineIndex[id] : null;
+  editingId = item ? item.id : null;
+  document.getElementById("nd-title").textContent = item ? "Изменить дедлайн" : "Новый дедлайн";
+  document.getElementById("nd-submit").textContent = item ? "Сохранить" : "Добавить";
+  document.getElementById("nd-hint").textContent = !item
+    ? "👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста."
+    : item.personal ? "👤 Личный — видишь только ты."
+    : "✏️ Общий дедлайн — изменится у всей группы. Автосинк СДО его больше не перезапишет.";
+  if (item) {
+    document.getElementById("nd-subject").value = item.subject;
+    document.getElementById("nd-date").value = item.due_date;
+    document.getElementById("nd-time").value = item.due_time || "";
+    document.getElementById("nd-desc").value = item.description || "";
+  } else {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    ["nd-subject", "nd-desc"].forEach(x => document.getElementById(x).value = "");
+    document.getElementById("nd-date").value = isoDate(d);
+    document.getElementById("nd-time").value = "23:59";
+  }
   document.getElementById("add-sheet").classList.add("open");
   setTimeout(() => document.getElementById("nd-subject").focus(), 150);
 }
@@ -977,14 +1032,18 @@ async function submitDeadline() {
   const btn = document.getElementById("nd-submit");
   btn.disabled = true;
   try {
-    await api("/api/deadlines", { method: "POST", body: JSON.stringify({
+    const payload = JSON.stringify({
       subject: subject,
       due_date: document.getElementById("nd-date").value,
       due_time: document.getElementById("nd-time").value,
       description: document.getElementById("nd-desc").value.trim(),
-    }) });
+    });
+    if (editingId) await api("/api/deadlines/" + editingId, { method: "PATCH", body: payload });
+    else await api("/api/deadlines", { method: "POST", body: payload });
     haptic("success");
+    showToast(editingId ? "✓ Сохранено" : "✓ Дедлайн добавлен");
     ["nd-subject", "nd-desc"].forEach(id => document.getElementById(id).value = "");
+    editingId = null;
     closeAddSheet();
     loadDeadlines(); loadToday();
   } catch (e) {

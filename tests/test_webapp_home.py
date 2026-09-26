@@ -144,3 +144,71 @@ async def test_homework_and_files_api(db, client):
                    "created_at": hw[0]["created_at"], "has_file": True}]
     files = {f["title"]: f["has_text"] for f in c.get("/api/files", headers=headers).json()["items"]}
     assert files == {"Лекция 1": True, "Фото": False}
+
+
+# ── правка дедлайнов и защита от автосинка ─────────────────────────────────
+
+def _headers_for(uid):
+    return {"X-Telegram-Init-Data": _make_init_data(user={"id": uid, "first_name": "U"})}
+
+
+@pytest.mark.asyncio
+async def test_edit_permissions_and_sdo_does_not_overwrite(db, client, monkeypatch):
+    import sdo_parser
+    from tests.conftest import STAROSTA_ID
+    c, _ = client
+    shared = await db.add_deadline("Практическая работа №1 - срок сдачи (Архитектура_Экзамен [I.26-27])",
+                                   "https://sdo/x", "2099-09-30", "23:59", 0, external_id="sdo:1")
+    body = {"subject": "ПР-1 Архитектура", "due_date": "2099-10-02", "due_time": "18:00", "description": ""}
+
+    assert c.patch(f"/api/deadlines/{shared}", headers=_headers_for(222), json=body).status_code == 403
+    items = {i["id"]: i for i in c.get("/api/deadlines", headers=_headers_for(222)).json()["items"]}
+    assert items[shared]["can_edit"] is False
+
+    st = _headers_for(STAROSTA_ID)
+    assert c.get("/api/deadlines", headers=st).json()["items"][0]["can_edit"] is True
+    assert c.patch(f"/api/deadlines/{shared}", headers=st, json=body).json()["ok"]
+    edited = await db.get_deadline(shared)
+    assert (edited["subject"], edited["due_date"], edited["due_time"], edited["manual_edit"]) == \
+           ("ПР-1 Архитектура", "2099-10-02", "18:00", 1)
+
+    # СДО снова отдаёт старое название/срок — ручная правка старосты главнее
+    async def sdo_page():
+        return "<html>usermenu</html>"
+
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
+    monkeypatch.setattr(sdo_parser, "fetch_upcoming_html", sdo_page)
+    monkeypatch.setattr(sdo_parser, "parse_deadlines", lambda html: [{
+        "external_id": "sdo:1", "subject": "Практическая работа №1 - срок сдачи (Архитектура_Экзамен [I.26-27])",
+        "description": "https://sdo/x", "due_date": "2099-09-30", "due_time": "23:59"}])
+    res = await sdo_parser.sync_deadlines()
+    assert res["updated"] == 0 and res["skipped"] == 1
+    assert (await db.get_deadline(shared))["subject"] == "ПР-1 Архитектура"
+
+    # староста может и удалить общий
+    assert c.delete(f"/api/deadlines/{shared}", headers=st).json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_bot_undone_returns_deadline(db):
+    import time
+    from aiogram import Bot, Dispatcher
+    from aiogram.fsm.storage.memory import MemoryStorage
+    from aiogram.types import Chat, Message, Update, User
+    from handlers.deadlines import router
+    from tests.test_solver_render import RecordingSession
+    user = User(id=222, is_bot=False, first_name="A")
+    did = await db.add_deadline("СР-2", "", "2099-10-01", None, 0)
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=RecordingSession())
+    dp = Dispatcher(storage=MemoryStorage()); dp.include_router(router)
+    try:
+        for i, text in enumerate(("/done %d" % did, "/deadlines", "/undone %d" % did, "/deadlines")):
+            msg = Message(message_id=900 + i, date=0, chat=Chat(id=222, type="private"), from_user=user, text=text)
+            await dp.feed_update(bot, Update(update_id=int(time.time()) + i, message=msg))
+    finally:
+        router._parent_router = None
+    sent = [t for t, _ in bot.session.sent]
+    assert f"/undone {did}" in sent[0]                          # подсказка сразу после /done
+    assert "Выполнено: 1" in sent[1] and "/undone ID" in sent[1]  # /deadlines показывает выполненные
+    assert "снова в активных" in sent[2]
+    assert "Выполнено" not in sent[3] and "СР-2" in sent[3]
