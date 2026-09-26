@@ -98,14 +98,15 @@ async def cmd_search(message: Message):
 
 
 def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | None:
+    from file_categories import sort_files
     if idx == "all":
-        return "Все файлы", all_files
+        return "Все файлы", sort_files(all_files)
     subjects = sorted(set(f["subject"] for f in all_files if f.get("subject")))
     try:
         subject = subjects[int(idx)]
     except (ValueError, IndexError):
         return None
-    return subject, [f for f in all_files if f.get("subject") == subject]
+    return subject, sort_files([f for f in all_files if f.get("subject") == subject])
 
 
 @router.callback_query(F.data.startswith("fsj:"))

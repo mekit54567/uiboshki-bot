@@ -1220,6 +1220,9 @@ function fileCard(f, withPlace) {
   '</div>';
 }
 
+// «Практика 2» раньше «Практики 10», серии с одинаковым началом — рядом.
+const titleCollator = new Intl.Collator("ru", { numeric: true, sensitivity: "base" });
+
 function countByCat(files) {
   const counts = {};
   files.forEach(f => counts[f.category] = (counts[f.category] || 0) + 1);
@@ -1277,7 +1280,8 @@ function renderFiles() {
   const shown = fileCat ? cats.filter(c => c.key === fileCat) : cats;
   list.innerHTML = shown.map(c =>
     '<div class="group-title">' + escapeHtml(c.label) + ' · ' + counts[c.key] + '</div>' +
-    files.filter(f => f.category === c.key).map(f => fileCard(f, false)).join("")
+    files.filter(f => f.category === c.key).sort((a, b) => titleCollator.compare(a.title, b.title))
+      .map(f => fileCard(f, false)).join("")
   ).join("");
   syncFileBack();
 }

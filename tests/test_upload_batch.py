@@ -181,3 +181,16 @@ def test_files_keyboard_pages():
     assert len(second) == 5 + 2 and [b.callback_data for b in second[-2]] == ["fct:0:*:0"]
     assert second[-1][0].callback_data == "fsj:0"
     assert len(files_keyboard(files[:3]).inline_keyboard) == 4           # одна страница — без стрелок
+
+
+def test_files_sorted_by_type_then_number():
+    # живой тест: после выгрузки СДО в «Практиках» шло 2, 1, 15 16, 8, 13 14
+    from file_categories import sort_files
+    titles = ["Практика 2 Графики", "Практика 1 Знакомство", "Практическа работа 15 16",
+              "Практика 8 преподаватель", "Практическа работа 13 14", "Лекция 10", "Лекция 9"]
+    files = [{"title": t, "file_name": t + ".pdf"} for t in titles]
+    assert [f["title"] for f in sort_files(files)] == [
+        "Лекция 9", "Лекция 10",
+        "Практика 1 Знакомство", "Практика 2 Графики", "Практика 8 преподаватель",
+        "Практическа работа 13 14", "Практическа работа 15 16",
+    ]
