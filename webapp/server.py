@@ -117,6 +117,79 @@ async def api_schedule_next(user: dict = CurrentUser):
     return {"html": await get_next_lesson()}
 
 
+# ── Главная WebApp: структурой, а не готовым HTML ───────────────────────────
+
+WEEKDAYS_RU = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
+
+
+def _day_label(d) -> dict:
+    from schedule_parser import MONTHS_GEN
+    return {"date": d.isoformat(), "weekday": WEEKDAYS_RU[d.weekday()],
+            "label": f"{d.day} {MONTHS_GEN[d.month - 1]}"}
+
+
+@app.get("/api/today")
+async def api_today(user: dict = CurrentUser):
+    """Всё для главной одним запросом: пары сегодня со статусами, ближайшая
+    пара (или завтрашняя первая), погода строкой, дедлайны (сколько и
+    ближайшие три), заметки к парам."""
+    from datetime import datetime, timedelta, date as date_cls
+    from database import get_active_deadlines, get_lesson_notes
+    from handlers.weather import get_weather_for_morning
+    from schedule_parser import fetch_schedule_raw, lessons_for_date
+    from utils import TZ
+
+    now = datetime.now(TZ)
+    today = now.date()
+    lessons, tomorrow_first, schedule_ok = [], None, True
+    try:
+        raw = await fetch_schedule_raw()
+        lessons = lessons_for_date(raw, today, now=now)
+        tomorrow = lessons_for_date(raw, today + timedelta(days=1))
+        tomorrow_first = tomorrow[0] if tomorrow else None
+    except Exception as e:
+        logger.warning(f"api_today: расписание недоступно: {e}")
+        schedule_ok = False
+
+    try:
+        weather = await get_weather_for_morning()
+    except Exception:
+        weather = ""
+
+    items = await get_active_deadlines(user["id"])
+    soon = []
+    for d in items[:3]:
+        days = (date_cls.fromisoformat(d["due_date"]) - today).days
+        soon.append({"id": d["id"], "subject": d["subject"], "due_date": d["due_date"],
+                     "due_time": d.get("due_time") or "", "days": days})
+    notes = await get_lesson_notes(today.isoformat())
+    return {
+        **_day_label(today), "now": now.isoformat(), "hour": now.hour,
+        "lessons": lessons, "tomorrow_first": tomorrow_first, "schedule_ok": schedule_ok,
+        "weather": weather,
+        "deadlines": {"active": len(items), "soon": soon},
+        "notes": [{"subject": n.get("subject") or "", "text": n["text"]} for n in notes],
+    }
+
+
+@app.get("/api/day")
+async def api_day(date: str, user: dict = CurrentUser):
+    """Пары любого дня (для выбора дня недели на главной)."""
+    from datetime import date as date_cls, datetime
+    from schedule_parser import fetch_schedule_raw, lessons_for_date
+    from utils import TZ
+    try:
+        d = date_cls.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception:
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+    now = datetime.now(TZ)
+    return {**_day_label(d), "lessons": lessons_for_date(raw, d, now=now if d == now.date() else None)}
+
+
 # ── Поиск расписания преподавателя / группы / аудитории ─────────────────────
 # Свой справочник (schedule_index.py, собран с зеркала english.mirea.ru):
 # официальный поиск МИРЭА из-за рубежа не отвечает. Пока справочник

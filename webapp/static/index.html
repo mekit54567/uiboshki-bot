@@ -38,8 +38,7 @@
 
   header.top {
     padding: 18px 18px 10px;
-    position: sticky; top: 0; z-index: 5;
-    background: linear-gradient(180deg, var(--bg) 60%, transparent);
+    background: var(--bg);
   }
   header.top h1 {
     margin: 0;
@@ -91,6 +90,61 @@
   .card .sub { color: var(--hint); font-size: 13px; margin: 0; }
 
   .schedule-html { font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+
+  /* Главная: погода, «следующая пара», пары карточками, выбор дня */
+  .weather-pill {
+    display: inline-block; margin: 0 0 10px; padding: 7px 12px; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--hint); font-size: 13px;
+  }
+  .hero {
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 4px; color: #fff;
+    background: linear-gradient(135deg, var(--accent) 0%, #5a5fe0 55%, var(--accent-2) 130%);
+    box-shadow: 0 10px 28px rgba(92, 96, 230, .35);
+  }
+  .hero .h-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; opacity: .85; }
+  .hero .h-big { font-size: 28px; font-weight: 900; letter-spacing: -.5px; margin: 4px 0 2px; }
+  .hero .h-title { font-size: 16px; font-weight: 700; margin: 2px 0; }
+  .hero .h-meta { font-size: 13px; opacity: .9; }
+  .hero .h-bar { height: 6px; background: rgba(255,255,255,.25); border-radius: 99px; margin-top: 12px; overflow: hidden; }
+  .hero .h-bar i { display: block; height: 100%; background: #fff; border-radius: 99px; transition: width .6s ease; }
+  .hero.calm { background: linear-gradient(135deg, #2f9e7e 0%, var(--accent-2) 100%); box-shadow: 0 10px 28px rgba(67,198,172,.3); }
+  .lessons { display: flex; flex-direction: column; gap: 8px; }
+  .lesson {
+    display: flex; gap: 12px; align-items: stretch;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 11px 13px; position: relative;
+  }
+  .lesson.now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .lesson.past { opacity: .5; }
+  .lesson .l-time { min-width: 46px; display: flex; flex-direction: column; font-size: 13px; color: var(--hint); }
+  .lesson .l-time b { color: var(--text); font-size: 15px; }
+  .lesson .l-body { flex: 1; min-width: 0; }
+  .lesson .l-title { font-weight: 700; line-height: 1.3; }
+  .lesson .l-meta { color: var(--hint); font-size: 12.5px; margin-top: 3px; }
+  .lesson .l-num {
+    align-self: flex-start; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 8px;
+    background: var(--bg-raised); color: var(--hint); font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lesson.now .l-num { background: var(--accent); color: #fff; }
+  .lesson .l-now { color: var(--ok); font-weight: 800; font-size: 12px; }
+  .note-card { margin-top: 8px; padding: 10px 13px; border-radius: var(--radius-sm);
+               background: rgba(255,178,56,.1); border: 1px solid rgba(255,178,56,.3); font-size: 13.5px; }
+  .daychips { display: flex; gap: 6px; margin-bottom: 10px; }
+  .daychips button {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--hint);
+    border-radius: 12px; padding: 7px 0; font-size: 11.5px; font-weight: 700; line-height: 1.2;
+  }
+  .daychips button b { display: block; font-size: 16px; color: var(--text); }
+  .daychips button.today b { color: var(--accent-2); }
+  .daychips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .daychips button.active b { color: #fff; }
+  .skel {
+    border-radius: var(--radius-sm); margin-bottom: 8px;
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-raised) 50%, var(--bg-card) 75%);
+    background-size: 200% 100%; animation: shimmer 1.2s infinite linear;
+  }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   .schedule-html s { color: var(--hint); }
   .schedule-html b { color: var(--accent-2); }
 
@@ -349,26 +403,31 @@
 
   <!-- ── Сегодня ───────────────────────────────────────────────────── -->
   <section class="view active" id="view-today">
-    <div class="bento">
-      <div class="card wide">
-        <p class="eyebrow">Сегодня</p>
-        <div class="schedule-html" id="today-schedule">Загружаю…</div>
-      </div>
+    <div class="weather-pill" id="weather" style="display:none;"></div>
+    <div id="hero"><div class="skel" style="height:118px"></div></div>
+
+    <h2 class="section"><span>Сегодня</span><span class="stat" id="today-count"></span></h2>
+    <div class="lessons" id="today-lessons">
+      <div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div>
+    </div>
+    <div id="today-notes"></div>
+
+    <div class="bento" style="margin-top:14px;">
       <div class="card tap" onclick="switchTab('deadlines')">
         <p class="eyebrow">Дедлайны</p>
         <p class="big" id="today-deadline-count">—</p>
-        <p class="sub">ближайшие</p>
+        <p class="sub" id="today-deadline-next">ближайшие</p>
       </div>
-      <div class="card tap" onclick="loadWeek()">
-        <p class="eyebrow">Неделя</p>
-        <p class="big">📆</p>
-        <p class="sub">открыть расписание</p>
-      </div>
-      <div class="card wide" id="week-card" style="display:none;">
-        <p class="eyebrow">Неделя целиком</p>
-        <div class="schedule-html" id="week-schedule"></div>
+      <div class="card tap" onclick="switchTab('search')">
+        <p class="eyebrow">Поиск</p>
+        <p class="big">🔍</p>
+        <p class="sub">препод, группа, аудитория</p>
       </div>
     </div>
+
+    <h2 class="section">Неделя</h2>
+    <div class="daychips" id="daychips"></div>
+    <div class="lessons" id="day-lessons"></div>
   </section>
 
   <!-- ── Дедлайны / ДЗ ─────────────────────────────────────────────── -->
@@ -509,37 +568,174 @@ function switchTab(name) {
 
 // ── Сегодня ───────────────────────────────────────────────────────────────
 
+let todayData = null;
+
+function greetingFor(hour) {
+  if (hour >= 5 && hour < 12) return "Доброе утро";
+  if (hour >= 12 && hour < 17) return "Добрый день";
+  if (hour >= 17 && hour < 23) return "Добрый вечер";
+  return "Доброй ночи";
+}
+
+function humanMinutes(min) {
+  min = Math.max(0, Math.round(min));
+  if (min < 60) return min + " мин";
+  const h = Math.floor(min / 60), m = min % 60;
+  return h + " ч" + (m ? " " + m + " мин" : "");
+}
+
+function lessonMeta(l) {
+  return [l.kind, l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml).join(" · ");
+}
+
+function lessonRow(l, withStatus) {
+  const cls = withStatus && l.status ? " " + l.status : "";
+  const now = withStatus && l.status === "now" ? '<div class="l-now">● идёт сейчас</div>' : "";
+  const pairs = l.pairs > 1 ? " · " + l.pairs + " пары подряд" : "";
+  return '<div class="lesson' + cls + '">' +
+    '<div class="l-time"><b>' + escapeHtml(l.start) + '</b><span>' + escapeHtml(l.end) + '</span></div>' +
+    '<div class="l-body"><div class="l-title">' + escapeHtml(l.title) + '</div>' +
+    '<div class="l-meta">' + lessonMeta(l) + escapeHtml(pairs) + '</div>' + now + '</div>' +
+    '<div class="l-num">' + escapeHtml(String(l.num)) + '</div></div>';
+}
+
+// Статусы и отсчёт пересчитываются на клиенте раз в 30 с — главная
+// «живая», даже если WebApp долго открыт.
+function refreshStatuses() {
+  if (!todayData) return;
+  const now = Date.now();
+  todayData.lessons.forEach(l => {
+    if (!l.start_iso) return;
+    const s = Date.parse(l.start_iso), e = Date.parse(l.end_iso || l.start_iso);
+    l.status = now >= e ? "past" : (now >= s ? "now" : "later");
+  });
+  renderHero();
+  document.getElementById("today-lessons").innerHTML = todayData.lessons.length
+    ? todayData.lessons.map(l => lessonRow(l, true)).join("")
+    : '<div class="empty">' + (todayData.schedule_ok ? "Сегодня пар нет 🎉" : "Расписание сейчас не загрузилось") + '</div>';
+}
+
+function renderHero() {
+  const hero = document.getElementById("hero");
+  const d = todayData, now = Date.now();
+  const cur = d.lessons.find(l => l.status === "now");
+  const next = d.lessons.find(l => l.status === "later");
+  hero.className = "hero";
+  if (cur) {
+    const s = Date.parse(cur.start_iso), e = Date.parse(cur.end_iso);
+    const pct = Math.min(100, Math.max(0, (now - s) / (e - s) * 100));
+    hero.innerHTML = '<div class="h-eyebrow">Идёт сейчас · до ' + escapeHtml(cur.end) + '</div>' +
+      '<div class="h-big">ещё ' + humanMinutes((e - now) / 60000) + '</div>' +
+      '<div class="h-title">' + escapeHtml(cur.title) + '</div><div class="h-meta">' + lessonMeta(cur) + '</div>' +
+      '<div class="h-bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+  } else if (next) {
+    hero.innerHTML = '<div class="h-eyebrow">Следующая пара · ' + escapeHtml(next.start) + '</div>' +
+      '<div class="h-big">через ' + humanMinutes((Date.parse(next.start_iso) - now) / 60000) + '</div>' +
+      '<div class="h-title">' + escapeHtml(next.title) + '</div><div class="h-meta">' + lessonMeta(next) + '</div>';
+  } else {
+    hero.className = "hero calm";
+    const t = d.tomorrow_first;
+    const head = d.lessons.length ? "На сегодня всё 🎉" : "Сегодня пар нет 🎉";
+    hero.innerHTML = '<div class="h-eyebrow">' + head + '</div>' + (t
+      ? '<div class="h-big">завтра в ' + escapeHtml(t.start) + '</div><div class="h-title">' + escapeHtml(t.title) +
+        '</div><div class="h-meta">' + lessonMeta(t) + '</div>'
+      : '<div class="h-big">отдыхай</div><div class="h-meta">завтра тоже без пар</div>');
+  }
+}
+
+function dueText(days) {
+  if (days < 0) return "просрочен";
+  if (days === 0) return "сегодня";
+  if (days === 1) return "завтра";
+  return "через " + days + " дн.";
+}
+
 async function loadToday() {
   try {
     const me = await api("/api/me");
-    document.getElementById("greeting").textContent = "Привет, " + (me.first_name || "!");
-    document.getElementById("subtitle").textContent = "УИБО-03-24 · сегодня";
+    const hour = new Date().getHours();
+    document.getElementById("greeting").textContent = greetingFor(hour) + (me.first_name ? ", " + me.first_name : "") + " 👋";
   } catch (e) {
     document.getElementById("subtitle").textContent = "Не удалось авторизоваться: " + e.message;
+    return;
   }
   try {
-    const data = await api("/api/schedule/today");
-    document.getElementById("today-schedule").innerHTML = data.html || "Пар нет 🎉";
+    todayData = await api("/api/today");
+    document.getElementById("subtitle").textContent = todayData.weekday + ", " + todayData.label + " · УИБО-03-24";
+    if (todayData.weather) {
+      const w = document.getElementById("weather");
+      w.textContent = todayData.weather; w.style.display = "inline-block";
+    }
+    const n = todayData.lessons.reduce((a, l) => a + (l.pairs || 1), 0);
+    document.getElementById("today-count").textContent = n ? n + " " + plural(n, "пара", "пары", "пар") : "";
+    refreshStatuses();
+    const dl = todayData.deadlines;
+    document.getElementById("today-deadline-count").textContent = dl.active;
+    document.getElementById("today-deadline-next").textContent = dl.soon.length
+      ? dl.soon[0].subject.slice(0, 40) + " · " + dueText(dl.soon[0].days) : "ничего не горит 🎉";
+    document.getElementById("today-notes").innerHTML = todayData.notes.map(x =>
+      '<div class="note-card">📌 ' + (x.subject ? "<b>" + escapeHtml(x.subject) + ":</b> " : "") + escapeHtml(x.text) + '</div>').join("");
   } catch (e) {
-    document.getElementById("today-schedule").textContent = "Не загрузилось: " + e.message;
+    const hero = document.getElementById("hero");
+    hero.className = "hero calm";
+    hero.innerHTML = '<div class="h-eyebrow">Расписание</div><div class="h-title">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    document.getElementById("today-lessons").innerHTML = "";
   }
-  try {
-    const dl = await api("/api/deadlines");
-    document.getElementById("today-deadline-count").textContent = dl.stats.active;
-  } catch (e) {}
+  renderDayChips();
 }
 
-let weekLoaded = false;
-async function loadWeek() {
-  const card = document.getElementById("week-card");
-  card.style.display = "block";
-  if (weekLoaded) return;
-  weekLoaded = true;
+function plural(n, one, few, many) {
+  const n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return one;
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return few;
+  return many;
+}
+
+setInterval(refreshStatuses, 30000);
+
+// ── Неделя: выбор дня ─────────────────────────────────────────────────────
+
+const DAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+function isoDate(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function renderDayChips() {
+  const base = todayData ? new Date(todayData.date + "T12:00:00") : new Date();
+  const wd = (base.getDay() + 6) % 7;             // 0 = понедельник
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - wd + (wd === 6 ? 7 : 0));  // в воскресенье — следующая неделя
+  const box = document.getElementById("daychips");
+  box.innerHTML = "";
+  let selected = null;
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const b = document.createElement("button");
+    const iso = isoDate(d);
+    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + "</b>";
+    b.dataset.date = iso;
+    if (todayData && iso === todayData.date) { b.classList.add("today"); selected = b; }
+    b.onclick = () => selectDay(b);
+    box.appendChild(b);
+  }
+  selectDay(selected || box.children[0], true);
+}
+
+async function selectDay(btn, silent) {
+  document.querySelectorAll("#daychips button").forEach(b => b.classList.toggle("active", b === btn));
+  if (!silent) haptic();
+  const list = document.getElementById("day-lessons");
+  list.innerHTML = '<div class="skel" style="height:64px"></div>';
   try {
-    const data = await api("/api/schedule/week");
-    document.getElementById("week-schedule").innerHTML = data.html;
+    const data = await api("/api/day?date=" + btn.dataset.date);
+    if (btn.classList.contains("active")) {
+      list.innerHTML = data.lessons.length
+        ? data.lessons.map(l => lessonRow(l, !!l.status)).join("")
+        : '<div class="empty">' + data.weekday + ' — пар нет 🎉</div>';
+    }
   } catch (e) {
-    document.getElementById("week-schedule").textContent = "Не загрузилось: " + e.message;
+    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
