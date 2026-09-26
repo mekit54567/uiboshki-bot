@@ -63,7 +63,6 @@ async def test_chat_without_subject_gets_matching_lectures(db, monkeypatch):
         return ""
 
     monkeypatch.setattr(ai_solver, "chat_with_reasoning", fake_chat)
-    monkeypatch.setattr(server, "chat_with_reasoning", fake_chat, raising=False)
     monkeypatch.setattr("group_context.build_group_context", no_context)
     client = TestClient(server.app)
     headers = {"X-Telegram-Init-Data": _make_init_data()}
@@ -74,3 +73,46 @@ async def test_chat_without_subject_gets_matching_lectures(db, monkeypatch):
 
     client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет!"}]}, headers=headers)
     assert seen["lectures"] == ""
+
+
+def test_junk_characters_are_stripped():
+    assert lp.pick("=== Л1 ===\nтекст\x00 и \ud835 ещё", "текст") == "=== Л1 ===\nтекст и  ещё"
+
+
+@pytest.mark.asyncio
+async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
+    # живой тест: «Дебет и кредит — что это?» без предмета → «ИИ недоступен»
+    from fastapi.testclient import TestClient
+
+    import webapp.server as server
+    from gemini_solver import GeminiError
+    from tests.test_webapp_auth import _make_init_data
+
+    fid = await db.add_file("Лекция 2. Дебет и кредит", "Учёт", "f", "l.pdf", 1)
+    await db.save_file_text(fid, "Дебет и кредит — стороны счёта. Кредит справа, дебет слева.")
+    calls = []
+
+    async def flaky_chat(history, subject="", extra_system="", lectures=""):
+        calls.append(bool(lectures))
+        if lectures:
+            raise GeminiError("Gemini не ответил вовремя — попробуй ещё раз")
+        return {"content": "Дебет — левая сторона счёта.", "reasoning": ""}
+
+    async def no_context(user_id):
+        return ""
+
+    monkeypatch.setattr("ai_solver.chat_with_reasoning", flaky_chat)
+    monkeypatch.setattr("group_context.build_group_context", no_context)
+    client = TestClient(server.app)
+    headers = {"X-Telegram-Init-Data": _make_init_data()}
+    data = client.post("/api/chat", json={"history": [{"role": "user", "content": "Дебет и кредит счёта — что это?"}]},
+                       headers=headers).json()
+    assert calls == [True, False]
+    assert "левая сторона" in data["content"] and "ответ без лекций: Gemini не ответил вовремя" in data["content"]
+
+    async def down(*a, **kw):
+        raise GeminiError("Gemini: лимит запросов исчерпан")
+
+    monkeypatch.setattr("ai_solver.chat_with_reasoning", down)
+    resp = client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет"}]}, headers=headers)
+    assert resp.status_code == 502 and "лимит запросов исчерпан" in resp.json()["detail"]

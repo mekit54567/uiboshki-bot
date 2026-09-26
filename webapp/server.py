@@ -516,6 +516,30 @@ async def api_notes(date: str = "", user: dict = CurrentUser):
 
 # ── Чат с ИИ (DeepSeek с трейсом рассуждений, без его ключа — Gemini) ─────
 
+def _short_reason(e: Exception) -> str:
+    """Причина ошибки ИИ для пользователя: у GeminiError она уже человеческая
+    («не ответил вовремя», «лимит запросов»), у прочих — хотя бы тип."""
+    text = str(e) if isinstance(e, RuntimeError) and str(e) else type(e).__name__
+    return text[:160]
+
+
+async def _chat_with_fallback(history: list, subject: str, context: str, lectures: str) -> dict:
+    """С лекциями запрос уходит в Gemini с большим контекстом — если он не
+    прошёл (живой тест: «Дебет и кредит — что это?» без предмета → «ИИ
+    недоступен», а «Привет» без лекций — ок), отвечаем без лекций и честно
+    пишем почему, а не оставляем человека без ответа."""
+    from ai_solver import chat_with_reasoning
+    try:
+        return await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+    except Exception as e:
+        if not lectures:
+            raise
+        logger.warning(f"webapp chat: с лекциями не вышло ({e!r}) — отвечаю без них")
+        result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures="")
+        result["content"] = (result.get("content") or "") + f"\n\n_(ответ без лекций: {_short_reason(e)})_"
+        return result
+
+
 class ChatMessage(BaseModel):
     role: str
     content: str
@@ -609,14 +633,14 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
                     (history[-1]["content"].strip() or "Разбери этот файл.")
                     + f"\n\n=== Файл «{name}» ===\n{text[:DOC_TEXT_LIMIT]}{note}"
                 )
-                result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+                result = await _chat_with_fallback(history, subject, context, lectures)
         else:
-            result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+            result = await _chat_with_fallback(history, subject, context, lectures)
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"webapp chat failed: {e}")
-        raise HTTPException(status_code=502, detail="ИИ сейчас недоступен, попробуй чуть позже")
+        logger.warning(f"webapp chat failed: {e!r}")
+        raise HTTPException(status_code=502, detail=f"ИИ сейчас недоступен ({_short_reason(e)}), попробуй чуть позже")
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
     return result
