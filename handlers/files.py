@@ -557,6 +557,16 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
     await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
 
 
+@router.message(Command("backup"))
+async def cmd_backup(message: Message):
+    """Копия базы прямо сейчас (обычно приходит сама каждую ночь)."""
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    from backup import send_backup
+    await send_backup(message.bot, message.chat.id, silent=False)
+
+
 # ── Синхронизация файлов из локальной базы ────────────────────────────────────
 
 @router.message(Command("syncfiles"))

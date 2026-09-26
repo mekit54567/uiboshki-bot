@@ -260,4 +260,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # обход прервался (редеплой), и обновлять раз в месяц (см. schedule_index).
     import schedule_index
     scheduler.add_job(schedule_index.ensure_fresh, "cron", hour=4, minute=10)
+    # Копия базы старосте каждую ночь, без звука (backup.py).
+    if STAROSTA_ID:
+        from backup import send_backup
+        scheduler.add_job(send_backup, "cron", hour=4, minute=40, args=[bot, STAROSTA_ID])
     return scheduler
