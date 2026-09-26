@@ -69,8 +69,9 @@ async def test_chat_without_deepseek_key_uses_gemini_and_returns_pretty_html(db,
     import webapp.server as server
     from fastapi.testclient import TestClient
 
-    async def fake_history(history, subject="", backend="gemini"):
+    async def fake_history(history, subject="", backend="gemini", lectures="", extra_system=""):
         assert backend == "gemini"
+        assert "Контекст группы" in extra_system  # чат знает дату, пары, дедлайны
         return "**Ответ:** x^2 <= 4"
 
     monkeypatch.setattr(ai_solver, "DEEPSEEK_API_KEY", "")
@@ -88,3 +89,74 @@ async def test_chat_without_deepseek_key_uses_gemini_and_returns_pretty_html(db,
     assert data["content"] == "**Ответ:** x^2 <= 4"
     assert data["reasoning"] == ""
     assert data["html"] == "<b>Ответ:</b> x² ≤ 4"
+
+
+# ── чат WebApp: вложения ─────────────────────────────────────────────────────
+
+def _chat_client(monkeypatch):
+    import webapp.server as server
+    from fastapi.testclient import TestClient
+    monkeypatch.setattr(server, "BOT_TOKEN", BOT_TOKEN)
+    return TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
+
+
+@pytest.mark.asyncio
+async def test_chat_photo_goes_to_gemini_vision_with_question(db, monkeypatch):
+    import base64
+    import ai_solver
+    seen = {}
+
+    async def fake_image(image_bytes, mime="image/jpeg", subject="", lectures="", prompt=""):
+        seen.update(bytes=image_bytes, mime=mime, prompt=prompt)
+        return "**Ответ:** x = 2"
+
+    monkeypatch.setattr(ai_solver, "solve_image", fake_image)
+    client, headers = _chat_client(monkeypatch)
+    resp = client.post("/api/chat", headers=headers, json={
+        "history": [{"role": "user", "content": "Реши систему"}],
+        "attachment": {"name": "task.png", "mime": "image/png", "data": base64.b64encode(b"PNGDATA").decode()},
+    })
+    assert resp.status_code == 200
+    assert resp.json()["html"] == "<b>Ответ:</b> x = 2"
+    assert seen["bytes"] == b"PNGDATA" and seen["mime"] == "image/png"
+    assert "Реши систему" in seen["prompt"] and "Контекст группы" in seen["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_chat_document_text_goes_into_message(db, monkeypatch):
+    import base64
+    import ai_solver
+    seen = {}
+
+    async def fake_history(history, subject="", backend="gemini", lectures="", extra_system=""):
+        seen["last"] = history[-1]["content"]
+        return "Разобрал"
+
+    monkeypatch.setattr(ai_solver, "DEEPSEEK_API_KEY", "")
+    monkeypatch.setattr(ai_solver, "solve_with_history", fake_history)
+    client, headers = _chat_client(monkeypatch)
+    doc = "Лекция 5. NPV — чистая приведённая стоимость".encode("cp1251")
+    resp = client.post("/api/chat", headers=headers, json={
+        "history": [{"role": "user", "content": ""}],
+        "attachment": {"name": "lec5.txt", "mime": "text/plain", "data": base64.b64encode(doc).decode()},
+    })
+    assert resp.status_code == 200
+    assert seen["last"].startswith("Разбери этот файл.")
+    assert "=== Файл «lec5.txt» ===" in seen["last"] and "чистая приведённая стоимость" in seen["last"]
+
+
+@pytest.mark.asyncio
+async def test_chat_rejects_unsupported_and_too_big(db, monkeypatch):
+    import base64
+    import webapp.server as server
+    client, headers = _chat_client(monkeypatch)
+    hist = [{"role": "user", "content": "что тут?"}]
+    resp = client.post("/api/chat", headers=headers, json={
+        "history": hist, "attachment": {"name": "a.exe", "mime": "application/x-msdownload", "data": "AAAA"}})
+    assert resp.status_code == 415 and "PDF" in resp.json()["detail"]
+
+    monkeypatch.setattr(server, "MAX_ATTACHMENT_BYTES", 3)
+    resp = client.post("/api/chat", headers=headers, json={
+        "history": hist, "attachment": {"name": "a.txt", "mime": "text/plain",
+                                        "data": base64.b64encode(b"long text").decode()}})
+    assert resp.status_code == 413

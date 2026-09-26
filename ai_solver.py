@@ -146,7 +146,8 @@ async def extract_text_from_image(image_bytes: bytes, mime: str = "image/jpeg") 
     )
 
 
-async def chat_with_reasoning(history: list, subject: str = "") -> dict:
+async def chat_with_reasoning(history: list, subject: str = "", extra_system: str = "",
+                              lectures: str = "") -> dict:
     """Для WebApp-чата: всегда deepseek-reasoner — единственная модель
     DeepSeek, которая отдаёт отдельное поле reasoning_content ("как думала")
     в дополнение к обычному content ("что ответила"). Раздельно, чтобы фронт
@@ -155,11 +156,13 @@ async def chat_with_reasoning(history: list, subject: str = "") -> dict:
     Без DEEPSEEK_API_KEY — тот же Gemini, что и у решалки в боте (без
     трейса рассуждений): иначе чат в WebApp просто не работал бы у тех, кто
     не заводил ключ DeepSeek. Возвращает {"content": str, "reasoning": str}."""
-    if not DEEPSEEK_API_KEY:
-        content = await solve_with_history(history, subject, backend="gemini")
+    if not DEEPSEEK_API_KEY or lectures.strip():
+        content = await solve_with_history(history, subject, backend="gemini",
+                                           lectures=lectures, extra_system=extra_system)
         return {"content": content, "reasoning": ""}
+    system = build_system_prompt(subject) + (f"\n\n{extra_system}" if extra_system else "")
     msg = await _deepseek_chat(
-        [{"role": "system", "content": build_system_prompt(subject)}, *history],
+        [{"role": "system", "content": system}, *history],
         model=MODEL_DEEPSEEK_REASONER, max_tokens=4096,
     )
     return {

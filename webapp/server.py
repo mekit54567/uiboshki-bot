@@ -225,20 +225,90 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class ChatAttachment(BaseModel):
+    name: str = "файл"
+    mime: str = ""
+    data: str  # base64
+
+
 class ChatBody(BaseModel):
     history: list[ChatMessage]
     subject: str = ""
+    attachment: ChatAttachment | None = None
+
+
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+DOC_TEXT_LIMIT = 60_000
+
+
+@app.get("/api/subjects")
+async def api_subjects(user: dict = CurrentUser):
+    """Предметы для чата: с загруженными лекциями (чат будет опираться на
+    них) — сверху, дальше остальные предметы группы из расписания."""
+    from database import get_subjects_with_lecture_text
+    from schedule_parser import get_group_subjects
+    with_lectures = await get_subjects_with_lecture_text()
+    rest = [s for s in await get_group_subjects() if s not in with_lectures]
+    return {"subjects": [{"name": s, "lectures": True} for s in with_lectures]
+                        + [{"name": s, "lectures": False} for s in rest]}
 
 
 @app.post("/api/chat")
 async def api_chat(body: ChatBody, user: dict = CurrentUser):
-    from ai_solver import chat_with_reasoning
+    """Чат WebApp: история (последние 20), по желанию предмет (если по нему
+    есть лекции — ответ опирается на них) и одно вложение — фото (решает
+    Gemini по картинке) или документ PDF/DOCX/PPTX/TXT (его текст уходит в
+    сообщение). В системный промпт — контекст группы: пары, дедлайны, ДЗ."""
+    import asyncio
+    import base64
+    from ai_solver import chat_with_reasoning, solve_image
+    from database import get_subject_lecture_context, get_subjects_with_lecture_text
+    from file_text import SUPPORTED_EXTENSIONS, extract_text
+    from group_context import build_group_context
+    from utils import md_to_tg_html_chunks
+
     if not body.history:
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]
-    from utils import md_to_tg_html_chunks
+    subject = body.subject.strip()
+    lectures = ""
+    if subject and subject in await get_subjects_with_lecture_text():
+        lectures = await get_subject_lecture_context(subject)
+    context = await build_group_context(user["id"])
+
     try:
-        result = await chat_with_reasoning(history, subject=body.subject)
+        if body.attachment:
+            try:
+                raw = base64.b64decode(body.attachment.data, validate=False)
+            except Exception:
+                raise HTTPException(status_code=400, detail="вложение повреждено")
+            if len(raw) > MAX_ATTACHMENT_BYTES:
+                raise HTTPException(status_code=413, detail="файл больше 10 МБ")
+            name = body.attachment.name or "файл"
+            if body.attachment.mime.startswith("image/"):
+                question = history[-1]["content"].strip() or "Реши задание на фото с подробным объяснением."
+                earlier = "\n".join(f"{'Студент' if m['role'] == 'user' else 'Ты'}: {m['content'][:500]}"
+                                     for m in history[-7:-1])
+                prompt = (f"Предыдущий разговор:\n{earlier}\n\n" if earlier else "") + f"Сообщение студента: {question}"
+                content = await solve_image(raw, body.attachment.mime, subject=subject,
+                                            lectures=lectures, prompt=prompt + "\n\n" + context)
+                result = {"content": content, "reasoning": ""}
+            else:
+                if not name.lower().endswith(SUPPORTED_EXTENSIONS):
+                    raise HTTPException(status_code=415, detail="умею читать PDF, DOCX, PPTX и TXT, а ещё фото")
+                text = (await asyncio.to_thread(extract_text, raw, name)).strip()
+                if not text:
+                    raise HTTPException(status_code=422, detail="не смог достать текст из файла (скан без текстового слоя?)")
+                note = "\n\n(файл обрезан — слишком длинный)" if len(text) > DOC_TEXT_LIMIT else ""
+                history[-1]["content"] = (
+                    (history[-1]["content"].strip() or "Разбери этот файл.")
+                    + f"\n\n=== Файл «{name}» ===\n{text[:DOC_TEXT_LIMIT]}{note}"
+                )
+                result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+        else:
+            result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"webapp chat failed: {e}")
         raise HTTPException(status_code=502, detail="ИИ сейчас недоступен, попробуй чуть позже")
