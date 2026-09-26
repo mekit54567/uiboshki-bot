@@ -205,6 +205,12 @@ async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
         return {"items": [], "ready": await schedule_index.is_ready()}
     items = await schedule_index.search(q, types, limit=30)
     ready = await schedule_index.is_ready()
+    if items:
+        from mirea_schedule_api import add_hints_for_namesakes
+        hinted = await add_hints_for_namesakes(
+            [{"id": i["id"], "fullTitle": i["title"], "scheduleTarget": i["type"]} for i in items])
+        items = [{"type": h["scheduleTarget"], "id": h["id"], "title": h["fullTitle"],
+                  **({"hint": h["hint"]} if h.get("hint") else {})} for h in hinted]
     if not items and not ready:
         for t in types:
             try:

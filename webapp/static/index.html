@@ -1074,7 +1074,8 @@ function targetItem(t) {
   const kind = TARGET_KIND[t.type] || ["📅", ""];
   return '<div class="target-item" onclick="openTarget(' + t.type + ',' + t.id + ',' + escapeHtml(JSON.stringify(t.title)) + ')">' +
     '<span class="ic">' + kind[0] + '</span>' +
-    '<div><div class="tt">' + escapeHtml(t.title) + '</div><div class="ts">' + kind[1] + '</div></div>' +
+    '<div style="min-width:0"><div class="tt">' + escapeHtml(t.title) + '</div><div class="ts">' + kind[1] +
+    (t.hint ? ' · ' + escapeHtml(t.hint) : '') + '</div></div>' +
     '<span class="go">›</span></div>';
 }
 

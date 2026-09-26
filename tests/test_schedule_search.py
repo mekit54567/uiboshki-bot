@@ -170,3 +170,27 @@ async def test_graduated_groups_hidden_and_newest_first(db, monkeypatch):
     assert titles[:3] == [f"БАСО-01-{yy:02d}", f"БАСО-02-{yy - 1:02d}", f"БАСО-01-{yy - 5:02d}"]
     assert f"БАСО-01-{yy - 14:02d}" not in titles
     assert "Басов И. И." in titles
+
+
+@pytest.mark.asyncio
+async def test_namesakes_get_hints_and_busy_one_first(monkeypatch):
+    # Прод: «/teacher Морозов» — «Морозов В. А.» ×3, «Морозов Д. В.» ×3,
+    # в справочнике только инициалы, выбрать нужного невозможно.
+    import mirea_schedule_api as api
+    icals = {5: None, 6: _teacher_ical(), 7: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"}
+
+    async def fake_ical(target_id, target_type):
+        return icals.get(target_id)
+
+    monkeypatch.setattr(api, "fetch_ical", fake_ical)
+    res = await api.add_hints_for_namesakes([
+        {"id": 1, "fullTitle": "Морозов А. А.", "scheduleTarget": 2},
+        {"id": 7, "fullTitle": "Морозов В. А.", "scheduleTarget": 2},
+        {"id": 6, "fullTitle": "Морозов В. А.", "scheduleTarget": 2},
+        {"id": 5, "fullTitle": "Морозов В. А.", "scheduleTarget": 2},
+        {"id": 9, "fullTitle": "Моро Б. Б.", "scheduleTarget": 2},
+    ])
+    assert [r["id"] for r in res] == [1, 6, 7, 5, 9]      # порядок выдачи сохранён, внутри — с парами первым
+    assert res[1]["hint"] == "Физика 1 п/г"
+    assert res[2]["hint"] == "нет пар в ближайшие 2 недели"
+    assert "hint" not in res[0] and "hint" not in res[3]  # уникальное имя / ical недоступен

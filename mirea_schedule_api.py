@@ -75,6 +75,40 @@ async def search_targets(query: str, target_type: int, limit: int = 8) -> list[d
         return []
 
 
+async def add_hints_for_namesakes(results: list[dict], limit: int = 10) -> list[dict]:
+    """Для одинаковых названий в выдаче («Морозов В. А.» ×3 — в справочнике
+    только инициалы) подтягивает их расписание и добавляет "hint": главный
+    предмет на 2 недели или «нет пар». Те, у кого есть пары, — выше.
+    results — [{"id", "fullTitle", "scheduleTarget"}]; остальные не трогаются."""
+    import asyncio
+    from collections import Counter
+    from schedule_parser import summarize_target
+    counts = Counter(r["fullTitle"] for r in results)
+    dupes = [r for r in results if counts[r["fullTitle"]] > 1][:limit]
+    if not dupes:
+        return results
+
+    async def hint(r):
+        raw = await fetch_ical(r["id"], r["scheduleTarget"])
+        if raw is None:
+            return
+        try:
+            subject, pairs = summarize_target(raw)
+        except Exception:
+            return
+        r["pairs"] = pairs
+        r["hint"] = subject if pairs else "нет пар в ближайшие 2 недели"
+
+    await asyncio.gather(*(hint(r) for r in dupes))
+    # Порядок выдачи (совпадения с начала, свежие группы выше) сохраняем —
+    # переставляем только однофамильцев между собой: с парами — первыми.
+    order = {id(r): i for i, r in enumerate(results)}
+    first_pos: dict[str, int] = {}
+    for i, r in enumerate(results):
+        first_pos.setdefault(r["fullTitle"], i)
+    return sorted(results, key=lambda r: (first_pos[r["fullTitle"]], -(r.get("pairs") or 0), order[id(r)]))
+
+
 async def get_baseinfo(target_id: int, target_type: int) -> dict | None:
     import schedule_index
     title = await schedule_index.get_title(target_type, target_id)

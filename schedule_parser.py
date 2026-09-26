@@ -344,6 +344,22 @@ async def get_group_subjects(days_back: int = 14, days_ahead: int = 28) -> list[
     return _subjects_cache[key]
 
 
+def summarize_target(raw: bytes, days: int = 14) -> tuple[str, int]:
+    """(главный предмет, сколько пар) за days дней вперёд — подпись, чтобы
+    отличить однофамильцев: в справочнике МИРЭА у преподавателей только
+    инициалы, и «Морозов В. А.» бывает трижды."""
+    from collections import Counter
+    today = datetime.now(TZ).date()
+    subjects: Counter = Counter()
+    pairs = 0
+    for i in range(days):
+        for e in parse_events_for_date(raw, today + timedelta(days=i)):
+            title, _, _ = _split_kind(e["summary"])
+            subjects[title] += 1
+            pairs += 1
+    return (subjects.most_common(1)[0][0] if subjects else ""), pairs
+
+
 def format_target_schedule(raw: bytes, target_type: int, days: int = 14) -> str:
     """Расписание найденного преподавателя/группы/аудитории на days дней
     вперёд, пустые дни пропускаются. У преподавателя и аудитории в строке —
