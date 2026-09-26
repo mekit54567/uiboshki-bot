@@ -266,11 +266,13 @@ async def scan_course(client: httpx.AsyncClient, course: dict, subject: str) -> 
 
 
 async def scan(client: httpx.AsyncClient, subjects: list[str]) -> list[SdoCourse]:
-    from sdo_parser import is_old_semester
+    from sdo_parser import is_old_semester, off_schedule
     courses = await list_courses(client)
     out = []
     for c in courses:
-        if is_old_semester(c["name"]):   # «…[II.25-26]» осенью — прошлый семестр, владельцу не нужен
+        # «…[II.25-26]» осенью или курса нет в нынешнем расписании группы —
+        # не этот семестр, владельцу не нужен
+        if is_old_semester(c["name"]) or off_schedule(c["name"], subjects):
             out.append(SdoCourse(id=c["id"], name=c["name"], subject="", old=True))
             continue
         out.append(await scan_course(client, c, match_subject(c["name"], subjects)))

@@ -380,7 +380,9 @@ async def cmd_sync_sdo(message: Message):
         f"✅ Готово!\n\nДобавлено: {result['added']}\n"
         f"Обновлено (сменился срок/название): {result.get('updated', 0)}\n"
         f"Без изменений: {result['skipped']}"
-        + (f"\nКурсы прошлого семестра — пропущено: {result['old_semester']}" if result.get("old_semester") else "")
+        + (f"\nНе этого семестра (нет в расписании) — пропущено: {result['old_semester']}"
+           + (f" ({', '.join(result['old_courses'][:6])})" if result.get("old_courses") else "")
+           if result.get("old_semester") else "")
     )
 
 
@@ -388,9 +390,13 @@ async def cmd_sync_sdo(message: Message):
 # Синк их больше не берёт (sdo_parser.is_old_semester), а уже заведённые
 # староста удаляет здесь — сначала список, потом кнопка.
 
-def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
-    from sdo_parser import is_old_semester
-    return [d for d in items if is_old_semester(d["subject"])]
+async def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
+    """Прошлый семестр по метке в названии курса или курса нет в нынешнем
+    расписании группы (sdo_parser.not_this_semester)."""
+    from schedule_parser import get_group_subjects
+    from sdo_parser import not_this_semester
+    subjects = await get_group_subjects()
+    return [d for d in items if not_this_semester(d, subjects)]
 
 
 @router.message(Command("sdoclean"))
@@ -400,9 +406,9 @@ async def cmd_sdo_clean(message: Message):
         return
     from database import get_sdo_deadlines
     from sdo_parser import current_semester_tag
-    old = _old_sdo_deadlines(await get_sdo_deadlines())
+    old = await _old_sdo_deadlines(await get_sdo_deadlines())
     if not old:
-        await message.answer(f"✅ Дедлайнов прошлых семестров нет (нынешний — [{current_semester_tag()}]).")
+        await message.answer(f"✅ Дедлайнов не этого семестра нет (нынешний — [{current_semester_tag()}], курсы сверяю с расписанием).")
         return
     lines = [f"• {esc(d['subject'][:90])} — {d['due_date'][8:10]}.{d['due_date'][5:7]}" for d in old[:25]]
     more = f"\n…и ещё {len(old) - 25}" if len(old) > 25 else ""
@@ -411,7 +417,8 @@ async def cmd_sdo_clean(message: Message):
         InlineKeyboardButton(text="Не надо", callback_data="sdoclean:no"),
     ]])
     await message.answer(
-        f"🧹 <b>Дедлайны прошлых семестров: {len(old)}</b> (нынешний — [{current_semester_tag()}])\n\n"
+        f"🧹 <b>Дедлайны не этого семестра: {len(old)}</b> — прошлые семестры "
+        f"(нынешний — [{current_semester_tag()}]) или курсов нет в расписании группы\n\n"
         + "\n".join(lines) + more + "\n\nУдалятся у всех. Синк СДО их больше не подтянет.",
         parse_mode="HTML", reply_markup=kb,
     )
@@ -427,10 +434,10 @@ async def sdo_clean_confirm(callback: CallbackQuery):
         await callback.answer("Ок, ничего не трогаю")
         return
     from database import delete_deadline, get_sdo_deadlines
-    old = _old_sdo_deadlines(await get_sdo_deadlines())   # заново: список мог измениться
+    old = await _old_sdo_deadlines(await get_sdo_deadlines())   # заново: список мог измениться
     for d in old:
         await delete_deadline(d["id"])
-    await callback.message.edit_text(f"🗑 Удалено дедлайнов прошлых семестров: {len(old)}.")
+    await callback.message.edit_text(f"🗑 Удалено дедлайнов не этого семестра: {len(old)}.")
     await callback.answer()
 
 # ── Публикация дедлайнов в группу (ручная модерация старостой) ─────────────

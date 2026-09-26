@@ -178,7 +178,7 @@ async def test_sync_skips_old_semester_and_sdoclean_removes_them(db, monkeypatch
     try:
         msg = Message(message_id=1, date=0, chat=chat, from_user=user, text="/sdoclean")
         await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, message=msg))
-        assert "Дедлайны прошлых семестров: 1" in bot.session.sent_texts[-1][1]
+        assert "Дедлайны не этого семестра: 1" in bot.session.sent_texts[-1][1]
         assert await db.get_deadline(stale)                                   # до кнопки — на месте
         cb = CallbackQuery(id="1", from_user=user, chat_instance="c", data="sdoclean:go",
                            message=Message(message_id=2, date=0, chat=chat, text="…"))
@@ -187,3 +187,40 @@ async def test_sync_skips_old_semester_and_sdoclean_removes_them(db, monkeypatch
         router._parent_router = None
     assert await db.get_deadline(stale) is None
     assert await db.get_deadline_by_external_id("sdo:1")                     # нынешний — не тронут
+
+
+def test_course_of_takes_last_top_level_parentheses():
+    assert sdo_parser.course_of("ПР 1 (Анализ данных (УИБО-03-24))") == "Анализ данных (УИБО-03-24)"
+    assert sdo_parser.course_of("Тест (1) закрывается (Архитектура_Экзамен [I.26-27])") == "Архитектура_Экзамен [I.26-27]"
+    assert sdo_parser.course_of("Без курса") == ""
+
+
+@pytest.mark.asyncio
+async def test_sync_keeps_only_courses_from_schedule(db, monkeypatch):
+    # живой тест: «Методы принятия управленческих решений», «Физкультура 3/3»
+    # прошлых семестров были без метки «[II.25-26]» — сверяем с расписанием
+    import schedule_parser
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
+
+    async def subjects():
+        return ["Анализ данных", "Архитектура предприятия"]
+
+    async def calendar():
+        mk = lambda n, course: {"external_id": f"sdo:{n}", "course": course, "subject": f"ПР {n} ({course})",
+                                "description": "", "due_date": "2099-10-01", "due_time": "23:59"}
+        return [mk(1, "Анализ данных (УИБО-03-24)"), mk(2, "Архитектура_Экзамен [I.26-27]"),
+                mk(3, "Методы принятия управленческих решений"), mk(4, "Физическая культура и спорт 3/3"),
+                mk(5, "Учебный отдел ИТУ")]                     # нет в расписании, но владелец просил оставить
+
+    monkeypatch.setattr(schedule_parser, "get_group_subjects", subjects)
+    monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", calendar)
+    res = await sdo_parser.sync_deadlines()
+    assert (res["added"], res["old_semester"]) == (3, 2)
+    assert res["old_courses"] == ["Методы принятия управленческих решений", "Физическая культура и спорт 3/3"]
+
+    async def no_schedule():
+        return []
+
+    monkeypatch.setattr(schedule_parser, "get_group_subjects", no_schedule)   # расписание не загрузилось —
+    res = await sdo_parser.sync_deadlines()                                    # ничего не выбрасываем
+    assert (res["added"], res["old_semester"]) == (2, 0)

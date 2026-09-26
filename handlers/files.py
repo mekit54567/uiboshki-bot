@@ -450,7 +450,7 @@ def _sdo_report(courses, known: set[str]) -> tuple[list[str], int]:
     if empty:
         lines.append(f"\nБез файлов: {esc(', '.join(empty))}")
     if old:
-        lines.append(f"\nПрошлый семестр — пропустил: {esc(', '.join(old))}")
+        lines.append(f"\nНе этого семестра (нет в расписании) — пропустил: {esc(', '.join(old))}")
     lines.append("\nПредмет и тип потом можно поправить в WebApp (✏️ у файла).")
     chunks, cur = [], ""
     for line in lines:
@@ -555,6 +555,16 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
         lines.append("⚠️ Кука СДО протухла посередине — обнови SDO_SESSION_COOKIE и повтори /sdofiles.")
     lines.append("\nСмотреть: /files или вкладка «Файлы» в приложении.")
     await bot.send_message(chat_id, "\n".join(lines), parse_mode="HTML")
+
+
+@router.message(Command("backup"))
+async def cmd_backup(message: Message):
+    """Копия базы прямо сейчас (обычно приходит сама каждую ночь)."""
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    from backup import send_backup
+    await send_backup(message.bot, message.chat.id, silent=False)
 
 
 # ── Синхронизация файлов из локальной базы ────────────────────────────────────
