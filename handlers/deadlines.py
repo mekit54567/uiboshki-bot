@@ -11,7 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
 
 from database import (
-    add_deadline, get_active_deadlines, mark_deadline_done,
+    add_deadline, get_active_deadlines, mark_deadline_done, set_deadline_done,
     delete_deadline, upsert_user, get_deadline_stats, get_deadline, is_shared_deadline,
 )
 from config import STAROSTA_ID, GROUP_CHAT_ID
@@ -97,11 +97,18 @@ def _deadline_line(d: dict, today: date) -> str:
     return f"<code>{d['id']}</code> <b>{esc(d['subject'])}</b>{mine}\n    {due_label(due, today, d.get('due_time'))}{extra}"
 
 
-def format_deadlines(deadlines: list[dict]) -> str:
+def format_deadlines(deadlines: list[dict], done: list[dict] | None = None) -> str:
     """Дедлайны группами по срочности. Раньше — плоский список с полоской
-    «━━━━━━━━╌╌ 80%», по которой было непонятно, 80% чего (живой тест)."""
+    «━━━━━━━━╌╌ 80%», по которой было непонятно, 80% чего (живой тест).
+    done — выполненные этим студентом: коротко внизу, с подсказкой, как
+    вернуть (если отметил случайно)."""
+    done_block = ""
+    if done:
+        lines = [f"<code>{d['id']}</code> {esc(d['subject'][:60])}" for d in done[:5]]
+        more = f"\n… и ещё {len(done) - 5}" if len(done) > 5 else ""
+        done_block = f"✅ <b>Выполнено: {len(done)}</b> — вернуть: /undone ID\n" + "\n".join(lines) + more
     if not deadlines:
-        return "📋 Дедлайнов нет — можно расслабиться! 🎉"
+        return "📋 Дедлайнов нет — можно расслабиться! 🎉" + (f"\n\n{done_block}" if done_block else "")
 
     today = today_msk()
     groups = {"💀 Просрочено": [], "🔥 Горит": [], "📅 На неделе": [], "🗓 Позже": []}
@@ -115,7 +122,9 @@ def format_deadlines(deadlines: list[dict]) -> str:
     for title, items in groups.items():
         if items:
             blocks.append(f"<b>{title}</b>\n" + "\n".join(_deadline_line(d, today) for d in items))
-    blocks.append("✅ /done ID — выполнено · 🗑 /del ID — удалить · ➕ /add")
+    if done_block:
+        blocks.append(done_block)
+    blocks.append("✅ /done ID — выполнено · ↩️ /undone ID — вернуть · 🗑 /del ID · ➕ /add")
     return "\n\n".join(blocks)
 
 
@@ -123,8 +132,10 @@ def format_deadlines(deadlines: list[dict]) -> str:
 @router.message(F.text == "📋 Дедлайны")
 async def cmd_deadlines(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    deadlines = await get_active_deadlines(message.from_user.id)
-    await message.answer(format_deadlines(deadlines), parse_mode="HTML")
+    everything = await get_active_deadlines(message.from_user.id, include_done=True)
+    active = [d for d in everything if not d.get("done")]
+    done = [d for d in everything if d.get("done")]
+    await message.answer(format_deadlines(active, done), parse_mode="HTML", disable_web_page_preview=True)
 
 
 @router.message(Command("stats"))
@@ -265,7 +276,23 @@ async def cmd_done(message: Message):
     # Персональная отметка: у каждого свой статус "выполнено" — не влияет
     # на то, что видят остальные (в т.ч. по этому же общему дедлайну).
     await mark_deadline_done(did, message.from_user.id)
-    await message.answer(f"✅ У тебя дедлайн #{did} отмечен как выполненный!")
+    await message.answer(f"✅ У тебя дедлайн #{did} отмечен как выполненный!\nОшибся — /undone {did}")
+
+
+@router.message(Command("undone"))
+async def cmd_undone(message: Message):
+    """Вернуть дедлайн из выполненных — если отметил случайно (раньше
+    вернуть можно было только галочкой в WebApp, в боте — никак)."""
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Использование: /undone 3 — вернуть дедлайн в активные")
+        return
+    did = int(parts[1])
+    if not await get_deadline(did):
+        await message.answer("❌ Дедлайн с таким ID не найден.")
+        return
+    await set_deadline_done(did, message.from_user.id, False)
+    await message.answer(f"↩️ Дедлайн #{did} снова в активных.")
 
 
 @router.message(Command("del"))

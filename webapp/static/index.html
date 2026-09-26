@@ -31,7 +31,6 @@
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     font-size: 15px;
     line-height: 1.45;
-    padding-bottom: 84px;
     overscroll-behavior-y: contain;
   }
   ::-webkit-scrollbar { display: none; }
@@ -52,7 +51,10 @@
     font-size: 13px;
   }
 
-  main { padding: 6px 14px 20px; }
+  /* Отступ снизу под фиксированную панель вкладок. На body он не работал:
+     у body height: 100%, и его padding-bottom не добавлялся после контента —
+     последняя пара/карточка оставалась под панелью (живой тест с телефона). */
+  main { padding: 6px 14px calc(var(--nav-h, 64px) + 28px); }
 
   .view { display: none; animation: fadein .18s ease; }
   .view.active { display: block; }
@@ -131,6 +133,12 @@
   .note-card { margin-top: 8px; padding: 10px 13px; border-radius: var(--radius-sm);
                background: rgba(255,178,56,.1); border: 1px solid rgba(255,178,56,.3); font-size: 13.5px; }
   .daychips { display: flex; gap: 6px; margin-bottom: 10px; }
+  .week-nav { display: flex; gap: 6px; }
+  .week-nav button {
+    width: 34px; height: 30px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg-card); color: var(--text); font-size: 18px; font-weight: 800; line-height: 1;
+  }
+  .week-nav button:disabled { opacity: .3; }
   .daychips button {
     flex: 1; background: var(--bg-card); border: 1px solid var(--border); color: var(--hint);
     border-radius: 12px; padding: 7px 0; font-size: 11.5px; font-weight: 700; line-height: 1.2;
@@ -223,11 +231,36 @@
   .sheet-hint { color: var(--hint); font-size: 12.5px; margin: 0 0 12px; }
   button.primary { width: 100%; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 13px; font-size: 15px; font-weight: 800; }
   button.primary:disabled { opacity: .5; }
+  .toast {
+    position: fixed; left: 14px; right: 14px; bottom: calc(var(--nav-h, 64px) + 12px); z-index: 15;
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    background: #23262f; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    font-size: 14px; transform: translateY(20px); opacity: 0; pointer-events: none;
+    transition: transform .2s ease, opacity .2s ease;
+  }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast span { flex: 1; }
+  .toast button { background: none; border: none; color: #9ea2ff; font-weight: 800; font-size: 14px; padding: 0; }
+  .toast button:empty { display: none; }
   .hw-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
   .hw-card .hw-subj { font-weight: 800; margin-bottom: 4px; }
   .hw-card .hw-text { white-space: pre-wrap; word-break: break-word; font-size: 14px; }
   .hw-card .dl-meta { margin-top: 8px; }
   .file-card .badge { font-size: 11px; font-weight: 800; color: var(--accent-2); margin-left: 6px; }
+  .file-card button.edit { margin-left: -4px; background: none; color: var(--hint); padding: 6px 2px; font-size: 15px; }
+  .folder-card {
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 13px 14px;
+    transition: transform .12s ease;
+  }
+  .folder-card:active { transform: scale(0.985); background: var(--bg-raised); }
+  .folder-card .ic { font-size: 24px; }
+  .folder-card .ft { font-weight: 800; word-break: break-word; }
+  .folder-card .fs { color: var(--hint); font-size: 12.5px; margin-top: 2px; }
+  .folder-card .go { margin-left: auto; color: var(--hint); font-size: 18px; }
+  .file-back { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 14px; padding: 0; margin: 0 0 6px; }
+  .file-subj-title { font-size: 19px; font-weight: 800; margin: 0 2px 10px; word-break: break-word; }
+  #file-list > .group-title:first-child { margin-top: 2px; }
 
   .deadline-card {
     display: flex; align-items: flex-start; gap: 12px;
@@ -326,7 +359,7 @@
      чат был высотой calc(100vh - 180px): внутри Telegram 100vh не равен
      видимой высоте окна, и поле ввода уезжало под панель вкладок — писать
      было нельзя (живой тест). --nav-h выставляет JS по реальной высоте панели. */
-  .chat-wrap { padding-bottom: calc(var(--nav-h, 64px) + var(--dock-h, 60px) + 20px); }
+  .chat-wrap { padding-bottom: var(--dock-h, 60px); }  /* под панель вкладок отступ уже даёт main */
   .chat-log { display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
@@ -396,7 +429,12 @@
   .msg.typing-dots span:nth-child(3) { animation-delay: .4s; }
   @keyframes blink { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
   .chat-empty { text-align: center; color: var(--hint); padding: 22px 8px 6px; }
-  .chat-empty .big-emoji { font-size: 40px; }
+  .chat-avatar {
+    width: 64px; height: 64px; margin: 0 auto 4px; border-radius: 22px;
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 120%);
+    box-shadow: 0 10px 26px rgba(92, 96, 230, .35);
+  }
   .chat-empty p { margin: 6px 0 14px; font-size: 14px; }
   .suggest { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
   .suggest button {
@@ -463,7 +501,13 @@
       </div>
     </div>
 
-    <h2 class="section">Неделя</h2>
+    <h2 class="section">
+      <span id="wk-label">Эта неделя</span>
+      <span class="week-nav">
+        <button id="wk-prev" onclick="shiftWeek(-1)" aria-label="Предыдущая неделя">‹</button>
+        <button id="wk-next" onclick="shiftWeek(1)" aria-label="Следующая неделя">›</button>
+      </span>
+    </h2>
     <div class="daychips" id="daychips"></div>
     <div class="lessons" id="day-lessons"></div>
   </section>
@@ -513,14 +557,14 @@
   <section class="view" id="view-files">
     <h2 class="section">Файлы</h2>
     <input class="searchbox" id="file-search" placeholder="Поиск по названию, предмету, файлу…">
-    <div class="chips-row" id="file-subjects"></div>
+    <div id="file-head"></div>
     <div class="list" id="file-list"><div class="skel" style="height:60px"></div><div class="skel" style="height:60px"></div></div>
     <p class="sheet-hint" style="margin-top:14px;">📖 — ИИ уже прочитал файл и отвечает по нему. Загрузить новые: /upload в боте.</p>
   </section>
 
   <!-- ── Чат ───────────────────────────────────────────────────────── -->
   <section class="view" id="view-chat">
-    <h2 class="section">Чат с ИИ 🤖 <button class="link-btn" onclick="newChat()">＋ Новый чат</button></h2>
+    <h2 class="section">Чат с ИИ ✨ <button class="link-btn" onclick="newChat()">＋ Новый чат</button></h2>
     <select class="filter" id="chat-subject">
       <option value="">📚 Предмет: любой</option>
     </select>
@@ -543,24 +587,39 @@
 <div class="sheet-backdrop" id="add-sheet" onclick="if (event.target === this) closeAddSheet()">
   <div class="sheet">
     <div class="sheet-grip"></div>
-    <h3>Новый дедлайн</h3>
+    <h3 id="nd-title">Новый дедлайн</h3>
     <input class="searchbox" id="nd-subject" placeholder="Что сдать? Например: лаба 3 по анализу данных" maxlength="200">
     <div class="row2">
       <input class="searchbox" type="date" id="nd-date">
       <input class="searchbox" type="time" id="nd-time">
     </div>
     <textarea class="searchbox" id="nd-desc" rows="2" placeholder="Описание — необязательно"></textarea>
-    <p class="sheet-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
+    <p class="sheet-hint" id="nd-hint">👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста.</p>
     <button class="primary" id="nd-submit" onclick="submitDeadline()">Добавить</button>
   </div>
 </div>
+
+<div class="sheet-backdrop" id="file-sheet" onclick="if (event.target === this) closeFileSheet()">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <h3>Изменить файл</h3>
+    <input class="searchbox" id="fe-title" placeholder="Название" maxlength="120">
+    <input class="searchbox" id="fe-subject" placeholder="Предмет" maxlength="80" list="fe-subjects">
+    <datalist id="fe-subjects"></datalist>
+    <div class="chips-row" id="fe-cats"></div>
+    <p class="sheet-hint">Изменится у всей группы. Текст для ИИ переедет вместе с файлом.</p>
+    <button class="primary" id="fe-submit" onclick="submitFileEdit()">Сохранить</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-text"></span><button id="toast-action"></button></div>
 
 <nav class="tabs">
   <button class="active" data-tab="today" onclick="switchTab('today')"><span class="ic">📅</span>Сегодня</button>
   <button data-tab="deadlines" onclick="switchTab('deadlines')"><span class="ic">📋</span>Дедлайны</button>
   <button data-tab="search" onclick="switchTab('search')"><span class="ic">🔍</span>Поиск</button>
   <button data-tab="files" onclick="switchTab('files')"><span class="ic">📁</span>Файлы</button>
-  <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">🤖</span>Чат</button>
+  <button data-tab="chat" onclick="switchTab('chat')"><span class="ic">💬</span>Чат</button>
 </nav>
 
 <script>
@@ -629,7 +688,11 @@ function switchTab(name) {
   if (name === "files") loadFiles();
   if (name === "search") renderRecent();
   if (name === "chat") requestAnimationFrame(syncNavHeight);
-  if (name !== "search" && tg && tg.BackButton) tg.BackButton.hide();
+  if (tg && tg.BackButton) {
+    tg.BackButton.offClick(closeFolder);
+    const targetOpen = document.getElementById("target-view").style.display === "block";
+    if (!(name === "search" && targetOpen)) tg.BackButton.hide();
+  }
 }
 
 // ── Сегодня ───────────────────────────────────────────────────────────────
@@ -767,11 +830,30 @@ function isoDate(d) {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
+// Неделю можно листать стрелками: на прошлую и на несколько вперёд —
+// раньше чипы заканчивались субботой, и глянуть следующий понедельник было
+// нельзя (живой тест с телефона).
+let weekOffset = 0;
+const WEEK_MIN = -1, WEEK_MAX = 8;
+const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+
+function shiftWeek(delta) {
+  weekOffset = Math.min(WEEK_MAX, Math.max(WEEK_MIN, weekOffset + delta));
+  haptic();
+  renderDayChips();
+}
+
 function renderDayChips() {
   const base = todayData ? new Date(todayData.date + "T12:00:00") : new Date();
   const wd = (base.getDay() + 6) % 7;             // 0 = понедельник
   const monday = new Date(base);
-  monday.setDate(base.getDate() - wd + (wd === 6 ? 7 : 0));  // в воскресенье — следующая неделя
+  monday.setDate(base.getDate() - wd + (wd === 6 ? 7 : 0) + weekOffset * 7);  // в воскресенье — следующая неделя
+  const saturday = new Date(monday); saturday.setDate(monday.getDate() + 5);
+  const label = weekOffset === 0 ? "Эта неделя" : weekOffset === 1 ? "Следующая неделя" : weekOffset === -1 ? "Прошлая неделя"
+    : monday.getDate() + " " + MONTHS_SHORT[monday.getMonth()] + " – " + saturday.getDate() + " " + MONTHS_SHORT[saturday.getMonth()];
+  document.getElementById("wk-label").textContent = label;
+  document.getElementById("wk-prev").disabled = weekOffset <= WEEK_MIN;
+  document.getElementById("wk-next").disabled = weekOffset >= WEEK_MAX;
   const box = document.getElementById("daychips");
   box.innerHTML = "";
   let selected = null;
@@ -861,18 +943,24 @@ async function loadDeadlines() {
       block("На этой неделе", groups.week) +
       block("Позже", groups.later) +
       (groups.done.length ? '<details class="done-group"><summary><p class="group-title">Выполнено · ' + groups.done.length +
-        ' ▾</p></summary><div class="list">' + groups.done.map(renderDeadline).join("") + '</div></details>' : "");
+        ' ▾ <span style="text-transform:none;font-weight:600">— нажми, чтобы вернуть</span></p></summary><div class="list">' +
+        groups.done.map(renderDeadline).join("") + '</div></details>' : "");
   } catch (e) {
     list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
   }
 }
 
+let deadlineIndex = {};
+
 function renderDeadline(item) {
+  deadlineIndex[item.id] = item;
   const desc = item.description || "";
   const isLink = /^https?:\/\//.test(desc);
   const actions = [];
-  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Открыть задание</a>');
-  if (item.mine && item.personal) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
+  if (item.done) actions.push('<button onclick="event.stopPropagation(); toggleDeadline(' + item.id + ', false)">↩ Вернуть в активные</button>');
+  if (isLink) actions.push('<a href="#" onclick="event.stopPropagation(); openLink(' + escapeHtml(JSON.stringify(desc)) + '); return false;">🔗 Задание</a>');
+  if (item.can_edit) actions.push('<button onclick="event.stopPropagation(); openAddSheet(' + item.id + ')">✏️ Изменить</button>');
+  if (item.can_edit) actions.push('<button class="del" onclick="event.stopPropagation(); deleteDeadline(' + item.id + ')">🗑 Удалить</button>');
   return (
     '<div class="deadline-card ' + (item.done ? "done" : "") + '" onclick="toggleDeadline(' + item.id + ', ' + (!item.done) + ')">' +
       '<div class="checkbox ' + (item.done ? "checked" : "") + '">' + (item.done ? "✓" : "") + '</div>' +
@@ -890,12 +978,28 @@ function openLink(url) {
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, "_blank");
 }
 
+let toastTimer = null;
+function showToast(text, actionLabel, onAction) {
+  const t = document.getElementById("toast");
+  document.getElementById("toast-text").textContent = text;
+  const btn = document.getElementById("toast-action");
+  btn.textContent = actionLabel || "";
+  btn.onclick = () => { t.classList.remove("show"); if (onAction) onAction(); };
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 4500);
+}
+
+// Отметил случайно — «Отменить» в тосте или «↩ Вернуть» у выполненного
+// (раньше выполненный уезжал в свёрнутый список, и вернуть его было неочевидно).
 async function toggleDeadline(id, done) {
   haptic("success");
   try {
     await api("/api/deadlines/" + id + "/toggle", { method: "POST", body: JSON.stringify({ done: done }) });
     loadDeadlines();
     loadToday();
+    if (done) showToast("✓ Отмечено выполненным", "Отменить", () => toggleDeadline(id, false));
+    else showToast("↩ Вернул в активные");
   } catch (e) {
     alert("Не получилось: " + e.message);
   }
@@ -920,11 +1024,31 @@ function confirmDialog(text) {
   });
 }
 
-function openAddSheet() {
+let editingId = null;
+
+// Одна форма на «добавить» и «изменить»: openAddSheet() — новый личный,
+// openAddSheet(id) — правка (свой личный или, для старосты, общий).
+function openAddSheet(id) {
   haptic();
-  const d = new Date(); d.setDate(d.getDate() + 7);
-  document.getElementById("nd-date").value = isoDate(d);
-  document.getElementById("nd-time").value = "23:59";
+  const item = id ? deadlineIndex[id] : null;
+  editingId = item ? item.id : null;
+  document.getElementById("nd-title").textContent = item ? "Изменить дедлайн" : "Новый дедлайн";
+  document.getElementById("nd-submit").textContent = item ? "Сохранить" : "Добавить";
+  document.getElementById("nd-hint").textContent = !item
+    ? "👤 Личный — видишь только ты. Общие дедлайны группы добавляет староста."
+    : item.personal ? "👤 Личный — видишь только ты."
+    : "✏️ Общий дедлайн — изменится у всей группы. Автосинк СДО его больше не перезапишет.";
+  if (item) {
+    document.getElementById("nd-subject").value = item.subject;
+    document.getElementById("nd-date").value = item.due_date;
+    document.getElementById("nd-time").value = item.due_time || "";
+    document.getElementById("nd-desc").value = item.description || "";
+  } else {
+    const d = new Date(); d.setDate(d.getDate() + 7);
+    ["nd-subject", "nd-desc"].forEach(x => document.getElementById(x).value = "");
+    document.getElementById("nd-date").value = isoDate(d);
+    document.getElementById("nd-time").value = "23:59";
+  }
   document.getElementById("add-sheet").classList.add("open");
   setTimeout(() => document.getElementById("nd-subject").focus(), 150);
 }
@@ -939,14 +1063,18 @@ async function submitDeadline() {
   const btn = document.getElementById("nd-submit");
   btn.disabled = true;
   try {
-    await api("/api/deadlines", { method: "POST", body: JSON.stringify({
+    const payload = JSON.stringify({
       subject: subject,
       due_date: document.getElementById("nd-date").value,
       due_time: document.getElementById("nd-time").value,
       description: document.getElementById("nd-desc").value.trim(),
-    }) });
+    });
+    if (editingId) await api("/api/deadlines/" + editingId, { method: "PATCH", body: payload });
+    else await api("/api/deadlines", { method: "POST", body: payload });
     haptic("success");
+    showToast(editingId ? "✓ Сохранено" : "✓ Дедлайн добавлен");
     ["nd-subject", "nd-desc"].forEach(id => document.getElementById(id).value = "");
+    editingId = null;
     closeAddSheet();
     loadDeadlines(); loadToday();
   } catch (e) {
@@ -986,8 +1114,15 @@ document.getElementById("file-search").addEventListener("input", (e) => {
   fileSearchTimer = setTimeout(() => loadFiles(e.target.value), 300);
 });
 
+// Файлы: предметы-папки → внутри разделы по типам (лекции, практики, КР…).
+// Поиск — плоский список с предметом и типом у каждого файла.
 let fileItems = [];
-let fileSubject = "";
+let fileCategories = [];
+let fileSubject = null;   // null — список папок; строка — открыт предмет ("" — без предмета)
+let fileCat = "";
+let fileQuery = "";
+let folderList = [];
+let fileIndex = {};
 
 function fileIcon(name) {
   const n = (name || "").toLowerCase();
@@ -999,49 +1134,176 @@ function fileIcon(name) {
   return "📄";
 }
 
-function renderFiles() {
-  const list = document.getElementById("file-list");
-  const items = fileSubject ? fileItems.filter(f => f.subject === fileSubject) : fileItems;
-  if (!items.length) { list.innerHTML = '<div class="empty">Ничего не нашлось</div>'; return; }
-  list.innerHTML = items.map(f =>
-    '<div class="file-card">' +
-      '<span class="ic">' + fileIcon(f.file_name) + '</span>' +
-      '<div style="min-width:0"><div class="ft">' + escapeHtml(f.title) + (f.has_text ? '<span class="badge">📖</span>' : '') + '</div>' +
-      '<div class="fs">' + escapeHtml(f.subject || f.file_name || "") + '</div></div>' +
-      '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
-    '</div>'
-  ).join("");
+function fileCard(f, withPlace) {
+  const sub = withPlace ? (f.subject || "Без предмета") + " · " + f.category_label : (f.file_name || "");
+  return '<div class="file-card">' +
+    '<span class="ic">' + fileIcon(f.file_name) + '</span>' +
+    '<div style="min-width:0"><div class="ft">' + escapeHtml(f.title) + (f.has_text ? '\u2060<span class="badge">📖</span>' : '') + '</div>' +
+    '<div class="fs">' + escapeHtml(sub) + '</div></div>' +
+    '<button onclick="openFile(' + f.id + ')">Открыть</button>' +
+    (f.can_edit ? '<button class="edit" onclick="openFileSheet(' + f.id + ')" aria-label="Изменить">✏️</button>' : '') +
+  '</div>';
 }
 
-function renderFileSubjects() {
-  const box = document.getElementById("file-subjects");
-  const subjects = [...new Set(fileItems.map(f => f.subject).filter(Boolean))].sort();
-  if (subjects.length < 2) { box.innerHTML = ""; return; }
-  box.innerHTML = "";
-  ["", ...subjects].forEach(s => {
-    const b = document.createElement("button");
-    b.textContent = s || "Все";
-    b.classList.toggle("active", s === fileSubject);
-    b.onclick = () => { fileSubject = s; haptic(); renderFileSubjects(); renderFiles(); };
-    box.appendChild(b);
-  });
+function countByCat(files) {
+  const counts = {};
+  files.forEach(f => counts[f.category] = (counts[f.category] || 0) + 1);
+  return counts;
+}
+
+function renderFolders(list) {
+  const bySubject = {};
+  fileItems.forEach(f => (bySubject[f.subject] = bySubject[f.subject] || []).push(f));
+  folderList = Object.keys(bySubject).sort((a, b) => a === "" ? 1 : b === "" ? -1 : a.localeCompare(b, "ru"));
+  list.innerHTML = folderList.map((s, i) => {
+    const files = bySubject[s];
+    const counts = countByCat(files);
+    const parts = fileCategories.filter(c => counts[c.key]).map(c => c.label.split(" ")[0] + " " + counts[c.key]);
+    return '<div class="folder-card" onclick="openFolder(' + i + ')">' +
+      '<span class="ic">📁</span>' +
+      '<div style="min-width:0"><div class="ft">' + escapeHtml(s || "Без предмета") + '</div>' +
+      '<div class="fs">' + files.length + " " + plural(files.length, "файл", "файла", "файлов") +
+        (parts.length > 1 ? " · " + parts.join(" · ") : "") + '</div></div>' +
+      '<span class="go">›</span></div>';
+  }).join("");
+}
+
+function renderFiles() {
+  const head = document.getElementById("file-head");
+  const list = document.getElementById("file-list");
+  head.innerHTML = "";
+  if (fileQuery) {
+    list.innerHTML = fileItems.length ? fileItems.map(f => fileCard(f, true)).join("") : '<div class="empty">Ничего не нашлось</div>';
+    syncFileBack();
+    return;
+  }
+  const subjects = [...new Set(fileItems.map(f => f.subject))];
+  const single = subjects.length === 1;
+  if (fileSubject === null && !single) { renderFolders(list); syncFileBack(); return; }
+  const subject = single ? subjects[0] : fileSubject;
+  const files = fileItems.filter(f => f.subject === subject);
+  const counts = countByCat(files);
+  const cats = fileCategories.filter(c => counts[c.key]);
+  if (fileCat && !counts[fileCat]) fileCat = "";
+
+  head.innerHTML = (single ? "" : '<button class="file-back" onclick="closeFolder()">‹ Все предметы</button>') +
+    '<div class="file-subj-title">' + escapeHtml(subject || "Без предмета") + '</div>' +
+    (cats.length > 1 ? '<div class="chips-row" id="file-cats"></div>' : "");
+  if (cats.length > 1) {
+    const box = document.getElementById("file-cats");
+    [{ key: "", label: "Все" }, ...cats].forEach(c => {
+      const b = document.createElement("button");
+      b.textContent = c.label + " · " + (c.key ? counts[c.key] : files.length);
+      b.classList.toggle("active", c.key === fileCat);
+      b.onclick = () => { fileCat = c.key; haptic(); renderFiles(); };
+      box.appendChild(b);
+    });
+  }
+  const shown = fileCat ? cats.filter(c => c.key === fileCat) : cats;
+  list.innerHTML = shown.map(c =>
+    '<div class="group-title">' + escapeHtml(c.label) + ' · ' + counts[c.key] + '</div>' +
+    files.filter(f => f.category === c.key).map(f => fileCard(f, false)).join("")
+  ).join("");
+  syncFileBack();
+}
+
+function openFolder(i) {
+  fileSubject = folderList[i];
+  fileCat = "";
+  haptic();
+  renderFiles();
+  window.scrollTo(0, 0);
+}
+
+function closeFolder() {
+  fileSubject = null;
+  fileCat = "";
+  renderFiles();
+}
+
+// Системная «Назад» Telegram внутри папки возвращает к списку предметов.
+function syncFileBack() {
+  if (!tg || !tg.BackButton) return;
+  tg.BackButton.offClick(closeFolder);
+  const inFolder = fileSubject !== null && !fileQuery && new Set(fileItems.map(f => f.subject)).size > 1;
+  if (inFolder) { tg.BackButton.onClick(closeFolder); tg.BackButton.show(); }
+  else tg.BackButton.hide();
 }
 
 async function loadFiles(q) {
   const list = document.getElementById("file-list");
+  if (q !== undefined) fileQuery = q.trim();
   try {
-    const data = await api("/api/files?q=" + encodeURIComponent(q || ""));
+    const data = await api("/api/files?q=" + encodeURIComponent(fileQuery));
     fileItems = data.items;
-    if (fileSubject && !fileItems.some(f => f.subject === fileSubject)) fileSubject = "";
+    fileCategories = data.categories || [];
+    fileIndex = {};
+    fileItems.forEach(f => fileIndex[f.id] = f);
+    if (fileSubject !== null && !fileItems.some(f => f.subject === fileSubject)) fileSubject = null;
     if (!fileItems.length) {
-      list.innerHTML = '<div class="empty">' + (q ? "Ничего не нашлось" : "Файлов пока нет — загрузи их в боте: /upload") + '</div>';
-      document.getElementById("file-subjects").innerHTML = "";
+      list.innerHTML = '<div class="empty">' + (fileQuery ? "Ничего не нашлось" : "Файлов пока нет — загрузи их в боте: /upload") + '</div>';
+      document.getElementById("file-head").innerHTML = "";
+      syncFileBack();
       return;
     }
-    renderFileSubjects();
     renderFiles();
   } catch (e) {
     list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+let fileEditing = null;
+let fileEditCat = "";
+
+function openFileSheet(id) {
+  const f = fileIndex[id];
+  if (!f) return;
+  haptic();
+  fileEditing = f;
+  fileEditCat = f.category;
+  document.getElementById("fe-title").value = f.title;
+  document.getElementById("fe-subject").value = f.subject;
+  const subjects = [...new Set(fileItems.map(x => x.subject).filter(Boolean))].sort();
+  document.getElementById("fe-subjects").innerHTML = subjects.map(s => '<option value="' + escapeHtml(s) + '">').join("");
+  renderFileEditCats();
+  document.getElementById("file-sheet").classList.add("open");
+}
+
+function renderFileEditCats() {
+  const box = document.getElementById("fe-cats");
+  box.innerHTML = "";
+  fileCategories.forEach(c => {
+    const b = document.createElement("button");
+    b.textContent = c.label;
+    b.classList.toggle("active", c.key === fileEditCat);
+    b.onclick = () => { fileEditCat = c.key; haptic(); renderFileEditCats(); };
+    box.appendChild(b);
+  });
+}
+
+function closeFileSheet() {
+  document.getElementById("file-sheet").classList.remove("open");
+}
+
+async function submitFileEdit() {
+  const title = document.getElementById("fe-title").value.trim();
+  if (!title) { document.getElementById("fe-title").focus(); return; }
+  const btn = document.getElementById("fe-submit");
+  btn.disabled = true;
+  try {
+    await api("/api/files/" + fileEditing.id, { method: "PATCH", body: JSON.stringify({
+      title: title,
+      subject: document.getElementById("fe-subject").value.trim(),
+      category: fileEditCat,
+    }) });
+    haptic("success");
+    showToast("✓ Сохранено");
+    closeFileSheet();
+    loadFiles();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1175,7 +1437,7 @@ function renderChat() {
   if (!chatLog.length) {
     const empty = document.createElement("div");
     empty.className = "chat-empty";
-    empty.innerHTML = '<div class="big-emoji">🤖</div><p>Спрашивай про учёбу, присылай фото задач и файлы лекций.<br>Я знаю ваше расписание, дедлайны и ДЗ.</p><div class="suggest"></div>';
+    empty.innerHTML = '<div class="chat-avatar">✨</div><p>Спрашивай про учёбу, присылай фото задач и файлы лекций.<br>Я знаю ваше расписание, дедлайны и ДЗ.</p><div class="suggest"></div>';
     const box = empty.querySelector(".suggest");
     SUGGESTIONS.forEach(t => {
       const b = document.createElement("button");

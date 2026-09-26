@@ -42,6 +42,12 @@ async def init_db():
             await db.execute("ALTER TABLE deadlines ADD COLUMN external_id TEXT")
         except Exception:
             pass  # колонка уже есть
+        # Дедлайн отредактирован вручную (староста поправил название/срок
+        # задания из СДО) — автосинк его больше не перезаписывает.
+        try:
+            await db.execute("ALTER TABLE deadlines ADD COLUMN manual_edit INTEGER DEFAULT 0")
+        except Exception:
+            pass  # колонка уже есть
 
         # Персональный токен подписки на ICS-календарь (Фаза 12) — каждому
         # студенту своя приватная ссылка, не одна общая на группу. Генерится
@@ -100,6 +106,18 @@ async def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Тип файла внутри предмета (лекции/практики/КР/…, см. file_categories).
+        # NULL у старых файлов — тип определяется по названию на лету.
+        try:
+            await db.execute("ALTER TABLE files ADD COLUMN category TEXT")
+        except Exception:
+            pass  # колонка уже есть
+        # Откуда файл пришёл автоматически ("sdo:<cmid>:<имя>" — выгрузка из
+        # СДО, см. sdo_files.py): повторная выгрузка не плодит дубли.
+        try:
+            await db.execute("ALTER TABLE files ADD COLUMN source TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS file_text (
                 file_id      INTEGER PRIMARY KEY,
@@ -300,6 +318,17 @@ async def add_deadline(subject, description, due_date, due_time, created_by, ext
         await db.commit()
         return cursor.lastrowid
 
+async def edit_deadline(did: int, subject: str, description: str, due_date: str, due_time: str | None):
+    """Ручная правка (WebApp): помечает manual_edit, чтобы автосинк СДО не
+    вернул старое название/срок при следующем проходе."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE deadlines SET subject=?, description=?, due_date=?, due_time=?, manual_edit=1 WHERE id=?",
+            (subject, description, due_date, due_time, did),
+        )
+        await db.commit()
+
+
 async def update_deadline_due(did: int, subject: str, due_date: str, due_time: str | None):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute(
@@ -317,7 +346,8 @@ async def get_deadline_by_external_id(external_id: str) -> dict | None:
 
 # Дедлайн считается "общим" (видят все), если его добавил/утвердил староста,
 # либо это автосинк из СДО (created_by=0) — всё остальное видит только автор.
-_DEADLINE_COLS = "d.id, d.subject, d.description, d.due_date, d.due_time, d.created_by, d.created_at, d.external_id"
+_DEADLINE_COLS = ("d.id, d.subject, d.description, d.due_date, d.due_time, d.created_by, d.created_at, "
+                  "d.external_id, d.manual_edit")
 
 
 def is_shared_deadline(d: dict) -> bool:
@@ -478,14 +508,33 @@ async def get_solver_history(user_id: int, limit=5) -> list[dict]:
 
 # ── Files ─────────────────────────────────────────────────────────────────────
 
-async def add_file(title, subject, file_id, file_name, uploaded_by) -> int:
+async def add_file(title, subject, file_id, file_name, uploaded_by, category: str | None = None,
+                   source: str | None = None) -> int:
+    """category — тип внутри предмета (file_categories); None — определить
+    по названию и имени файла. source — откуда файл выгружен автоматически."""
+    from file_categories import LABELS, detect_category
+    if category not in LABELS:
+        category = detect_category(title or "", file_name or "")
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
-            INSERT INTO files (title, subject, file_id, file_name, uploaded_by)
-            VALUES (?, ?, ?, ?, ?)
-        """, (title, subject, file_id, file_name, uploaded_by))
+            INSERT INTO files (title, subject, file_id, file_name, uploaded_by, category, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (title, subject, file_id, file_name, uploaded_by, category, source))
         await db.commit()
         return cursor.lastrowid
+
+async def get_file_sources() -> set[str]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL")
+        return {r[0] for r in await cursor.fetchall()}
+
+
+async def update_file_meta(fid: int, title: str, subject: str, category: str):
+    """Правка файла (WebApp): название, предмет, тип."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE files SET title=?, subject=?, category=? WHERE id=?", (title, subject, category, fid))
+        await db.commit()
+
 
 async def get_files(subject: str = None) -> list[dict]:
     async with aiosqlite.connect(DATABASE_PATH) as db:

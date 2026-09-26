@@ -80,3 +80,80 @@ async def test_batch_upload_saves_files_reads_text_and_skips_dupes(db, dp, bot, 
     assert progress[-1][1] == "📥 Загружено: <b>2</b> · 📖 прочитано для ИИ: <b>1</b> · ♻️ уже были: 1"
     assert sum("Загружено" in t for t in texts) == 1  # одно сообщение, дальше — правки
     assert "Сохранено файлов: <b>2</b>" in texts[-1]
+    # тип не выбран кнопкой — определён по названию каждого файла
+    assert {f["title"]: f["category"] for f in files} == {"Лекция 1": "lecture", "Практика 2": "practice"}
+
+
+# ── типы файлов внутри предмета ──────────────────────────────────────────────
+
+@pytest.mark.parametrize("names,category", [
+    (("Лекция 3. Бизнес-анализ", "lec3.pdf"), "lecture"),
+    (("Презентация к теме 2",), "lecture"),
+    (("ПР_5 Сети",), "practice"),
+    (("Лабораторная работа №2",), "practice"),
+    (("КР 1 вариант 3",), "control"),
+    (("Тест по главе 4",), "control"),
+    (("Методические указания к практике",), "method"),   # методичка, а не практика
+    (("Вопросы к экзамену по лекциям",), "exam"),         # экзамен, а не лекция
+    (("Зачёт 2025",), "exam"),
+    (("scan_0001", "IMG_22.jpg"), "other"),
+    (("Криптография",), "other"),                          # «кр» внутри слова — не КР
+    (("Проект",), "other"),                                # «пр» без номера — не практика
+])
+def test_detect_category(names, category):
+    from file_categories import detect_category
+    assert detect_category(*names) == category
+
+
+class _Session(RecordingSession):
+    async def make_request(self, bot, method, timeout=None):
+        if type(method).__name__ == "EditMessageReplyMarkup":
+            return True
+        return await super().make_request(bot, method, timeout)
+
+
+async def _click(dp, bot, data):
+    from aiogram.types import CallbackQuery
+    _mid[0] += 1
+    msg = Message(message_id=_mid[0], date=0, chat=CHAT, text="…")
+    cb = CallbackQuery(id=str(_mid[0]), from_user=USER, chat_instance="c", data=data, message=msg)
+    await dp.feed_update(bot, Update(update_id=int(time.time() * 1000000) % 10**9 + _mid[0], callback_query=cb))
+
+
+@pytest.mark.asyncio
+async def test_upload_with_picked_category(db, dp, monkeypatch):
+    import schedule_parser
+
+    async def subjects():
+        return ["Анализ данных"]
+
+    monkeypatch.setattr(schedule_parser, "get_group_subjects", subjects)
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_Session())
+
+    await _feed(dp, bot, text="/upload")
+    await _click(dp, bot, "upsj:0")
+    assert "Что загружаешь?" in bot.session.sent[-1][0]
+    await _click(dp, bot, "upct:control")
+    assert "📝 КР и тесты" in bot.session.sent[-1][0]
+    await _feed(dp, bot, document=_doc("вариант_7.pdf", "k1"))      # по названию был бы «другое»
+    await _feed(dp, bot, text="✅ Готово")
+
+    [f] = await db.get_files("Анализ данных")
+    assert f["category"] == "control"
+
+
+@pytest.mark.asyncio
+async def test_files_browse_subject_then_category(db, dp, bot):
+    await db.add_file("Лекция 1", "ОБА", "a", "l1.pdf", 1)
+    await db.add_file("Лекция 2", "ОБА", "b", "l2.pdf", 1)
+    await db.add_file("ПР 1", "ОБА", "c", "p1.pdf", 1)
+    await db.add_file("Лекция 1", "Сети", "d", "s1.pdf", 1)
+
+    await _click(dp, bot, "fsj:0")                                  # ОБА: два типа — сначала выбор типа
+    menu = bot.session.sent_texts[-1][1]
+    assert "Что нужно?" in menu
+    await _click(dp, bot, "fct:0:lecture")
+    assert bot.session.sent_texts[-1][1] == "📁 <b>ОБА</b> → 📓 Лекции (2):"
+
+    await _click(dp, bot, "fsj:1")                                  # Сети: один тип — сразу файлы
+    assert bot.session.sent_texts[-1][1] == "📁 <b>Сети</b> (1):"
