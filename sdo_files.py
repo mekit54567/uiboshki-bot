@@ -71,9 +71,8 @@ def _logged_out(resp: httpx.Response) -> bool:
 
 
 async def _get_html(client: httpx.AsyncClient, url: str) -> str:
-    resp = await client.get(url)
-    if _logged_out(resp):
-        raise SdoSessionExpired(f"СДО попросил войти заново ({url})")
+    from sdo_parser import get_checked
+    resp = await get_checked(client, url)
     resp.raise_for_status()
     return resp.text
 
