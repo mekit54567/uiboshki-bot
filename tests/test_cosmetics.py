@@ -209,3 +209,19 @@ async def test_actions_send_clickable_hints(db, bot):
     finally:
         router._parent_router = None
     assert "/upload" in bot.session.sent[-1][0] and "пачкой" in bot.session.sent[-1][0]
+
+
+def test_deadlines_grouped_by_urgency_with_safe_links():
+    from datetime import timedelta
+    from handlers.deadlines import format_deadlines
+    from utils import today_msk
+    t = today_msk()
+    mk = lambda i, s, d, by=0, desc="": {"id": i, "subject": s, "due_date": (t + timedelta(days=d)).isoformat(),
+                                         "due_time": None, "created_by": by, "description": desc}
+    text = format_deadlines([mk(1, "Эссе", -1), mk(2, "СР-2", 0, desc='https://sdo/x?a=1&b="2"'),
+                             mk(3, "Практика", 5), mk(4, "Своё", 12, by=222)])
+    order = [text.index(g) for g in ("💀 Просрочено", "🔥 Горит", "📅 На неделе", "🗓 Позже")]
+    assert order == sorted(order)
+    assert '<a href="https://sdo/x?a=1&amp;b=&quot;2&quot;">' in text   # кавычка в URL не рвёт атрибут
+    assert "━" not in text and "%" not in text                    # никаких загадочных «80%»
+    assert "<b>Своё</b> 👤" in text

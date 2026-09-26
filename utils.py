@@ -43,6 +43,13 @@ def esc(value) -> str:
     return escape(str(value), quote=False)
 
 
+def esc_attr(value) -> str:
+    """Для значения HTML-атрибута (href="…"): в отличие от esc экранирует и
+    кавычки — иначе ссылка с " внутри рвёт атрибут, и Telegram отклоняет
+    сообщение целиком ("can't parse entities")."""
+    return escape(str(value or ""), quote=True)
+
+
 _DAY_MONTH_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$")
 
 # Насколько далеко в прошлое может быть дата без года, чтобы остаться в

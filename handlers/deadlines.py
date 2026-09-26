@@ -17,7 +17,7 @@ from database import (
 from config import STAROSTA_ID, GROUP_CHAT_ID
 from scheduler import DEADLINE_POST_QUESTION
 from keyboards import MAIN_KB, CANCEL_KB
-from utils import esc, parse_day_month, today_msk
+from utils import esc, parse_day_month, today_msk, esc_attr
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -67,35 +67,56 @@ def progress_bar(delta: int, max_days: int = 14) -> str:
     return f"{bar} {pct}%"
 
 
+WEEKDAY_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
+
+
+def due_label(due: date, today: date, due_time: str | None = None) -> str:
+    """«🔴 сегодня в 23:59», «🟠 завтра», «🟡 пт, 2 октября», «💀 просрочен (29.09)»."""
+    from schedule_parser import MONTHS_GEN
+    delta = (due - today).days
+    tp = f" в {due_time}" if due_time else ""
+    if delta < 0:
+        return f"💀 просрочен ({due.strftime('%d.%m')})"
+    if delta == 0:
+        return f"🔴 сегодня{tp}"
+    if delta == 1:
+        return f"🟠 завтра{tp}"
+    human = f"{WEEKDAY_SHORT[due.weekday()]}, {due.day} {MONTHS_GEN[due.month - 1]}{tp}"
+    return f"{'🟡' if delta <= 3 else '🟢'} {human} · через {delta} дн."
+
+
+def _deadline_line(d: dict, today: date) -> str:
+    due = date.fromisoformat(d["due_date"])
+    mine = " 👤" if "created_by" in d and not is_shared_deadline(d) else ""
+    desc = (d.get("description") or "").strip()
+    extra = ""
+    if desc.startswith(("http://", "https://")):
+        extra = f' · <a href="{esc_attr(desc)}">задание</a>'
+    elif desc and desc not in ("-", "–"):
+        extra = f"\n    📝 {esc(desc[:200])}"
+    return f"<code>{d['id']}</code> <b>{esc(d['subject'])}</b>{mine}\n    {due_label(due, today, d.get('due_time'))}{extra}"
+
+
 def format_deadlines(deadlines: list[dict]) -> str:
+    """Дедлайны группами по срочности. Раньше — плоский список с полоской
+    «━━━━━━━━╌╌ 80%», по которой было непонятно, 80% чего (живой тест)."""
     if not deadlines:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
     today = today_msk()
-    lines = ["📋 <b>Дедлайны</b>"]
-
+    groups = {"💀 Просрочено": [], "🔥 Горит": [], "📅 На неделе": [], "🗓 Позже": []}
     for d in deadlines:
-        due   = date.fromisoformat(d["due_date"])
-        delta = (due - today).days
+        delta = (date.fromisoformat(d["due_date"]) - today).days
+        key = ("💀 Просрочено" if delta < 0 else "🔥 Горит" if delta <= 2
+               else "📅 На неделе" if delta <= 7 else "🗓 Позже")
+        groups[key].append(d)
 
-        if delta < 0:    badge = "💀 просрочен"
-        elif delta == 0: badge = "🔴 сегодня!"
-        elif delta == 1: badge = "🟠 завтра"
-        elif delta <= 3: badge = f"🟡 через {delta} дн."
-        else:            badge = f"🟢 через {delta} дн."
-
-        tp       = f" в {d['due_time']}" if d.get("due_time") else ""
-        desc_str = f"\n   📝 {esc(d['description'])}" if d.get("description") and d["description"] not in ("", "-") else ""
-
-        mine = " · 👤 личный" if "created_by" in d and not is_shared_deadline(d) else ""
-        lines.append(
-            f"[{d['id']}] <b>{esc(d['subject'])}</b>{mine}\n"
-            f"   📅 {format_date(d['due_date'])}{tp} — {badge}\n"
-            f"   {progress_bar(delta)}{desc_str}"
-        )
-
-    lines.append("/done ID — выполнено  •  /del ID — удалить")
-    return "\n\n".join(lines)
+    blocks = [f"📋 <b>Дедлайны</b> · {len(deadlines)}"]
+    for title, items in groups.items():
+        if items:
+            blocks.append(f"<b>{title}</b>\n" + "\n".join(_deadline_line(d, today) for d in items))
+    blocks.append("✅ /done ID — выполнено · 🗑 /del ID — удалить · ➕ /add")
+    return "\n\n".join(blocks)
 
 
 @router.message(Command("deadlines"))

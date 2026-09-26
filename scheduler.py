@@ -13,7 +13,7 @@ from config import (
 )
 from database import get_all_subscribed_users, get_deadlines_soon, get_user
 from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
-from utils import esc, today_msk
+from utils import esc, today_msk, esc_attr
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -81,19 +81,18 @@ async def send_group_morning_digest(bot: Bot):
 
 
 def _format_deadline_reminders(deadlines: list[dict]) -> str:
+    from handlers.deadlines import due_label
     today = today_msk()
-    lines = ["⏳ <b>Ближайшие дедлайны группы:</b>"]
+    lines = ["⏳ <b>Ближайшие дедлайны группы</b>"]
     for d in deadlines:
-        due   = date.fromisoformat(d["due_date"])
-        delta = (due - today).days
-        badge = "🔴 Сегодня!" if delta == 0 else ("🟠 Завтра" if delta == 1 else f"🟡 Через {delta} дн.")
-        tp    = f" в {d['due_time']}" if d.get("due_time") else ""
-        desc  = f"\n   📝 {esc(d['description'])}" if d.get("description") and d["description"] not in ("", "-") else ""
-        lines.append(
-            f"• <b>{esc(d['subject'])}</b>\n"
-            f"  📅 {format_date(d['due_date'])}{tp} — {badge}\n"
-            f"  {progress_bar(delta)}{desc}"
-        )
+        due = date.fromisoformat(d["due_date"])
+        desc = (d.get("description") or "").strip()
+        extra = ""
+        if desc.startswith(("http://", "https://")):
+            extra = f' · <a href="{esc_attr(desc)}">задание</a>'
+        elif desc and desc not in ("-", "–"):
+            extra = f"\n   📝 {esc(desc[:200])}"
+        lines.append(f"• <b>{esc(d['subject'])}</b>\n   {due_label(due, today, d.get('due_time'))}{extra}")
     return "\n\n".join(lines)
 
 
