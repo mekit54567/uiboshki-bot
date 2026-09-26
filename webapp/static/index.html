@@ -443,6 +443,8 @@
                    padding: 4px 9px; margin-bottom: 6px; font-size: 13px; }
   .msg .msg-tools { margin-top: 6px; display: flex; gap: 10px; }
   .msg .msg-tools button { background: none; border: none; color: var(--hint); font-size: 12px; font-weight: 700; padding: 0; }
+  .msg .chat-retry { display: block; margin-top: 8px; background: none; border: none; padding: 0;
+                     color: var(--accent); font-size: 13px; font-weight: 800; }
   .msg.typing-dots { display: inline-flex; gap: 4px; padding: 14px 16px; }
   .msg.typing-dots span {
     width: 7px; height: 7px; border-radius: 50%; background: var(--hint);
@@ -1846,25 +1848,48 @@ async function sendChat() {
   appendMsg("user", text, "", "", shownAtt);
   // В истории для сервера — только текст; само вложение уходит отдельным полем.
   const content = text || (att ? (att.image ? "Реши задание на фото." : "Разбери этот файл.") : "");
-  chatLog.push({ role: "user", content: content, att: shownAtt ? { name: shownAtt.name, image: shownAtt.image } : null });
+  const entry = { role: "user", content: content, att: shownAtt ? { name: shownAtt.name, image: shownAtt.image } : null };
+  chatLog.push(entry);
   saveChatLog();
-  const pending = typingBubble();
+  try {
+    await requestAnswer(entry, att);
+  } finally {
+    btn.disabled = false;
+  }
+}
 
-  const history = chatLog.filter(m => m.content).map(m => ({ role: m.role, content: m.content }));
+// Вопрос без ответа (ошибка ИИ) помечается failed и следующим сообщениям
+// в историю не идёт. Живой тест: после «ИИ недоступен» на «Привет» модель
+// отвечала на прошлый, неотвеченный вопрос. Повторить — кнопкой под ошибкой.
+async function requestAnswer(entry, att) {
+  const pending = typingBubble();
+  const history = chatLog.filter(m => m.content && !m.failed).map(m => ({ role: m.role, content: m.content }));
   const body = { history: history, subject: document.getElementById("chat-subject").value };
   if (att) body.attachment = { name: att.name, mime: att.mime, data: att.data };
   try {
     const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
     pending.remove();
+    delete entry.failed;
     appendMsg("assistant", data.content, data.reasoning, data.html);
     chatLog.push({ role: "assistant", content: data.content, html: data.html });
     saveChatLog();
     haptic("success");
   } catch (e) {
     pending.remove();
-    appendMsg("assistant", "⚠️ " + e.message);
-  } finally {
-    btn.disabled = false;
+    entry.failed = true;
+    saveChatLog();
+    const bubble = appendMsg("assistant", "⚠️ " + e.message);
+    const retry = document.createElement("button");
+    retry.className = "chat-retry";
+    retry.textContent = "↻ Повторить";
+    retry.onclick = () => {
+      bubble.remove();
+      chatLog.splice(chatLog.indexOf(entry), 1);   // повтор — последним, чтобы ответ был на него
+      delete entry.failed;
+      chatLog.push(entry);
+      requestAnswer(entry, att);
+    };
+    bubble.appendChild(retry);
   }
 }
 

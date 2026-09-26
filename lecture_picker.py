@@ -25,6 +25,9 @@ _STOP = {
     "сегодня", "завтра", "неделе", "неделю", "недели", "пара", "пары", "сдавать", "сдать", "дедлайн",
 }
 _cache: dict[tuple, list[tuple]] = {}
+# Текст из PDF бывает с управляющими символами и «половинками» суррогатных
+# пар — модели такое лучше не отдавать.
+_JUNK = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff]")
 
 
 def _stems(text: str) -> set[str]:
@@ -64,7 +67,7 @@ def pick(context: str, query: str, budget: int = SUBJECT_BUDGET, min_score: int 
     if not context.strip():
         return ""
     if min_score == 0 and len(context) <= budget:
-        return context
+        return _JUNK.sub("", context)
     blocks = _blocks(context)
     q = _stems(query or "")
     scored = [(_score(q, t, b), i) for i, (_, _, t, b) in enumerate(blocks)] if q else []
@@ -80,4 +83,4 @@ def pick(context: str, query: str, budget: int = SUBJECT_BUDGET, min_score: int 
             continue
         chosen.append(i)
         used += size
-    return "\n\n".join(blocks[i][1] for i in sorted(chosen))
+    return _JUNK.sub("", "\n\n".join(blocks[i][1] for i in sorted(chosen)))
