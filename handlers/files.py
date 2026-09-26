@@ -18,8 +18,9 @@ router = Router()
 
 
 class UploadFile(StatesGroup):
-    waiting_subject = State()
-    waiting_file    = State()
+    waiting_subject  = State()
+    waiting_category = State()
+    waiting_file     = State()
 
 
 def subjects_keyboard(subjects: list[str]) -> InlineKeyboardMarkup:
@@ -78,32 +79,69 @@ async def cmd_search(message: Message):
     )
 
 
+def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | None:
+    if idx == "all":
+        return "Все файлы", all_files
+    subjects = sorted(set(f["subject"] for f in all_files if f.get("subject")))
+    try:
+        subject = subjects[int(idx)]
+    except (ValueError, IndexError):
+        return None
+    return subject, [f for f in all_files if f.get("subject") == subject]
+
+
 @router.callback_query(F.data.startswith("fsj:"))
 async def files_by_subject(callback: CallbackQuery):
+    """Предмет → сначала типы (лекции/практики/КР/…) с количеством, если
+    их больше одного, иначе сразу файлы."""
+    from file_categories import CATEGORIES, category_of
     idx = callback.data.split(":", 1)[1]
-    all_files = await get_files()
-
-    if idx == "all":
-        files = all_files
-        title = "Все файлы"
-    else:
-        subjects = sorted(set(f["subject"] for f in all_files if f.get("subject")))
-        try:
-            subject = subjects[int(idx)]
-        except (ValueError, IndexError):
-            await callback.answer("Ошибка")
-            return
-        files = [f for f in all_files if f.get("subject") == subject]
-        title = subject
-
+    picked = _subject_files(await get_files(), idx)
+    if not picked:
+        await callback.answer("Ошибка")
+        return
+    title, files = picked
     if not files:
         await callback.answer("Файлов нет")
         return
+    counts: dict[str, int] = {}
+    for f in files:
+        counts[category_of(f)] = counts.get(category_of(f), 0) + 1
+    if len(counts) > 1:
+        rows = [[InlineKeyboardButton(text=f"{label} · {counts[key]}", callback_data=f"fct:{idx}:{key}")]
+                for key, label in CATEGORIES if key in counts]
+        rows.append([InlineKeyboardButton(text=f"📋 Все файлы · {len(files)}", callback_data=f"fct:{idx}:*")])
+        rows.append([InlineKeyboardButton(text="◀️ Предметы", callback_data="fbk")])
+        await callback.message.edit_text(
+            f"📁 <b>{esc(title)}</b>\n\nЧто нужно?", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
+    else:
+        await callback.message.edit_text(
+            f"📁 <b>{esc(title)}</b> ({len(files)}):", parse_mode="HTML", reply_markup=files_keyboard(files),
+        )
+    await callback.answer()
 
+
+@router.callback_query(F.data.startswith("fct:"))
+async def files_by_category(callback: CallbackQuery):
+    from file_categories import LABELS, category_of
+    _, idx, cat = callback.data.split(":", 2)
+    picked = _subject_files(await get_files(), idx)
+    if not picked:
+        await callback.answer("Ошибка")
+        return
+    title, files = picked
+    if cat != "*":
+        files = [f for f in files if category_of(f) == cat]
+    if not files:
+        await callback.answer("Файлов нет")
+        return
+    label = LABELS.get(cat, "📋 Все файлы")
+    kb = files_keyboard(files)
+    kb.inline_keyboard[-1] = [InlineKeyboardButton(text="◀️ Назад", callback_data=f"fsj:{idx}")]
     await callback.message.edit_text(
-        f"📁 <b>{esc(title)}</b> ({len(files)} файлов):",
-        parse_mode="HTML",
-        reply_markup=files_keyboard(files)
+        f"📁 <b>{esc(title)}</b> → {label} ({len(files)}):", parse_mode="HTML", reply_markup=kb,
     )
     await callback.answer()
 
@@ -192,10 +230,36 @@ async def cmd_upload(message: Message, state: FSMContext):
     await message.answer("Отменить — «❌ Отмена».", reply_markup=CANCEL_KB)
 
 
-async def _start_collecting(target: Message, state: FSMContext, subject: str):
+async def _ask_category(target: Message, state: FSMContext, subject: str):
+    """Второй шаг: тип файлов (лекции/практики/КР/…) — или «определить по
+    названию» для смешанной пачки."""
+    from file_categories import CATEGORIES
+    await state.update_data(subject=subject)
+    await state.set_state(UploadFile.waiting_category)
+    rows = [[InlineKeyboardButton(text=label, callback_data=f"upct:{key}")] for key, label in CATEGORIES]
+    rows.insert(0, [InlineKeyboardButton(text="✨ Определить по названию каждого файла", callback_data="upct:auto")])
+    where = f"«{esc(subject)}»" if subject else "без предмета"
+    await target.answer(f"📚 {where}\n\nЧто загружаешь?", parse_mode="HTML",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(UploadFile.waiting_category, F.data.startswith("upct:"))
+async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
+    from file_categories import LABELS
+    key = callback.data.split(":", 1)[1]
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await _start_collecting(callback.message, state, (await state.get_data()).get("subject", ""),
+                            key if key in LABELS else None)
+
+
+async def _start_collecting(target: Message, state: FSMContext, subject: str, category: str | None = None):
+    from file_categories import LABELS
     await state.set_state(UploadFile.waiting_file)
-    await state.update_data(subject=subject, added=0, with_text=0, dupes=0, status_id=None)
+    await state.update_data(subject=subject, category=category, added=0, with_text=0, dupes=0, status_id=None)
     where = f"в «{esc(subject)}»" if subject else "без предмета"
+    if category:
+        where += f" → {LABELS[category]}"
     await target.answer(
         f"📥 Кидай файлы {where} — сколько угодно, можно пачкой.\n"
         f"PDF, DOCX, PPTX и TXT я ещё и прочитаю, чтобы ИИ отвечал по лекциям.\n\n"
@@ -211,7 +275,7 @@ async def upload_pick_subject(callback: CallbackQuery, state: FSMContext):
     subject = "" if key == "none" or not key.isdigit() or int(key) >= len(subjects) else subjects[int(key)]
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
-    await _start_collecting(callback.message, state, subject)
+    await _ask_category(callback.message, state, subject)
 
 
 @router.message(UploadFile.waiting_subject, F.text)
@@ -220,15 +284,32 @@ async def upload_type_subject(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("Отменено.", reply_markup=MAIN_KB)
         return
-    await _start_collecting(message, state, message.text.strip()[:80])
+    await _ask_category(message, state, message.text.strip()[:80])
 
 
-@router.message(UploadFile.waiting_file, F.document | F.photo)
+@router.message(UploadFile.waiting_category, F.text)
+async def upload_category_text(message: Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer("Отменено.", reply_markup=MAIN_KB)
+        return
+    await message.answer("Выбери тип кнопкой выше — или сразу кидай файлы, тип определю по названию.")
+
+
+# Файлы, присланные сразу после предмета (не нажав тип), тоже принимаем —
+# с типом по названию: пересылать пачку и потом обнаружить, что ничего не
+# сохранилось, обиднее, чем лишний раз не выбрать кнопку.
+@router.message(StateFilter(UploadFile.waiting_file, UploadFile.waiting_category), F.document | F.photo)
 async def receive_file(message: Message, state: FSMContext):
     # Альбом из 10 файлов — это 10 апдейтов почти одновременно: без замка
     # счётчики в FSM и одно сообщение-прогресс перетирали бы друг друга.
     lock = _upload_locks.setdefault(message.from_user.id, asyncio.Lock())
     async with lock:
+        if await state.get_state() == UploadFile.waiting_category.state:
+            await state.set_state(UploadFile.waiting_file)
+            await state.update_data(category=None, added=0, with_text=0, dupes=0, status_id=None)
+            await message.answer(f"✨ Тип определю по названию каждого файла. Закончишь — жми «{UPLOAD_DONE}».",
+                                 reply_markup=UPLOAD_KB)
         data = await state.get_data()
         subject = data.get("subject", "")
         if message.document:
@@ -242,7 +323,8 @@ async def receive_file(message: Message, state: FSMContext):
         if message.document and (file_name, subject) in existing:
             data["dupes"] = data.get("dupes", 0) + 1
         else:
-            fid = await add_file(title_from_filename(file_name), subject, tg_file_id, file_name, message.from_user.id)
+            fid = await add_file(title_from_filename(file_name), subject, tg_file_id, file_name,
+                                 message.from_user.id, category=data.get("category"))
             from file_text import extract_and_save
             if await extract_and_save(message.bot, fid, tg_file_id, file_name):
                 data["with_text"] = data.get("with_text", 0) + 1

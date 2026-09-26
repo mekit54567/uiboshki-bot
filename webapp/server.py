@@ -373,12 +373,51 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
     # открывает диплинк на сам бот (t.me/<bot>?start=file_<id>), который уже
     # шлёт документ — см. handlers/start.py: cmd_start_deeplink.
     from database import get_file_ids_with_text
+    from file_categories import CATEGORIES, LABELS, category_of
+    from handlers.announce import is_editor
     with_text = await get_file_ids_with_text()
-    return {"items": [
-        {"id": f["id"], "title": f["title"], "subject": f.get("subject") or "", "file_name": f.get("file_name") or "",
-         "has_text": f["id"] in with_text}
-        for f in items
-    ]}
+    editor = await is_editor(user["id"])
+    out = []
+    for f in items:
+        cat = category_of(f)
+        out.append({
+            "id": f["id"], "title": f["title"], "subject": f.get("subject") or "",
+            "file_name": f.get("file_name") or "", "has_text": f["id"] in with_text,
+            "category": cat, "category_label": LABELS[cat],
+            # как /delfile в боте: тот, кто загрузил, или староста/зам
+            "can_edit": editor or f.get("uploaded_by") == user["id"],
+        })
+    return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES]}
+
+
+class FileMeta(BaseModel):
+    title: str
+    subject: str = ""
+    category: str
+
+
+@app.patch("/api/files/{file_id}")
+async def api_file_edit(file_id: int, body: FileMeta, user: dict = CurrentUser):
+    """Поправить название, предмет и тип файла (например, если тип по
+    названию угадан неверно). Предмет меняется вместе с контекстом ИИ:
+    текст лекции привязан к файлу, а не к предмету."""
+    from database import get_files, update_file_meta
+    from file_categories import LABELS
+    from handlers.announce import is_editor
+    f = next((x for x in await get_files() if x["id"] == file_id), None)
+    if not f:
+        raise HTTPException(status_code=404, detail="файл не найден")
+    if f.get("uploaded_by") != user["id"] and not await is_editor(user["id"]):
+        raise HTTPException(status_code=403, detail="править файл может тот, кто его загрузил, или староста")
+    title, subject = body.title.strip(), body.subject.strip()
+    if not title or len(title) > 120:
+        raise HTTPException(status_code=400, detail="название — от 1 до 120 символов")
+    if len(subject) > 80:
+        raise HTTPException(status_code=400, detail="предмет — до 80 символов")
+    if body.category not in LABELS:
+        raise HTTPException(status_code=400, detail="неизвестный тип файла")
+    await update_file_meta(file_id, title, subject, body.category)
+    return {"ok": True, "id": file_id}
 
 
 # ── Заметки к парам ──────────────────────────────────────────────────────────

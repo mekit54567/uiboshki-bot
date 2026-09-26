@@ -106,6 +106,12 @@ async def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Тип файла внутри предмета (лекции/практики/КР/…, см. file_categories).
+        # NULL у старых файлов — тип определяется по названию на лету.
+        try:
+            await db.execute("ALTER TABLE files ADD COLUMN category TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS file_text (
                 file_id      INTEGER PRIMARY KEY,
@@ -496,14 +502,26 @@ async def get_solver_history(user_id: int, limit=5) -> list[dict]:
 
 # ── Files ─────────────────────────────────────────────────────────────────────
 
-async def add_file(title, subject, file_id, file_name, uploaded_by) -> int:
+async def add_file(title, subject, file_id, file_name, uploaded_by, category: str | None = None) -> int:
+    """category — тип внутри предмета (file_categories); None — определить
+    по названию и имени файла."""
+    from file_categories import LABELS, detect_category
+    if category not in LABELS:
+        category = detect_category(title or "", file_name or "")
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
-            INSERT INTO files (title, subject, file_id, file_name, uploaded_by)
-            VALUES (?, ?, ?, ?, ?)
-        """, (title, subject, file_id, file_name, uploaded_by))
+            INSERT INTO files (title, subject, file_id, file_name, uploaded_by, category)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (title, subject, file_id, file_name, uploaded_by, category))
         await db.commit()
         return cursor.lastrowid
+
+async def update_file_meta(fid: int, title: str, subject: str, category: str):
+    """Правка файла (WebApp): название, предмет, тип."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE files SET title=?, subject=?, category=? WHERE id=?", (title, subject, category, fid))
+        await db.commit()
+
 
 async def get_files(subject: str = None) -> list[dict]:
     async with aiosqlite.connect(DATABASE_PATH) as db:

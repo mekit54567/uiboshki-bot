@@ -212,3 +212,31 @@ async def test_bot_undone_returns_deadline(db):
     assert "Выполнено: 1" in sent[1] and "/undone ID" in sent[1]  # /deadlines показывает выполненные
     assert "снова в активных" in sent[2]
     assert "Выполнено" not in sent[3] and "СР-2" in sent[3]
+
+
+@pytest.mark.asyncio
+async def test_files_have_categories_and_edit_permissions(db, client):
+    from tests.conftest import STAROSTA_ID
+    c, _ = client
+    lec = await db.add_file("Лекция 1", "ОБА", "a", "l1.pdf", 222)
+    kr = await db.add_file("вариант 7", "ОБА", "b", "v7.pdf", 333, category="control")
+
+    data = c.get("/api/files", headers=_headers_for(222)).json()
+    items = {i["id"]: i for i in data["items"]}
+    assert (items[lec]["category"], items[lec]["category_label"]) == ("lecture", "📓 Лекции")
+    assert items[kr]["category"] == "control"
+    assert items[lec]["can_edit"] and not items[kr]["can_edit"]   # своё — да, чужое — нет
+    assert [x["key"] for x in data["categories"]][:3] == ["lecture", "practice", "control"]
+
+    body = {"title": "КР 1", "subject": "Анализ данных", "category": "control"}
+    assert c.patch(f"/api/files/{kr}", headers=_headers_for(222), json=body).status_code == 403
+    assert c.patch(f"/api/files/{kr}", headers=_headers_for(STAROSTA_ID), json=body).json()["ok"]
+    assert c.patch(f"/api/files/{lec}", headers=_headers_for(222),
+                   json={"title": "Л1", "category": "nope"}).status_code == 400
+    assert c.patch(f"/api/files/{lec}", headers=_headers_for(222),
+                   json={"title": "Лекция 1", "subject": "ОБА", "category": "method"}).json()["ok"]
+
+    [f] = await db.get_files("Анализ данных")
+    assert (f["title"], f["category"]) == ("КР 1", "control")
+    assert (await db.get_files("ОБА"))[0]["category"] == "method"
+    assert c.patch("/api/files/9999", headers=_headers_for(STAROSTA_ID), json=body).status_code == 404
