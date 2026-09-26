@@ -144,10 +144,10 @@ async def test_help_hides_starosta_commands_from_students(db, bot):
 async def test_solver_hint_only_after_first_answer(db, bot, monkeypatch):
     import handlers.solver as solver
 
-    async def fake_solve_text(task, subject="", backend="gemini"):
+    async def fake_solve_text(task, subject="", backend="gemini", **kw):
         return "**Ответ:** 4"
 
-    async def fake_history(history, subject="", backend="gemini"):
+    async def fake_history(history, subject="", backend="gemini", **kw):
         return "**Ответ:** 5"
 
     monkeypatch.setattr(solver, "solve_text", fake_solve_text)
