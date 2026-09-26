@@ -112,6 +112,12 @@ async def init_db():
             await db.execute("ALTER TABLE files ADD COLUMN category TEXT")
         except Exception:
             pass  # колонка уже есть
+        # Откуда файл пришёл автоматически ("sdo:<cmid>:<имя>" — выгрузка из
+        # СДО, см. sdo_files.py): повторная выгрузка не плодит дубли.
+        try:
+            await db.execute("ALTER TABLE files ADD COLUMN source TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS file_text (
                 file_id      INTEGER PRIMARY KEY,
@@ -502,19 +508,26 @@ async def get_solver_history(user_id: int, limit=5) -> list[dict]:
 
 # ── Files ─────────────────────────────────────────────────────────────────────
 
-async def add_file(title, subject, file_id, file_name, uploaded_by, category: str | None = None) -> int:
+async def add_file(title, subject, file_id, file_name, uploaded_by, category: str | None = None,
+                   source: str | None = None) -> int:
     """category — тип внутри предмета (file_categories); None — определить
-    по названию и имени файла."""
+    по названию и имени файла. source — откуда файл выгружен автоматически."""
     from file_categories import LABELS, detect_category
     if category not in LABELS:
         category = detect_category(title or "", file_name or "")
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
-            INSERT INTO files (title, subject, file_id, file_name, uploaded_by, category)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (title, subject, file_id, file_name, uploaded_by, category))
+            INSERT INTO files (title, subject, file_id, file_name, uploaded_by, category, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (title, subject, file_id, file_name, uploaded_by, category, source))
         await db.commit()
         return cursor.lastrowid
+
+async def get_file_sources() -> set[str]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL")
+        return {r[0] for r in await cursor.fetchall()}
+
 
 async def update_file_meta(fid: int, title: str, subject: str, category: str):
     """Правка файла (WebApp): название, предмет, тип."""

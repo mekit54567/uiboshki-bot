@@ -197,6 +197,7 @@ STAROSTA_HELP = (
     "/setzam ID — назначить зама\n"
     "/syncfiles — загрузить файлы\n"
     "/importdeadlines · /syncsdo — дедлайны из СДО\n"
+    "/sdofiles — файлы из СДО (сначала покажу, что нашлось)\n"
     "/delpost ID — удалить пост из ленты\n"
     "/clearsem — сбросить всё под новый семестр"
 )
