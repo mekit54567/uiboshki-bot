@@ -8,7 +8,7 @@ from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done, set_deadline_done,
@@ -380,7 +380,58 @@ async def cmd_sync_sdo(message: Message):
         f"✅ Готово!\n\nДобавлено: {result['added']}\n"
         f"Обновлено (сменился срок/название): {result.get('updated', 0)}\n"
         f"Без изменений: {result['skipped']}"
+        + (f"\nКурсы прошлого семестра — пропущено: {result['old_semester']}" if result.get("old_semester") else "")
     )
+
+
+# ── Дедлайны курсов прошлого семестра: показать и удалить разом ─────────────
+# Синк их больше не берёт (sdo_parser.is_old_semester), а уже заведённые
+# староста удаляет здесь — сначала список, потом кнопка.
+
+def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
+    from sdo_parser import is_old_semester
+    return [d for d in items if is_old_semester(d["subject"])]
+
+
+@router.message(Command("sdoclean"))
+async def cmd_sdo_clean(message: Message):
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Только для старосты.")
+        return
+    from database import get_sdo_deadlines
+    from sdo_parser import current_semester_tag
+    old = _old_sdo_deadlines(await get_sdo_deadlines())
+    if not old:
+        await message.answer(f"✅ Дедлайнов прошлых семестров нет (нынешний — [{current_semester_tag()}]).")
+        return
+    lines = [f"• {esc(d['subject'][:90])} — {d['due_date'][8:10]}.{d['due_date'][5:7]}" for d in old[:25]]
+    more = f"\n…и ещё {len(old) - 25}" if len(old) > 25 else ""
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"🗑 Удалить {len(old)}", callback_data="sdoclean:go"),
+        InlineKeyboardButton(text="Не надо", callback_data="sdoclean:no"),
+    ]])
+    await message.answer(
+        f"🧹 <b>Дедлайны прошлых семестров: {len(old)}</b> (нынешний — [{current_semester_tag()}])\n\n"
+        + "\n".join(lines) + more + "\n\nУдалятся у всех. Синк СДО их больше не подтянет.",
+        parse_mode="HTML", reply_markup=kb,
+    )
+
+
+@router.callback_query(F.data.startswith("sdoclean:"))
+async def sdo_clean_confirm(callback: CallbackQuery):
+    if STAROSTA_ID and callback.from_user.id != STAROSTA_ID:
+        await callback.answer("Только для старосты", show_alert=True)
+        return
+    if callback.data == "sdoclean:no":
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.answer("Ок, ничего не трогаю")
+        return
+    from database import delete_deadline, get_sdo_deadlines
+    old = _old_sdo_deadlines(await get_sdo_deadlines())   # заново: список мог измениться
+    for d in old:
+        await delete_deadline(d["id"])
+    await callback.message.edit_text(f"🗑 Удалено дедлайнов прошлых семестров: {len(old)}.")
+    await callback.answer()
 
 # ── Публикация дедлайнов в группу (ручная модерация старостой) ─────────────
 # scheduler.send_deadline_reminders шлёт старосте тот же текст, что ушёл

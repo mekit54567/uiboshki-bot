@@ -41,6 +41,20 @@ def detect_category(*texts: str) -> str:
     return "other"
 
 
+def natural_key(title: str) -> list:
+    """«Практика 2» раньше «Практики 10»: числа сравниваются как числа.
+    re.split с группой чередует текст и числа — типы на позициях совпадают."""
+    parts = re.split(r"(\d+)", (title or "").lower().replace("ё", "е"))
+    return [int(p) if i % 2 else p.strip() for i, p in enumerate(parts)]
+
+
+def sort_files(files: list[dict]) -> list[dict]:
+    """По типам (лекции, практики, …), внутри — по названию с числами.
+    Раньше шли в порядке загрузки: после выгрузки СДО «Практика 2» стояла
+    выше «Практики 1», а «Практическая работа 15» — между ними."""
+    return sorted(files, key=lambda f: (ORDER[category_of(f)], natural_key(f.get("title", ""))))
+
+
 def category_of(f: dict) -> str:
     """Тип файла из базы: явно заданный или определённый по названию."""
     cat = f.get("category")

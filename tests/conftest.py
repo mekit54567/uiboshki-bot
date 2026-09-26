@@ -46,3 +46,28 @@ def _no_schedule_network(monkeypatch):
         return []
 
     monkeypatch.setattr(schedule_parser, "get_group_subjects", no_subjects)
+
+
+@pytest.fixture(autouse=True)
+def _no_sdo_calendar_network(monkeypatch):
+    """Синк дедлайнов СДО сначала идёт в календарь по AJAX; в тестах без
+    сети — как будто AJAX недоступен, и работает запасной путь (страница
+    «Предстоящие», её тесты подменяют fetch_upcoming_html). Сам календарь —
+    tests/test_sdo_calendar.py."""
+    import sdo_parser
+
+    async def unavailable():
+        return None
+
+    monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", unavailable)
+
+
+@pytest.fixture(autouse=True)
+def _fixed_semester(monkeypatch):
+    """В тестах метка «[I.26-27]» — нынешний семестр, как в живых данных
+    26.09.2026, иначе с февраля 2027 они бы считались прошлым семестром и
+    тесты синка СДО упали бы сами собой. Явная дата — по-прежнему своя."""
+    from datetime import date
+    import sdo_parser
+    real = sdo_parser.current_semester_tag
+    monkeypatch.setattr(sdo_parser, "current_semester_tag", lambda today=None: real(today or date(2026, 9, 26)))

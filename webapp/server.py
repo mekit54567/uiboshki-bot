@@ -190,6 +190,22 @@ async def api_day(date: str, user: dict = CurrentUser):
     return {**_day_label(d), "lessons": lessons_for_date(raw, d, now=now if d == now.date() else None)}
 
 
+@app.get("/api/week")
+async def api_week(start: str, user: dict = CurrentUser):
+    """Номер учебной недели и точки пар под днями (пн–сб от start)."""
+    from datetime import date as date_cls
+    from schedule_parser import fetch_schedule_raw, week_overview
+    try:
+        monday = date_cls.fromisoformat(start)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+    try:
+        raw = await fetch_schedule_raw()
+    except Exception:
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+    return week_overview(raw, monday)
+
+
 # ── Поиск расписания преподавателя / группы / аудитории ─────────────────────
 # Свой справочник (schedule_index.py, собран с зеркала english.mirea.ru):
 # официальный поиск МИРЭА из-за рубежа не отвечает. Пока справочник
@@ -221,21 +237,66 @@ async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
     return {"items": items, "ready": ready}
 
 
+TARGET_WEEKS = 8
+
+
 @app.get("/api/target/{target_type}/{target_id}")
 async def api_target(target_type: int, target_id: int, user: dict = CurrentUser):
+    """Расписание группы/преподавателя/аудитории на TARGET_WEEKS недель с
+    текущей (в воскресенье — со следующей): WebApp рисует его так же, как
+    главную, — недели, точки под днями, карточки пар."""
+    from datetime import datetime, timedelta
+    from database import get_pins
     from mirea_schedule_api import get_baseinfo, fetch_ical
-    from schedule_parser import format_target_schedule
+    from schedule_parser import target_weeks
+    from utils import TZ
     if target_type not in (1, 2, 3):
         raise HTTPException(status_code=404, detail="нет такого типа")
     info = await get_baseinfo(target_id, target_type)
     ical = await fetch_ical(target_id, target_type)
     if ical is None:
         raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
+    now = datetime.now(TZ)
+    today = now.date()
+    monday = today - timedelta(days=today.weekday()) + timedelta(days=7 if today.weekday() == 6 else 0)
+    pinned = any(p["type"] == target_type and p["id"] == target_id for p in await get_pins(user["id"]))
     return {
         "type": target_type, "id": target_id,
         "title": info["fullTitle"] if info else str(target_id),
-        "html": format_target_schedule(ical, target_type),
+        "pinned": pinned,
+        "today": today.isoformat(),
+        "weeks": target_weeks(ical, monday, TARGET_WEEKS, now=now),
     }
+
+
+# ── Закреплённые группы / преподаватели / аудитории ─────────────────────────
+
+class PinBody(BaseModel):
+    title: str
+
+
+@app.get("/api/pins")
+async def api_pins(user: dict = CurrentUser):
+    from database import get_pins
+    return {"items": await get_pins(user["id"])}
+
+
+@app.put("/api/pins/{target_type}/{target_id}")
+async def api_pin(target_type: int, target_id: int, body: PinBody, user: dict = CurrentUser):
+    from database import MAX_PINS, pin_target
+    title = body.title.strip()[:120]
+    if target_type not in (1, 2, 3) or not title:
+        raise HTTPException(status_code=400, detail="нужны тип цели и название")
+    if not await pin_target(user["id"], target_type, target_id, title):
+        raise HTTPException(status_code=400, detail=f"закрепить можно до {MAX_PINS}")
+    return {"ok": True}
+
+
+@app.delete("/api/pins/{target_type}/{target_id}")
+async def api_unpin(target_type: int, target_id: int, user: dict = CurrentUser):
+    from database import unpin_target
+    await unpin_target(user["id"], target_type, target_id)
+    return {"ok": True}
 
 
 # ── Дедлайны (общие + личные, "done" персональный для каждого) ──────────────
@@ -387,7 +448,29 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
             # как /delfile в боте: тот, кто загрузил, или староста/зам
             "can_edit": editor or f.get("uploaded_by") == user["id"],
         })
-    return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES]}
+    return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES],
+            "can_delete": not STAROSTA_ID or user["id"] == STAROSTA_ID}
+
+
+class FileIds(BaseModel):
+    ids: list[int]
+
+
+@app.post("/api/files/delete")
+async def api_files_delete(body: FileIds, user: dict = CurrentUser):
+    """Удалить файл или сразу папку/раздел (лишнее из выгрузки СДО) — у
+    всей группы. Как /delfile в боте: только староста."""
+    from database import delete_files, get_files
+    if STAROSTA_ID and user["id"] != STAROSTA_ID:
+        raise HTTPException(status_code=403, detail="удалять файлы может только староста")
+    ids = sorted(set(body.ids))
+    if not ids or len(ids) > 1000:
+        raise HTTPException(status_code=400, detail="от 1 до 1000 файлов за раз")
+    by_id = {f["id"]: f for f in await get_files()}
+    files = [by_id[i] for i in ids if i in by_id]
+    if not files:
+        raise HTTPException(status_code=404, detail="файлы не найдены")
+    return {"ok": True, "deleted": await delete_files([f["id"] for f in files])}
 
 
 class FileMeta(BaseModel):
@@ -484,9 +567,18 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="пустая история")
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]]
     subject = body.subject.strip()
+    # Лекции — только подходящие к вопросу (lecture_picker): после выгрузки
+    # СДО их у предмета сотни тысяч символов. Без выбранного предмета — из
+    # всех предметов, но только при явном совпадении с вопросом.
+    import lecture_picker
+    from database import get_all_lecture_context
+    query = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
     lectures = ""
     if subject and subject in await get_subjects_with_lecture_text():
-        lectures = await get_subject_lecture_context(subject)
+        lectures = lecture_picker.pick(await get_subject_lecture_context(subject), query)
+    elif not subject and query.strip():
+        lectures = await asyncio.to_thread(lecture_picker.pick, await get_all_lecture_context(), query,
+                                           lecture_picker.AUTO_BUDGET, lecture_picker.AUTO_MIN_SCORE)
     context = await build_group_context(user["id"])
 
     try:

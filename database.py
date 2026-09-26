@@ -118,6 +118,18 @@ async def init_db():
             await db.execute("ALTER TABLE files ADD COLUMN source TEXT")
         except Exception:
             pass  # колонка уже есть
+        # Закреплённые в поиске WebApp группы/преподаватели/аудитории —
+        # в базе, а не в браузере: видны с телефона и с компьютера.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pinned_targets (
+                user_id     INTEGER NOT NULL,
+                target_type INTEGER NOT NULL,
+                target_id   INTEGER NOT NULL,
+                title       TEXT NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, target_type, target_id)
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS file_text (
                 file_id      INTEGER PRIMARY KEY,
@@ -479,6 +491,15 @@ async def get_deadline(did: int) -> dict | None:
         row = await cursor.fetchone()
         return dict(row) if row else None
 
+async def get_sdo_deadlines() -> list[dict]:
+    """Все дедлайны, пришедшие из СДО (для /sdoclean)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM deadlines WHERE external_id LIKE 'sdo:%' ORDER BY due_date, due_time")
+        return [dict(r) for r in await cursor.fetchall()]
+
+
 async def delete_deadline(did: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM deadline_done WHERE deadline_id=?", (did,))
@@ -524,8 +545,11 @@ async def add_file(title, subject, file_id, file_name, uploaded_by, category: st
         return cursor.lastrowid
 
 async def get_file_sources() -> set[str]:
+    """Что уже выгружено из СДО — и что удалили вручную (не выгружать снова)."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL")
+        await db.execute("CREATE TABLE IF NOT EXISTS files_skipped (source TEXT PRIMARY KEY)")
+        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL "
+                                  "UNION SELECT source FROM files_skipped")
         return {r[0] for r in await cursor.fetchall()}
 
 
@@ -546,14 +570,26 @@ async def get_files(subject: str = None) -> list[dict]:
         return [dict(r) for r in await cursor.fetchall()]
 
 async def delete_file(fid: int):
+    await delete_files([fid])
+
+
+async def delete_files(fids: list[int]) -> int:
+    """Удаляет файлы вместе с их текстом для ИИ. Удалённое из СДО
+    запоминается (files_skipped), чтобы следующий /sdofiles не выгрузил
+    его обратно."""
+    if not fids:
+        return 0
+    marks = ",".join("?" * len(fids))
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute("DELETE FROM files WHERE id=?", (fid,))
-        # file_text не связана FK/CASCADE (SQLite её не включает по умолчанию,
-        # заводить ради одной таблицы отдельный PRAGMA не стали) — чистим руками,
-        # иначе после удаления файла его текст молча остаётся висеть в контексте
-        # предмета для решалки по лекциям (Фаза 9).
-        await db.execute("DELETE FROM file_text WHERE file_id=?", (fid,))
+        await db.execute("CREATE TABLE IF NOT EXISTS files_skipped (source TEXT PRIMARY KEY)")
+        await db.execute(f"INSERT OR IGNORE INTO files_skipped (source) "
+                         f"SELECT source FROM files WHERE id IN ({marks}) AND source IS NOT NULL", fids)
+        cursor = await db.execute(f"DELETE FROM files WHERE id IN ({marks})", fids)
+        deleted = cursor.rowcount
+        await db.execute(f"DELETE FROM file_text WHERE file_id IN ({marks})", fids)
         await db.commit()
+        return deleted
+
 
 async def save_file_text(file_id: int, text: str):
     """Сохраняет извлечённый из файла лекции текст (см. file_text.py). Вызывается
@@ -584,6 +620,21 @@ async def get_subject_lecture_context(subject: str) -> str:
         """, (subject,))
         rows = await cursor.fetchall()
     return "\n\n".join(f"=== {r['title']} ===\n{r['content']}" for r in rows)
+
+async def get_all_lecture_context() -> str:
+    """Тексты лекций всех предметов — для подбора под вопрос в чате без
+    выбранного предмета (lecture_picker). Заголовок блока — «предмет: файл»."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT f.title, f.subject, ft.content
+            FROM file_text ft
+            JOIN files f ON f.id = ft.file_id
+            ORDER BY f.subject, f.id
+        """)
+        rows = await cursor.fetchall()
+    return "\n\n".join(f"=== {r['subject'] or 'Без предмета'}: {r['title']} ===\n{r['content']}" for r in rows)
+
 
 async def get_file_ids_with_text() -> set[int]:
     """id файлов, текст которых извлечён (участвуют в контексте ИИ) — для
@@ -785,4 +836,40 @@ async def get_lesson_notes(date_str: str) -> list[dict]:
 async def delete_lesson_note(note_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM lesson_notes WHERE id=?", (note_id,))
+        await db.commit()
+
+
+# ── Закреплённое в поиске расписания (WebApp) ────────────────────────────────
+
+MAX_PINS = 20
+
+
+async def get_pins(user_id: int) -> list[dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT target_type, target_id, title FROM pinned_targets WHERE user_id=? ORDER BY created_at, rowid",
+            (user_id,))
+        return [{"type": t, "id": i, "title": title} for t, i, title in await cursor.fetchall()]
+
+
+async def pin_target(user_id: int, target_type: int, target_id: int, title: str) -> bool:
+    """False — уже MAX_PINS закреплённых (повторное закрепление — не ошибка)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*), SUM(target_type=? AND target_id=?) FROM pinned_targets WHERE user_id=?",
+            (target_type, target_id, user_id))
+        count, exists = await cursor.fetchone()
+        if not exists and count >= MAX_PINS:
+            return False
+        await db.execute(
+            "INSERT OR REPLACE INTO pinned_targets (user_id, target_type, target_id, title) VALUES (?, ?, ?, ?)",
+            (user_id, target_type, target_id, title))
+        await db.commit()
+        return True
+
+
+async def unpin_target(user_id: int, target_type: int, target_id: int):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM pinned_targets WHERE user_id=? AND target_type=? AND target_id=?",
+                         (user_id, target_type, target_id))
         await db.commit()

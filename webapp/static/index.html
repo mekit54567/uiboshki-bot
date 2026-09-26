@@ -147,6 +147,11 @@
   .daychips button.today b { color: var(--accent-2); }
   .daychips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .daychips button.active b { color: #fff; }
+  .daychips .dots { display: flex; justify-content: center; gap: 2px; height: 5px; margin-top: 4px; }
+  .daychips .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--hint); }
+  .daychips button.active .dots i { background: rgba(255,255,255,.9) !important; }
+  .kd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  #wk-num, #tw-num { margin-left: 6px; }
   .skel {
     border-radius: var(--radius-sm); margin-bottom: 8px;
     background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-raised) 50%, var(--bg-card) 75%);
@@ -259,6 +264,9 @@
   .folder-card .fs { color: var(--hint); font-size: 12.5px; margin-top: 2px; }
   .folder-card .go { margin-left: auto; color: var(--hint); font-size: 18px; }
   .file-back { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 14px; padding: 0; margin: 0 0 6px; }
+  .file-del { display: block; width: 100%; margin-top: 10px; background: none; border: none;
+              color: var(--danger); font-size: 14px; font-weight: 700; padding: 8px; }
+  .file-del.inline { display: inline; width: auto; margin: 0 0 10px; padding: 0; font-size: 13px; }
   .file-subj-title { font-size: 19px; font-weight: 800; margin: 0 2px 10px; word-break: break-word; }
   #file-list > .group-title:first-child { margin-top: 2px; }
 
@@ -340,6 +348,21 @@
   .target-item .tt { font-weight: 700; }
   .target-item .ts { color: var(--hint); font-size: 12px; }
   .target-item .go { margin-left: auto; color: var(--hint); font-size: 18px; }
+  .target-head {
+    display: flex; align-items: center; gap: 12px; margin: 4px 0 2px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+  }
+  .target-head .ic { font-size: 30px; }
+  .target-head .eyebrow { margin: 0; }
+  .target-head .t-title { font-size: 19px; font-weight: 800; margin: 3px 0 0; word-break: break-word; }
+  .pin-btn {
+    margin-left: auto; flex: none; width: 42px; height: 42px; border-radius: 50%;
+    background: var(--bg-raised); border: 1px solid var(--border); font-size: 19px; line-height: 1; padding: 0;
+  }
+  .pin-btn span { display: inline-block; filter: grayscale(1); opacity: .55; transition: transform .15s ease; }
+  .pin-btn.on { background: var(--accent); border-color: var(--accent); }
+  .pin-btn.on span { filter: none; opacity: 1; transform: rotate(-20deg); }
+  .l-groups { color: var(--hint); font-size: 12.5px; margin-top: 3px; word-break: break-word; }
   .recent-title { color: var(--hint); font-size: 12px; font-weight: 700; text-transform: uppercase;
                   letter-spacing: .05em; margin: 4px 2px 8px; }
   button.back {
@@ -502,7 +525,7 @@
     </div>
 
     <h2 class="section">
-      <span id="wk-label">Эта неделя</span>
+      <span><span id="wk-label">Эта неделя</span><span class="stat" id="wk-num"></span></span>
       <span class="week-nav">
         <button id="wk-prev" onclick="shiftWeek(-1)" aria-label="Предыдущая неделя">‹</button>
         <button id="wk-next" onclick="shiftWeek(1)" aria-label="Следующая неделя">›</button>
@@ -545,11 +568,20 @@
     </div>
     <div id="target-view" style="display:none;">
       <button class="back" onclick="closeTarget()">← к поиску</button>
-      <div class="card">
-        <p class="eyebrow" id="target-kind"></p>
-        <p class="big" id="target-title"></p>
-        <div class="schedule-html" id="target-schedule">Загружаю…</div>
+      <div class="target-head">
+        <span class="ic" id="target-ic">👤</span>
+        <div style="min-width:0"><p class="eyebrow" id="target-kind"></p><p class="t-title" id="target-title"></p></div>
+        <button class="pin-btn" id="target-pin" onclick="togglePin()" aria-label="Закрепить"><span>📌</span></button>
       </div>
+      <h2 class="section">
+        <span><span id="tw-label">Эта неделя</span><span class="stat" id="tw-num"></span></span>
+        <span class="week-nav">
+          <button id="tw-prev" onclick="shiftTargetWeek(-1)" aria-label="Предыдущая неделя">‹</button>
+          <button id="tw-next" onclick="shiftTargetWeek(1)" aria-label="Следующая неделя">›</button>
+        </span>
+      </h2>
+      <div class="daychips" id="target-days"></div>
+      <div class="lessons" id="target-lessons"></div>
     </div>
   </section>
 
@@ -609,6 +641,7 @@
     <div class="chips-row" id="fe-cats"></div>
     <p class="sheet-hint">Изменится у всей группы. Текст для ИИ переедет вместе с файлом.</p>
     <button class="primary" id="fe-submit" onclick="submitFileEdit()">Сохранить</button>
+    <button class="file-del" id="fe-delete" onclick="deleteFiles([fileEditing.id], '«' + fileEditing.title + '»')">🗑 Удалить файл</button>
   </div>
 </div>
 
@@ -686,7 +719,7 @@ function switchTab(name) {
   haptic();
   if (name === "deadlines") loadDeadlines();
   if (name === "files") loadFiles();
-  if (name === "search") renderRecent();
+  if (name === "search") { renderRecent(); loadPins().then(renderRecent); }
   if (name === "chat") requestAnimationFrame(syncNavHeight);
   if (tg && tg.BackButton) {
     tg.BackButton.offClick(closeFolder);
@@ -713,8 +746,21 @@ function humanMinutes(min) {
   return h + " ч" + (m ? " " + m + " мин" : "");
 }
 
+// Цвет типа пары — один и тот же у точек под днями и в карточке пары.
+const KIND_COLORS = {
+  "лекция": "#a78bfa", "практика": "#4fc3f7", "лабораторная": "#34d399",
+  "сам. работа": "#f28b82", "доп. занятие": "#fbbf24",
+  "экзамен": "#ff6363", "зачёт": "#ff6363", "консультация": "#ff9f6e",
+  "курсовой проект": "#ff9f6e", "курсовая работа": "#ff9f6e",
+};
+
+function kindDot(kind) {
+  return '<i class="kd" style="background:' + (KIND_COLORS[kind] || "var(--hint)") + '"></i>';
+}
+
 function lessonMeta(l) {
-  return [l.kind, l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml).join(" · ");
+  const rest = [l.room ? "📍 " + l.room : "", l.teacher].filter(Boolean).map(escapeHtml);
+  return (l.kind ? kindDot(l.kind) + escapeHtml(l.kind) + (rest.length ? " · " : "") : "") + rest.join(" · ");
 }
 
 function lessonRow(l, withStatus) {
@@ -724,7 +770,8 @@ function lessonRow(l, withStatus) {
   return '<div class="lesson' + cls + '">' +
     '<div class="l-time"><b>' + escapeHtml(l.start) + '</b><span>' + escapeHtml(l.end) + '</span></div>' +
     '<div class="l-body"><div class="l-title">' + escapeHtml(l.title) + '</div>' +
-    '<div class="l-meta">' + lessonMeta(l) + escapeHtml(pairs) + '</div>' + now + '</div>' +
+    '<div class="l-meta">' + lessonMeta(l) + escapeHtml(pairs) + '</div>' +
+    (l.groups ? '<div class="l-groups">👥 ' + escapeHtml(l.groups) + '</div>' : '') + now + '</div>' +
     '<div class="l-num">' + escapeHtml(String(l.num)) + '</div></div>';
 }
 
@@ -843,15 +890,24 @@ function shiftWeek(delta) {
   renderDayChips();
 }
 
+function weekLabel(monday, offset) {
+  if (offset === 0) return "Эта неделя";
+  if (offset === 1) return "Следующая неделя";
+  if (offset === -1) return "Прошлая неделя";
+  const saturday = new Date(monday); saturday.setDate(monday.getDate() + 5);
+  return monday.getDate() + " " + MONTHS_SHORT[monday.getMonth()] + " – " + saturday.getDate() + " " + MONTHS_SHORT[saturday.getMonth()];
+}
+
+function dotsHtml(kinds) {
+  return kinds.slice(0, 7).map(k => '<i style="background:' + (KIND_COLORS[k] || "var(--hint)") + '"></i>').join("");
+}
+
 function renderDayChips() {
   const base = todayData ? new Date(todayData.date + "T12:00:00") : new Date();
   const wd = (base.getDay() + 6) % 7;             // 0 = понедельник
   const monday = new Date(base);
   monday.setDate(base.getDate() - wd + (wd === 6 ? 7 : 0) + weekOffset * 7);  // в воскресенье — следующая неделя
-  const saturday = new Date(monday); saturday.setDate(monday.getDate() + 5);
-  const label = weekOffset === 0 ? "Эта неделя" : weekOffset === 1 ? "Следующая неделя" : weekOffset === -1 ? "Прошлая неделя"
-    : monday.getDate() + " " + MONTHS_SHORT[monday.getMonth()] + " – " + saturday.getDate() + " " + MONTHS_SHORT[saturday.getMonth()];
-  document.getElementById("wk-label").textContent = label;
+  document.getElementById("wk-label").textContent = weekLabel(monday, weekOffset);
   document.getElementById("wk-prev").disabled = weekOffset <= WEEK_MIN;
   document.getElementById("wk-next").disabled = weekOffset >= WEEK_MAX;
   const box = document.getElementById("daychips");
@@ -861,13 +917,36 @@ function renderDayChips() {
     const d = new Date(monday); d.setDate(monday.getDate() + i);
     const b = document.createElement("button");
     const iso = isoDate(d);
-    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + "</b>";
+    b.innerHTML = DAY_SHORT[i] + "<b>" + d.getDate() + '</b><span class="dots"></span>';
     b.dataset.date = iso;
     if (todayData && iso === todayData.date) { b.classList.add("today"); selected = b; }
     b.onclick = () => selectDay(b);
     box.appendChild(b);
   }
   selectDay(selected || box.children[0], true);
+  loadWeekDots(isoDate(monday));
+}
+
+// Точки под днями (по одной на пару, цвет — тип) и номер учебной недели,
+// как в официальном приложении МИРЭА. Неделя грузится одним запросом и
+// кэшируется: листать туда-обратно — мгновенно.
+const weekCache = {};
+
+async function loadWeekDots(mondayIso) {
+  const numEl = document.getElementById("wk-num");
+  numEl.textContent = "";
+  let data = weekCache[mondayIso];
+  if (!data) {
+    try { data = weekCache[mondayIso] = await api("/api/week?start=" + mondayIso); }
+    catch (e) { return; }  // без точек полоска дней всё равно работает
+  }
+  if (!document.querySelector('#daychips button[data-date="' + mondayIso + '"]')) return;  // уже листнули дальше
+  numEl.textContent = data.week ? "· " + data.week + " неделя" : "";
+  data.days.forEach(day => {
+    const box = document.querySelector('#daychips button[data-date="' + day.date + '"] .dots');
+    if (!box) return;
+    box.innerHTML = dotsHtml(day.dots);
+  });
 }
 
 async function selectDay(btn, silent) {
@@ -1123,6 +1202,7 @@ let fileCat = "";
 let fileQuery = "";
 let folderList = [];
 let fileIndex = {};
+let fileCanDelete = false;   // удалять (у всей группы) может только староста
 
 function fileIcon(name) {
   const n = (name || "").toLowerCase();
@@ -1144,6 +1224,9 @@ function fileCard(f, withPlace) {
     (f.can_edit ? '<button class="edit" onclick="openFileSheet(' + f.id + ')" aria-label="Изменить">✏️</button>' : '') +
   '</div>';
 }
+
+// «Практика 2» раньше «Практики 10», серии с одинаковым началом — рядом.
+const titleCollator = new Intl.Collator("ru", { numeric: true, sensitivity: "base" });
 
 function countByCat(files) {
   const counts = {};
@@ -1199,10 +1282,20 @@ function renderFiles() {
       box.appendChild(b);
     });
   }
+  // Удалить разом папку или раздел (лишнее из выгрузки СДО) — у всей
+  // группы, поэтому только старосте.
+  const inView = fileCat ? files.filter(f => f.category === fileCat) : files;
+  if (fileCanDelete && inView.length) {
+    const what = fileCat ? "раздел «" + (cats.find(c => c.key === fileCat) || {}).label + "»" : "папку «" + (subject || "Без предмета") + "»";
+    head.insertAdjacentHTML("beforeend", '<button class="file-del inline" id="file-del-all">🗑 Удалить ' + escapeHtml(what) +
+      " (" + inView.length + ")</button>");
+    document.getElementById("file-del-all").onclick = () => deleteFiles(inView.map(f => f.id), what);
+  }
   const shown = fileCat ? cats.filter(c => c.key === fileCat) : cats;
   list.innerHTML = shown.map(c =>
     '<div class="group-title">' + escapeHtml(c.label) + ' · ' + counts[c.key] + '</div>' +
-    files.filter(f => f.category === c.key).map(f => fileCard(f, false)).join("")
+    files.filter(f => f.category === c.key).sort((a, b) => titleCollator.compare(a.title, b.title))
+      .map(f => fileCard(f, false)).join("")
   ).join("");
   syncFileBack();
 }
@@ -1237,6 +1330,7 @@ async function loadFiles(q) {
     const data = await api("/api/files?q=" + encodeURIComponent(fileQuery));
     fileItems = data.items;
     fileCategories = data.categories || [];
+    fileCanDelete = !!data.can_delete;
     fileIndex = {};
     fileItems.forEach(f => fileIndex[f.id] = f);
     if (fileSubject !== null && !fileItems.some(f => f.subject === fileSubject)) fileSubject = null;
@@ -1266,6 +1360,7 @@ function openFileSheet(id) {
   const subjects = [...new Set(fileItems.map(x => x.subject).filter(Boolean))].sort();
   document.getElementById("fe-subjects").innerHTML = subjects.map(s => '<option value="' + escapeHtml(s) + '">').join("");
   renderFileEditCats();
+  document.getElementById("fe-delete").style.display = fileCanDelete ? "block" : "none";
   document.getElementById("file-sheet").classList.add("open");
 }
 
@@ -1279,6 +1374,23 @@ function renderFileEditCats() {
     b.onclick = () => { fileEditCat = c.key; haptic(); renderFileEditCats(); };
     box.appendChild(b);
   });
+}
+
+async function deleteFiles(ids, what) {
+  const n = ids.length;
+  const text = n === 1 ? "Удалить " + what + "? Текст для ИИ тоже удалится."
+    : "Удалить " + what + " — " + n + " " + plural(n, "файл", "файла", "файлов") + "? Из СДО их потом заново не подтянет.";
+  if (!(await confirmDialog(text))) return;
+  try {
+    const res = await api("/api/files/delete", { method: "POST", body: JSON.stringify({ ids: ids }) });
+    haptic("success");
+    showToast("🗑 Удалено: " + res.deleted);
+    closeFileSheet();
+    if (n > 1) fileCat = "";
+    loadFiles();
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  }
 }
 
 function closeFileSheet() {
@@ -1374,35 +1486,170 @@ function rememberTarget(t) {
   } catch (e) {}
 }
 
+// Закреплённые — на сервере (видны с любого устройства), недавние — на
+// этом устройстве. Закреплённые сверху и в «Недавних» не повторяются.
+let pinnedTargets = [];
+
+async function loadPins() {
+  try { pinnedTargets = (await api("/api/pins")).items; } catch (e) {}
+}
+
+function isPinned(type, id) {
+  return pinnedTargets.some(p => p.type === type && p.id === id);
+}
+
 function renderRecent() {
   const box = document.getElementById("target-recent");
-  const items = recentTargets();
-  box.innerHTML = items.length
-    ? '<p class="recent-title">Недавние</p><div class="list">' + items.map(targetItem).join("") + '</div>'
-    : '<div class="empty">Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03»</div>';
+  const recents = recentTargets().filter(t => !isPinned(t.type, t.id));
+  let html = "";
+  if (pinnedTargets.length) {
+    html += '<p class="recent-title">📌 Закреплённые</p><div class="list">' + pinnedTargets.map(targetItem).join("") + '</div>';
+  }
+  if (recents.length) {
+    html += '<p class="recent-title"' + (pinnedTargets.length ? ' style="margin-top:18px"' : '') + '>Недавние</p>' +
+      '<div class="list">' + recents.map(targetItem).join("") + '</div>';
+  }
+  box.innerHTML = html ||
+    '<div class="empty">Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03». Нужное можно закрепить 📌</div>';
+}
+
+// Экран расписания группы / преподавателя / аудитории — как главная:
+// недели листаются, под днями точки пар, пары карточками. Сервер отдаёт
+// сразу 8 недель, так что листать — без запросов.
+const DAY_SHORT7 = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const DAY_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+let targetCurrent = null;   // {type, id, title}
+let targetData = null;
+let targetWeekIdx = 0;
+let targetSelected = null;  // ISO-дата выбранного дня
+
+function setPinButton(on) {
+  const btn = document.getElementById("target-pin");
+  btn.classList.toggle("on", on);
+  btn.setAttribute("aria-label", on ? "Открепить" : "Закрепить");
 }
 
 async function openTarget(type, id, title) {
   haptic();
   rememberTarget({ type: type, id: id, title: title });
+  targetCurrent = { type: type, id: id, title: title };
+  targetData = null;
   const kind = TARGET_KIND[type] || ["📅", ""];
   document.getElementById("search-pane").style.display = "none";
   document.getElementById("target-view").style.display = "block";
-  document.getElementById("target-kind").textContent = kind[0] + " " + kind[1] + " · 2 недели";
+  document.getElementById("target-ic").textContent = kind[0];
+  document.getElementById("target-kind").textContent = kind[1];
   document.getElementById("target-title").textContent = title;
-  const box = document.getElementById("target-schedule");
-  box.textContent = "Загружаю…";
+  setPinButton(isPinned(type, id));
+  document.getElementById("tw-label").textContent = "Эта неделя";
+  document.getElementById("tw-num").textContent = "";
+  document.getElementById("target-days").innerHTML = "";
+  document.getElementById("target-lessons").innerHTML =
+    '<div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div>';
   window.scrollTo(0, 0);
-  if (tg && tg.BackButton) { tg.BackButton.show(); tg.BackButton.onClick(closeTarget); }
+  if (tg && tg.BackButton) { tg.BackButton.offClick(closeTarget); tg.BackButton.onClick(closeTarget); tg.BackButton.show(); }
   try {
     const data = await api("/api/target/" + type + "/" + id);
-    box.innerHTML = data.html;  // собран сервером из экранированных строк (schedule_parser)
+    if (!targetCurrent || targetCurrent.type !== type || targetCurrent.id !== id) return;  // уже ушли с экрана
+    targetData = data;
+    targetWeekIdx = 0;
+    if (data.pinned !== isPinned(type, id)) {   // сервер главнее: закрепили с другого устройства
+      pinnedTargets = pinnedTargets.filter(p => !(p.type === type && p.id === id));
+      if (data.pinned) pinnedTargets.push({ type: type, id: id, title: title });
+    }
+    setPinButton(data.pinned);
+    openNextLessonDay();
+    renderTargetWeek();
   } catch (e) {
-    box.textContent = "Не загрузилось: " + e.message;
+    document.getElementById("target-lessons").innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+// Сегодня, а если сегодня пар уже нет — ближайший день этой недели с парами
+// (обычно ищут «когда он в универе»); на других неделях — первый день с парами.
+function defaultTargetDay(week) {
+  const days = week.days;
+  const t = days.findIndex(d => d.date === targetData.today);
+  for (let j = Math.max(t, 0); j < days.length; j++) if (days[j].lessons.length) return days[j].date;
+  return (t >= 0 ? days[t] : days[0]).date;
+}
+
+// При открытии — ближайший день с парами начиная с сегодня, хоть на
+// следующей неделе (в субботу вечером «когда он в универе» — это уже
+// понедельник/вторник); если пар впереди нет вовсе — сегодня.
+function openNextLessonDay() {
+  targetWeekIdx = 0;
+  targetSelected = targetData.today;
+  for (let w = 0; w < targetData.weeks.length; w++) {
+    const day = targetData.weeks[w].days.find(d => d.date >= targetData.today && d.lessons.length);
+    if (day) { targetWeekIdx = w; targetSelected = day.date; return; }
+  }
+}
+
+function lessonKinds(lessons) {
+  const kinds = [];
+  lessons.forEach(l => { for (let i = 0; i < (l.pairs || 1); i++) kinds.push(l.kind); });
+  return kinds;
+}
+
+function renderTargetWeek() {
+  const week = targetData.weeks[targetWeekIdx];
+  document.getElementById("tw-label").textContent = weekLabel(new Date(week.monday + "T12:00:00"), targetWeekIdx);
+  document.getElementById("tw-num").textContent = week.week ? "· " + week.week + " неделя" : "";
+  document.getElementById("tw-prev").disabled = targetWeekIdx <= 0;
+  document.getElementById("tw-next").disabled = targetWeekIdx >= targetData.weeks.length - 1;
+  const box = document.getElementById("target-days");
+  box.innerHTML = "";
+  week.days.forEach((day, i) => {
+    if (i === 6 && !day.lessons.length) return;   // воскресенье — только если в этот день есть пары
+    const b = document.createElement("button");
+    b.innerHTML = DAY_SHORT7[i] + "<b>" + Number(day.date.slice(8)) + '</b><span class="dots">' + dotsHtml(lessonKinds(day.lessons)) + "</span>";
+    b.classList.toggle("today", day.date === targetData.today);
+    b.classList.toggle("active", day.date === targetSelected);
+    b.onclick = () => { targetSelected = day.date; haptic(); renderTargetWeek(); };
+    box.appendChild(b);
+  });
+  const day = week.days.find(d => d.date === targetSelected) || week.days[0];
+  const idx = week.days.indexOf(day);
+  document.getElementById("target-lessons").innerHTML = day.lessons.length
+    ? day.lessons.map(l => lessonRow(l, !!l.status)).join("")
+    : '<div class="empty">' + DAY_FULL[idx] + " — пар нет 🎉</div>";
+}
+
+function shiftTargetWeek(delta) {
+  if (!targetData) return;
+  const next = Math.min(targetData.weeks.length - 1, Math.max(0, targetWeekIdx + delta));
+  if (next === targetWeekIdx) return;
+  targetWeekIdx = next;
+  targetSelected = defaultTargetDay(targetData.weeks[next]);
+  haptic();
+  renderTargetWeek();
+}
+
+async function togglePin() {
+  if (!targetCurrent) return;
+  const t = targetCurrent;
+  const on = isPinned(t.type, t.id);
+  const btn = document.getElementById("target-pin");
+  btn.disabled = true;
+  try {
+    const path = "/api/pins/" + t.type + "/" + t.id;
+    if (on) await api(path, { method: "DELETE" });
+    else await api(path, { method: "PUT", body: JSON.stringify({ title: t.title }) });
+    pinnedTargets = pinnedTargets.filter(p => !(p.type === t.type && p.id === t.id));
+    if (!on) pinnedTargets.push({ type: t.type, id: t.id, title: t.title });
+    setPinButton(!on);
+    haptic("success");
+    showToast(on ? "Откреплено" : "📌 Закреплено — будет сверху в поиске");
+  } catch (e) {
+    alert("Не получилось: " + e.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
 function closeTarget() {
+  targetCurrent = null;
   document.getElementById("target-view").style.display = "none";
   document.getElementById("search-pane").style.display = "block";
   if (tg && tg.BackButton) { tg.BackButton.offClick(closeTarget); tg.BackButton.hide(); }
