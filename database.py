@@ -2,6 +2,7 @@ import secrets
 
 import aiosqlite
 from config import DATABASE_PATH, STAROSTA_ID
+from utils import today_msk
 
 
 async def init_db():
@@ -299,6 +300,14 @@ async def add_deadline(subject, description, due_date, due_time, created_by, ext
         await db.commit()
         return cursor.lastrowid
 
+async def update_deadline_due(did: int, subject: str, due_date: str, due_time: str | None):
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE deadlines SET subject=?, due_date=?, due_time=? WHERE id=?",
+            (subject, due_date, due_time, did)
+        )
+        await db.commit()
+
 async def get_deadline_by_external_id(external_id: str) -> dict | None:
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -345,34 +354,42 @@ async def get_active_deadlines(viewer_id: int, include_done: bool = False) -> li
 async def get_deadlines_soon(days=3, viewer_id: int | None = None, shared_only: bool = False) -> list[dict]:
     """shared_only=True — для группового поста (модерация старостой): только
     общие дедлайны, не выполненные старостой. Иначе — персональная подборка
-    для viewer_id (общие + его личные, не отмеченные им самим)."""
+    для viewer_id (общие + его личные, не отмеченные им самим).
+
+    "Сегодня" — по Москве, передаётся параметром, а не date('now'): в SQLite
+    это дата по UTC, и в рассылке после полуночи МСК вчерашние дедлайны ещё
+    считались бы "сегодняшними"."""
+    today = today_msk().isoformat()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         if shared_only:
             query = f"""
                 SELECT {_DEADLINE_COLS} FROM deadlines d
                 WHERE d.created_by IN (0, ?)
-                AND d.due_date BETWEEN date('now') AND date('now', ? || ' days')
+                AND d.due_date BETWEEN ? AND date(?, ? || ' days')
                 AND NOT EXISTS (SELECT 1 FROM deadline_done dd WHERE dd.deadline_id=d.id AND dd.user_id=?)
                 ORDER BY d.due_date, d.due_time
             """
-            params = (STAROSTA_ID, str(days), STAROSTA_ID)
+            params = (STAROSTA_ID, today, today, str(days), STAROSTA_ID)
         else:
             if viewer_id is None:
                 raise ValueError("viewer_id обязателен при shared_only=False")
             query = f"""
                 SELECT {_DEADLINE_COLS} FROM deadlines d
                 WHERE (d.created_by = ? OR d.created_by IN (0, ?))
-                AND d.due_date BETWEEN date('now') AND date('now', ? || ' days')
+                AND d.due_date BETWEEN ? AND date(?, ? || ' days')
                 AND NOT EXISTS (SELECT 1 FROM deadline_done dd WHERE dd.deadline_id=d.id AND dd.user_id=?)
                 ORDER BY d.due_date, d.due_time
             """
-            params = (viewer_id, STAROSTA_ID, str(days), viewer_id)
+            params = (viewer_id, STAROSTA_ID, today, today, str(days), viewer_id)
         cursor = await db.execute(query, params)
         return [dict(r) for r in await cursor.fetchall()]
 
 async def get_deadline_stats(viewer_id: int) -> dict:
-    """Статистика по дедлайнам, видимым viewer_id, с учётом его личного done."""
+    """Статистика по дедлайнам, видимым viewer_id, с учётом его личного done.
+    Просрочено/активно — относительно сегодняшней даты по Москве (см.
+    get_deadlines_soon)."""
+    today = today_msk().isoformat()
     async with aiosqlite.connect(DATABASE_PATH) as db:
         visible = "(d.created_by = ? OR d.created_by IN (0, ?))"
         vparams = (viewer_id, STAROSTA_ID)
@@ -386,12 +403,12 @@ async def get_deadline_stats(viewer_id: int) -> dict:
             vparams + (viewer_id,)
         )).fetchone())[0]
         overdue = (await (await db.execute(
-            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date < date('now') AND NOT {done_expr}",
-            vparams + (viewer_id,)
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date < ? AND NOT {done_expr}",
+            vparams + (today, viewer_id)
         )).fetchone())[0]
         active = (await (await db.execute(
-            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date >= date('now') AND NOT {done_expr}",
-            vparams + (viewer_id,)
+            f"SELECT COUNT(*) FROM deadlines d WHERE {visible} AND d.due_date >= ? AND NOT {done_expr}",
+            vparams + (today, viewer_id)
         )).fetchone())[0]
         return {"total": total, "done": done, "overdue": overdue, "active": active}
 

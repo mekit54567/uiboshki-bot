@@ -91,11 +91,11 @@ async def api_me(user: dict = CurrentUser):
 
 @app.get("/api/schedule/today")
 async def api_schedule_today(user: dict = CurrentUser):
-    from datetime import date
     from schedule_parser import get_today_schedule
     from handlers.schedule import _notes_block
+    from utils import today_msk
     html = await get_today_schedule()
-    html += await _notes_block(date.today().isoformat())
+    html += await _notes_block(today_msk().isoformat())
     return {"html": html}
 
 
@@ -169,9 +169,9 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
 
 @app.get("/api/notes")
 async def api_notes(date: str = "", user: dict = CurrentUser):
-    from datetime import date as date_cls
     from database import get_lesson_notes
-    date_str = date or date_cls.today().isoformat()
+    from utils import today_msk
+    date_str = date or today_msk().isoformat()
     items = await get_lesson_notes(date_str)
     return {"date": date_str, "items": items}
 

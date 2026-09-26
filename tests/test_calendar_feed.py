@@ -3,7 +3,7 @@
 по дате, и сборка самого .ics-фида (icalendar VEVENT per occurrence, не
 RRULE — см. webapp/calendar_feed.py, почему).
 """
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -38,9 +38,17 @@ def test_parse_lesson_date(raw, expected_ok, expected_date):
 
 
 def test_parse_lesson_date_default_year_is_current():
-    ok, value = parse_lesson_date("30.05")
+    # today — явно: без года выбирается ближайшая дата (utils.parse_day_month),
+    # и с "настоящим" today тест зависел бы от того, в какой месяц его гоняют.
+    ok, value = parse_lesson_date("30.05", today=date(2026, 9, 26))
     assert ok is True
-    assert value == f"{datetime.now(TZ).year}-05-30"
+    assert value == "2026-05-30"
+
+
+def test_parse_lesson_date_rolls_over_to_next_year():
+    ok, value = parse_lesson_date("15.01", today=date(2026, 12, 20))
+    assert ok is True
+    assert value == "2027-01-15"
 
 
 # ── _matches_subject (чистая функция) ────────────────────────────────────────

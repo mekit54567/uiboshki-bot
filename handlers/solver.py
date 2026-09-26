@@ -13,6 +13,7 @@ from database import (
 )
 from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
+from utils import esc
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -65,7 +66,7 @@ async def choose_subject(message: Message, state: FSMContext):
     await state.set_state(SolverState.waiting_task)
     note = "\n\n(фото — всегда через Groq, у DeepSeek нет зрения)" if backend == "deepseek" else ""
     msg = await message.answer(
-        f"✅ Предмет: <b>{message.text}</b>\n\nПришли задачу — текстом или фото 📸{note}",
+        f"✅ Предмет: <b>{esc(message.text)}</b>\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
     await state.update_data(msg_ids=[msg.message_id])
@@ -219,8 +220,11 @@ async def cmd_history(message: Message):
         return
     lines = ["📜 <b>Последние 5 задач:</b>\n"]
     for i, h in enumerate(history, 1):
-        subj = f" [{h['subject']}]" if h.get("subject") else ""
-        task = h["task_text"][:80] + ("..." if len(h["task_text"]) > 80 else "")
+        # Экранирование обязательно: в условиях задач постоянно встречаются
+        # "<"/">" ("x < 5"), и одна такая задача среди последних пяти
+        # раньше навсегда ломала /history ("can't parse entities").
+        subj = f" [{esc(h['subject'])}]" if h.get("subject") else ""
+        task = esc(h["task_text"][:80]) + ("..." if len(h["task_text"]) > 80 else "")
         lines.append(f"{i}.{subj} {task}\n   <i>{h['created_at'][:10]}</i>")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
@@ -309,7 +313,7 @@ async def lecture_choose_subject(message: Message, state: FSMContext):
     await state.update_data(subject=subject)
     await state.set_state(LectureSolverState.waiting_task)
     await message.answer(
-        f"✅ Предмет: <b>{subject}</b>\n\nПришли текст задания (практики) — решу, опираясь на лекции этого предмета.",
+        f"✅ Предмет: <b>{esc(subject)}</b>\n\nПришли текст задания (практики) — решу, опираясь на лекции этого предмета.",
         parse_mode="HTML", reply_markup=CANCEL_KB
     )
 

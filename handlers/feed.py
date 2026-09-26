@@ -30,6 +30,7 @@ from database import (
     get_feed_post, delete_feed_post, set_feed_reaction, get_feed_reaction_counts,
 )
 from config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID
+from utils import esc
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -106,7 +107,7 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
         return
 
     post_id = await add_feed_post(text, photo_file_id, message.from_user.id)
-    caption = f"🗣 <b>Подслушано</b>\n\n{text}" if text else "🗣 <b>Подслушано</b>"
+    caption = f"🗣 <b>Подслушано</b>\n\n{esc(text)}" if text else "🗣 <b>Подслушано</b>"
 
     try:
         if photo_file_id:
@@ -122,6 +123,11 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
         await message.answer("✅ Опубликовано анонимно!")
     except Exception as e:
         logger.error(f"Не удалось опубликовать в ленту: {e}")
+        # Пост так и не появился в группе — помечаем удалённым, иначе
+        # неудачная попытка всё равно запускала антиспам-кулдаун
+        # (get_last_feed_post_time смотрит на deleted=0) и повторить
+        # можно было только через FEED_COOLDOWN_MINUTES.
+        await delete_feed_post(post_id)
         await message.answer(
             f"❌ Не смог опубликовать в группу ({e}). "
             "Возможно, бота нет в группе или у него нет прав постить."

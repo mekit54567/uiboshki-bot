@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 from config import GROUP_CHAT_ID, TIMEZONE
 from database import get_schedule_snapshot, save_schedule_snapshot, get_all_subscribed_users
 from schedule_parser import fetch_schedule_raw, parse_events_for_date
+from utils import esc
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,8 @@ def _change_line(oe: dict, ne: dict) -> str:
     if oe.get("time") != ne.get("time"):
         parts.append(f"время {oe.get('time') or '—'} → {ne.get('time') or '—'}")
     if oe.get("location") != ne.get("location"):
-        parts.append(f"аудитория {oe.get('location') or '—'} → {ne.get('location') or '—'}")
-    return f"🔄 <b>{ne['summary']}</b>: {', '.join(parts)}"
+        parts.append(f"аудитория {esc(oe.get('location')) or '—'} → {esc(ne.get('location')) or '—'}")
+    return f"🔄 <b>{esc(ne['summary'])}</b>: {', '.join(parts)}"
 
 
 def diff_events(old: list[dict], new: list[dict]) -> list[str]:
@@ -71,16 +72,16 @@ def diff_events(old: list[dict], new: list[dict]) -> list[str]:
             changes.append(_change_line(oe, ne))
         for ne in news[len(olds):]:
             changes.append(
-                f"➕ Добавлена пара: <b>{ne['summary']}</b> в {ne['time']} "
-                f"({ne['location'] or '—'})"
+                f"➕ Добавлена пара: <b>{esc(ne['summary'])}</b> в {ne['time']} "
+                f"({esc(ne['location']) or '—'})"
             )
         for oe in olds[len(news):]:
-            changes.append(f"❌ Отменена пара: <b>{oe['summary']}</b> (была в {oe.get('time') or '—'})")
+            changes.append(f"❌ Отменена пара: <b>{esc(oe['summary'])}</b> (была в {oe.get('time') or '—'})")
 
     for key, olds in old_groups.items():
         if key not in new_groups:
             for oe in olds:
-                changes.append(f"❌ Отменена пара: <b>{oe['summary']}</b> (была в {oe.get('time') or '—'})")
+                changes.append(f"❌ Отменена пара: <b>{esc(oe['summary'])}</b> (была в {oe.get('time') or '—'})")
 
     return changes
 

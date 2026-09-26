@@ -11,6 +11,7 @@ Telegram file_id (bot.get_file + bot.download_file) и парсит в обыч�
 в контексте лекций для решалки).
 """
 
+import asyncio
 import io
 import logging
 
@@ -96,7 +97,10 @@ async def extract_and_save(bot, db_file_id: int, tg_file_id: str, file_name: str
         logger.warning(f"Не смог скачать файл для извлечения текста (file_id={db_file_id}): {e}")
         return False
 
-    text = extract_text(data, file_name)
+    # В отдельном потоке: pypdf/python-docx/python-pptx — синхронный CPU-код,
+    # и разбор большой лекции прямо в event loop на несколько секунд
+    # замораживал весь бот (все остальные пользователи ждали ответа).
+    text = await asyncio.to_thread(extract_text, data, file_name)
     if not text.strip():
         return False
 

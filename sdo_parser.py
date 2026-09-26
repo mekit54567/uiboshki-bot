@@ -117,29 +117,38 @@ def parse_deadlines(html: str) -> list[dict]:
 async def sync_deadlines() -> dict:
     """Тянет актуальные дедлайны из СДО и добавляет новые в базу бота.
 
-    Возвращает {"added": int, "skipped": int, "expired": bool}.
+    Возвращает {"added": int, "updated": int, "skipped": int, "expired": bool}.
+    updated — уже известные задания, у которых в СДО поменялись срок или
+    название (препод продлил/перенёс сдачу): раньше дедуп по external_id их
+    просто пропускал, и бот до конца семестра показывал и напоминал старую
+    дату.
     При протухшей куке НЕ бросает исключение наружу — возвращает
     expired=True, чтобы вызывающий код (scheduler/хендлер) сам решил,
     как об этом сообщить старосте, вместо падения джобы целиком.
     """
-    from database import add_deadline, get_deadline_by_external_id
+    from database import add_deadline, get_deadline_by_external_id, update_deadline_due
 
     try:
         html = await fetch_upcoming_html()
     except SdoSessionExpired as e:
         logger.warning(f"СДО sync: {e}")
-        return {"added": 0, "skipped": 0, "expired": True}
+        return {"added": 0, "updated": 0, "skipped": 0, "expired": True}
     except Exception as e:
         logger.error(f"СДО sync: не удалось получить страницу: {e}")
-        return {"added": 0, "skipped": 0, "expired": False, "error": str(e)}
+        return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": str(e)}
 
     items = parse_deadlines(html)
-    added = skipped = 0
+    added = updated = skipped = 0
 
     for item in items:
         existing = await get_deadline_by_external_id(item["external_id"])
         if existing:
-            skipped += 1
+            fresh = (item["subject"], item["due_date"], item["due_time"])
+            if (existing["subject"], existing["due_date"], existing["due_time"]) != fresh:
+                await update_deadline_due(existing["id"], *fresh)
+                updated += 1
+            else:
+                skipped += 1
             continue
         await add_deadline(
             subject=item["subject"],
@@ -151,5 +160,5 @@ async def sync_deadlines() -> dict:
         )
         added += 1
 
-    logger.info(f"СДО sync: добавлено {added}, пропущено {skipped}")
-    return {"added": added, "skipped": skipped, "expired": False}
+    logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}")
+    return {"added": added, "updated": updated, "skipped": skipped, "expired": False}

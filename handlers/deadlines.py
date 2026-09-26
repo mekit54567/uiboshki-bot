@@ -15,7 +15,9 @@ from database import (
     delete_deadline, upsert_user, get_deadline_stats, get_deadline,
 )
 from config import STAROSTA_ID, GROUP_CHAT_ID
+from scheduler import DEADLINE_POST_QUESTION
 from keyboards import MAIN_KB, CANCEL_KB
+from utils import esc, parse_day_month, today_msk
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -69,7 +71,7 @@ def format_deadlines(deadlines: list[dict]) -> str:
     if not deadlines:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
-    today = date.today()
+    today = today_msk()
     lines = ["📋 <b>Дедлайны группы</b>\n"]
 
     for d in deadlines:
@@ -83,10 +85,10 @@ def format_deadlines(deadlines: list[dict]) -> str:
         else:            badge = f"🟢 через {delta} дн."
 
         tp       = f" в {d['due_time']}" if d.get("due_time") else ""
-        desc_str = f"\n   📝 {d['description']}" if d.get("description") and d["description"] not in ("", "-") else ""
+        desc_str = f"\n   📝 {esc(d['description'])}" if d.get("description") and d["description"] not in ("", "-") else ""
 
         lines.append(
-            f"[{d['id']}] <b>{d['subject']}</b>\n"
+            f"[{d['id']}] <b>{esc(d['subject'])}</b>\n"
             f"   📅 {format_date(d['due_date'])}{tp} — {badge}\n"
             f"   {progress_bar(delta)}{desc_str}"
         )
@@ -139,6 +141,9 @@ async def cmd_cancel(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.subject)
 async def add_subject(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("📌 Название пришли текстом.")
+        return
     await state.update_data(subject=message.text.strip())
     await state.set_state(AddDeadline.description)
     await message.answer(
@@ -190,19 +195,14 @@ async def add_description(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.due_date)
 async def add_due_date(message: Message, state: FSMContext):
-    raw   = message.text.strip()
-    match = re.match(r"^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?$", raw)
-    if not match:
-        await message.answer("❌ Неверный формат. Например: <b>30.05</b>", parse_mode="HTML")
+    due_date = parse_day_month(message.text or "", today_msk())
+    if not due_date:
+        await message.answer(
+            "❌ Неверная или несуществующая дата. Например: <b>30.05</b> или <b>30.05.2027</b>",
+            parse_mode="HTML"
+        )
         return
-    day, month, year = match.groups()
-    year = year or str(date.today().year)
-    try:
-        parsed = date(int(year), int(month), int(day))
-    except ValueError:
-        await message.answer("❌ Такой даты не существует.")
-        return
-    await state.update_data(due_date=parsed.isoformat())
+    await state.update_data(due_date=due_date.isoformat())
     await state.set_state(AddDeadline.due_time)
     await message.answer("⏰ Время? Формат <b>ЧЧ:ММ</b> или <i>–</i>", parse_mode="HTML")
 
@@ -223,7 +223,7 @@ async def add_due_time(message: Message, state: FSMContext):
     tp  = f" в {due_time}" if due_time else ""
     await message.answer(
         f"✅ <b>Дедлайн добавлен!</b> (ID: {did})\n\n"
-        f"📌 {data['subject']}\n"
+        f"📌 {esc(data['subject'])}\n"
         f"📅 {format_date(data['due_date'])}{tp}",
         parse_mode="HTML", reply_markup=MAIN_KB
     )
@@ -280,9 +280,6 @@ SKIP_KEYWORDS = [
     "достижение", "научная конференция", "пример программы",
 ]
 
-TODAY = date.today().isoformat()
-
-
 def should_skip(name: str) -> bool:
     name_lower = name.lower()
     return any(kw in name_lower for kw in SKIP_KEYWORDS)
@@ -320,7 +317,9 @@ async def cmd_sync_sdo(message: Message):
         return
 
     await wait.edit_text(
-        f"✅ Готово!\n\nДобавлено: {result['added']}\nУже было: {result['skipped']}"
+        f"✅ Готово!\n\nДобавлено: {result['added']}\n"
+        f"Обновлено (сменился срок/название): {result.get('updated', 0)}\n"
+        f"Без изменений: {result['skipped']}"
     )
 
 # ── Публикация дедлайнов в группу (ручная модерация старостой) ─────────────
@@ -338,8 +337,9 @@ async def deadline_post_confirm(callback: CallbackQuery):
         await callback.answer("GROUP_CHAT_ID не настроен", show_alert=True)
         return
     text = callback.message.html_text
+    group_text = text.removesuffix(DEADLINE_POST_QUESTION.strip()).rstrip()
     try:
-        await callback.bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+        await callback.bot.send_message(GROUP_CHAT_ID, group_text, parse_mode="HTML")
     except Exception as e:
         await callback.answer(f"Ошибка отправки: {e}", show_alert=True)
         return

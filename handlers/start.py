@@ -3,8 +3,9 @@ from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.types import Message, CallbackQuery
 
 from database import upsert_user, set_subscription, get_user
-from config import GROUP_NAME, STAROSTA_ID, WEBAPP_URL
+from config import GROUP_NAME, STAROSTA_ID, WEBAPP_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from keyboards import MAIN_KB, ACTIONS_KB, webapp_keyboard
+from utils import esc
 
 router = Router()
 
@@ -33,7 +34,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject):
         if target:
             await message.bot.send_document(
                 user.id, target["file_id"],
-                caption=f"📄 <b>{target['title']}</b>" + (f" ({target['subject']})" if target.get('subject') else ""),
+                caption=f"📄 <b>{esc(target['title'])}</b>" + (f" ({esc(target['subject'])})" if target.get('subject') else ""),
                 parse_mode="HTML",
             )
         else:
@@ -47,7 +48,7 @@ async def cmd_start(message: Message):
     user = message.from_user
     await upsert_user(user.id, user.username or "", user.full_name or "")
     await message.answer(
-        f"👋 Привет, <b>{user.first_name}</b>!\n\n"
+        f"👋 Привет, <b>{esc(user.first_name)}</b>!\n\n"
         f"Я бот группы <b>{GROUP_NAME}</b> 🎓\n\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         "📅 Расписание — сегодня, завтра, неделя\n"
@@ -199,7 +200,7 @@ async def cmd_help(message: Message):
 async def cmd_subscribe(message: Message):
     await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
     await set_subscription(message.from_user.id, 1)
-    await message.answer("✅ Подписан! Расписание каждое утро в 6:30 🌅")
+    await message.answer(f"✅ Подписан! Расписание каждое утро в {SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d} 🌅")
 
 
 @router.message(Command("unsubscribe"))
