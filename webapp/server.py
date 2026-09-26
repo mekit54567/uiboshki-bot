@@ -448,7 +448,29 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
             # как /delfile в боте: тот, кто загрузил, или староста/зам
             "can_edit": editor or f.get("uploaded_by") == user["id"],
         })
-    return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES]}
+    return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES],
+            "can_delete": not STAROSTA_ID or user["id"] == STAROSTA_ID}
+
+
+class FileIds(BaseModel):
+    ids: list[int]
+
+
+@app.post("/api/files/delete")
+async def api_files_delete(body: FileIds, user: dict = CurrentUser):
+    """Удалить файл или сразу папку/раздел (лишнее из выгрузки СДО) — у
+    всей группы. Как /delfile в боте: только староста."""
+    from database import delete_files, get_files
+    if STAROSTA_ID and user["id"] != STAROSTA_ID:
+        raise HTTPException(status_code=403, detail="удалять файлы может только староста")
+    ids = sorted(set(body.ids))
+    if not ids or len(ids) > 1000:
+        raise HTTPException(status_code=400, detail="от 1 до 1000 файлов за раз")
+    by_id = {f["id"]: f for f in await get_files()}
+    files = [by_id[i] for i in ids if i in by_id]
+    if not files:
+        raise HTTPException(status_code=404, detail="файлы не найдены")
+    return {"ok": True, "deleted": await delete_files([f["id"] for f in files])}
 
 
 class FileMeta(BaseModel):

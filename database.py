@@ -536,8 +536,11 @@ async def add_file(title, subject, file_id, file_name, uploaded_by, category: st
         return cursor.lastrowid
 
 async def get_file_sources() -> set[str]:
+    """Что уже выгружено из СДО — и что удалили вручную (не выгружать снова)."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL")
+        await db.execute("CREATE TABLE IF NOT EXISTS files_skipped (source TEXT PRIMARY KEY)")
+        cursor = await db.execute("SELECT source FROM files WHERE source IS NOT NULL "
+                                  "UNION SELECT source FROM files_skipped")
         return {r[0] for r in await cursor.fetchall()}
 
 
@@ -558,14 +561,26 @@ async def get_files(subject: str = None) -> list[dict]:
         return [dict(r) for r in await cursor.fetchall()]
 
 async def delete_file(fid: int):
+    await delete_files([fid])
+
+
+async def delete_files(fids: list[int]) -> int:
+    """Удаляет файлы вместе с их текстом для ИИ. Удалённое из СДО
+    запоминается (files_skipped), чтобы следующий /sdofiles не выгрузил
+    его обратно."""
+    if not fids:
+        return 0
+    marks = ",".join("?" * len(fids))
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute("DELETE FROM files WHERE id=?", (fid,))
-        # file_text не связана FK/CASCADE (SQLite её не включает по умолчанию,
-        # заводить ради одной таблицы отдельный PRAGMA не стали) — чистим руками,
-        # иначе после удаления файла его текст молча остаётся висеть в контексте
-        # предмета для решалки по лекциям (Фаза 9).
-        await db.execute("DELETE FROM file_text WHERE file_id=?", (fid,))
+        await db.execute("CREATE TABLE IF NOT EXISTS files_skipped (source TEXT PRIMARY KEY)")
+        await db.execute(f"INSERT OR IGNORE INTO files_skipped (source) "
+                         f"SELECT source FROM files WHERE id IN ({marks}) AND source IS NOT NULL", fids)
+        cursor = await db.execute(f"DELETE FROM files WHERE id IN ({marks})", fids)
+        deleted = cursor.rowcount
+        await db.execute(f"DELETE FROM file_text WHERE file_id IN ({marks})", fids)
         await db.commit()
+        return deleted
+
 
 async def save_file_text(file_id: int, text: str):
     """Сохраняет извлечённый из файла лекции текст (см. file_text.py). Вызывается

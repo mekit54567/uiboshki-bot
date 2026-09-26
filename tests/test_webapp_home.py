@@ -269,3 +269,22 @@ async def test_api_week_number_and_dots(db, client, monkeypatch):
     assert all(not d["dots"] for i, d in enumerate(data["days"]) if i != 3)   # «4 неделя» — не пара
     assert c.get("/api/week", params={"start": "21.09"}, headers=headers).status_code == 400
     assert c.get("/api/week", params={"start": monday.isoformat()}).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_files_delete_only_starosta_and_sdo_does_not_bring_back(db, client):
+    from tests.conftest import STAROSTA_ID
+    c, _ = client
+    mine = await db.add_file("Мой конспект", "ОБА", "a", "a.pdf", 222)
+    sdo = [await db.add_file(f"Физра {i}", "Физкультура", f"s{i}", f"{i}.pdf", 0, source=f"sdo:{i}") for i in range(3)]
+    await db.save_file_text(sdo[0], "текст")
+
+    assert c.get("/api/files", headers=_headers_for(222)).json()["can_delete"] is False
+    assert c.post("/api/files/delete", json={"ids": [mine]}, headers=_headers_for(222)).status_code == 403  # и свой — нет
+    st = _headers_for(STAROSTA_ID)
+    assert c.get("/api/files", headers=st).json()["can_delete"] is True
+    assert c.post("/api/files/delete", json={"ids": sdo}, headers=st).json() == {"ok": True, "deleted": 3}
+    assert [f["id"] for f in await db.get_files()] == [mine]
+    assert await db.get_subject_lecture_context("Физкультура") == ""          # текст для ИИ тоже ушёл
+    assert {"sdo:0", "sdo:1", "sdo:2"} <= await db.get_file_sources()         # /sdofiles их не вернёт
+    assert c.post("/api/files/delete", json={"ids": []}, headers=st).status_code == 400

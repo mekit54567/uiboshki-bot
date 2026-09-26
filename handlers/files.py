@@ -400,14 +400,12 @@ async def cmd_delfile(message: Message):
     if not f:
         await message.answer("❌ Файл с таким ID не найден.")
         return
-    # Раньше проверки не было вообще: любой участник мог удалить любой файл
-    # группы — и вместе с ним текст лекции из контекста решалки (delete_file
-    # чистит и file_text). Теперь — только тот, кто загрузил, или староста/зам.
-    # STAROSTA_ID не задан — как и у остальных админ-команд, без ограничений.
-    from handlers.announce import is_editor
-    if (STAROSTA_ID and f.get("uploaded_by") != message.from_user.id
-            and not await is_editor(message.from_user.id)):
-        await message.answer("❌ Удалить файл может только тот, кто его загрузил, или староста.")
+    # Файл удаляется у всей группы (вместе с текстом для ИИ), поэтому
+    # удалять может только староста — так решил владелец. Раньше мог и тот,
+    # кто загрузил, и зам. STAROSTA_ID не задан — как у остальных
+    # админ-команд, без ограничений.
+    if STAROSTA_ID and message.from_user.id != STAROSTA_ID:
+        await message.answer("❌ Удалять файлы может только староста — файл пропадёт у всей группы.")
         return
     await delete_file(fid)
     await message.answer(f"🗑 Файл #{fid} удалён.")

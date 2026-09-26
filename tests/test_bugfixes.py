@@ -267,19 +267,21 @@ async def _feed(dp, bot, text, user=USER):
 
 
 @pytest.mark.asyncio
-async def test_delfile_requires_uploader_or_starosta(hw_db, make_dp, bot):
+async def test_delfile_only_starosta(hw_db, make_dp, bot):
+    # Файл удаляется у всей группы — владелец решил: удаляет только староста
+    # (раньше мог и загрузивший свой).
     from handlers.files import router as files_router
     dp = make_dp(files_router)
     sess = bot.session
 
     foreign = await hw_db.add_file("Лекция 1", "Матан", "tg-file-1", "l1.pdf", 999)
     await _feed(dp, bot, f"/delfile {foreign}")
-    assert any("только тот, кто его загрузил" in t for _, t in sess.sent_texts)
+    assert any("только староста" in t for _, t in sess.sent_texts)
     assert any(f["id"] == foreign for f in await hw_db.get_files())
 
     own = await hw_db.add_file("Мой конспект", "Матан", "tg-file-2", "c.pdf", USER.id)
     await _feed(dp, bot, f"/delfile {own}")
-    assert not any(f["id"] == own for f in await hw_db.get_files())
+    assert any(f["id"] == own for f in await hw_db.get_files())       # и свой — нет
 
     await _feed(dp, bot, f"/delfile {foreign}", user=STAROSTA)
     assert not any(f["id"] == foreign for f in await hw_db.get_files())
