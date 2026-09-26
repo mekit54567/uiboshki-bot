@@ -157,3 +157,27 @@ async def test_files_browse_subject_then_category(db, dp, bot):
 
     await _click(dp, bot, "fsj:1")                                  # Сети: один тип — сразу файлы
     assert bot.session.sent_texts[-1][1] == "📁 <b>Сети</b> (1):"
+
+
+@pytest.mark.asyncio
+async def test_files_list_pages_instead_of_dropping(db, dp, bot):
+    # после выгрузки из СДО лекций у предмета бывает больше, чем влезало (30)
+    for i in range(30):
+        await db.add_file(f"Лекция {i + 1}", "ОБА", f"x{i}", f"l{i}.pdf", 1)
+    await _click(dp, bot, "fsj:0")                                  # один тип — сразу файлы, стр. 1
+    assert bot.session.sent_texts[-1][1] == "📁 <b>ОБА</b> (30) · стр. 1/2:"
+    await _click(dp, bot, "fct:0:*:1")
+    assert bot.session.sent_texts[-1][1] == "📁 <b>ОБА</b> → 📋 Все файлы (30) · стр. 2/2:"
+    await _click(dp, bot, "fct:0:lecture:9")                        # страница за краем — последняя
+    assert bot.session.sent_texts[-1][1] == "📁 <b>ОБА</b> → 📓 Лекции (30) · стр. 2/2:"
+
+
+def test_files_keyboard_pages():
+    from handlers.files import files_keyboard
+    files = [{"id": i, "title": f"Файл {i}"} for i in range(30)]
+    first = files_keyboard(files, back="fsj:0", page=0, page_cb="fct:0:*").inline_keyboard
+    assert len(first) == 25 + 2 and [b.callback_data for b in first[-2]] == ["fct:0:*:1"]
+    second = files_keyboard(files, back="fsj:0", page=1, page_cb="fct:0:*").inline_keyboard
+    assert len(second) == 5 + 2 and [b.callback_data for b in second[-2]] == ["fct:0:*:0"]
+    assert second[-1][0].callback_data == "fsj:0"
+    assert len(files_keyboard(files[:3]).inline_keyboard) == 4           # одна страница — без стрелок

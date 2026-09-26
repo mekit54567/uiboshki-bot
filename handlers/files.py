@@ -32,12 +32,30 @@ def subjects_keyboard(subjects: list[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def files_keyboard(files: list[dict]) -> InlineKeyboardMarkup:
+FILES_PAGE = 25
+
+
+def pages_label(total: int, page: int) -> str:
+    pages = (total + FILES_PAGE - 1) // FILES_PAGE
+    return f" · стр. {page + 1}/{pages}" if pages > 1 else ""
+
+
+def files_keyboard(files: list[dict], back: str = "fbk", page: int = 0, page_cb: str | None = None) -> InlineKeyboardMarkup:
+    """По FILES_PAGE файлов на страницу. Раньше показывались первые 30, а
+    остальные молча пропадали — после выгрузки из СДО (сотни файлов) в
+    разделе «Лекции» предмета их легко больше."""
     buttons = []
-    for f in files[:30]:
+    for f in files[page * FILES_PAGE:(page + 1) * FILES_PAGE]:
         name = f["title"][:35]
         buttons.append([InlineKeyboardButton(text=f"📄 {name}", callback_data=f"fget:{f['id']}")])
-    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="fbk")])
+    nav = []
+    if page_cb and page > 0:
+        nav.append(InlineKeyboardButton(text="‹ Назад", callback_data=f"{page_cb}:{page - 1}"))
+    if page_cb and (page + 1) * FILES_PAGE < len(files):
+        nav.append(InlineKeyboardButton(text="Дальше ›", callback_data=f"{page_cb}:{page + 1}"))
+    if nav:
+        buttons.append(nav)
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data=back)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -118,7 +136,8 @@ async def files_by_subject(callback: CallbackQuery):
         )
     else:
         await callback.message.edit_text(
-            f"📁 <b>{esc(title)}</b> ({len(files)}):", parse_mode="HTML", reply_markup=files_keyboard(files),
+            f"📁 <b>{esc(title)}</b> ({len(files)}){pages_label(len(files), 0)}:", parse_mode="HTML",
+            reply_markup=files_keyboard(files, page_cb=f"fct:{idx}:*"),
         )
     await callback.answer()
 
@@ -126,7 +145,9 @@ async def files_by_subject(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("fct:"))
 async def files_by_category(callback: CallbackQuery):
     from file_categories import LABELS, category_of
-    _, idx, cat = callback.data.split(":", 2)
+    parts = callback.data.split(":")
+    idx, cat = parts[1], parts[2]
+    page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
     picked = _subject_files(await get_files(), idx)
     if not picked:
         await callback.answer("Ошибка")
@@ -138,10 +159,11 @@ async def files_by_category(callback: CallbackQuery):
         await callback.answer("Файлов нет")
         return
     label = LABELS.get(cat, "📋 Все файлы")
-    kb = files_keyboard(files)
-    kb.inline_keyboard[-1] = [InlineKeyboardButton(text="◀️ Назад", callback_data=f"fsj:{idx}")]
+    page = min(page, (len(files) - 1) // FILES_PAGE)
+    kb = files_keyboard(files, back=f"fsj:{idx}", page=page, page_cb=f"fct:{idx}:{cat}")
     await callback.message.edit_text(
-        f"📁 <b>{esc(title)}</b> → {label} ({len(files)}):", parse_mode="HTML", reply_markup=kb,
+        f"📁 <b>{esc(title)}</b> → {label} ({len(files)}){pages_label(len(files), page)}:",
+        parse_mode="HTML", reply_markup=kb,
     )
     await callback.answer()
 
