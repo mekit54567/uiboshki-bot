@@ -153,3 +153,20 @@ async def test_webapp_search_and_target_endpoints(db, monkeypatch):
     data = resp.json()
     assert data["title"] == "Блеко В. В."
     assert "👥 КСБО-11-26 1 п/г" in data["html"]
+
+
+@pytest.mark.asyncio
+async def test_graduated_groups_hidden_and_newest_first(db, monkeypatch):
+    # живой тест: по «БАСО» весь верх выдачи занимали БАСО-01-12…-17
+    yy = datetime.now(TZ).year % 100
+    await schedule_index._save([
+        (1, 1, f"БАСО-01-{yy - 14:02d}"),
+        (1, 2, f"БАСО-01-{yy - 5:02d}"),
+        (1, 3, f"БАСО-01-{yy:02d}"),
+        (1, 4, f"БАСО-02-{yy - 1:02d}"),
+        (2, 5, "Басов И. И."),
+    ])
+    titles = [f["title"] for f in await schedule_index.search("басо")]
+    assert titles[:3] == [f"БАСО-01-{yy:02d}", f"БАСО-02-{yy - 1:02d}", f"БАСО-01-{yy - 5:02d}"]
+    assert f"БАСО-01-{yy - 14:02d}" not in titles
+    assert "Басов И. И." in titles

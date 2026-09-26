@@ -21,11 +21,14 @@ import asyncio
 import logging
 import re
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import aiosqlite
 import httpx
 
 import database
+from config import TIMEZONE
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ MIRROR = "https://english.mirea.ru/schedule/api"
 
 TYPES = (1, 2, 3)            # группа, преподаватель, аудитория (как в API МИРЭА)
 STOP_AFTER_MISSES = 300      # столько 404 подряд — дальше id этого типа нет
+GROUP_MAX_AGE_YEARS = 6      # группы старше (по году в названии "УИБО-03-24") в поиске не показываем
 CONCURRENCY = 4
 REFRESH_DAYS = 30
 
@@ -183,20 +187,29 @@ async def count() -> int:
 
 async def search(query: str, types: tuple[int, ...] = TYPES, limit: int = 20) -> list[dict]:
     """Подстрока без учёта регистра и ё/е; сначала те, что начинаются с
-    запроса ("Морозов" раньше "Шморозова"), дальше по алфавиту."""
+    запроса ("Морозов" раньше "Шморозова"). Группы — свежие выше, а
+    выпущенные (год набора в названии старше GROUP_MAX_AGE_YEARS) не
+    показываются вовсе: у "БАСО-01-12" расписания нет уже десять лет, а в
+    живом тесте такие занимали весь верх выдачи по «БАСО»."""
     q = _norm(query)
     if not q or not types:
         return []
     like = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     marks = ",".join("?" * len(types))
+    min_year = datetime.now(ZoneInfo(TIMEZONE)).year % 100 - GROUP_MAX_AGE_YEARS
+    group_year = "CAST(substr(title, -2) AS INTEGER)"
+    has_year = "(type = 1 AND title GLOB '*-[0-9][0-9]')"
     async with aiosqlite.connect(database.DATABASE_PATH) as db:
         await _ensure_tables(db)
         cur = await db.execute(
             f"""SELECT type, id, title FROM schedule_targets
                 WHERE type IN ({marks}) AND title_lc LIKE ? ESCAPE '\\'
-                ORDER BY (title_lc LIKE ? ESCAPE '\\') DESC, length(title), title
+                  AND NOT ({has_year} AND {group_year} < ?)
+                ORDER BY (title_lc LIKE ? ESCAPE '\\') DESC,
+                         CASE WHEN {has_year} THEN -{group_year} ELSE 0 END,
+                         length(title), title
                 LIMIT ?""",
-            (*types, f"%{like}%", f"{like}%", limit),
+            (*types, f"%{like}%", min_year, f"{like}%", limit),
         )
         return [{"type": t, "id": i, "title": title} for t, i, title in await cur.fetchall()]
 
