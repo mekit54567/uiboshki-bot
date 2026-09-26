@@ -121,6 +121,7 @@ def parse_deadlines(html: str) -> list[dict]:
             continue
 
         results.append({
+            "course":      course_name,
             "external_id": f"sdo:{event_id}",
             "subject":     f"{title} ({course_name})" if course_name else title,
             "description": item_url,
@@ -152,6 +153,38 @@ def is_old_semester(text: str, today=None) -> bool:
     """Есть метка семестра, и она не нынешняя. Без метки — не знаем, не трогаем."""
     tags = [f"{a}.{b}-{c}" for a, b, c in _SEM_TAG.findall(text or "")]
     return bool(tags) and current_semester_tag(today) not in tags
+
+
+def course_of(subject: str) -> str:
+    """Курс из названия дедлайна: последняя скобка верхнего уровня —
+    «ПР 1 (Анализ данных (УИБО-03-24))» → «Анализ данных (УИБО-03-24)»."""
+    s = (subject or "").rstrip()
+    if not s.endswith(")"):
+        return ""
+    depth = 0
+    for i in range(len(s) - 1, -1, -1):
+        if s[i] == ")":
+            depth += 1
+        elif s[i] == "(":
+            depth -= 1
+            if depth == 0:
+                return s[i + 1:-1].strip()
+    return ""
+
+
+def off_schedule(course: str, subjects: list[str]) -> bool:
+    """Курса нет среди предметов нынешнего расписания группы. Живой тест:
+    «Методы принятия управленческих решений», «Физкультура 3/3» и т.п.
+    прошлых семестров были без метки «[II.25-26]». Нет расписания или
+    курса — не выбрасываем (лучше лишний дедлайн, чем пропущенный)."""
+    if not course or not subjects:
+        return False
+    from sdo_files import match_subject
+    return match_subject(course, subjects) not in subjects
+
+
+def not_this_semester(item: dict, subjects: list[str]) -> bool:
+    return is_old_semester(item["subject"]) or off_schedule(item.get("course") or course_of(item["subject"]), subjects)
 
 
 async def fetch_calendar_events(client: httpx.AsyncClient, months: int = CALENDAR_MONTHS) -> list[dict] | None:
@@ -205,6 +238,7 @@ def parse_calendar_events(events: list[dict]) -> list[dict]:
         title = html_lib.unescape(e.get("name") or "Без названия").strip()
         course = html_lib.unescape((e.get("course") or {}).get("fullname") or "").strip()
         results.append({
+            "course":      course,
             "external_id": f"sdo:{e['id']}",   # тот же id события, что и в «Предстоящих» — без дублей
             "subject":     f"{title} ({course})" if course else title,
             "description": e.get("url") or "",
@@ -257,9 +291,11 @@ async def sync_deadlines() -> dict:
         logger.error(f"СДО sync: не удалось получить страницу: {e}")
         return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": str(e)}
 
+    from schedule_parser import get_group_subjects
     added = updated = skipped = 0
-    old = [i for i in items if is_old_semester(i["subject"])]
-    items = [i for i in items if not is_old_semester(i["subject"])]
+    subjects = await get_group_subjects()
+    old = [i for i in items if not_this_semester(i, subjects)]
+    items = [i for i in items if not not_this_semester(i, subjects)]
 
     for item in items:
         existing = await get_deadline_by_external_id(item["external_id"])
@@ -285,4 +321,6 @@ async def sync_deadlines() -> dict:
         added += 1
 
     logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}, прошлый семестр {len(old)}")
-    return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old), "expired": False}
+    return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old),
+            "old_courses": sorted({i.get("course") or course_of(i["subject"]) for i in old} - {""}),
+            "expired": False}

@@ -14,7 +14,8 @@ import re
 
 SUBJECT_BUDGET = 200_000   # ~60К токенов — отвечает быстро и не упирается в лимиты
 AUTO_BUDGET = 60_000       # без выбранного предмета — только самое подходящее
-AUTO_MIN_SCORE = 4         # совпадение в названии (3) + в тексте, или 4 слова вопроса в тексте
+AUTO_MIN_SCORE = 2         # два слова вопроса в тексте лекции (или одно — в названии); с 4 короткий
+                           # точный вопрос («дебет и кредит — что это?») лекций не получал
 
 _WORD = re.compile(r"[а-яёa-z]{4,}|\d{1,3}", re.I)
 _STOP = {
@@ -56,6 +57,39 @@ def _blocks(context: str) -> list[tuple[str, str, set, set]]:
     return _cache[key]
 
 
+_typo_index: dict[tuple, dict[str, set[str]]] = {}
+
+
+def _deletes(stem: str) -> set[str]:
+    return {stem} | {stem[:i] + stem[i + 1:] for i in range(len(stem))}
+
+
+def _fix_typos(query: set[str], blocks: list, key: tuple) -> set[str]:
+    """Слова вопроса, которых нет в лекциях, заменяем на похожие из лекций
+    (одна буква отличается / лишняя / пропущена): живой тест — «Дебит и
+    кредит» не находил лекцию про «дебет». Индекс «слово без одной буквы» →
+    слова строится лениво и только когда в вопросе есть незнакомое слово."""
+    vocab = set().union(*(t | b for _, _, t, b in blocks)) if blocks else set()
+    unknown = {q for q in query if len(q) >= 5 and not q.isdigit() and q not in vocab}
+    if not unknown:
+        return query
+    if key not in _typo_index:
+        index: dict[str, set[str]] = {}
+        for word in vocab:
+            if len(word) >= 4 and not word.isdigit():
+                for d in _deletes(word):
+                    index.setdefault(d, set()).add(word)
+        if len(_typo_index) > 8:
+            _typo_index.clear()
+        _typo_index[key] = index
+    index = _typo_index[key]
+    fixed = set(query) - unknown
+    for q in unknown:
+        near = set().union(*(index.get(d, set()) for d in _deletes(q)))
+        fixed |= near or {q}
+    return fixed
+
+
 def _score(query: set, title: set, body: set) -> int:
     return 3 * len(query & title) + len(query & body)
 
@@ -69,7 +103,7 @@ def pick(context: str, query: str, budget: int = SUBJECT_BUDGET, min_score: int 
     if min_score == 0 and len(context) <= budget:
         return _JUNK.sub("", context)
     blocks = _blocks(context)
-    q = _stems(query or "")
+    q = _fix_typos(_stems(query or ""), blocks, (len(context), context[:200], context[-200:]))
     scored = [(_score(q, t, b), i) for i, (_, _, t, b) in enumerate(blocks)] if q else []
     order = [i for s, i in sorted(scored, key=lambda x: (-x[0], x[1])) if s > 0 and s >= min_score]
     if not order and min_score == 0:

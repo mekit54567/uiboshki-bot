@@ -143,6 +143,7 @@ async def test_scan_maps_subjects_and_categories():
         courses = await sdo_files.scan(client, SUBJECTS)
     arch, data, sport, old = courses
     assert old.old and old.files == []                    # прошлый семестр — даже не открывали
+    assert sport.old and sport.files == []                # в расписании группы физкультуры нет
     assert arch.subject == "Архитектура вычислительных машин и систем"
     assert [(f.title, f.category, f.source) for f in arch.files] == [
         ("Введение в архитектуру", "lecture", "sdo:101"),       # тип — по разделу «Лекции»
@@ -152,7 +153,6 @@ async def test_scan_maps_subjects_and_categories():
         ("Ссылка-страница", "practice", "sdo:104"),
     ]
     assert data.subject == "Анализ данных" and [f.category for f in data.files] == ["exam"]
-    assert sport.files == [] and not sport.error
 
 
 class _BotSession(RecordingSession):
@@ -233,9 +233,8 @@ async def test_sdofiles_command_dry_run_then_import(db, bot, monkeypatch):
         await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, message=msg))
         report = bot.session.sent_texts[-1][1]
         assert "СДО: 4 курса, 6 файлов</b> (новых: 6)" in report
-        assert "Прошлый семестр — пропустил: Информатика [II.25-26]" in report
+        assert "Не этого семестра (нет в расписании) — пропустил: Физкультура, Информатика [II.25-26]" in report
         assert "<b>Архитектура_Экзамен [I.26-27]</b>\n→ 📁 Архитектура вычислительных машин и систем · 5: 📓 2 · 🛠 2 · 📝 1" in report
-        assert "Без файлов: Физкультура" in report
         assert await db.get_files() == []               # пробный прогон ничего не сохраняет
         assert not [c for c in calls if c[1].startswith("/pluginfile.php/")]  # и ничего не качает
         assert not [c for c in calls if c[2].get("id") == "14"]           # старый курс не открывали

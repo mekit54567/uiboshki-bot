@@ -450,7 +450,7 @@ def _sdo_report(courses, known: set[str]) -> tuple[list[str], int]:
     if empty:
         lines.append(f"\nБез файлов: {esc(', '.join(empty))}")
     if old:
-        lines.append(f"\nПрошлый семестр — пропустил: {esc(', '.join(old))}")
+        lines.append(f"\nНе этого семестра (нет в расписании) — пропустил: {esc(', '.join(old))}")
     lines.append("\nПредмет и тип потом можно поправить в WebApp (✏️ у файла).")
     chunks, cur = [], ""
     for line in lines:

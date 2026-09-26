@@ -116,3 +116,11 @@ async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
     monkeypatch.setattr("ai_solver.chat_with_reasoning", down)
     resp = client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет"}]}, headers=headers)
     assert resp.status_code == 502 and "лимит запросов исчерпан" in resp.json()["detail"]
+
+
+def test_typo_in_question_still_finds_lecture():
+    # живой тест: «Дебит и кредит эт что?» — в лекциях «дебет»
+    ctx = _ctx(("Лекция 1. Учёт", "Дебет и кредит — стороны счёта. " + "учёт " * 3000),
+               ("Лекция 2. Налоги", "НДС и налог на прибыль. " + "налог " * 3000))
+    out = lp.pick(ctx, "Дебит и кредит эт что?", lp.AUTO_BUDGET, lp.AUTO_MIN_SCORE)
+    assert out.startswith("=== Лекция 1. Учёт ===") and "Лекция 2" not in out
