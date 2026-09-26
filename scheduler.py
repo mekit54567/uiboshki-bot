@@ -81,7 +81,7 @@ async def send_group_morning_digest(bot: Bot):
 
 def _format_deadline_reminders(deadlines: list[dict]) -> str:
     today = today_msk()
-    lines = ["⏳ <b>Ближайшие дедлайны группы:</b>\n"]
+    lines = ["⏳ <b>Ближайшие дедлайны группы:</b>"]
     for d in deadlines:
         due   = date.fromisoformat(d["due_date"])
         delta = (due - today).days

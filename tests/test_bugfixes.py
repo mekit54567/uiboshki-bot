@@ -83,6 +83,22 @@ def test_deadline_reminders_escape_user_text():
     assert "&lt;b&gt;" in text and "a &amp; b" in text
 
 
+def test_no_triple_newlines_under_headers():
+    # Живой тест в Telegram: под "📅 Суббота, 26.09.2026" стояли три пустые
+    # строки (header + "" склеивались через "\n\n"), под заголовком
+    # /deadlines и утренней рассылки — две.
+    from datetime import date
+    from handlers.deadlines import format_deadlines
+    from schedule_parser import format_day
+    from scheduler import _format_deadline_reminders
+
+    day = format_day([{"time": "09:00–10:30", "summary": "ЛК Матан", "location": "А-18"}], date(2026, 9, 26))
+    assert day.startswith("📅 <b>Суббота</b>, 26.09.2026\n\n┌ <b>Пара 1</b>")
+    d = {"id": 1, "subject": "Лаба", "description": "", "due_date": "2099-01-01", "due_time": None}
+    for text in (day, format_deadlines([d]), _format_deadline_reminders([d])):
+        assert "\n\n\n" not in text
+
+
 @pytest.mark.asyncio
 async def test_notes_block_escapes_notes(db):
     # _notes_block уходит и в бот (parse_mode=HTML), и в WebApp через

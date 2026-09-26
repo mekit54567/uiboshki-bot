@@ -109,7 +109,7 @@ def format_day(events: list[dict], target: date, show_date=True) -> str:
     if not events:
         return f"{header}\n🎉 Пар нет!"
 
-    lines = [header, ""]
+    lines = [header]
     for i, e in enumerate(events, 1):
         lines.append(
             f"┌ <b>Пара {i}</b>  ⏰ {e['time']}\n"

@@ -72,7 +72,7 @@ def format_deadlines(deadlines: list[dict]) -> str:
         return "📋 Дедлайнов нет — можно расслабиться! 🎉"
 
     today = today_msk()
-    lines = ["📋 <b>Дедлайны группы</b>\n"]
+    lines = ["📋 <b>Дедлайны группы</b>"]
 
     for d in deadlines:
         due   = date.fromisoformat(d["due_date"])
@@ -93,7 +93,7 @@ def format_deadlines(deadlines: list[dict]) -> str:
             f"   {progress_bar(delta)}{desc_str}"
         )
 
-    lines.append("\n/done ID — выполнено  •  /del ID — удалить")
+    lines.append("/done ID — выполнено  •  /del ID — удалить")
     return "\n\n".join(lines)
 
 
