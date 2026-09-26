@@ -224,3 +224,44 @@ async def test_sync_keeps_only_courses_from_schedule(db, monkeypatch):
     monkeypatch.setattr(schedule_parser, "get_group_subjects", no_schedule)   # расписание не загрузилось —
     res = await sdo_parser.sync_deadlines()                                    # ничего не выбрасываем
     assert (res["added"], res["old_semester"]) == (2, 0)
+
+
+# ── протухшая кука: круг редиректов «вход → единый вход → обратно» ─────────
+
+def _loop_client():
+    def handler(request):
+        nxt = "/sso" if request.url.path != "/sso" else "/login/index.php"
+        if request.url.path == "/login/index.php":
+            nxt = "/sso"
+        return httpx.Response(302, headers={"location": f"{BASE}{nxt}"})
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler), follow_redirects=True)
+
+
+@pytest.mark.asyncio
+async def test_redirect_loop_means_expired_cookie_not_network():
+    # живой тест 26.09: «СДО недоступен… Exceeded maximum allowed redirects»
+    async with _loop_client() as client:
+        with pytest.raises(sdo_parser.SdoSessionExpired):
+            await sdo_parser.fetch_calendar_events(client)
+
+
+@pytest.mark.asyncio
+async def test_sync_reports_redirect_loop_as_expired(db, monkeypatch):
+    monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
+
+    async def looping():
+        async with _loop_client() as client:
+            return sdo_parser.parse_calendar_events(await sdo_parser.fetch_calendar_events(client))
+
+    monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", looping)
+    res = await sdo_parser.sync_deadlines()
+    assert res["expired"] and not res.get("missing") and "error" not in res
+
+
+def test_sdo_jobs_keepalive_and_early_first_sync():
+    from datetime import datetime, timedelta
+    import scheduler
+    jobs = {j.func.__name__: j for j in scheduler.start_scheduler(object()).get_jobs()}
+    assert jobs["keepalive"].trigger.interval <= timedelta(hours=1)
+    first = jobs["sync_sdo_deadlines"].next_run_time
+    assert first - datetime.now(first.tzinfo) < timedelta(minutes=2)

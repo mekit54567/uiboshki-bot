@@ -116,6 +116,9 @@ async def stop_webapp(server, task):
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
+    # Длиннее лимита Telegram — несколькими сообщениями (long_messages.py)
+    from long_messages import SplitLongMessages
+    bot.session.middleware(SplitLongMessages())
     dp  = Dispatcher(storage=MemoryStorage())
 
     # Outer middleware — должен успеть сбросить FSM-состояние ДО того, как

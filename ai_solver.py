@@ -156,7 +156,7 @@ async def chat_with_reasoning(history: list, subject: str = "", extra_system: st
     DeepSeek, которая отдаёт отдельное поле reasoning_content ("как думала")
     в дополнение к обычному content ("что ответила"). Раздельно, чтобы фронт
     мог свернуть/развернуть трейс независимо от самого ответа — см. PLAN.md,
-    идея владельца про "мышление" как в приложениях DeepSeek/ChatGPT/Claude.
+    идея владельца про "мышление" как в приложениях DeepSeek/ChatGPT.
     Без DEEPSEEK_API_KEY — тот же Gemini, что и у решалки в боте (без
     трейса рассуждений): иначе чат в WebApp просто не работал бы у тех, кто
     не заводил ключ DeepSeek. Возвращает {"content": str, "reasoning": str}."""

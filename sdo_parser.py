@@ -61,6 +61,36 @@ class SdoSessionExpired(Exception):
     pass
 
 
+async def get_checked(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """GET в СДО. Протухшая сессия бывает не только редиректом на
+    /login/index.php, но и бесконечным кругом «вход → единый вход МИРЭА →
+    обратно» — httpx тогда бросает TooManyRedirects. Живой тест 26.09:
+    это приходило старосте как «СДО недоступен с сервера», хотя дело в куке."""
+    try:
+        resp = await client.get(url)
+    except httpx.TooManyRedirects:
+        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла")
+    if "/login/index.php" in str(resp.url):
+        raise SdoSessionExpired(f"Похоже, сессия СДО протухла (итоговый URL: {resp.url})")
+    return resp
+
+
+async def keepalive() -> bool:
+    """Лёгкий запрос в СДО, чтобы сессия Moodle не истекла без обращений
+    (сколько она живёт без них — не знаем; синк раз в 6 ч её не спас).
+    True — сессия жива."""
+    if not SDO_SESSION_COOKIE:
+        return False
+    try:
+        async with httpx.AsyncClient(cookies={"MoodleSession": SDO_SESSION_COOKIE},
+                                     follow_redirects=True, timeout=30) as client:
+            await get_checked(client, f"{SDO_BASE_URL}/my/")
+        return True
+    except Exception as e:
+        logger.info(f"СДО keepalive: {e}")
+        return False
+
+
 async def fetch_upcoming_html() -> str:
     if not SDO_SESSION_COOKIE:
         raise SdoSessionExpired("SDO_SESSION_COOKIE не задана")
@@ -70,7 +100,7 @@ async def fetch_upcoming_html() -> str:
         follow_redirects=True,
         timeout=30,
     ) as client:
-        resp = await client.get(UPCOMING_URL)
+        resp = await get_checked(client, UPCOMING_URL)
         resp.raise_for_status()
         html = resp.text
 
@@ -199,9 +229,7 @@ def not_this_semester(item: dict, subjects: list[str]) -> bool:
 async def fetch_calendar_events(client: httpx.AsyncClient, months: int = CALENDAR_MONTHS) -> list[dict] | None:
     """Все события календаря за months месяцев начиная с текущего (JSON
     Moodle). None — AJAX недоступен, пусть работает запасной путь."""
-    resp = await client.get(f"{SDO_BASE_URL}/my/")
-    if "/login/index.php" in str(resp.url):
-        raise SdoSessionExpired(f"Похоже, сессия СДО протухла (итоговый URL: {resp.url})")
+    resp = await get_checked(client, f"{SDO_BASE_URL}/my/")
     resp.raise_for_status()
     m = re.search(r'"sesskey":"([^"]+)"', resp.text)
     if not m:
