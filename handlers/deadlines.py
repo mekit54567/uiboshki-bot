@@ -327,11 +327,22 @@ async def cmd_sync_sdo(message: Message):
     result = await sync_deadlines()
 
     if result.get("expired"):
-        await wait.edit_text(
-            "⚠️ Кука СДО протухла. Зайди в online-edu.mirea.ru в браузере "
-            "(с «запомнить меня»), возьми свежее значение MoodleSession "
-            "(DevTools → Application → Cookies) и обнови SDO_SESSION_COOKIE."
-        )
+        # «Не задана» и «протухла» раньше были одним сообщением — а это разные
+        # вещи: во втором случае СДО с сервера открылся (сеть есть), просто
+        # попросил войти заново.
+        if result.get("missing"):
+            await wait.edit_text(
+                "⚠️ Кука СДО не задана. Зайди в online-edu.mirea.ru в браузере, "
+                "возьми значение MoodleSession (F12 → Application → Cookies) и добавь "
+                "его в Railway → Variables как SDO_SESSION_COOKIE."
+            )
+        else:
+            await wait.edit_text(
+                "⚠️ Кука СДО протухла: СДО открылся, но попросил войти заново. Зайди в "
+                "online-edu.mirea.ru в браузере, возьми свежее значение MoodleSession "
+                "(F12 → Application → Cookies) и обнови SDO_SESSION_COOKIE в Railway. "
+                "В СДО потом не жми «Выйти» — это убивает сессию."
+            )
         return
 
     if "error" in result:

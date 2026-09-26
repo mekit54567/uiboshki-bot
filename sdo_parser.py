@@ -132,7 +132,8 @@ async def sync_deadlines() -> dict:
         html = await fetch_upcoming_html()
     except SdoSessionExpired as e:
         logger.warning(f"СДО sync: {e}")
-        return {"added": 0, "updated": 0, "skipped": 0, "expired": True}
+        return {"added": 0, "updated": 0, "skipped": 0, "expired": True,
+                "missing": not SDO_SESSION_COOKIE}
     except Exception as e:
         logger.error(f"СДО sync: не удалось получить страницу: {e}")
         return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": str(e)}
