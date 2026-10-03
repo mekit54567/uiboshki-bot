@@ -2,7 +2,8 @@
 // Файлы подключаются по порядку и делят глобальную область видимости.
 
 renderSdoTile(readSdoTile());     // плитка «Баллы СДО»: сразу последнее сохранённое,
-loadToday().then(loadSdoTile);    // а свежее — после главной, не задерживая её
+loadToday().then(loadSdoTile).then(initPlanHome);    // а свежее — после главной, не задерживая её
+                                  // (план автопилота — последним: решатель и СДО)
 initHomeAdd();
 initOptional();
 renderChat();
@@ -16,13 +17,14 @@ loadChatSubjects();
 })();
 
 // Кнопка из уведомления бота открывает приложение сразу на нужном экране:
-// ?tab=deadlines / files / chat / sdo / search / notify («Корнилов», keyboards.app_button).
+// ?tab=deadlines / files / chat / sdo / search / notify / plan («Корнилов», keyboards.app_button).
 (function () {
   const tab = new URLSearchParams(location.search).get("tab");
   const deepLink = tab || new URLSearchParams(location.search).get("file");
   if (!deepLink) maybeOnboard();      // из уведомления — сразу к делу, знакомство потом
   if (tab === "sdo") openSdo();
   else if (tab === "notify") openNotify();
+  else if (tab === "plan") openPlan();
   else if (["deadlines", "files", "chat", "search"].includes(tab)) switchTab(tab);
 })();
 

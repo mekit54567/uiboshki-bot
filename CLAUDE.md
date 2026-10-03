@@ -204,6 +204,18 @@ WebApp: `https://uiboshki-bot-production.up.railway.app`, живёт в проц
   (`index_pending` раз в 20 мин: новые файлы, удалённые убирает, векторы
   пачками до 429), новые файлы — сразу при загрузке; прогресс — в `/status`.
   «Объясни 3 лекцию» и пустой индекс — по-старому, `lecture_picker`.
+- **Автопилот** (`autopilot.py` — математика, `autopilot_data.py` — входы,
+  `webapp/routes/plan.py`, `js/plan.js`): план на 14 дней по свободным окнам
+  между парами (`windows`, «СР» окна не занимает). CP-SAT (OR-Tools): интервал
+  на «работа × окно», NoOverlap с передышкой `BREAK`, лимит дня и лёгкие дни;
+  фаза 1 — недобор до цели (правило 75 % ТК, баллы, дедлайны без баллов),
+  фаза 2 — запас до срока `SAFETY_H`, ровность, польза (AddHint из фазы 1).
+  Задачи — работы ТК из `sdo_grades.course_detail` (у теста —
+  `time_limit` со страницы) и дедлайны (СДО — без дублей по cmid); посещения
+  впереди — `attendance.can_get`. «Сделал» + «сколько заняло» →
+  `autopilot_log` → `multipliers`. Настройки и цели — `settings`
+  `autopilot:<id>`. «Что если пропущу лекцию» — `what_if_skip`. На
+  «Сегодня» дела встают между парами (`lessonsWithPlan` в home.js).
 - **ИИ**: Gemini — основной (`gemini_solver.py`), DeepSeek — опционально
   (`ai_solver.py`). Лекции под вопрос подбирает `lecture_picker.py` (по словам с
   учётом опечаток, до ~200 тыс. символов; без выбранного предмета — по всем
@@ -214,10 +226,10 @@ WebApp: `https://uiboshki-bot-production.up.railway.app`, живёт в проц
   `webapp/server.py` — только каркас (CORS, заголовки, /health, index,
   статика последней); `webapp/deps.py` — `CurrentUser`, `tg_bot()`, BOT_TOKEN и
   WEBAPP_URL (читать как `deps.X`, тесты подменяют там); обработчики —
-  `webapp/routes/{schedule,deadlines,files,chat,sdo,account}.py`, новый модуль
+  `webapp/routes/{schedule,deadlines,files,chat,sdo,plan,account,channel}.py`, новый модуль
   добавить в цикл `include_router` в `server.py`. Фронт —
   `webapp/static/index.html` + `app.css` + `js/{core,icons,home,deadlines,files,
-  search,chat,more,sdo,main}.js` (классические скрипты, общая глобальная область,
+  search,chat,more,sdo,plan,main}.js` (классические скрипты, общая глобальная область,
   порядок важен). Иконки — свои (`js/icons.js`: спрайт, `icon("имя")`, `fileTypeIcon`),
   эмодзи в интерфейсе не используем. `/` отдаёт index со ссылками `?v=<хэш>` против кэша Telegram.
 - **Статистика** (`stats.py`, `/stats` у старосты): таблица `events` (кто,

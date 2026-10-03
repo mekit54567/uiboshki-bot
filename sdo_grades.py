@@ -178,10 +178,20 @@ def parse_assign_page(html: str) -> dict:
     if not due:
         m = re.search(r"Срок сдачи\s*:?\s*([^.]*?\d{4},\s*\d{1,2}:\d{2})", text)
         due = m.group(1) if m else ""
+    if not due:
+        # тест: «Тест будет закрыт: среда, 15 октября 2026, 23:59»
+        m = re.search(r"(?:будет закрыт|закрывается|закрыт)\w*\s*:?\s*([^.]*?\d{4},\s*\d{1,2}:\d{2})", text)
+        due = m.group(1) if m else ""
     opens = ""
     m = re.search(r"Открыва\w+\s*:?\s*([^.]*?\d{4},\s*\d{1,2}:\d{2})", text)
     if m:
         opens = m.group(1)
+    # «Ограничение по времени: 30 мин.» (у тестов) — столько автопилот и закладывает
+    tl = re.search(r"Ограничение по времени\s*:?\s*(\d+(?:[.,]\d+)?)\s*(мин|час|ч)", text, re.I)
+    time_limit = None
+    if tl:
+        n = float(tl.group(1).replace(",", "."))
+        time_limit = int(round(n * (60 if tl.group(2).lower().startswith("ч") else 1)))
     low = status.lower()
     return {
         "pass": float(pass_m.group(1).replace(",", ".")) if pass_m else None,
@@ -189,7 +199,7 @@ def parse_assign_page(html: str) -> dict:
         "submitted": any(k in low for k in ("отправлен", "submitted")) and "не " not in low[:4],
         "offline": "вне сайта" in low,
         "remaining": next((v for k, v in rows.items() if k.startswith("оставшееся время")), ""),
-        "due": due, "opens": opens,
+        "due": due, "opens": opens, "time_limit": time_limit,
         "can_submit": bool(soup.find(attrs={"name": "action", "value": "editsubmission"})
                            or "action=editsubmission" in html),
     }
@@ -314,7 +324,7 @@ async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
         if w["grade"] is not None and p.get("pass") is not None and w["passed"] is True and w["grade"] < p["pass"]:
             w = dict(w, passed=False)
         works.append(dict(w, pass_mark=p.get("pass"), status=work_status(w, p), due=p.get("due", ""),
-                          opens=p.get("opens", ""), remaining=p.get("remaining", ""),
+                          opens=p.get("opens", ""), remaining=p.get("remaining", ""), time_limit=p.get("time_limit"),
                           can_submit=bool(p.get("can_submit")) and w["module"] == "assign",
                           url=f"{SDO_BASE_URL}/mod/{w['module']}/view.php?id={w['cmid']}"))
     passed = sum(1 for w in works if w["status"] == "ok")

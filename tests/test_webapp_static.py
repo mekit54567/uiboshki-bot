@@ -495,10 +495,10 @@ def _more_menu():
 
 
 def test_more_menu_ten_tiles_with_actions():
-    # 10 плиток: прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам»
+    # 11 плиток: «План» (автопилот), прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам»
     menu = _more_menu()
     labels = re.findall(r'<span class="lbl">([^<]+)</span>', menu)
-    assert labels == ["Файлы", "Дедлайны", "ДЗ", "Календарь", "Уведомления", "Безопасность",
+    assert labels == ["План", "Файлы", "Дедлайны", "ДЗ", "Календарь", "Уведомления", "Безопасность",
                       "Ярлык", "Что нового", "Канал бота", "Написать нам"]
     for call in ("openHomework()", "showWhatsNew()", "openConfigLink(CHANNEL_URL)", "openConfigLink(CONTACT_URL)"):
         assert f'toggleMore(false); {call}"' in menu, call

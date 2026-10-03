@@ -47,18 +47,20 @@ EVENT_PATHS = [
     ("GET", "/api/me", "open"),
     ("GET", "/api/deadlines", "deadlines"),
     ("GET", "/api/files", "files"),
+    ("POST", "/api/plan/done", "plan_done"),
+    ("GET", "/api/plan", "plan"),
     ("GET", "/api/sdo/grades", "sdo"),
     ("GET", "/api/sdo/task", "sdo"),
     ("GET", "/api/search", "search"),
     ("GET", "/api/target", "search"),
 ]
-VIEWS = {"open", "deadlines", "files", "sdo", "search", "bot"}
+VIEWS = {"open", "deadlines", "files", "sdo", "search", "bot", "plan"}
 
 # Экраны для полосок «что открывают» — подписи и цвета как в приложении
 SCREENS = [("open", "Приложение", "#4a8ff7"), ("deadlines", "Дедлайны", "#f0884b"),
            ("files", "Файлы", "#2bb3a3"), ("ai", "Чат с ИИ", "#9b7cf6"),
            ("sdo", "СДО и баллы", "#2aa39a"), ("search", "Поиск", "#f06292"),
-           ("bot", "Чат с ботом", "#8e8e93")]
+           ("plan", "План", "#7c7ff5"), ("bot", "Чат с ботом", "#8e8e93")]
 ACTIONS = [("submit", "сдано работ"), ("download", "файлов скачано"), ("ai", "вопросов ИИ"),
            ("sdo_connect", "подключений СДО")]
 
@@ -133,7 +135,8 @@ async def collect(days: int = 30) -> dict:
 
 # Чем пользуется — коротко, для списка «кто пользуется»
 USES = {"open": "приложение", "bot": "бот", "deadlines": "дедлайны", "files": "файлы", "download": "файлы",
-        "ai": "ИИ", "summary": "конспекты", "sdo": "СДО", "sdo_connect": "СДО", "submit": "сдача работ", "search": "поиск"}
+        "ai": "ИИ", "summary": "конспекты", "sdo": "СДО", "sdo_connect": "СДО", "submit": "сдача работ", "search": "поиск",
+        "plan": "план", "plan_done": "план"}
 
 
 def period_label(days: int) -> str:
@@ -269,13 +272,13 @@ def render(s: dict) -> bytes:
     _card(d, (48, 752, 640, 1172), "Что открывают (людей)")
     screens = s["screens"]
     smax = max([n for *_, n in screens] + [1])
-    y = 820
+    y, step = 816, min(48, 344 // max(1, len(screens)))
     for label, color, n in screens:
         d.text((80, y), label, font=_font(24), fill=TEXT)
         d.rounded_rectangle((300, y + 4, 300 + 270, y + 26), radius=11, fill="#232733")
         d.rounded_rectangle((300, y + 4, 300 + max(12, 270 * n / smax), y + 26), radius=11, fill=color)
         d.text((600, y), str(n), font=_font(24, True), fill=TEXT)
-        y += 48
+        y += step
 
     # действия
     _card(d, (668, 752, W - 48, 1172), "Действия")

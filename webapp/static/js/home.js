@@ -50,6 +50,14 @@ function lessonRow(l, withStatus, tap) {
     '<div class="l-num">' + escapeHtml(String(l.num)) + '</div></div>';
 }
 
+// «Сегодня»: пары и дела автопилота (plan.js) одним списком, по времени
+function lessonsWithPlan(lessons) {
+  const rows = lessons.map(l => ({ at: l.start, html: lessonRow(l, true) }));
+  if (typeof todayItems === "function") todayItems().forEach(i => rows.push({ at: planHm(i.start), html: planSlot(i) }));
+  rows.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return rows.map(r => r.html).join("");
+}
+
 // Статусы и отсчёт пересчитываются на клиенте раз в 30 с — главная
 // «живая», даже если WebApp долго открыт.
 function refreshStatuses() {
@@ -63,11 +71,16 @@ function refreshStatuses() {
   renderHero();
   // Пар нет — об этом уже крупно говорит карточка сверху, пустой блок
   // «Сегодня · пар нет» под ней только оставлял дыру (живой тест).
-  const noPairs = !todayData.lessons.length && todayData.schedule_ok;
+  // дела автопилота на сегодня — между парами, по времени (plan.js)
+  const planned = typeof todayItems === "function" ? todayItems().length : 0;
+  const noPairs = !todayData.lessons.length && todayData.schedule_ok && !planned;
+  const pairs = todayData.lessons.reduce((a, l) => a + (l.pairs || 1), 0);
+  document.getElementById("today-count").textContent = [pairs ? pairs + " " + plural(pairs, "пара", "пары", "пар") : "",
+    planned ? planned + " " + plural(planned, "дело", "дела", "дел") : ""].filter(Boolean).join(" · ");
   document.getElementById("today-head").style.display = noPairs ? "none" : "";
   document.getElementById("today-lessons").style.display = noPairs ? "none" : "";
-  document.getElementById("today-lessons").innerHTML = todayData.lessons.length
-    ? todayData.lessons.map(l => lessonRow(l, true)).join("")
+  document.getElementById("today-lessons").innerHTML = todayData.lessons.length || planned
+    ? lessonsWithPlan(todayData.lessons)
     : '<div class="empty">Расписание сейчас не загрузилось</div>';
 }
 
@@ -157,9 +170,7 @@ function renderToday() {
   // пары не в своём корпусе — заметно, до первой пары («сегодня МП-1»)
   const campus = (todayData.campus || "").replace(/^Сегодня пары на (.+?) — не на .+$/, "сегодня $1");
   showBadge("campus", campus ? icon("place") + " " + escapeHtml(campus) : "");
-  const n = todayData.lessons.reduce((a, l) => a + (l.pairs || 1), 0);
-  document.getElementById("today-count").textContent = n ? n + " " + plural(n, "пара", "пары", "пар") : "";
-  refreshStatuses();
+  refreshStatuses();     // и число пар (с делами автопилота) в заголовке
   const dl = todayData.deadlines;
   document.getElementById("today-deadline-count").textContent = dl.active;
   document.getElementById("today-deadline-next").innerHTML = dl.soon.length

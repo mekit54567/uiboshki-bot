@@ -125,7 +125,7 @@ function switchTab(name) {
   // СДО — своя кнопка внизу (и его экраны: предмет, ТК, задание); файлы и
   // дедлайны живут в меню «Ещё» — тогда подсвечена ☰
   const tab = ["sdo", "subject", "tk", "pos", "task"].includes(name) ? "sdo"
-    : (["files", "deadlines"].includes(name) ? "more" : name);
+    : (["files", "deadlines", "plan"].includes(name) ? "more" : name);
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   haptic();
   if (name === "deadlines") loadDeadlines();

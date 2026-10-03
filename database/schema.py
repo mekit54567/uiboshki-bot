@@ -280,6 +280,19 @@ async def init_db():
                 PRIMARY KEY (user_id, course_id, day)
             )
         """)
+        # Автопилот (autopilot.py): «сделал» и сколько заняло — план учится,
+        # сколько человеку нужно на похожие работы, и не планирует сделанное.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS autopilot_log (
+                user_id     INTEGER NOT NULL,
+                key         TEXT NOT NULL,
+                kind        TEXT NOT NULL,
+                planned_min INTEGER,
+                actual_min  INTEGER,
+                at          TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, key)
+            )
+        """)
         # Последний удачный календарь группы (schedule_parser.fetch_schedule_raw):
         # если зеркало МИРЭА не отвечает, а бот только что перезапустился —
         # показываем его, а не ошибку.

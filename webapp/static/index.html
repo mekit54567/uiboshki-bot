@@ -37,6 +37,7 @@
       <div class="skel" style="height:64px"></div><div class="skel" style="height:64px"></div>
     </div>
     <div id="today-notes"></div>
+    <div id="plan-card"></div>
 
     <div class="bento" style="margin-top:14px;">
       <div class="card tap" onclick="switchTab('deadlines')">
@@ -145,6 +146,11 @@
     <div id="pos-body"></div>
   </section>
 
+  <section class="view" id="view-plan">
+    <h2 class="section"><span class="ttl"><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg> План</span><span class="stat">автопилот</span></h2>
+    <div id="plan-body"></div>
+  </section>
+
   <section class="view" id="view-task">
     <button class="back" onclick="sdoBack()"><svg class="ico" aria-hidden="true"><use href="#i-back"/></svg> Текущий контроль</button>
     <div id="task-body"></div>
@@ -228,8 +234,9 @@
 
 <div class="more-backdrop" id="more-menu" onclick="if (event.target === this) toggleMore(false)">
   <div class="more-pop">
-    <!-- 10 плиток по 4 в ряд, неполный ряд — по центру (дизайн-ревью, п. 18) -->
+    <!-- 11 плиток по 4 в ряд, неполный ряд — по центру (дизайн-ревью, п. 18) -->
     <div class="more-grid">
+      <button onclick="toggleMore(false); openPlan()"><span class="sq t-plan"><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg></span><span class="lbl">План</span></button>
       <button onclick="toggleMore(false); switchTab('files')"><span class="sq t-files"><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg></span><span class="lbl">Файлы</span></button>
       <button onclick="toggleMore(false); openDeadlinesSeg('dl')"><span class="sq t-dl"><svg class="ico" aria-hidden="true"><use href="#i-deadlines"/></svg></span><span class="lbl">Дедлайны</span></button>
       <button onclick="toggleMore(false); openHomework()"><span class="sq t-hw"><svg class="ico" aria-hidden="true"><use href="#i-note"/></svg></span><span class="lbl">ДЗ</span></button>
@@ -248,6 +255,13 @@
   <div class="sheet">
     <div class="sheet-grip"></div>
     <div id="sdo-body"></div>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="plan-sheet" onclick="if (event.target === this) closeSheet('plan-sheet')">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div id="plan-sheet-body"></div>
   </div>
 </div>
 
@@ -298,6 +312,7 @@
 <script src="js/chat.js"></script>
 <script src="js/more.js"></script>
 <script src="js/sdo.js"></script>
+<script src="js/plan.js"></script>
 <script src="js/main.js"></script>
 
 </body>
