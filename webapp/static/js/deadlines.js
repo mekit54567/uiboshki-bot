@@ -74,7 +74,7 @@ async function loadDeadlines() {
         ' ' + icon("chevron", "done-chev") + '</p></summary><div class="list">' +
         groups.done.map(renderDeadline).join("") + '</div></details>' : "");
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    list.innerHTML = capyError(e.message);
   }
 }
 
@@ -330,7 +330,7 @@ async function loadHomework() {
         '<div class="dl-meta">' + when + '</div>' + file + '</div>';
     }).join("");
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    list.innerHTML = capyError(e.message);
   }
 }
 

@@ -170,7 +170,7 @@ async function loadFiles(q) {
     renderFiles();
     if (fileQuery) loadLectureHits(fileQuery, false);
   } catch (e) {
-    list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    list.innerHTML = capyError(e.message);
   }
 }
 
@@ -183,19 +183,19 @@ async function loadLectureHits(q, alone) {
   const my = ++lecSeq;
   const box = document.getElementById("lec-hits");
   if (!box) return;
-  if (q.length < 3) { if (alone) box.innerHTML = capyEmpty("Ничего не нашлось"); return; }
+  if (q.length < 3) { if (alone) box.innerHTML = capyEmpty("Ничего не нашлось", null, "sad"); return; }
   box.innerHTML = '<div class="lec-head">В тексте лекций</div><div class="skel" style="height:64px"></div>';
   let d;
   try {
     d = await api("/api/lecture-search?q=" + encodeURIComponent(q));
   } catch (e) {
-    if (my === lecSeq) box.innerHTML = alone ? capyEmpty("Ничего не нашлось") : "";
+    if (my === lecSeq) box.innerHTML = alone ? capyEmpty("Ничего не нашлось", null, "sad") : "";
     return;
   }
   if (my !== lecSeq || fileQuery !== q) return;      // уже ищем другое
   if (!d.items.length) {
     box.innerHTML = alone ? capyEmpty("Ничего не нашлось",
-      d.ready ? "Ни в названиях, ни в тексте лекций" : "Тексты лекций ещё индексируются") : "";
+      d.ready ? "Ни в названиях, ни в тексте лекций" : "Тексты лекций ещё индексируются", "sad") : "";
     return;
   }
   const stems = q.toLowerCase().split(/[^\wа-яё]+/i).filter(w => w.length >= 3).map(w => w.slice(0, 5));
@@ -356,7 +356,7 @@ async function openSummary(id) {
     const d = await api("/api/summary/" + id);
     if (sumFile === id) { sumData = d; renderSummary(false); }
   } catch (e) {
-    box.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    box.innerHTML = capyError(e.message);
   }
 }
 

@@ -6,12 +6,18 @@
 <title>УИБО-03-24</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="app.css">
+<link rel="icon" href="img/capy/icon-64.png" type="image/png">
+<link rel="apple-touch-icon" href="img/capy/icon-180.png">
 </head>
 <body>
+
+<!-- заставка, пока грузится главная (core.js: hideSplash; сама гаснет через 3 с) -->
+<div id="splash" aria-hidden="true"><span class="capy-pose capy-splash"></span><b>УИБО-03-24</b></div>
 
 <header class="top">
   <h1 id="greeting">УИБО-03-24</h1>
   <p id="subtitle">открываю…</p>
+  <span class="capy-pose capy-greet" id="greet-capy" aria-hidden="true"></span>
 </header>
 
 <main>

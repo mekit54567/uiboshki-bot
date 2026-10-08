@@ -127,7 +127,7 @@ async function openSdo(fresh) {
     renderSdoList();
   } catch (e) {
     if (/подключи/.test(e.message)) sdoNeedConnect(box, e.message[0].toUpperCase() + e.message.slice(1));
-    else if (!sdoData) box.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    else if (!sdoData) box.innerHTML = capyError(e.message);
   }
 }
 
@@ -285,7 +285,7 @@ async function openSubject(id) {
     if (sdoView !== "sdo") { renderSubject(); if (sdoView === "tk") renderTk(); if (sdoView === "pos") renderPos(); }
   } catch (e) {
     if (req !== sdoCourseReq) return;
-    if (!base) document.getElementById("subject-body").innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    if (!base) document.getElementById("subject-body").innerHTML = capyError(e.message);
   }
 }
 
@@ -557,7 +557,7 @@ function lectureGen(n) {              // «из 1 лекции», «из 2 ле�
 function renderPos() {
   const a = sdoCourse && sdoCourse.attendance;
   const box = document.getElementById("pos-body");
-  if (!a) { box.innerHTML = capyEmpty("Посещения не посчитать", "У предмета нет строки «Посещаемость» или его нет в расписании"); return; }
+  if (!a) { box.innerHTML = capyEmpty("Посещения не посчитать", "У предмета нет строки «Посещаемость» или его нет в расписании", "sad"); return; }
   const head = '<h2 class="section" style="margin-top:6px"><span>Посещения</span><span class="stat">лекции</span></h2>';
   if (!a.ok) {
     box.innerHTML = head + '<div class="card"><div class="sd-head"><span class="n">' + fmtNum(a.score) + '</span><span class="of">из ' + fmtNum(a.max) + '</span>' +
@@ -649,8 +649,8 @@ async function openTask(w) {
     if (sdoView === "task") renderTask();
   } catch (e) {
     if (req !== sdoTaskReq) return;
-    box.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '<br><br>' +
-      '<button class="link-btn" onclick="openLink(' + escapeHtml(JSON.stringify(w.url)) + ')">Открыть в СДО</button></div>';
+    box.innerHTML = capyError(e.message,
+      '<button class="link-btn" onclick="openLink(' + escapeHtml(JSON.stringify(w.url)) + ')">Открыть в СДО</button>');
   }
 }
 

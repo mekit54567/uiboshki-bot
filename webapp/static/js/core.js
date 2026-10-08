@@ -205,9 +205,28 @@ document.addEventListener("touchstart", (e) => {
   a.blur();
 }, { passive: true });
 
-function capyEmpty(title, sub) {
-  return '<div class="empty capy-empty">' + icon("capy", "capy") + '<b>' + title + '</b>' +
-    (sub ? '<span>' + sub + '</span>' : '') + '</div>';
+function capyEmpty(title, sub, pose) {
+  return '<div class="empty capy-empty"><span class="capy-pose capy-' + (pose || "joy") + '" aria-hidden="true"></span>' +
+    '<b>' + title + '</b>' + (sub ? '<span>' + sub + '</span>' : '') + '</div>';
+}
+
+// «Не загрузилось» — грустная капибара вместо голой строки
+function capyError(msg, extra) {
+  return '<div class="empty capy-empty err"><span class="capy-pose capy-sad" aria-hidden="true"></span>' +
+    '<b>Не загрузилось</b><span>' + escapeHtml(msg || "") + '</span>' + (extra || "") + '</div>';
+}
+
+// Капибара по времени суток: утро — кофе, день — ноутбук, вечер — книга, ночь — спит
+function capyForHour(hour) {
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "day";
+  if (hour >= 17 && hour < 23) return "evening";
+  return "night";
+}
+
+function hideSplash() {
+  const s = document.getElementById("splash");
+  if (s) s.classList.add("gone");
 }
 
 function escapeHtml(s) {

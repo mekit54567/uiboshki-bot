@@ -936,8 +936,36 @@
                           animation: capyBob 3.2s ease-in-out infinite; }
   .capy-empty b { color: var(--text); font-size: 15.5px; }
   .capy-empty span { font-size: 13px; }
+  /* капибары в позах (img/capy/*.png — только силуэт, цвет даёт CSS:
+     одинаково видно в светлой и тёмной теме) */
+  .capy-pose { display: inline-block; width: 96px; height: 96px; flex: none;
+               background: #c8915a; -webkit-mask: var(--capy-img) center / contain no-repeat;
+               mask: var(--capy-img) center / contain no-repeat; }
+  .capy-morning { --capy-img: url(img/capy/morning.png); }
+  .capy-day     { --capy-img: url(img/capy/day.png); }
+  .capy-evening { --capy-img: url(img/capy/evening.png); }
+  .capy-night   { --capy-img: url(img/capy/night.png); }
+  .capy-joy     { --capy-img: url(img/capy/joy.png); }
+  .capy-sad     { --capy-img: url(img/capy/sad.png); }
+  .capy-splash  { --capy-img: url(img/capy/splash.png); }
+  .capy-empty .capy-pose { margin-bottom: 6px; animation: capyBob 3.2s ease-in-out infinite; }
+  .capy-empty.err .capy-pose { animation: none; opacity: .85; }
+  .hero .h-capy { position: absolute; right: 12px; bottom: 10px; width: 58px; height: 58px; background: #fff; opacity: .9; }
+  .hero.calm { position: relative; }
+  /* в шапке — капибара по времени суток справа от приветствия */
+  header.top { position: relative; padding-right: 84px; }
+  .capy-greet { position: absolute; right: 14px; bottom: 4px; width: 64px; height: 64px; }
+  .capy-greet:not([class*="capy-morning"]):not([class*="capy-day"]):not([class*="capy-evening"]):not([class*="capy-night"]) { display: none; }
+  /* заставка */
+  #splash { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 14px; background: var(--bg); pointer-events: none;
+            animation: splashOut .35s ease 3s forwards; }
+  #splash .capy-pose { width: 132px; height: 132px; animation: capyBob 2.4s ease-in-out infinite; }
+  #splash b { color: var(--hint); font-size: 15px; letter-spacing: .3px; }
+  #splash.gone { animation: splashOut .3s ease forwards; }
+  @keyframes splashOut { to { opacity: 0; visibility: hidden; } }
   @keyframes capyBob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-4px) rotate(-2deg); } }
-  @media (prefers-reduced-motion: reduce) { .capy-empty .ico.capy, .view, .onboard.open, .ob-card { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .capy-empty .ico.capy, .capy-empty .capy-pose, #splash .capy-pose, .view, .onboard.open, .ob-card { animation: none; } }
   /* история баллов на экране предмета */
   .card.hist { margin-top: 12px; }
   .hist-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }

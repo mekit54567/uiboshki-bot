@@ -41,13 +41,13 @@ async function searchTargets(q) {
     if (seq !== targetSeq) return;  // пришёл ответ на старый запрос — пользователь уже печатает дальше
     if (!data.items.length) {
       list.innerHTML = data.ready
-        ? capyEmpty("Ничего не нашлось", "Проверь написание или попробуй часть фамилии")
+        ? capyEmpty("Ничего не нашлось", "Проверь написание или попробуй часть фамилии", "sad")
         : '<div class="empty">Справочник ещё собирается (первый запуск, около получаса) — попробуй чуть позже</div>';
       return;
     }
     list.innerHTML = data.items.map(targetItem).join("");
   } catch (e) {
-    if (seq === targetSeq) list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+    if (seq === targetSeq) list.innerHTML = capyError(e.message);
   }
 }
 
@@ -146,7 +146,7 @@ async function openTarget(type, id, title) {
     document.getElementById("target-days").innerHTML = "";
     document.getElementById("target-stale").innerHTML = "";
     document.getElementById("target-lessons").innerHTML =
-      capyEmpty("Сайт МИРЭА сейчас не отвечает", "Расписание появится, как только он оживёт. Обычно это минуты.") +
+      capyEmpty("Сайт МИРЭА сейчас не отвечает", "Расписание появится, как только он оживёт. Обычно это минуты.", "sad") +
       '<button class="primary target-retry" onclick="retryTarget()">' + icon("refresh") + ' Повторить</button>';
   }
 }

@@ -126,7 +126,9 @@ function renderHero() {
     hero.className = "hero calm";
     const t = d.tomorrow_first;
     const head = (d.lessons.length ? "На сегодня всё " : "Сегодня пар нет ") + icon("party", "mood");
-    hero.innerHTML = '<div class="h-eyebrow">' + head + '</div>' + (t
+    // пар больше нет — радостная капибара в углу карточки
+    hero.innerHTML = '<span class="capy-pose capy-joy h-capy" aria-hidden="true"></span>' +
+      '<div class="h-eyebrow">' + head + '</div>' + (t
       ? '<div class="h-big">завтра в ' + escapeHtml(t.start) + '</div><div class="h-title">' + escapeHtml(t.title) +
         '</div><div class="h-meta">' + lessonMeta(t) + '</div>'
       : '<div class="h-big">отдыхай</div><div class="h-meta">завтра тоже без пар</div>');
@@ -162,7 +164,8 @@ function saveHomeSnap() {
 
 function setGreeting(name) {
   const hour = new Date().getHours();
-  document.getElementById("greeting").innerHTML = escapeHtml(greetingFor(hour) + (name ? ", " + name : "")) + " " + icon("wave", "mood wave");
+  document.getElementById("greeting").textContent = greetingFor(hour) + (name ? ", " + name : "");
+  document.getElementById("greet-capy").className = "capy-pose capy-greet capy-" + capyForHour(hour);
 }
 
 function showBadge(id, html) {
@@ -184,6 +187,7 @@ function pillRowEdge() {
 }
 
 function renderToday() {
+  hideSplash();            // главная нарисована (из кэша или свежая) — заставку убираем
   document.getElementById("subtitle").textContent = todayData.weekday + ", " + todayData.label + " · " + GROUP_NAME;
   showBadge("weather", todayData.weather ? escapeHtml(todayData.weather) : "");
   // зеркало МИРЭА лежит — расписание сохранённое
@@ -454,7 +458,7 @@ async function selectDay(btn, silent) {
       // полоску могли пересоздать (листнули неделю) — старая кнопка отцеплена, но всё ещё «active»
       if (btn.isConnected && btn.classList.contains("active")) renderDay(list, data);
     } catch (e) {
-      if (btn.isConnected && btn.classList.contains("active")) list.innerHTML = '<div class="empty">Не загрузилось: ' + escapeHtml(e.message) + '</div>';
+      if (btn.isConnected && btn.classList.contains("active")) list.innerHTML = capyError(e.message);
     }
     list.style.minHeight = "";
   }
