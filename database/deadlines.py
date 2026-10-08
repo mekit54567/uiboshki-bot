@@ -236,12 +236,13 @@ async def get_sdo_deadlines() -> list[dict]:
         return [dict(r) for r in await cursor.fetchall()]
 
 
-async def delete_deadline(did: int):
+async def delete_deadline(did: int, remember: bool = True):
     """Удалить дедлайн с отметками и напоминаниями. Дедлайн из СДО запоминаем
-    в deadlines_skipped — иначе следующий синк вернул бы его заново."""
+    в deadlines_skipped — иначе следующий синк вернул бы его заново
+    (remember=False — пропал из самого СДО: вернётся там — вернётся и тут)."""
     async with connect() as db:
         row = await (await db.execute("SELECT external_id FROM deadlines WHERE id=?", (did,))).fetchone()
-        if row and (row[0] or "").startswith("sdo:"):
+        if remember and row and (row[0] or "").startswith("sdo:"):
             await db.execute("INSERT OR IGNORE INTO deadlines_skipped (external_id) VALUES (?)", (row[0],))
         await db.execute("DELETE FROM deadline_done WHERE deadline_id=?", (did,))
         await db.execute("DELETE FROM deadline_reminders WHERE deadline_id=?", (did,))

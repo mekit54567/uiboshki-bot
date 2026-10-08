@@ -319,12 +319,14 @@ async def sync_sdo_deadlines(bot: Bot):
 
     _sdo_expired_notified = False  # сессия снова живая — сбрасываем флаг
 
-    if (result["added"] or result.get("updated")) and STAROSTA_ID:
+    if (result["added"] or result.get("updated") or result.get("gone")) and STAROSTA_ID:
         parts = []
         if result["added"]:
             parts.append(f"добавлено новых дедлайнов — {result['added']}")
         if result.get("updated"):
             parts.append(f"перенесено/изменено — {result['updated']}")
+        if result.get("gone"):
+            parts.append(f"пропало из СДО и убрано — {len(result['gone'])} ({'; '.join(result['gone'][:5])})")
         try:
             await bot.send_message(
                 STAROSTA_ID,

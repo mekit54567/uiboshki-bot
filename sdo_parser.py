@@ -45,6 +45,7 @@ TZ = ZoneInfo(TIMEZONE)
 
 UPCOMING_URL = f"{SDO_BASE_URL}/calendar/view.php?view=upcoming"
 CALENDAR_MONTHS = 5  # текущий месяц и четыре вперёд — до конца семестра
+GONE_AFTER = 2       # столько синков подряд задания нет в календаре — убираем у себя
 
 # (компонент, тип события) — сроки, которые бот считает дедлайнами
 DEADLINE_EVENTS = {
@@ -314,6 +315,7 @@ def parse_calendar_events(events: list[dict]) -> list[dict]:
             "description": e.get("url") or "",
             "due_date":    dt.date().isoformat(),
             "due_time":    dt.strftime("%H:%M"),
+            "calendar":    True,               # из полного календаря — по нему видно, что пропало
         })
     results.sort(key=lambda d: (d["due_date"], d["due_time"]))
     return results
@@ -404,8 +406,57 @@ async def sync_deadlines() -> dict:
         if did:
             new_ids.append(did)
 
-    logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}, прошлый семестр {len(old)}")
+    gone = await drop_vanished(items + old)
+
+    logger.info(f"СДО sync: добавлено {added}, обновлено {updated}, пропущено {skipped}, "
+                f"прошлый семестр {len(old)}, пропало из СДО {len(gone)}")
     return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old), "new_ids": new_ids,
-            "moved": moved,
+            "moved": moved, "gone": gone,
             "old_courses": sorted({i.get("course") or course_of(i["subject"]) for i in old} - {""}),
             "expired": False}
+
+
+def calendar_end(today=None) -> str:
+    """Первый день после окна календаря (CALENDAR_MONTHS месяцев с текущего)."""
+    today = today or datetime.now(TZ).date()
+    k = today.year * 12 + today.month - 1 + CALENDAR_MONTHS
+    return f"{k // 12:04d}-{k % 12 + 1:02d}-01"
+
+
+async def drop_vanished(items: list[dict]) -> list[str]:
+    """Убрать дедлайны, которых больше нет в СДО (преподаватель удалил или
+    скрыл задание), — раньше они висели до срока и о них напоминали.
+
+    Решаем только по полному календарю (все события окна): «Предстоящие» —
+    21 день и 10 событий, по ним отсутствие ничего не значит. Пустой ответ
+    тоже не повод — скорее сбой. Задание должно пропасть GONE_AFTER синков
+    подряд (СДО иногда отдаёт календарь не целиком). Не трогаем прошедшие,
+    сроки за окном календаря и поправленные старостой вручную. В
+    deadlines_skipped не пишем: вернётся в СДО — вернётся и в боте.
+    → названия убранных."""
+    import json
+    from database import delete_deadline, get_sdo_deadlines, get_setting, set_setting
+    if not items or not all(i.get("calendar") for i in items):
+        return []
+    seen = {i["external_id"] for i in items}
+    today, end = datetime.now(TZ).date().isoformat(), calendar_end()
+    try:
+        misses = json.loads(await get_setting("sdo_missing") or "{}")
+    except ValueError:
+        misses = {}
+    left, gone = {}, []
+    for d in await get_sdo_deadlines():
+        ext = d["external_id"]
+        if ext in seen or d.get("manual_edit") or not (today <= d["due_date"] < end):
+            continue
+        n = misses.get(ext, 0) + 1
+        if n < GONE_AFTER:
+            left[ext] = n
+            continue
+        await delete_deadline(d["id"], remember=False)
+        gone.append(d["subject"])
+    if left != misses:
+        await set_setting("sdo_missing", json.dumps(left))
+    if gone:
+        logger.info(f"СДО sync: пропали из СДО и убраны — {gone}")
+    return gone
