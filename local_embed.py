@@ -85,7 +85,7 @@ async def download(key: str) -> str:
 
 # ── safetensors без библиотеки: заголовок JSON + сырые массивы ───────────────
 
-_DTYPES = {"F32": np.float32, "F16": np.float16}
+_DTYPES = {"F32": np.float32, "F16": np.float16, "I64": np.int64, "I32": np.int32}   # I64 — position_ids
 
 
 def read_safetensors(path: str) -> dict[str, np.ndarray]:
