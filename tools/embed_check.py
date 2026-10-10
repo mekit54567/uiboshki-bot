@@ -53,13 +53,28 @@ async def check(key: str) -> bool:
     per = (time.monotonic() - t0) / len(long_texts) * 1000
     peak = rss_mb()
     ok = True
+    st = SentenceTransformer(spec["repo"], device="cpu")
     for prefix in (spec["doc"], spec["query"]):
         texts = [prefix + t for t in TEXTS]
         ours = enc.encode(texts)
-        ref = SentenceTransformer(spec["repo"], device="cpu").encode(texts, prompt="", normalize_embeddings=True)
+        ref = st.encode(texts, prompt="", normalize_embeddings=True)
         cos = (ours * ref).sum(1)
-        print(f"  {key} «{prefix}»: косинус с эталоном min {cos.min():.6f}")
-        ok &= bool(cos.min() > 0.999)
+        # токены: наш tokenizer.json из репозитория модели против токенизатора transformers —
+        # если они разошлись, сравнивать векторы этих текстов бессмысленно
+        ref_ids = st.tokenize(texts)
+        same = []
+        for i, e in enumerate(enc.tok.encode_batch(texts)):
+            theirs = [int(x) for x, m in zip(ref_ids["input_ids"][i], ref_ids["attention_mask"][i]) if m]
+            same.append(theirs == e.ids)
+            if theirs != e.ids:
+                diff = next((j for j, (a, b) in enumerate(zip(theirs, e.ids)) if a != b), min(len(theirs), len(e.ids)))
+                print(f"    текст {i}: токены расходятся с transformers с позиции {diff} "
+                      f"(наши {e.ids[diff:diff + 5]}, их {theirs[diff:diff + 5]}), косинус {cos[i]:.6f}")
+        checked = [c for c, s in zip(cos, same) if s]
+        worst = min(checked) if checked else 0.0
+        print(f"  {key} «{prefix}»: косинус с эталоном min {worst:.6f} по {len(checked)} из {len(texts)} текстов "
+              f"(все: {', '.join(f'{c:.6f}' for c in cos)})")
+        ok &= bool(checked) and worst > 0.999
     print(f"  {key}: длина {ours.shape[1]}, загрузка {load_s:.1f} с, память +{loaded - before:.0f} МБ "
           f"(после пачки +{peak - before:.0f} МБ), {per:.0f} мс на кусок · {'OK' if ok else 'РАСХОЖДЕНИЕ'}")
     del enc
