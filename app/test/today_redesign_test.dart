@@ -306,6 +306,8 @@ void main() {
     await settle(t);
     expect(t.getRect(find.byTooltip('По дням')), where); // переключатель не сдвинулся
     expect((await SharedPreferences.getInstance()).getString(WeekScreen.viewKey), 'days');
+    // сверху — та же полоса дней, что и в ленте, все семь дней (владелец, 10.10)
+    expect(find.byType(DayCell), findsNWidgets(7));
     // открыт сегодняшний день, у пары — номер
     expect(find.text('${dayHead(now(), today: true)} · 1 пара'), findsOneWidget); // как в ленте (2.13)
     final today = find.text('Предмет: эта ${weekdays[ti]}');
@@ -337,6 +339,7 @@ void main() {
     await settle(t);
     expect(find.byKey(ValueKey('day:${iso(monday)}')), findsNothing);
     expect((await SharedPreferences.getInstance()).getString(WeekScreen.viewKey), 'list');
+    expect(find.byType(DayCell), findsNWidgets(7));
   });
 
   testWidgets('выбор «дни недели» со старой «Сегодня» переносится на «Неделю»', (t) async {
@@ -345,5 +348,25 @@ void main() {
     await t.pumpWidget(_wrap(WeekScreen(api: fakeApi())));
     await settle(t);
     expect(find.byKey(ValueKey('day:${iso(mondayOf(now()))}')), findsOneWidget);
+  });
+
+  testWidgets('«Неделя»: ушёл на другие недели — «Сегодня» возвращает на эту неделю и сегодняшний день', (t) async {
+    phone(t);
+    SharedPreferences.setMockInitialValues({WeekScreen.viewKey: 'days'});
+    final asked = <String>[];
+    await t.pumpWidget(_wrap(WeekScreen(api: fakeApi(requests: asked))));
+    await settle(t);
+    final today = ValueKey('day:${iso(now())}');
+    expect(find.text('Сегодня'), findsNothing); // на своей неделе кнопки нет
+    for (var i = 0; i < 3; i++) {
+      await t.tap(find.byTooltip('Следующая неделя'));
+      await settle(t);
+    }
+    expect(find.byKey(today), findsNothing);
+    await t.tap(find.text('Сегодня'));
+    await settle(t);
+    expect(find.text('Сегодня'), findsNothing);
+    expect(t.widget<DayCell>(find.byKey(today)).selected, isTrue);
+    expect(asked.last, isNot(contains('start=${iso(mondayOf(now()).add(const Duration(days: 21)))}')));
   });
 }

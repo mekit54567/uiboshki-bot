@@ -16,7 +16,8 @@ function check(ok, what) {
   results.push(`${ok ? 'OK  ' : 'FAIL'} ${cur} — ${what}`);
   if (!ok) console.log('FAIL', cur, what);
 }
-const label0 = async (p) => (await L.nodes(p))[0]?.label.split('\n')[0] || '';
+// подпись недели: вне своей недели она кнопка («Сегодня»), и первым узлом может стать не она
+const label0 = async (p) => (await L.nodes(p)).map((x) => x.label.split('\n')[0]).find((l) => /^\d+ неделя/.test(l)) || '';
 const asked = (s, re) => s.log.asked.some((a) => re.test(a));
 
 async function scenario(name, opts, fn) {
@@ -59,6 +60,9 @@ async function scenario(name, opts, fn) {
     check(await L.has(p, /, 5 пар$/), 'вид «По дням»: полоса дней с числом пар');
     await L.swipe(p, { from: [0.85, 0.6], to: [0.1, 0.6] });
     check((await label0(p)).startsWith('7 неделя'), 'свайп в виде «По дням»');
+    await L.shot(p, 'robot-week-away');
+    await L.tap(p, 'К сегодня', { wait: 1500 });
+    check((await label0(p)).startsWith('6 неделя') && !(await L.has(p, 'К сегодня')), '«Сегодня» — обратно на свою неделю');
     await p.reload(); await p.waitForTimeout(3000); await p.evaluate(() => document.querySelector('flt-semantics-placeholder')?.click()); await p.waitForTimeout(600);
     await L.tap(p, 'Неделя', { wait: 2000 });
     check(await L.has(p, /, 5 пар$/), 'вид «По дням» запомнился после перезапуска');
