@@ -107,6 +107,12 @@ class _WeekScreenState extends State<WeekScreen> {
     _fetch();
   }
 
+  /// Назад на свою неделю: она открывается на сегодняшнем дне (владелец, 10.10).
+  void _toToday() {
+    if (_shift == 0) return;
+    _shiftBy(-_shift);
+  }
+
   DateTime _monday(int shift) => mondayOf(now()).add(Duration(days: 7 * shift));
 
   Future<WeekData> _load(int shift) async {
@@ -231,6 +237,7 @@ class _WeekScreenState extends State<WeekScreen> {
             title: 'Неделя',
             lead: _WeekLabel(
               onShift: _shiftBy,
+              onToday: _shift == 0 ? null : _toToday,
               child: AnimatedSwitcher(
                 duration: duration,
                 switchInCurve: Curves.easeOutCubic,
@@ -352,7 +359,7 @@ class _WeekViewState extends State<_WeekView> {
               children: [
                 for (var i = 0; i < 7; i++)
                   Expanded(
-                    child: _DayCell(
+                    child: DayCell(
                       date: d.monday.add(Duration(days: i)),
                       dots: d.days[iso(d.monday.add(Duration(days: i)))]?.length ?? 0,
                       selected: i == _selected,
@@ -400,10 +407,14 @@ class _WeekViewState extends State<_WeekView> {
 
 /// Номер и даты недели, по бокам стрелки на соседние недели; стрелки стоят,
 /// подпись между ними едет ([child]).
+///
+/// Ушёл со своей недели — подпись нажимается, а справа появляется «Сегодня»:
+/// оба ведут обратно на эту неделю и сегодняшний день ([onToday]).
 class _WeekLabel extends StatelessWidget {
   final Widget child;
   final ValueChanged<int> onShift;
-  const _WeekLabel({required this.child, required this.onShift});
+  final VoidCallback? onToday;
+  const _WeekLabel({required this.child, required this.onShift, this.onToday});
 
   @override
   Widget build(BuildContext context) {
@@ -429,8 +440,38 @@ class _WeekLabel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           arrow(Icons.chevron_left_rounded, 'Прошлая неделя', -1),
-          Flexible(child: ClipRect(child: child)),
+          Flexible(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onToday,
+              child: ClipRect(child: child),
+            ),
+          ),
           arrow(Icons.chevron_right_rounded, 'Следующая неделя', 1),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: onToday == null
+                ? const SizedBox(height: 0)
+                : Semantics(
+                    button: true,
+                    label: 'К сегодня',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onToday,
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(Radii.pill),
+                          border: Border.all(color: s.p.accent.withValues(alpha: 0.6)),
+                        ),
+                        child: Text('Сегодня', style: s.body(12, weight: FontWeight.w600, color: s.p.accent)),
+                      ),
+                    ),
+                  ),
+          ),
         ],
       ),
     );
@@ -499,17 +540,25 @@ class ViewToggle extends StatelessWidget {
   }
 }
 
-class _DayCell extends StatelessWidget {
+/// День в полосе дней: день недели, число и точки по числу пар; выбранный
+/// залит, сегодняшний — цветом акцента. Одна и та же полоса в обоих видах
+/// «Недели» (владелец, 10.10: плитки по дням «как в Телеграме» — некрасиво).
+class DayCell extends StatelessWidget {
   final DateTime date;
   final int dots;
   final bool selected, today;
   final VoidCallback onTap;
-  const _DayCell({
+
+  /// Добавка к подписи для экранного диктора («, 5 пар»).
+  final String hint;
+  const DayCell({
+    super.key,
     required this.date,
     required this.dots,
     required this.selected,
     required this.today,
     required this.onTap,
+    this.hint = '',
   });
 
   @override
@@ -520,7 +569,8 @@ class _DayCell extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: dayTitle(date),
+      label: '${dayTitle(date)}$hint',
+      excludeSemantics: hint.isNotEmpty,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
@@ -591,7 +641,10 @@ class _DayBlock extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(left: Space.s, bottom: Space.s),
-            child: Text(dayHead(date, today: today), style: s.eyebrow(color: today ? p.text : p.muted)),
+            child: Text(
+              dayHead(date, today: today),
+              style: s.eyebrow(color: today ? p.text : p.muted),
+            ),
           ),
           if (lessons.isEmpty)
             Tile(
