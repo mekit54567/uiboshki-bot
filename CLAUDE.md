@@ -168,6 +168,13 @@ A 192.0.2.1 с оранжевым облаком + Redirect Rule корень �
 входов студентов в СДО; без него — производный от `BOT_TOKEN`), `SDO_KEEP_COURSES` (по умолчанию «Учебный отдел»),
 `OPTIONAL_SUBJECTS` (предметы по выбору, по умолчанию «Военная кафедра»: пары
 скрыты, пока человек не ответит «хожу» — `optional_subjects.py`, /optional).
+Переезд в Россию (PLAN.md, «Переезд в Россию»; без переменных — всё
+напрямую, как на Railway): `OUT_PROXY` (прокси за границей, http или
+socks5) — только для хостов из `PROXY_HOSTS` (по умолчанию Gemini и
+OpenRouter; МИРЭА, СДО, VK, Яндекс — напрямую), `TG_PROXY` (Telegram, по
+умолчанию `OUT_PROXY`), `TELEGRAM_API_BASE` (свой адрес Bot API). Новые
+исходящие запросы за границу — через `net.client()`, не `httpx.AsyncClient`;
+`Bot(...)` — с `session=net.tg_session()`. Проверка с сервера — `/netcheck`.
 `CHANNEL_URL`, `CONTACT_URL` (необязательно: плитки «Канал бота» и «Написать нам»
 в меню «Ещё» WebApp; пока пусто — «Скоро», задать на этапе 3), `CHANNEL_ID`
 (куда бот публикует посты, `/channel`; не задан — @имя из `CHANNEL_URL`).

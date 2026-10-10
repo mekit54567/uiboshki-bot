@@ -1,5 +1,5 @@
 """Группа: зам старосты (/setzam), рейтинг активности (/rating), здоровье
-бота (/status), проверка Пульса (/pulsecheck) и статистика (/stats) — у старосты."""
+бота (/status), проверка Пульса (/pulsecheck), сети (/netcheck) и статистика (/stats) — у старосты."""
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -128,6 +128,15 @@ async def cmd_sub(message: Message):
     until = (today_msk() + timedelta(days=days)).isoformat() if days > 0 else None
     await set_subscription_until(uid, until)
     await message.answer(f"Подписка {uid}: " + (f"до {until}" if until else "снята"))
+
+
+@router.message(Command("netcheck"))
+async def cmd_netcheck(message: Message):
+    """Кто отвечает серверу бота и каким путём (net_check.py) — только староста."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import net_check
+    await message.answer(net_check.text(await net_check.check(message.bot)), parse_mode="HTML")
 
 
 @router.message(Command("pulsecheck"))

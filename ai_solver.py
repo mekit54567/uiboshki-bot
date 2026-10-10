@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 
-import httpx
+import net
 
 import gemini_solver
 from config import DEEPSEEK_API_KEY, GROUP_NAME, GROUP_PROGRAM
@@ -79,7 +79,7 @@ def _resolve_backend(backend: str) -> str:
 async def _deepseek_chat(messages: list[dict], model: str = MODEL_DEEPSEEK, **params) -> dict:
     body = json.dumps({"model": model, "messages": messages, **params}, ensure_ascii=False).encode("utf-8")
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=90) as client:
+    async with net.client(timeout=90) as client:
         resp = await client.post(DEEPSEEK_URL, headers=headers, content=body)
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]

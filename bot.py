@@ -75,6 +75,7 @@ STAROSTA_COMMANDS = BOT_COMMANDS + [
     BotCommand(command="channel", description="📢 Посты канала"),
     BotCommand(command="delnote", description="🗑 Удалить заметку к паре"),
     BotCommand(command="pulsecheck", description="📡 Пускает ли Пульс"),
+    BotCommand(command="netcheck", description="🌐 Сеть сервера: прокси и доступность"),
     BotCommand(command="backup", description="💾 Копия базы"),
     BotCommand(command="restore", description="♻️ Восстановить базу из копии"),
 ]
@@ -158,7 +159,8 @@ async def stop_webapp(server, task):
 
 
 async def main():
-    bot = Bot(token=BOT_TOKEN)
+    import net
+    bot = Bot(token=BOT_TOKEN, session=net.tg_session())   # прокси для Telegram из России (net.py)
     # Длиннее лимита Telegram — несколькими сообщениями (long_messages.py)
     from long_messages import SplitLongMessages
     bot.session.middleware(SplitLongMessages())

@@ -31,6 +31,8 @@ import time
 
 import httpx
 
+import net
+
 from config import (AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME,
                     GROUP_PROGRAM, OPENROUTER_API_KEY)
 
@@ -72,10 +74,11 @@ class GeminiError(RuntimeError):
     transient — временная (таймаут, сеть, лимит 429, сбой 5xx): тогда
     ai_solver пробует ещё раз и/или отвечает запасным DeepSeek."""
 
-    def __init__(self, text: str, *, transient: bool = False, status: int | None = None):
+    def __init__(self, text: str, *, transient: bool = False, status: int | None = None, blocked: bool = False):
         super().__init__(text)
         self.transient = transient
         self.status = status
+        self.blocked = blocked      # Google не пускает страну сервера — все модели Gemini разом
 
 
 # Что показать пользователю вместо сырого httpx-исключения (в нём полный URL
@@ -127,6 +130,9 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
             if model != GEMINI_MODEL and e.status == 404 and model not in _missing:
                 _missing.add(model)
                 logger.warning(f"Gemini: запасной модели {model} нет (404) — больше не пробую до перезапуска")
+            if e.blocked:                           # страна сервера (Россия без прокси) — сразу запасная
+                limited = e
+                break
             if e.status == 429 or (model != GEMINI_MODEL and e.status == 404):
                 if limited is None or (e.status == 429 and limited.status != 429):
                     limited = e                     # лимит важнее «запасной нет»
@@ -135,7 +141,7 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
                     continue
                 break
             raise
-    if limited and fallback and AI_SPARE_MODEL:     # у всех Gemini лимит — запасная через OpenRouter
+    if limited and fallback and AI_SPARE_MODEL:     # у всех Gemini лимит (или страна) — запасная через OpenRouter
         try:
             text = await _openrouter_once(contents, system_instruction, generation_config, timeout, mark_truncated)
             logger.info(f"Gemini: лимит у всех моделей — ответила {AI_SPARE_MODEL}")
@@ -143,6 +149,15 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
         except GeminiError as e:
             logger.warning(f"Запасная {AI_SPARE_MODEL} не ответила: {e}")
     raise limited or GeminiError("Gemini не ответил")
+
+
+# Из России Gemini отвечает 400 «User location is not supported» (переезд,
+# PLAN.md): без прокси (net.py, OUT_PROXY) — сразу запасная через OpenRouter.
+GEOBLOCK_TEXT = "Gemini не работает из страны сервера — нужен прокси (OUT_PROXY)"
+
+
+def _geoblocked(resp) -> bool:
+    return resp.status_code in (400, 403) and "location is not supported" in resp.text.lower()
 
 
 PRIMARY_REST = 600            # сек: основная после 429 — сначала запасные
@@ -170,7 +185,7 @@ def _rest_primary():
 async def _generate_once(model: str, payload: dict, timeout: float, mark_truncated: bool) -> str:
     url = GEMINI_URL_TEMPLATE.format(model=model)
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with net.client(timeout=timeout) as client:
             # Ключ — в заголовке, а НЕ в ?key= query-параметре: текст ошибки
             # показывается пользователю в чате, и с ключом в URL он утекал бы
             # в Telegram (реальный баг, v1.6.3).
@@ -182,6 +197,8 @@ async def _generate_once(model: str, payload: dict, timeout: float, mark_truncat
 
     if resp.status_code != 200:
         logger.warning(f"Gemini HTTP {resp.status_code}: {resp.text[:1000]}")
+        if _geoblocked(resp):
+            raise GeminiError(GEOBLOCK_TEXT, status=resp.status_code, blocked=True)
         template = _HTTP_ERROR_TEXT.get(resp.status_code, "Gemini ответил ошибкой HTTP {code}")
         raise GeminiError(template.format(model=model, code=resp.status_code),
                           transient=resp.status_code == 429 or resp.status_code >= 500,
@@ -236,7 +253,7 @@ async def _openrouter_once(contents: list[dict], system_instruction: str | None,
     if generation_config.get("maxOutputTokens"):
         payload["max_tokens"] = generation_config["maxOutputTokens"]
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with net.client(timeout=timeout) as client:
             resp = await client.post(OPENROUTER_URL, json=payload,
                                      headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"})
     except httpx.HTTPError as e:
@@ -386,7 +403,7 @@ async def embed(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", titles: list
             r["title"] = titles[i]
         reqs.append(r)
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with net.client(timeout=timeout) as client:
             resp = await client.post(GEMINI_EMBED_URL.format(model=GEMINI_EMBED_MODEL),
                                      headers={"x-goog-api-key": GEMINI_API_KEY}, json={"requests": reqs})
     except httpx.TimeoutException:
@@ -395,6 +412,8 @@ async def embed(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", titles: list
         raise GeminiError(f"Не достучался до Gemini ({type(e).__name__})", transient=True)
     if resp.status_code != 200:
         logger.warning(f"Gemini embed HTTP {resp.status_code}: {resp.text[:500]}")
+        if _geoblocked(resp):
+            raise GeminiError(GEOBLOCK_TEXT, status=resp.status_code, blocked=True)
         raise GeminiError(f"эмбеддинги: HTTP {resp.status_code}", transient=resp.status_code == 429 or resp.status_code >= 500,
                           status=resp.status_code)
     out = []

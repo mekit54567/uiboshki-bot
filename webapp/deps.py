@@ -73,5 +73,6 @@ def tg_bot():
     global _tg_bot
     if _tg_bot is None:
         from aiogram import Bot
-        _tg_bot = Bot(BOT_TOKEN)
+        import net
+        _tg_bot = Bot(BOT_TOKEN, session=net.tg_session())
     return _tg_bot
