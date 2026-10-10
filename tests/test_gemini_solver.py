@@ -232,3 +232,45 @@ async def test_resting_primary_tried_when_spare_is_gone(monkeypatch):
     replies["main"] = (429, {"error": {}})
     with pytest.raises(gemini_solver.GeminiError, match="Лимит"):    # не «модель не найдена»
         await gemini_solver._generate([{"role": "user", "parts": [{"text": "?"}]}])
+
+
+@pytest.mark.asyncio
+async def test_spare_openrouter_model_when_gemini_limited(monkeypatch):
+    """10.10, владелец: своя группа — на Gemini, а кончились лимиты у всех её
+    моделей — отвечает дешёвая Ling через OpenRouter (тем же запросом, с фото)."""
+    calls, sent = [], []
+
+    def handler(request):
+        if request.url.host == "openrouter.ai":
+            sent.append(json.loads(request.content))
+            calls.append("ling")
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ответ Ling"},
+                                                          "finish_reason": "stop"}]})
+        calls.append(request.url.path.split("/models/")[1].split(":")[0])
+        return httpx.Response(429, json={"error": {}})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(gemini_solver.httpx, "AsyncClient",
+                        lambda *a, **kw: real_client(*a, transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(gemini_solver, "GEMINI_API_KEY", "k")
+    monkeypatch.setattr(gemini_solver, "GEMINI_MODEL", "main")
+    monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", ["spare"])
+    monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
+    monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
+    text = await gemini_solver.generate_from_image(b"img", "image/png", "реши", "система")
+    assert text == "ответ Ling" and calls == ["main", "spare", "ling"]
+    msg = sent[0]
+    assert msg["model"] == "inclusionai/ling-3.0-flash-vl" and msg["messages"][0] == {"role": "system", "content": "система"}
+    parts = msg["messages"][1]["content"]
+    assert parts[0]["image_url"]["url"].startswith("data:image/png;base64,") and parts[1] == {"type": "text", "text": "реши"}
+
+    calls.clear()                                              # классификатор — без запасных, Ling тоже нет
+    with pytest.raises(gemini_solver.GeminiError, match="Лимит"):
+        await gemini_solver.generate_text([{"role": "user", "content": "?"}], "s", fallback=False)
+    assert "ling" not in calls
+
+    calls.clear()                                              # без ключа OpenRouter — как раньше, текст про лимит
+    monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "")
+    with pytest.raises(gemini_solver.GeminiError, match="Лимит"):
+        await gemini_solver.generate_text([{"role": "user", "content": "?"}], "s")
+    assert "ling" not in calls

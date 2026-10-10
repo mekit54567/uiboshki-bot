@@ -9,6 +9,10 @@ BOT_TOKEN     = os.getenv("BOT_TOKEN")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 # OpenRouter — выбор модели ИИ для других групп (/aitest, ai_bench.py); без ключа команда объясняет, что задать
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+# Запасная модель через OpenRouter, когда у всех моделей Gemini кончился
+# бесплатный лимит (429): по отбору /aitest 10.10 — Ling 3.0 Flash VL, почти
+# на уровне Gemini, видит фото, ~10 ₽ за 1000 вопросов. Пусто — без неё.
+AI_SPARE_MODEL = os.getenv("AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl") if OPENROUTER_API_KEY else ""
 ICAL_URL      = os.getenv("ICAL_URL", "https://english.mirea.ru/schedule/api/ical/1/4928")
 
 # ─── БД ───────────────────────────────────────────────────────────────────────
