@@ -179,7 +179,9 @@ OpenRouter; МИРЭА, СДО, VK, Яндекс — напрямую), `TG_PROX
 `local_embed.MODELS`), `EMBED_PRECOMPUTE` (чьи векторы считать фоном заранее),
 `EMBED_DIR` (куда качать модели, по умолчанию `models/` рядом с базой),
 `EMBED_HF_BASE` (зеркало Hugging Face). Векторы — только через `embedder.embed`.
-Свой сервер: `Dockerfile` (бот + Xray), `XRAY_CONFIG` — ссылка `vless://` или
+На своём сервере — `rubert-mini-frida` (владелец 10.10).
+Свой сервер — Amvera (`amvera.yml`: Docker, диск `/data`, порт 8080; деплой
+вебхуком из форка): `Dockerfile` (бот + Xray), `XRAY_CONFIG` — ссылка `vless://` или
 JSON приложения VPN (секрет хостинга, в репозиторий и чат — никогда),
 `docker/start.sh` поднимает Xray и ставит `OUT_PROXY`. Бэкап в российское S3
 — `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET` (`s3_store.py`);

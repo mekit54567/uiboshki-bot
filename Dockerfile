@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/data/mirea_bot.db
+    DATABASE_PATH=/data/mirea_bot.db \
+    PORT=8080
 EXPOSE 8080
 CMD ["sh", "docker/start.sh"]

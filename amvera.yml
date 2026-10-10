@@ -1,0 +1,14 @@
+# Настройки для Amvera (переезд в Россию, PLAN.md): собирать по Dockerfile,
+# база и модели — на постоянном диске /data (папка «Data» в интерфейсе
+# Amvera), веб-приложение слушает 8080.
+meta:
+  environment: docker
+  toolchain:
+    name: docker
+    version: latest
+build:
+  dockerfile: Dockerfile
+  skip: false
+run:
+  persistenceMount: /data
+  containerPort: 8080
