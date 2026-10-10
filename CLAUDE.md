@@ -168,6 +168,24 @@ A 192.0.2.1 с оранжевым облаком + Redirect Rule корень �
 входов студентов в СДО; без него — производный от `BOT_TOKEN`), `SDO_KEEP_COURSES` (по умолчанию «Учебный отдел»),
 `OPTIONAL_SUBJECTS` (предметы по выбору, по умолчанию «Военная кафедра»: пары
 скрыты, пока человек не ответит «хожу» — `optional_subjects.py`, /optional).
+Переезд в Россию (PLAN.md, «Переезд в Россию»; без переменных — всё
+напрямую, как на Railway): `OUT_PROXY` (прокси за границей, http или
+socks5) — только для хостов из `PROXY_HOSTS` (по умолчанию Gemini и
+OpenRouter; МИРЭА, СДО, VK, Яндекс — напрямую), `TG_PROXY` (Telegram, по
+умолчанию `OUT_PROXY`), `TELEGRAM_API_BASE` (свой адрес Bot API). Новые
+исходящие запросы за границу — через `net.client()`, не `httpx.AsyncClient`;
+`Bot(...)` — с `session=net.tg_session()`. Проверка с сервера — `/netcheck`.
+Векторы поиска: `EMBED_PROVIDER` (`gemini` или ключ своей модели из
+`local_embed.MODELS`), `EMBED_PRECOMPUTE` (чьи векторы считать фоном заранее),
+`EMBED_DIR` (куда качать модели, по умолчанию `models/` рядом с базой),
+`EMBED_HF_BASE` (зеркало Hugging Face). Векторы — только через `embedder.embed`.
+На своём сервере — `rubert-mini-frida` (владелец 10.10).
+Свой сервер — Amvera (`amvera.yml`: Docker, диск `/data`, порт 8080; деплой
+вебхуком из форка): `Dockerfile` (бот + Xray), `XRAY_CONFIG` — ссылка `vless://` или
+JSON приложения VPN (секрет хостинга, в репозиторий и чат — никогда),
+`docker/start.sh` поднимает Xray и ставит `OUT_PROXY`. Бэкап в российское S3
+— `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET` (`s3_store.py`);
+заданы — база в Telegram не уходит.
 `CHANNEL_URL`, `CONTACT_URL` (необязательно: плитки «Канал бота» и «Написать нам»
 в меню «Ещё» WebApp; пока пусто — «Скоро», задать на этапе 3), `CHANNEL_ID`
 (куда бот публикует посты, `/channel`; не задан — @имя из `CHANNEL_URL`).
@@ -268,7 +286,8 @@ A 192.0.2.1 с оранжевым облаком + Redirect Rule корень �
   режутся по страницам PDF / слайдам PPTX / частям DOCX-TXT (`chunk_pages`),
   индекс — отдельный файл `<база>.search.db` (не в бэкапе, основная база
   через ATTACH): FTS5/BM25 + векторы Gemini (`gemini_solver.embed`,
-  `gemini-embedding-001`, 768) в sqlite-vec (vec0, cosine). Запрос — два
+  `gemini-embedding-001`, 768) в sqlite-vec (vec0, cosine); или своя модель
+  на сервере (`local_embed.py`, `embedder.py`, своя таблица `vec_<модель>`). Запрос — два
   пути, слияние RRF, разнообразие MMR (≤3 куска с файла), без предмета —
   порог похожести `VEC_MIN_SIM` (подстроить по логам «лучший косинус»).
   Чат: куски с номерами [n] → ИИ ссылается, под ответом «Лекция · слайд 12»,

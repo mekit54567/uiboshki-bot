@@ -4,8 +4,9 @@
 Лекция режется на куски с привязкой к месту: страница PDF, слайд PPTX,
 часть DOCX/TXT. У каждого куска два «отпечатка»:
   • слова — FTS5 (BM25) прямо в SQLite;
-  • смысл — вектор Gemini (gemini_solver.embed) в виртуальной таблице vec0
-    расширения sqlite-vec: ближайшие по косинусу ищет сам SQLite.
+  • смысл — вектор Gemini или своей модели на сервере (embedder.py,
+    EMBED_PROVIDER) в виртуальной таблице vec0 расширения sqlite-vec:
+    ближайшие по косинусу ищет сам SQLite. У каждой модели своя таблица.
 
 Индекс — производные данные: лежит отдельным файлом рядом с базой
 (<база>.search.db), в ночной бэкап не идёт (пересобирается из файлов), а
@@ -204,7 +205,33 @@ async def _schema(db, dims: int):
         await db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("
                          f"embedding float[{int(dims)}] distance_metric=cosine)")
         await db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('dims', ?)", (str(dims),))
+        import embedder
+        for p in {embedder.provider(), embedder.precompute()} - {embedder.GEMINI, None}:
+            # своя модель — свои таблицы: векторы Gemini не трогаем, переключение обратно мгновенное
+            await db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS {embedder.vec_table(p)} USING vec0("
+                             f"embedding float[{int(embedder.dims(p))}] distance_metric=cosine)")
+            await db.execute(f"CREATE TABLE IF NOT EXISTS {embedder.done_table(p)} (id INTEGER PRIMARY KEY)")
     await db.commit()
+
+
+async def _vector_tables(db) -> list[str]:
+    """Все таблицы векторов (vec0) и отметок «посчитано» всех моделей."""
+    rows = await (await db.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND "
+        "((name LIKE 'vec\\_%' ESCAPE '\\' AND sql LIKE '%USING vec0%') OR name LIKE 'emb\\_%' ESCAPE '\\')")).fetchall()
+    return [r[0] for r in rows]
+
+
+async def has_vectors(db, p: str) -> bool:
+    import embedder
+    if not VEC_OK:
+        return False
+    done = embedder.done_table(p)
+    sql = f"SELECT 1 FROM {done} LIMIT 1" if done else "SELECT 1 FROM chunks WHERE embedded=1 LIMIT 1"
+    try:
+        return bool(await (await db.execute(sql)).fetchone())
+    except Exception:
+        return False
 
 
 @asynccontextmanager
@@ -226,7 +253,10 @@ async def open_index():
 async def _replace_chunks(db, file_id: int, kind: str, chunks: list[tuple[int, int, str]], mode: str):
     old = [r[0] for r in await (await db.execute("SELECT id FROM chunks WHERE file_id=?", (file_id,))).fetchall()]
     if old and VEC_OK:
-        await db.execute(f"DELETE FROM vec_chunks WHERE rowid IN ({','.join('?' * len(old))})", old)
+        marks = ",".join("?" * len(old))
+        for table in await _vector_tables(db):      # номера кусков переиспользуются — старые векторы всех моделей прочь
+            col = "id" if table.startswith("emb_") else "rowid"
+            await db.execute(f"DELETE FROM {table} WHERE {col} IN ({marks})", old)
     await db.execute("DELETE FROM chunks WHERE file_id=?", (file_id,))
     await db.executemany("INSERT INTO chunks (file_id, page_from, page_to, kind, text) VALUES (?, ?, ?, ?, ?)",
                          [(file_id, a, b, kind, t) for a, b, t in chunks])
@@ -257,11 +287,15 @@ async def index_file(file_id: int, data: bytes | None = None, file_name: str = "
     return len(chunks)
 
 
-async def embed_pending(max_batches: int = 8, pause: float = 1.0) -> int:
+async def embed_pending(max_batches: int = 8, pause: float = 1.0, p: str | None = None) -> int:
     """Досчитать векторы кускам без них — пачками, пока не кончатся или Gemini
-    не скажет «лимит» (тогда — в следующий проход). → сколько посчитано."""
+    не скажет «лимит» (тогда — в следующий проход). p — модель (embedder.py),
+    по умолчанию та, что ищет сейчас. → сколько посчитано."""
     import asyncio
-    import gemini_solver
+    import embedder
+    p = p or embedder.provider()
+    table, done_t = embedder.vec_table(p), embedder.done_table(p)
+    todo = f"c.id NOT IN (SELECT id FROM {done_t})" if done_t else "c.embedded = 0"
     done = 0
     async with open_index() as db:
         if not VEC_OK:
@@ -269,17 +303,20 @@ async def embed_pending(max_batches: int = 8, pause: float = 1.0) -> int:
         for _ in range(max_batches):
             rows = await (await db.execute(
                 "SELECT c.id, c.text, COALESCE(f.title, '') FROM chunks c LEFT JOIN m.files f ON f.id = c.file_id "
-                "WHERE c.embedded = 0 ORDER BY c.id LIMIT ?", (EMBED_BATCH,))).fetchall()
+                f"WHERE {todo} ORDER BY c.id LIMIT ?", (EMBED_BATCH,))).fetchall()
             if not rows:
                 break
             try:
-                vecs = await gemini_solver.embed([r[1] for r in rows], "RETRIEVAL_DOCUMENT", titles=[r[2] for r in rows])
-            except gemini_solver.GeminiError as e:
+                vecs = await embedder.embed([r[1] for r in rows], titles=[r[2] for r in rows], p=p)
+            except embedder.EmbedError as e:
                 logger.info(f"эмбеддинги: {e} — продолжу в следующий проход")
                 break
-            await db.executemany("INSERT OR REPLACE INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
+            await db.executemany(f"INSERT OR REPLACE INTO {table} (rowid, embedding) VALUES (?, ?)",
                                  [(r[0], _pack(v)) for r, v in zip(rows, vecs)])
-            await db.executemany("UPDATE chunks SET embedded=1 WHERE id=?", [(r[0],) for r in rows])
+            if done_t:
+                await db.executemany(f"INSERT OR IGNORE INTO {done_t} (id) VALUES (?)", [(r[0],) for r in rows])
+            else:
+                await db.executemany("UPDATE chunks SET embedded=1 WHERE id=?", [(r[0],) for r in rows])
             await db.commit()
             done += len(rows)
             if pause:
@@ -314,6 +351,9 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
         except Exception as e:
             logger.warning(f"индекс: файл {fid}: {type(e).__name__}: {e}")
     embedded = await embed_pending(max_batches)
+    import embedder
+    if embedder.precompute():           # векторы другой модели заранее (до переезда)
+        embedded += await embed_pending(max_batches, pause=0, p=embedder.precompute())
     st = await stats()
     try:
         import health
@@ -327,7 +367,14 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
 async def stats() -> dict:
     async with open_index() as db:
         files = (await (await db.execute("SELECT COUNT(*) FROM indexed_files")).fetchone())[0]
-        chunks, emb = await (await db.execute("SELECT COUNT(*), COALESCE(SUM(embedded), 0) FROM chunks")).fetchone()
+        import embedder
+        p = embedder.provider()
+        if embedder.done_table(p):
+            chunks = (await (await db.execute("SELECT COUNT(*) FROM chunks")).fetchone())[0]
+            emb = (await (await db.execute(f"SELECT COUNT(*) FROM {embedder.done_table(p)}")).fetchone())[0] if VEC_OK else 0
+        else:
+            chunks, emb = await (await db.execute("SELECT COUNT(*), COALESCE(SUM(embedded), 0) FROM chunks")).fetchone()
         waiting = (await (await db.execute(
             "SELECT COUNT(*) FROM m.file_text WHERE file_id NOT IN (SELECT file_id FROM indexed_files)")).fetchone())[0]
-    return {"files": files, "chunks": chunks, "embedded": emb, "waiting": waiting, "vectors": bool(VEC_OK)}
+    return {"files": files, "chunks": chunks, "embedded": emb, "waiting": waiting, "vectors": bool(VEC_OK),
+            "provider": p}

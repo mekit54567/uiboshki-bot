@@ -453,6 +453,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         except Exception as e:
             logger.warning(f"индекс поиска: {type(e).__name__}: {e}")
     scheduler.add_job(index_lectures, "interval", minutes=20, next_run_time=datetime.now(TZ) + timedelta(minutes=2))
+    import local_embed
+    scheduler.add_job(local_embed.unload_idle, "interval", minutes=5)    # своя модель векторов — из памяти после простоя
     # Копия базы старосте каждую ночь, без звука (backup.py).
     if STAROSTA_ID:
         from backup import send_backup

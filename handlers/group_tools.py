@@ -1,5 +1,5 @@
 """Группа: зам старосты (/setzam), рейтинг активности (/rating), здоровье
-бота (/status), проверка Пульса (/pulsecheck) и статистика (/stats) — у старосты."""
+бота (/status), проверка Пульса (/pulsecheck), сети (/netcheck), векторов (/embedtest) и статистика (/stats) — у старосты."""
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -128,6 +128,37 @@ async def cmd_sub(message: Message):
     until = (today_msk() + timedelta(days=days)).isoformat() if days > 0 else None
     await set_subscription_until(uid, until)
     await message.answer(f"Подписка {uid}: " + (f"до {until}" if until else "снята"))
+
+
+@router.message(Command("embedtest"))
+async def cmd_embedtest(message: Message):
+    """Своя модель векторов против Gemini на лекциях группы (embed_bench.py) —
+    только староста. /embedtest — все модели, /embedtest ключ… — выбранные."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import embed_bench
+    import local_embed
+    keys = [k for k in (message.text or "").split()[1:] if k in local_embed.MODELS] or None
+    if embed_bench._lock.locked():
+        await message.answer("Тест уже идёт — дождись итога.")
+        return
+    async with embed_bench._lock:
+        await message.answer("🧪 Сравниваю свои модели векторов с Gemini на лекциях группы — "
+                             "пара минут, модели скачиваются при первом запуске.")
+        try:
+            text = await embed_bench.run(keys)
+        except Exception as e:
+            text = f"Не вышло: {type(e).__name__}: {e}"
+    await message.answer(text, parse_mode="HTML")
+
+
+@router.message(Command("netcheck"))
+async def cmd_netcheck(message: Message):
+    """Кто отвечает серверу бота и каким путём (net_check.py) — только староста."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import net_check
+    await message.answer(net_check.text(await net_check.check(message.bot)), parse_mode="HTML")
 
 
 @router.message(Command("pulsecheck"))

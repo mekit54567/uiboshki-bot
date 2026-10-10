@@ -1,0 +1,9 @@
+.git
+.github
+app
+docs
+tests
+**/__pycache__
+*.db
+*.db-*
+models

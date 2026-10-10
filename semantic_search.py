@@ -4,7 +4,7 @@
 Вопрос ищется двумя путями сразу:
   • по словам — FTS5, ранжирование BM25 (с расшифровкой сокращений и
     любыми окончаниями из lecture_picker: «дисконт*»);
-  • по смыслу — вектор вопроса (Gemini, RETRIEVAL_QUERY) против векторов
+  • по смыслу — вектор вопроса (Gemini или своя модель, embedder.py) против векторов
     кусков в sqlite-vec: «почему нельзя просто сложить прибыль за годы»
     находит «дисконтирование» и «NPV», хотя этих слов в вопросе нет.
 
@@ -42,16 +42,17 @@ def fts_query(query: str) -> str:
     return " OR ".join(f'"{w}"*' for w in words[:24])
 
 
-async def _query_vec(query: str) -> list[float] | None:
-    """Вектор вопроса; одинаковые вопросы не тратят лимит Gemini (кэш)."""
-    key = query.strip().lower()
+async def _query_vec(query: str, p: str) -> list[float] | None:
+    """Вектор вопроса моделью p (embedder.py); одинаковые вопросы не тратят
+    лимит Gemini (кэш)."""
+    key = f"{p}\n{query.strip().lower()}"
     if key in _qcache:
         _qcache.move_to_end(key)
         return _qcache[key]
-    import gemini_solver
+    import embedder
     try:
-        (vec,) = await gemini_solver.embed([query], "RETRIEVAL_QUERY")
-    except gemini_solver.GeminiError as e:
+        (vec,) = await embedder.embed([query], query=True, p=p)
+    except embedder.EmbedError as e:
         logger.info(f"поиск по смыслу без вектора вопроса: {e}")
         return None
     _qcache[key] = vec
@@ -118,8 +119,11 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
     """Гибридный поиск: [{id, file_id, title, subject, page_from, page_to, kind,
     text, score, lex, sem, sim}] — лучшие и разные куски. lex/sem — место в
     списке «по словам» / «по смыслу» (None — не нашёлся этим путём)."""
+    import embedder
     import semantic_index as si
     from semantic_index import open_index, unpack
+    p = embedder.provider()
+    vt = embedder.vec_table(p)
     query = (query or "").strip()
     if not query:
         return []
@@ -144,11 +148,11 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
         sem: list[int] = []
         sims: dict[int, float] = {}
         vecs: dict[int, list[float]] = {}
-        if si.VEC_OK and (await (await db.execute("SELECT 1 FROM chunks WHERE embedded=1 LIMIT 1")).fetchone()):
-            qv = await _query_vec(query)
+        if await si.has_vectors(db, p):
+            qv = await _query_vec(query, p)
             if qv:
                 rows = await (await db.execute(
-                    "SELECT rowid, distance, embedding FROM vec_chunks WHERE embedding MATCH ? AND k = ? "
+                    f"SELECT rowid, distance, embedding FROM {vt} WHERE embedding MATCH ? AND k = ? "
                     "ORDER BY distance", (si._pack(qv), POOL * (4 if subject else 1)))).fetchall()
                 ids = [r[0] for r in rows]
                 if ids:
@@ -164,7 +168,8 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
         if not subject:
             # без предмета не тянем лекции к «привет» и «спасибо»: нужен
             # хоть один кусок, найденный по словам или достаточно близкий по смыслу
-            fused = {c: s for c, s in fused.items() if c in lex or sims.get(c, 0) >= VEC_MIN_SIM}
+            thr = embedder.min_sim(p, VEC_MIN_SIM)
+            fused = {c: s for c, s in fused.items() if c in lex or sims.get(c, 0) >= thr}
         if sims:
             logger.info(f"поиск по смыслу: лучший косинус {max(sims.values()):.3f} · «{query[:60]}»")
         best = sorted(fused, key=fused.get, reverse=True)[:POOL]
@@ -175,9 +180,9 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
             f"FROM chunks c JOIN m.files f ON f.id = c.file_id WHERE c.id IN ({','.join('?' * len(best))})",
             best)).fetchall()
         missing = [r[0] for r in rows if r[0] not in vecs]
-        if missing and si.VEC_OK:
+        if missing and await si.has_vectors(db, p):
             for cid, blob in await (await db.execute(
-                    f"SELECT rowid, embedding FROM vec_chunks WHERE rowid IN ({','.join('?' * len(missing))})",
+                    f"SELECT rowid, embedding FROM {vt} WHERE rowid IN ({','.join('?' * len(missing))})",
                     missing)).fetchall():
                 vecs[cid] = unpack(blob)
     lex_pos = {c: i for i, c in enumerate(lex, 1)}

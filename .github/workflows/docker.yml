@@ -1,0 +1,29 @@
+name: Образ сервера
+
+# Сборка Dockerfile (бот + Xray) для своего сервера — переезд в Россию.
+# Проверяет, что образ собирается и в нём запускаются бот-модули и Xray.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ["Dockerfile", ".dockerignore", "docker/**", "requirements.txt", "tools/xray_conf.py",
+            ".github/workflows/docker.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сборка
+        run: docker build -t uiboshki .
+      - name: Проверка внутри образа
+        run: |
+          docker run --rm uiboshki xray version
+          docker run --rm uiboshki python -c "import bot, net, local_embed, s3_store; print('модули ok')"
+          docker run --rm -e XRAY_CONFIG='vless://00000000-1111-2222-3333-444444444444@example.org:443?security=tls&sni=example.org' \
+            uiboshki sh -c 'python tools/xray_conf.py /tmp/x.json && xray run -test -c /tmp/x.json'

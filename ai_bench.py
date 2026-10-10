@@ -41,6 +41,8 @@ from collections import Counter
 
 import httpx
 
+import net
+
 logger = logging.getLogger(__name__)
 
 API = "https://openrouter.ai/api/v1"
@@ -529,7 +531,7 @@ def table(tasks: list[dict], ids: list[str], models: dict) -> list[dict]:
 
 async def prepare(key: str, wanted: list[str] | None = None, *, intents: bool = True) -> dict:
     """Кого и на чём гоняем, сколько примерно стоит — без запросов к моделям."""
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    async with net.client(timeout=TIMEOUT) as client:
         models = parse_models(await _get(client, key, "/models"))
         left = await balance(client, key)
     judge = pick_judge(models)
@@ -587,7 +589,7 @@ async def _answer_all(client, key: str, tasks: list[dict], ids: list[str]) -> No
 async def screen(key: str, plan: dict) -> tuple[str, str]:
     """Отбор: все модели плана на всех задачах, судья → (страница, итог)."""
     tasks, ids, judge = plan["tasks"], plan["ids"], plan["judge"]
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    async with net.client(timeout=TIMEOUT) as client:
         await _answer_all(client, key, tasks, ids)
         if judge:
             sem = asyncio.Semaphore(PARALLEL)
@@ -610,7 +612,7 @@ async def screen(key: str, plan: dict) -> tuple[str, str]:
 async def vote(key: str, plan: dict) -> tuple[str, str]:
     """Слепое голосование финалистов → (страница, итог)."""
     tasks, ids = plan["tasks"], plan["ids"]
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    async with net.client(timeout=TIMEOUT) as client:
         await _answer_all(client, key, tasks, ids)
     items = []
     for t in tasks:

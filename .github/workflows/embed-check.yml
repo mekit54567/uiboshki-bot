@@ -1,0 +1,34 @@
+name: Свои векторы
+
+# Сверка local_embed.py (векторы на numpy, без torch) с sentence-transformers
+# на настоящих моделях с Hugging Face, плюс память и скорость каждой модели.
+# Из облака разработки Hugging Face закрыт — поэтому здесь.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ["local_embed.py", "tools/embed_check.py", ".github/workflows/embed-check.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Зависимости
+        run: |
+          pip install -r requirements.txt
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install sentence-transformers
+      - name: Сверка с эталоном
+        env:
+          EMBED_DIR: /tmp/models
+          DATABASE_PATH: /tmp/bot.db
+        run: python tools/embed_check.py

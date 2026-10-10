@@ -62,6 +62,23 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         await bot.send_message(chat_id, f"⚠️ Не получилось снять копию базы: {e}")
         return False
     size_mb = len(data) / 1024 / 1024
+    import s3_store
+    if s3_store.configured():
+        # своё российское хранилище: база не уходит за границу, старосте — только отметка
+        now = datetime.now(TZ)
+        try:
+            codes = [await s3_store.put(key, data) for key in s3_store.backup_keys(now)]
+        except Exception as e:
+            codes = [f"{type(e).__name__}"]
+        if all(c == 200 for c in codes):
+            await health.note("backup", True, f"{size_mb:.1f} МБ в хранилище")
+            await bot.send_message(chat_id, f"💾 Копия базы ({size_mb:.1f} МБ) — в хранилище: "
+                                            f"{', '.join(s3_store.backup_keys(now))}.", disable_notification=silent)
+            return True
+        await health.note("backup", False, f"хранилище: {codes}")
+        await bot.send_message(chat_id, f"⚠️ Копия базы не легла в хранилище ({', '.join(map(str, codes))}). "
+                                        "Проверь BACKUP_S3_* в переменных сервера.")
+        return False
     if len(data) > MAX_SEND_BYTES:
         await health.note("backup", False, f"{size_mb:.0f} МБ — больше лимита Telegram")
         await bot.send_message(chat_id, f"⚠️ Копия базы — {size_mb:.0f} МБ, больше лимита Telegram (50 МБ).")

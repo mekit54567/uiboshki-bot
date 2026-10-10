@@ -1,5 +1,5 @@
-import httpx
 import logging
+import net
 import time
 from zoneinfo import ZoneInfo
 
@@ -44,7 +44,7 @@ async def _fetch_weather() -> dict | None:
             f"&current=temperature_2m,apparent_temperature,precipitation,weathercode,windspeed_10m"
             f"&timezone=Europe/Moscow"
         )
-        async with httpx.AsyncClient(timeout=WEATHER_TIMEOUT) as client:
+        async with net.client(timeout=WEATHER_TIMEOUT) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             return resp.json()
