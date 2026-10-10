@@ -236,6 +236,7 @@ async def test_current_gemini_joins_by_own_key(group_data, monkeypatch):
     plan["ids"] = plan["ids"][:2]
     html, _ = await ai_bench.screen("k", plan)
     assert len(gemini_calls) == len(plan["tasks"]) and gemini_calls[-1]["temperature"] == 0  # намерения — без фантазии
+    assert all(kw["fallback"] is False for kw in gemini_calls)               # мерка — сама Gemini, не Ling
     assert "наш ключ, бесплатно · сейчас у нас" in html and "обрыв" in html
     assert "ответ Gemini [1]" in html and "ответ обрезан" not in html
 

@@ -160,7 +160,10 @@ A 192.0.2.1 с оранжевым облаком + Redirect Rule корень �
 с `&view=result` (владелец присылает ссылку, Claude читает через WebFetch);
 бюджет прогона `AITEST_BUDGET_USD`, судья `AITEST_JUDGE`; OpenRouter закрывает
 аккаунту OpenAI/Anthropic/Google — `AITEST_SKIP_VENDORS`, нынешняя Gemini — своим
-ключом, `gemini-direct`; своя группа остаётся на Gemini — владелец 10.10), `WEBAPP_URL`, `PORT`, `SDO_SESSION_COOKIE`,
+ключом, `gemini-direct`; своя группа остаётся на Gemini — владелец 10.10),
+`AI_SPARE_MODEL` (с `OPENROUTER_API_KEY`: модель OpenRouter, когда у всех Gemini
+лимит 429, по умолчанию `inclusionai/ling-3.0-flash-vl`; пусто — без неё;
+классификатор и `/aitest` её не зовут), `WEBAPP_URL`, `PORT`, `SDO_SESSION_COOKIE`,
 `SDO_SYNC_INTERVAL_HOURS` (6), `SDO_CRYPT_KEY` (необязательно, ключ шифрования
 входов студентов в СДО; без него — производный от `BOT_TOKEN`), `SDO_KEEP_COURSES` (по умолчанию «Учебный отдел»),
 `OPTIONAL_SUBJECTS` (предметы по выбору, по умолчанию «Военная кафедра»: пары

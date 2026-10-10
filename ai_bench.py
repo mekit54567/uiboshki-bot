@@ -262,9 +262,9 @@ async def ask_gemini(system: str, user: str, max_tokens: int, temperature: float
     started = time.monotonic()
     for attempt in range(GEMINI_TRIES):     # бесплатный лимит в минуту: подождать и ещё раз
         try:
-            text = await gemini_solver.generate_text(
+            text = await gemini_solver.generate_text(       # только сама Gemini: без запасных и Ling
                 [{"role": "user", "content": user}], system, max_output_tokens=max_tokens,
-                temperature=0.3 if temperature is None else temperature)
+                temperature=0.3 if temperature is None else temperature, fallback=False)
             break
         except Exception as e:
             if attempt + 1 == GEMINI_TRIES:

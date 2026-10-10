@@ -31,7 +31,8 @@ import time
 
 import httpx
 
-from config import GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME, GROUP_PROGRAM
+from config import (AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME,
+                    GROUP_PROGRAM, OPENROUTER_API_KEY)
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +133,15 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
                 if i + 1 < len(models):
                     logger.info(f"Gemini {model}: HTTP {e.status} — пробую {models[i + 1]}")
                     continue
-                raise limited
+                break
             raise
+    if limited and fallback and AI_SPARE_MODEL:     # у всех Gemini лимит — запасная через OpenRouter
+        try:
+            text = await _openrouter_once(contents, system_instruction, generation_config, timeout, mark_truncated)
+            logger.info(f"Gemini: лимит у всех моделей — ответила {AI_SPARE_MODEL}")
+            return text
+        except GeminiError as e:
+            logger.warning(f"Запасная {AI_SPARE_MODEL} не ответила: {e}")
     raise limited or GeminiError("Gemini не ответил")
 
 
@@ -193,6 +201,54 @@ async def _generate_once(model: str, payload: dict, timeout: float, mark_truncat
         raise GeminiError(f"Gemini вернула пустой ответ (finishReason={finish_reason})")
     if candidate.get("finishReason") == "MAX_TOKENS" and mark_truncated:
         logger.info("Gemini: ответ упёрся в maxOutputTokens")
+        text = text.rstrip() + TRUNCATED_NOTE
+    return text
+
+
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _to_messages(contents: list[dict], system_instruction: str | None) -> list[dict]:
+    """contents Gemini -> messages OpenAI (OpenRouter): текст и картинки inlineData."""
+    messages = [{"role": "system", "content": system_instruction}] if system_instruction else []
+    for c in contents:
+        parts = []
+        for p in c.get("parts", []):
+            if "text" in p:
+                parts.append({"type": "text", "text": p["text"]})
+            elif "inlineData" in p:
+                d = p["inlineData"]
+                parts.append({"type": "image_url",
+                              "image_url": {"url": f"data:{d['mimeType']};base64,{d['data']}"}})
+        role = "assistant" if c.get("role") == "model" else "user"
+        if len(parts) == 1 and parts[0]["type"] == "text":
+            messages.append({"role": role, "content": parts[0]["text"]})
+        else:
+            messages.append({"role": role, "content": parts})
+    return messages
+
+
+async def _openrouter_once(contents: list[dict], system_instruction: str | None, generation_config: dict,
+                           timeout: float, mark_truncated: bool) -> str:
+    """Тот же запрос запасной модели через OpenRouter (AI_SPARE_MODEL)."""
+    payload = {"model": AI_SPARE_MODEL, "messages": _to_messages(contents, system_instruction),
+               "temperature": generation_config.get("temperature", 0.3)}
+    if generation_config.get("maxOutputTokens"):
+        payload["max_tokens"] = generation_config["maxOutputTokens"]
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(OPENROUTER_URL, json=payload,
+                                     headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"})
+    except httpx.HTTPError as e:
+        raise GeminiError(f"Не достучался до запасной модели ({type(e).__name__})", transient=True)
+    if resp.status_code != 200:
+        logger.warning(f"OpenRouter HTTP {resp.status_code}: {resp.text[:500]}")
+        raise GeminiError(f"Запасная модель ответила ошибкой HTTP {resp.status_code}", status=resp.status_code)
+    choice = (resp.json().get("choices") or [{}])[0]
+    text = (choice.get("message") or {}).get("content") or ""
+    if not text.strip():
+        raise GeminiError("Запасная модель вернула пустой ответ")
+    if choice.get("finish_reason") == "length" and mark_truncated:
         text = text.rstrip() + TRUNCATED_NOTE
     return text
 
