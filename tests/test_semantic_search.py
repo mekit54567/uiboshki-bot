@@ -212,3 +212,47 @@ async def test_chat_cites_pages_and_page_view(db, embed, monkeypatch):
     img = c.get(f"{u.path}?{u.query}")
     assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and img.content[:2] == b"\xff\xd8"
     assert c.get(f"/pg/{fid}/2.jpg?exp=9999999999&sig=bad").status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_local_model_own_vectors_and_switch_back(db, embed, monkeypatch):
+    """Своя модель (переезд в Россию): свои векторы в своей таблице — Gemini
+    не трогаем; заранее считаются фоном (EMBED_PRECOMPUTE), переключение
+    EMBED_PROVIDER туда и обратно — без пересчёта; удалённый файл уходит
+    из векторов всех моделей."""
+    import local_embed
+    calls = []
+
+    async def fake_local(key, texts, query=False):
+        calls.append((key, query, len(texts)))
+        return [fake_vec(t) for t in texts]
+
+    monkeypatch.setattr(local_embed, "embed", fake_local)
+    monkeypatch.setitem(local_embed.MODELS, "rubert-mini-frida", {**local_embed.MODELS["rubert-mini-frida"], "dims": DIMS})
+    monkeypatch.delenv("EMBED_PROVIDER", raising=False)
+    monkeypatch.setenv("EMBED_PRECOMPUTE", "local:rubert-mini-frida")
+    f1 = await db.add_file("Лекция 5. Инвестиции", "Анализ данных", "tg1", "лк5.pptx", 1)
+    f2 = await db.add_file("Лекция 2. Регрессия", "Анализ данных", "tg2", "лк2.pptx", 1)
+    for fid in (f1, f2):
+        await db.save_file_text(fid, "текст")
+    await si.index_file(f1, pptx_bytes(["Дисконтирование и NPV: деньги дешевеют со временем. " * 6]), "лк5.pptx")
+    await si.index_file(f2, pptx_bytes(["Линейная регрессия: коэффициент b. " * 8]), "лк2.pptx")
+    st = await si.index_pending(None, max_batches=4)            # Gemini + заранее своя
+    assert st["provider"] == "gemini" and st["embedded"] == st["chunks"] == 2
+    assert calls == [("rubert-mini-frida", False, 2)]
+
+    monkeypatch.setenv("EMBED_PROVIDER", "rubert-mini-frida")    # переехали: ищет своя, Gemini не зовём
+    embed.clear()
+    hits = await ss.search("почему нельзя просто сложить прибыль за все годы")
+    assert hits[0]["file_id"] == f1 and hits[0]["sem"] == 1 and embed == []
+    assert calls[-1] == ("rubert-mini-frida", True, 1)
+    assert (await si.stats())["embedded"] == 2
+
+    monkeypatch.setenv("EMBED_PROVIDER", "gemini")               # и обратно — векторы Gemini на месте
+    hits = await ss.search("почему нельзя просто сложить прибыль за все годы")
+    assert hits[0]["file_id"] == f1 and hits[0]["sem"] == 1 and embed[-1] == ("RETRIEVAL_QUERY", 1)
+
+    await si.index_file(f2, None, "лк2.pptx", text="")           # перенарезка — старые векторы всех моделей прочь
+    async with si.open_index() as idx:
+        left = (await (await idx.execute("SELECT COUNT(*) FROM emb_rubert_mini_frida")).fetchone())[0]
+    assert left == 1

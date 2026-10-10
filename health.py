@@ -195,7 +195,8 @@ async def report() -> str:
         import semantic_index
         st = await semantic_index.stats()
         lines.append(f"Лекций в индексе: {st['files']}" + (f" · ждут {st['waiting']}" if st["waiting"] else "") +
-                     f" · фрагментов {st['chunks']}, с векторами {st['embedded']}")
+                     f" · фрагментов {st['chunks']}, с векторами {st['embedded']}"
+                     + ("" if st.get("provider", "gemini") == "gemini" else f" (своя модель {st['provider']})"))
         if not st["vectors"]:
             lines.append("⚠️ sqlite-vec не загрузился — ищу только по словам")
     except Exception as e:

@@ -16,4 +16,6 @@ python-pptx==1.0.2
 cryptography==41.0.7
 Pillow>=10.0
 sqlite-vec==0.1.9
+numpy>=1.26
+tokenizers>=0.19
 pypdfium2==5.13.0

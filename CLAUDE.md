@@ -175,6 +175,10 @@ OpenRouter; МИРЭА, СДО, VK, Яндекс — напрямую), `TG_PROX
 умолчанию `OUT_PROXY`), `TELEGRAM_API_BASE` (свой адрес Bot API). Новые
 исходящие запросы за границу — через `net.client()`, не `httpx.AsyncClient`;
 `Bot(...)` — с `session=net.tg_session()`. Проверка с сервера — `/netcheck`.
+Векторы поиска: `EMBED_PROVIDER` (`gemini` или ключ своей модели из
+`local_embed.MODELS`), `EMBED_PRECOMPUTE` (чьи векторы считать фоном заранее),
+`EMBED_DIR` (куда качать модели, по умолчанию `models/` рядом с базой),
+`EMBED_HF_BASE` (зеркало Hugging Face). Векторы — только через `embedder.embed`.
 `CHANNEL_URL`, `CONTACT_URL` (необязательно: плитки «Канал бота» и «Написать нам»
 в меню «Ещё» WebApp; пока пусто — «Скоро», задать на этапе 3), `CHANNEL_ID`
 (куда бот публикует посты, `/channel`; не задан — @имя из `CHANNEL_URL`).
@@ -275,7 +279,8 @@ OpenRouter; МИРЭА, СДО, VK, Яндекс — напрямую), `TG_PROX
   режутся по страницам PDF / слайдам PPTX / частям DOCX-TXT (`chunk_pages`),
   индекс — отдельный файл `<база>.search.db` (не в бэкапе, основная база
   через ATTACH): FTS5/BM25 + векторы Gemini (`gemini_solver.embed`,
-  `gemini-embedding-001`, 768) в sqlite-vec (vec0, cosine). Запрос — два
+  `gemini-embedding-001`, 768) в sqlite-vec (vec0, cosine); или своя модель
+  на сервере (`local_embed.py`, `embedder.py`, своя таблица `vec_<модель>`). Запрос — два
   пути, слияние RRF, разнообразие MMR (≤3 куска с файла), без предмета —
   порог похожести `VEC_MIN_SIM` (подстроить по логам «лучший косинус»).
   Чат: куски с номерами [n] → ИИ ссылается, под ответом «Лекция · слайд 12»,
