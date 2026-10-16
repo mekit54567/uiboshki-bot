@@ -17,7 +17,7 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "2"                  # 2 — сервер в России (Amvera), Ling среди получателей
+VERSION = "2"
 DATE = "16.10.2026"
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
