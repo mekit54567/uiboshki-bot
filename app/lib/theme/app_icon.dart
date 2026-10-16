@@ -54,7 +54,7 @@ class AppIcon {
   /// Все, что есть в приложении (и в сборке под iOS/Android).
   static const values = <AppIcon>[...drawn, ...artIcons];
 
-  /// Есть подписка: /api/me plan «sub». Задаёт оболочка.
+  /// Есть подписка (/api/me plus). Задаёт оболочка.
   static final premium = ValueNotifier<bool>(false);
 
   /// Как открыть (design/app_icons.json → unlock): null — бесплатно, `sub`,

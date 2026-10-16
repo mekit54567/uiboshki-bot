@@ -196,8 +196,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     if (me == null || !mounted) return;
     achName = '${me['first_name'] ?? ''}'.trim();
-    // подписочные иконки — только с подпиской (5.91)
-    AppIcon.premium.value = me['plan'] == 'sub';
+    // подписочные иконки — только с подпиской (5.91): plus из /api/me
+    // (у своей группы plan остаётся «own» и с подпиской), до него — plan
+    AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;
