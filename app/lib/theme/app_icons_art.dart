@@ -52,3 +52,5 @@ const artIcons = <AppIcon>[
   AppIcon._art('chalk', 'Мел', 'Фактуры'),
   AppIcon._art('riso', 'Ризограф', 'Фактуры'),
 ];
+
+const iconUnlock = <String, String>{};

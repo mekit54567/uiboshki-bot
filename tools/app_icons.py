@@ -297,6 +297,14 @@ def build_art():
             extra += f", season: '{ic['season']}'"
         lines.append(f"  AppIcon._art('{ic['name']}', '{ic['label']}', '{ic['group']}'{extra}),")
     lines += ["];", ""]
+    # как открыть (5.91): нет записи — бесплатно
+    unlock = json.loads(ART_JSON.read_text(encoding="utf-8")).get("unlock", {})
+    if unlock:
+        lines.append("const iconUnlock = <String, String>{")
+        lines += [f"  '{k}': '{v}'," for k, v in unlock.items()]
+        lines += ["};", ""]
+    else:
+        lines += ["const iconUnlock = <String, String>{};", ""]
     ART_DART.write_text("\n".join(lines), encoding="utf-8")
 
 

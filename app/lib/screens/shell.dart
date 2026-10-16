@@ -10,6 +10,7 @@ import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/models.dart';
+import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
@@ -150,6 +151,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     Api.onOk = (method, path, body, result) => AchStore.onApi(method, path, body, result, now());
     AchStore.onUnlock = showUnlockBanner;
     AchStore.openTab = _open;
+    AchStore.api = widget.api;
     WidgetsBinding.instance.addObserver(this);
     _visit();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -164,6 +166,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     Api.onOk = null;
     AchStore.onUnlock = null;
     AchStore.openTab = null;
+    AchStore.api = null;
     super.dispose();
   }
 
@@ -177,6 +180,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     try {
       await AchStore.load();
       await AchStore.visit(now());
+      await AchStore.sync();
       final sink = HomeWidgets.sink;
       if (sink != null && await sink.installed() > 0) await AchStore.unlock('widget');
     } catch (_) {}
@@ -192,6 +196,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     if (me == null || !mounted) return;
     achName = '${me['first_name'] ?? ''}'.trim();
+    // подписочные иконки — только с подпиской (5.91)
+    AppIcon.premium.value = me['plan'] == 'sub';
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;
