@@ -408,4 +408,17 @@ def test_legal_backup_where(monkeypatch):
     for name in ("consent", "privacy"):
         text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
         assert "резервной копии базы у оператора" not in text and "Yandex Cloud (Россия)" in text
-        assert "месячные — за год" in text or "через год" in text
+        assert "7 дней" in text and "год" not in text            # ст. 21 ч. 5: не дольше 30 дней
+
+
+def test_legal_proxy_as_configured(monkeypatch):
+    """Ревью 16.10: как уходят запросы за границу — как устроено на сервере:
+    туннель Xray на сервер оператора (страна — PROXY_COUNTRY) или сеть хостинга."""
+    c, _ = _client(monkeypatch)
+    monkeypatch.delenv("XRAY_CONFIG", raising=False)
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "через сеть хостинга Amvera" in text and "туннель" not in text
+    monkeypatch.setenv("XRAY_CONFIG", "x")
+    monkeypatch.setenv("PROXY_COUNTRY", "Нидерландах")
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "туннель на сервер оператора в Нидерландах" in text and "не расшифровывается" in text

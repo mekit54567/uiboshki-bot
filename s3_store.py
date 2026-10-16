@@ -10,9 +10,9 @@ Telegram — заграница, а база по 152-ФЗ должна оста
 `BACKUP_S3_REGION` (по умолчанию ru-central1). Не заданы — бэкап, как
 раньше, файлом в Telegram.
 
-Копии по кругу, без удаления по списку: `daily/<день недели>.db.gz` (семь
-последних дней) и `monthly/<месяц>.db.gz` (первое число месяца, двенадцать
-месяцев) — удалённое человеком уходит из копий само (политика, 152-ФЗ).
+Копии по кругу, без удаления по списку: `daily/<день недели>.db.gz` —
+семь последних дней. Дольше не храним: отозвал согласие — данные уходят из
+копий за 7 дней (152-ФЗ, ст. 21 ч. 5: не позже 30 дней; политика это говорит).
 """
 
 import hashlib
@@ -85,8 +85,5 @@ async def put(key: str, data: bytes, content_type: str = "application/gzip") -> 
 
 
 def backup_keys(now: datetime) -> list[str]:
-    """Куда положить сегодняшнюю копию: день недели и, первого числа, месяц."""
-    keys = [f"daily/uiboshki-{now.isoweekday()}-{now.strftime('%a').lower()}.db.gz"]
-    if now.day == 1:
-        keys.append(f"monthly/uiboshki-{now.strftime('%m')}.db.gz")     # через год — поверх
-    return keys
+    """Куда положить сегодняшнюю копию: день недели (через неделю — поверх)."""
+    return [f"daily/uiboshki-{now.isoweekday()}-{now.strftime('%a').lower()}.db.gz"]
