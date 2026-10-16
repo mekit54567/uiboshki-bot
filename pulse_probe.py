@@ -154,7 +154,8 @@ def _headers(cookie: str, version: str) -> dict:
         "content-type": "application/grpc-web+proto",
         "x-grpc-web": "1",
         "x-requested-with": "XMLHttpRequest",
-        "pulse-app-type": os.getenv("PULSE_APP_TYPE", "web"),
+        # как у настоящего клиента (бандл 1.9.3: Metadata pulse-app-type, «версия+сборка»)
+        "pulse-app-type": os.getenv("PULSE_APP_TYPE", "pulse-app"),
         "pulse-app-version": os.getenv("PULSE_APP_VERSION", version),
         "origin": PULSE,
         "referer": PULSE + "/",
@@ -218,10 +219,13 @@ async def fetch_bundle(client: httpx.AsyncClient) -> tuple[dict[str, bytes], lis
 
 
 def _version(files: dict[str, bytes]) -> str:
+    """«1.9.3+10379» из pulse-info.json — так подписывается клиент Пульса."""
     try:
-        return str(json.loads(files.get("pulse-info.json", b"{}")).get("version") or "1.9.2")
+        info = json.loads(files.get("pulse-info.json", b"{}"))
+        version, build = str(info.get("version") or "1.9.3"), info.get("buildNumber")
     except (ValueError, AttributeError):
-        return "1.9.2"
+        return "1.9.3"
+    return f"{version}+{build}" if build else version
 
 
 async def probe() -> tuple[bytes, str]:

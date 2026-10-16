@@ -57,9 +57,9 @@ async def test_probe(monkeypatch):
         if path in ("/assets/Lessons-b2.js", "/assets/shared-c3.js"):
             return httpx.Response(200, text='"rtu_tc.attendance.api.VisitingLogService"')
         if path == "/pulse-info.json":
-            return httpx.Response(200, json={"version": "1.9.3"})
+            return httpx.Response(200, json={"version": "1.9.3", "buildNumber": 10379})
         if path.endswith("/GetMeInfo"):
-            assert request.headers["pulse-app-version"] == "1.9.3" and request.content == b"\x00\x00\x00\x00\x00"
+            assert request.headers["pulse-app-version"] == "1.9.3+10379" and request.headers["pulse-app-type"] == "pulse-app" and request.content == b"\x00\x00\x00\x00\x00"
             return httpx.Response(200, content=pulse_probe.frame(ME) + b"\x80" + struct.pack(">I", 14) + b"grpc-status:0\r\n")
         return httpx.Response(200, headers={"grpc-status": "12", "grpc-message": "unimplemented"})
 
