@@ -29,6 +29,21 @@
   </style>
 </head>
 <body>
+  <script id="uib-history">
+    // iPhone, PWA с экрана «Домой» (Никита 17.10, видео): свайп от левого края —
+    // это «назад» браузера, iOS листает к снимку страницы, а потом экран
+    // секунды чёрный, пока Flutter заново рисует. Flutter кладёт каждый экран
+    // в историю браузера (pushState), отсюда и «назад». Здесь истории не
+    // заводим: свайп от края ловит сам Flutter (как в приложении с iPhone), а
+    // из системы «назад» некуда. Android и браузер — как было (кнопка «назад»).
+    (function () {
+      if (window.navigator.standalone === true && window.history) {
+        window.history.pushState = function (state, title, url) {
+          window.history.replaceState(state, title, url);
+        };
+      }
+    })();
+  </script>
   <script>
     // До запуска Flutter (shared_preferences в вебе — localStorage, ключи
     // «flutter.<имя>», значения — JSON):
