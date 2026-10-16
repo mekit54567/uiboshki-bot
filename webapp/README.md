@@ -2,19 +2,19 @@
 
 HTTP-бэкенд (FastAPI) + статический фронтенд для бота УИБО-03-24. Крутится
 **в том же процессе, что и бот** (`bot.py` → `start_webapp`, порт — `$PORT`):
-одна служба на Railway и один том с SQLite — отдельный процесс не видел бы ту
-же базу. Все модули (`database.py`, `schedule_parser.py`, `ai_solver.py`)
+одна служба на хостинге и один диск с SQLite — отдельный процесс не видел бы
+ту же базу. Все модули (`database.py`, `schedule_parser.py`, `ai_solver.py`)
 общие — WebApp просто даёт им HTTP-фасад.
 
-## Как включить на Railway (один раз)
+## Как включить (один раз)
 
-1. **Домен.** Railway → сервис бота → **Settings → Networking → Generate
-   Domain**, порт — `8080`. Получится адрес вида
-   `https://www.uiboshki.ru` (старый адрес `https://uiboshki-bot-production.up.railway.app` тоже работает).
-2. **Переменные.** Railway → **Variables**: `WEBAPP_URL` = этот адрес (с
-   `https://`, без `/` в конце) и `PORT` = `8080` (явно — чтобы порт сервера
-   точно совпал с портом домена). Railway перезапустит бота; в Deploy Logs
-   появится «🌐 WebApp слушает порт 8080».
+Сервер — Amvera (Москва, `amvera.yml`: Dockerfile, диск `/data`, порт 8080).
+
+1. **Домен.** Amvera → проект → **Домены**: `www.uiboshki.ru` (в Cloudflare
+   CNAME `www` → `edge.msk1.amvera.tech`, серое облако).
+2. **Переменные.** Amvera → **Переменные**: `WEBAPP_URL` =
+   `https://www.uiboshki.ru` (без `/` в конце); порт 8080 уже в образе. После
+   перезапуска в логах — «🌐 WebApp слушает порт 8080».
 3. **Всё.** При старте бот сам ставит кнопку меню «Приложение» слева от поля
    ввода (`setup_bot_menu` в `bot.py`), `/app` и `/start` показывают кнопку
    запуска, `/calendar` начинает выдавать ссылки.

@@ -15,7 +15,7 @@ class ApiError implements Exception {
   final int? status;
   ApiError(this.message, {this.status});
 
-  /// Сервер упал или ответил не тем (500, 502 от Railway, HTML вместо JSON).
+  /// Сервер упал или ответил не тем (500, 502 от хостинга, HTML вместо JSON).
   ApiError.server(int code)
     : this(
         code >= 400
@@ -90,7 +90,7 @@ class Api {
     try {
       body = r.bodyBytes.isEmpty ? null : jsonDecode(utf8.decode(r.bodyBytes));
     } on FormatException {
-      // «Internal Server Error», страница 502 от Railway — сбой сервера, не сети
+      // «Internal Server Error», страница 502 от хостинга — сбой сервера, не сети
       throw ApiError.server(r.statusCode);
     }
     if (r.statusCode >= 400) {

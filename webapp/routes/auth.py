@@ -148,7 +148,7 @@ def _page(title: str, text: str, extra: str = "", status: int = 200):
 
 @router.get("/api/auth/providers")
 async def auth_providers():
-    """Каким ещё входом можно войти (есть ключи в Railway)."""
+    """Каким ещё входом можно войти (есть ключи на хостинге)."""
     import oauth
     return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()]}
 

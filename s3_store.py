@@ -11,7 +11,8 @@ Telegram — заграница, а база по 152-ФЗ должна оста
 раньше, файлом в Telegram.
 
 Копии по кругу, без удаления по списку: `daily/<день недели>.db.gz` (семь
-последних дней) и `monthly/<год-месяц>.db.gz` (первое число месяца).
+последних дней) и `monthly/<месяц>.db.gz` (первое число месяца, двенадцать
+месяцев) — удалённое человеком уходит из копий само (политика, 152-ФЗ).
 """
 
 import hashlib
@@ -27,6 +28,17 @@ DEFAULT_ENDPOINT = "https://storage.yandexcloud.net"
 
 def configured() -> bool:
     return all(os.getenv(k, "").strip() for k in ("BACKUP_S3_BUCKET", "BACKUP_S3_KEY_ID", "BACKUP_S3_SECRET"))
+
+
+PROVIDERS = (("yandexcloud", "Yandex Cloud"), ("vkcloud", "VK Cloud"), ("mcs.mail", "VK Cloud"),
+             ("selcdn", "Selectel"), ("selectel", "Selectel"), ("timeweb", "Timeweb Cloud"),
+             ("cloud.ru", "Cloud.ru"))
+
+
+def provider() -> str:
+    """Чьё хранилище — для политики обработки данных."""
+    host = urlsplit(os.getenv("BACKUP_S3_ENDPOINT") or DEFAULT_ENDPOINT).netloc.lower()
+    return next((name for key, name in PROVIDERS if key in host), host or "хранилище S3")
 
 
 def _hmac(key: bytes, msg: str) -> bytes:
@@ -76,5 +88,5 @@ def backup_keys(now: datetime) -> list[str]:
     """Куда положить сегодняшнюю копию: день недели и, первого числа, месяц."""
     keys = [f"daily/uiboshki-{now.isoweekday()}-{now.strftime('%a').lower()}.db.gz"]
     if now.day == 1:
-        keys.append(f"monthly/uiboshki-{now.strftime('%Y-%m')}.db.gz")
+        keys.append(f"monthly/uiboshki-{now.strftime('%m')}.db.gz")     # через год — поверх
     return keys

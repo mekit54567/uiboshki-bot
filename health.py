@@ -188,6 +188,10 @@ async def report() -> str:
         lines.append(_line(await _get("sdo_sync"), "Синк дедлайнов", now, "ещё не было"))
     ok, expired = len(await get_sdo_sessions("ok")), len(await get_sdo_sessions("expired"))
     lines.append(f"Входы студентов: {ok} работают" + (f" · {expired} устарели" if expired else ""))
+    import sdo_accounts
+    if (ok or expired) and sdo_accounts.key_source() == "bot_token":   # 152-ФЗ: ключ отдельно от токена бота
+        lines.append("⚠️ Входы зашифрованы ключом от BOT_TOKEN — задай на хостинге SDO_CRYPT_PASSPHRASE "
+                     "(длинная фраза) или SDO_CRYPT_KEY")
 
     lines += ["", "<b>Расписание</b>"]
     stale = stale_label()
@@ -215,6 +219,14 @@ async def report() -> str:
         total, top = await ai_quota.summary()
         limit = f" · лимит {config.AI_DAILY_LIMIT} на человека" if config.AI_DAILY_LIMIT else " · дневного лимита нет"
         lines.append(f"Вопросов сегодня: {total}, у самого активного — {top}{limit}")
+        if config.OPENROUTER_API_KEY and gemini_solver.AI_SPARE_MODEL:
+            mode = await gemini_solver.ai_main()
+            n = gemini_solver.answered
+            lines.append(f"Ling ({esc(gemini_solver.AI_SPARE_MODEL)}) основная: {gemini_solver.MAIN_MODES[mode]}"
+                         " · сменить — /aimain")
+            if sum(n.values()):
+                lines.append(f"С запуска ответили: Ling {n['ling']}, Gemini {n['gemini']}"
+                             + (f" · Ling не смогла {n['ling_failed']}" if n["ling_failed"] else ""))
         rest, spare = gemini_solver.rest_status()
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "

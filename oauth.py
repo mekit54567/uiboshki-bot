@@ -9,7 +9,7 @@
   4. PWA/приложение получает токен тем же /api/auth/poll.
 
 Ключи — VK_CLIENT_ID (+ VK_CLIENT_SECRET, необязательно: VK ID работает с
-PKCE) и YANDEX_CLIENT_ID + YANDEX_CLIENT_SECRET в Railway. Нет ключа —
+PKCE) и YANDEX_CLIENT_ID + YANDEX_CLIENT_SECRET в переменных хостинга. Нет ключа —
 кнопки нет. Сеть — только через _post/_get (тесты подменяют).
 """
 
@@ -30,7 +30,7 @@ def _cfg(provider: str) -> tuple[str, str]:
 
 
 def available() -> list[str]:
-    """Провайдеры, для которых в Railway есть ключи (Яндексу нужен и секрет)."""
+    """Провайдеры, для которых на хостинге есть ключи (Яндексу нужен и секрет)."""
     out = []
     for p in NAMES:
         cid, secret = _cfg(p)

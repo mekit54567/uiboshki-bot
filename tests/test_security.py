@@ -19,6 +19,32 @@ def test_passphrase_key_and_rotation(monkeypatch):
     assert sdo_accounts.decrypt(new) is None                      # без фразы не прочитать
 
 
+@pytest.mark.asyncio
+async def test_rotate_all_on_new_key(db, monkeypatch):
+    """152-ФЗ, 16.10: задали отдельный ключ — при запуске все входы (и
+    устаревшие) перешифровываются, не дожидаясь проверки; /status больше не
+    предупреждает про ключ от BOT_TOKEN."""
+    import health
+    from database import get_sdo_sessions, save_sdo_session, set_sdo_status
+    monkeypatch.delenv("SDO_CRYPT_KEY", raising=False)
+    monkeypatch.delenv("SDO_CRYPT_PASSPHRASE", raising=False)
+    await save_sdo_session(1, sdo_accounts.encrypt("cookie-one-0123456789"))
+    await save_sdo_session(2, sdo_accounts.encrypt("cookie-two-0123456789"))
+    await set_sdo_status(2, "expired")
+    assert "ключом от BOT_TOKEN" in await health.report()
+    assert await sdo_accounts.rotate_all() == {"rotated": 0, "unreadable": 0}
+
+    monkeypatch.setenv("SDO_CRYPT_KEY", "-" * 43 + "=")            # 32 байта в base64 — годный ключ Fernet
+    assert await sdo_accounts.rotate_all() == {"rotated": 2, "unreadable": 0}
+    rows = await get_sdo_sessions("ok") + await get_sdo_sessions("expired")
+    assert all(not sdo_accounts.needs_rotation(r["cookie_enc"]) for r in rows)
+    assert {sdo_accounts.decrypt(r["cookie_enc"]) for r in rows} == {"cookie-one-0123456789", "cookie-two-0123456789"}
+    assert "ключом от BOT_TOKEN" not in await health.report()
+    monkeypatch.setenv("BOT_TOKEN", "другой")                      # токен бота больше не нужен для куки
+    monkeypatch.setattr(sdo_accounts, "BOT_TOKEN", "другой")
+    assert sdo_accounts.decrypt(rows[0]["cookie_enc"]) is not None
+
+
 def test_rate_limit():
     ratelimit.reset()
     assert all(ratelimit.allow("submit", 1) for _ in range(6))

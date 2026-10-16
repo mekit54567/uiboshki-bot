@@ -3,9 +3,13 @@
 сам вставляет в WebApp (меню «Ещё» → СДО). Нужна, чтобы сдавать работы
 из WebApp от своего имени (sdo_submit.py).
 
-Кука в базе только зашифрованной (Fernet). Ключ — переменная SDO_CRYPT_KEY,
-а если её нет — производный от BOT_TOKEN: утечка одной базы (бэкап в чате
-старосты) не раскрывает чужие входы. В логи и ответы значение не попадает.
+Кука в базе только зашифрованной (Fernet). Ключ — отдельный секрет на
+хостинге (152-ФЗ): SDO_CRYPT_KEY (ключ Fernet) или SDO_CRYPT_PASSPHRASE
+(фраза, из неё ключ через scrypt); если их нет — производный от BOT_TOKEN,
+и /status об этом предупреждает. Утечка одной базы (бэкап) не раскрывает
+чужие входы. Задали ключ — при запуске все записи перешифровываются
+(rotate_all), старые ключи остаются запасными для расшифровки. В логи и
+ответы значение не попадает.
 
 Куки проверяются примерно раз в час и заодно держат сессию живой;
 разлогиненная помечается expired, и человеку один раз приходит сообщение.
@@ -40,7 +44,7 @@ def _bot_token_key() -> bytes:
 
 
 def _passphrase_key(phrase: str) -> bytes:
-    """Ключ из секретной фразы владельца (SDO_CRYPT_PASSPHRASE в Railway):
+    """Ключ из секретной фразы владельца (SDO_CRYPT_PASSPHRASE на хостинге):
     scrypt — медленная функция, перебором фразу не подобрать. Соль своя для
     бота: одна и та же фраза в другом проекте даст другой ключ."""
     raw = hashlib.scrypt(phrase.encode(), salt=b"uiboshki-bot/sdo-cookies/v1", n=2 ** 14, r=8, p=1, dklen=32)
@@ -136,7 +140,7 @@ async def check(cookie: str) -> bool:
 
 async def cookie_for(user_id: int) -> str | None:
     """Рабочая кука человека. У старосты, если он свою не подключал, —
-    общая из Railway (SDO_SESSION_COOKIE): это и есть его вход."""
+    общая из переменных хостинга (SDO_SESSION_COOKIE): это и есть его вход."""
     from database import get_sdo_session
     row = await get_sdo_session(user_id)
     if row and row["status"] == "ok":
@@ -235,6 +239,27 @@ async def keepalive_due(bot=None, now: datetime | None = None):
                                      JITTER_CHECKS if left is None else left)
         elif due <= _utc(now):
             await _check_one(row, bot, now)
+
+
+async def rotate_all() -> dict:
+    """Перешифровать все входы (и устаревшие) на основной ключ — при запуске,
+    чтобы после SDO_CRYPT_KEY/фразы не ждать проверки каждого входа.
+    → {"rotated": сколько, "unreadable": не расшифровались ни одним ключом}."""
+    from database import get_sdo_sessions, update_sdo_cookie
+    out = {"rotated": 0, "unreadable": 0}
+    for status in ("ok", "expired"):
+        for row in await get_sdo_sessions(status):
+            enc = row["cookie_enc"]
+            if not needs_rotation(enc):
+                continue
+            cookie = decrypt(enc)
+            if cookie is None:
+                out["unreadable"] += 1
+            elif await update_sdo_cookie(row["user_id"], encrypt(cookie), only_if=enc):
+                out["rotated"] += 1
+    if out["rotated"] or out["unreadable"]:
+        logger.info(f"СДО: перешифровано входов {out['rotated']}, не расшифровались {out['unreadable']}")
+    return out
 
 
 async def keepalive_all(bot=None):

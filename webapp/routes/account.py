@@ -74,9 +74,11 @@ async def api_set_group(body: GroupBody, user: dict = CurrentUser):
 async def api_security(user: dict = CurrentUser):
     """Экран «Безопасность»: как защищены данные (без самих ключей)."""
     import ratelimit
+    import s3_store
     import sdo_accounts
     from webapp.auth import MAX_AUTH_AGE_SECONDS
     return {
+        "backup_s3": s3_store.configured(),
         "sdo": (await sdo_accounts.status_for(user["id"]))["state"],
         "key_source": sdo_accounts.key_source(),
         "auth_max_hours": MAX_AUTH_AGE_SECONDS // 3600,

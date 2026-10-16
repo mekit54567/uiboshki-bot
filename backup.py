@@ -1,7 +1,7 @@
 """
 Резервная копия базы: раз в сутки (и по /backup) бот присылает старосте
 сжатую копию SQLite — все файлы, дедлайны, заметки, закреплённые. Раньше
-всё жило в одном файле на Railway без копий: потеря тома — потеря всего.
+всё жило в одном файле на сервере без копий: потеря тома — потеря всего.
 
 Копия снимается штатным sqlite3 backup API — консистентно, даже если бот
 в этот момент пишет в базу.
@@ -86,7 +86,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
     await bot.send_document(
         chat_id, BufferedInputFile(data, filename=name), disable_notification=silent,
         caption=(f"💾 Копия базы ({size_mb:.1f} МБ). Храни — это все файлы, дедлайны и заметки.\n"
-                 "Восстановить: распаковать .gz и положить вместо базы на томе Railway."),
+                 "Восстановить: распаковать .gz и положить вместо базы на диске /data (Amvera) или /restore."),
     )
     await health.note("backup", True, f"{size_mb:.1f} МБ")
     return True

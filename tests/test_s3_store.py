@@ -24,7 +24,7 @@ def test_sigv4_matches_aws_example():
 def test_backup_keys_rotate():
     assert s3_store.backup_keys(datetime(2026, 10, 5)) == ["daily/uiboshki-1-mon.db.gz"]
     assert s3_store.backup_keys(datetime(2026, 11, 1)) == ["daily/uiboshki-7-sun.db.gz",
-                                                          "monthly/uiboshki-2026-11.db.gz"]
+                                                          "monthly/uiboshki-11.db.gz"]
 
 
 @pytest.mark.asyncio

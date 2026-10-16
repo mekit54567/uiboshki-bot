@@ -113,6 +113,6 @@ async def erase_decision(callback: CallbackQuery):
     import privacy
     await privacy.erase(callback.from_user.id)
     await callback.message.edit_text(
-        "✅ Готово: всё о тебе удалено. Из ночных копий базы оно уйдёт при ежемесячной чистке копий.\n\n"
+        f"✅ Готово: всё о тебе удалено. Из ночных копий базы — {privacy.backup_texts()['BACKUP_ERASE']}.\n\n"
         "Сообщения в этом чате можешь удалить сам. Если напишешь снова — начнём с нуля.")
     await callback.answer("Удалено")

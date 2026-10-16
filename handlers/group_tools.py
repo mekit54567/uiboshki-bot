@@ -61,6 +61,28 @@ async def cmd_status(message: Message):
     await message.answer(await health.report(), parse_mode="HTML")
 
 
+@router.message(Command("aimain"))
+async def cmd_aimain(message: Message):
+    """Кому Ling — основная модель ИИ (Gemini тогда запасная), только староста:
+    /aimain group — своя группа, /aimain me — только старосты, /aimain gemini —
+    все на Gemini. Без аргумента — что сейчас."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import gemini_solver
+    if not gemini_solver.AI_SPARE_MODEL:
+        await message.answer("Ling не подключена: нужен OPENROUTER_API_KEY на хостинге.")
+        return
+    args = (message.text or "").split()[1:]
+    if args and args[0].lower() in gemini_solver.MAIN_MODES:
+        await init_hw_table()
+        await set_setting("ai_main", args[0].lower())
+    mode = await gemini_solver.ai_main()
+    await message.answer(
+        f"Ling основная: <b>{gemini_solver.MAIN_MODES[mode]}</b>. Остальные — на Gemini, а Gemini "
+        "упёрлась в лимит — тоже Ling.\n\n/aimain group — своя группа\n/aimain me — только старосты\n"
+        "/aimain gemini — все на Gemini\n\nКто сколько ответил — в /status.", parse_mode="HTML")
+
+
 @router.message(Command("aitest"))
 async def cmd_aitest(message: Message):
     """Выбор модели ИИ для других групп (ai_bench.py) — только староста:
@@ -72,7 +94,7 @@ async def cmd_aitest(message: Message):
     from config import OPENROUTER_API_KEY
     if not OPENROUTER_API_KEY:
         await message.answer("Нужен ключ OpenRouter: openrouter.ai → Credits (пополнить), Keys → Create, "
-                             "и задать OPENROUTER_API_KEY в переменных Railway.")
+                             "и задать OPENROUTER_API_KEY в переменных хостинга.")
         return
     import ai_bench
     from webapp.routes.aitest import link
