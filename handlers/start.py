@@ -70,8 +70,9 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     чате). Само «/start file_…» стираем, чтобы чат не зарастал. Просто
     /start без параметра идёт в обычный cmd_start ниже."""
     user = message.from_user
-    await upsert_user(user.id, user.username or "", user.full_name or "")
     payload = command.args or ""
+    existed = payload.startswith("ref_") and await get_user(user.id) is not None
+    await upsert_user(user.id, user.username or "", user.full_name or "")
     if payload.startswith(("file_", "hw_")):
         is_file = payload.startswith("file_")
         key = payload.split("_", 1)[1]
@@ -87,6 +88,9 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     if payload.startswith("login_"):            # вход в приложение без Telegram (webapp/routes/auth.py)
         await ask_login(message, payload[6:])
         return
+    if payload.startswith("ref_"):              # пришёл по приглашению друга (referrals.py)
+        import referrals
+        await referrals.bind(user.id, payload[4:], was_new=not existed)
     if payload == "site":                       # кнопка «Открыть бота» на сайте /about — для /stats
         import stats
         await stats.track(user.id, "from_site")

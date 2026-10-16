@@ -460,6 +460,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(purge_events,            "cron", hour=4, minute=20)
     import privacy                             # 152-ФЗ: год без заходов — данные стираются
     scheduler.add_job(privacy.purge,           "cron", hour=4, minute=25)
+    import referrals                           # «пригласи друга»: друг пользуется — обоим дни подписки
+    scheduler.add_job(referrals.check_all,     "cron", hour=12, minute=17, args=[bot])
     import health
     scheduler.add_job(health.alert_errors,     "interval", minutes=15, args=[bot])   # всплеск ошибок — старосте
     import stats

@@ -14,27 +14,45 @@ NAMES = {OWN: "своя группа", SUB: "подписка", BASE: "база"
 
 
 async def plan_of(user_id: int) -> str:
-    import config
+    """Своя группа важнее подписки: у своей ИИ без дневного лимита, а
+    подписка дала бы AI_SUB_DAILY (своим ничего не урезаем)."""
     import groups
-    from database import get_subscription, get_user_group
-    from utils import today_msk
-    if config.is_starosta(user_id):
+    if await _own(user_id):
         return OWN
-    until = await get_subscription(user_id)
-    if until and until >= today_msk().isoformat():
+    if await has_plus(user_id):
         return SUB
     if not groups.home_id():
         return OWN          # копия бота на одну группу (ICAL_URL без id) — тарифов нет
+    return BASE
+
+
+async def has_plus(user_id: int) -> bool:
+    """Оплачена ли «Капибара+» (или подарена бонусом) — для платных мелочей:
+    иконки и скины «по подписке», значок. Своей группе ИИ и так бесплатно."""
+    from database import get_subscription
+    from utils import today_msk
+    until = await get_subscription(user_id)
+    return bool(until and until >= today_msk().isoformat())
+
+
+async def _own(user_id: int) -> bool:
+    import config
+    import groups
+    from database import get_user_group
+    if config.is_starosta(user_id):
+        return True
+    if not groups.home_id():
+        return False
     import members
     member = await members.known(user_id)
     if member:              # в чате своей группы — своя, какую бы группу ни выбрал (владелец 09.10)
-        return OWN
+        return True
     gid = await get_user_group(user_id)
     if gid and gid == groups.home_id():
-        return BASE if member is False else OWN
+        return member is not False
     if gid:
         from database import get_group
         g = await get_group(gid)
         if g and g["own"]:
-            return OWN
-    return BASE
+            return True
+    return False
