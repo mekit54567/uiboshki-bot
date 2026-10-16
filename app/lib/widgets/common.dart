@@ -2,7 +2,9 @@
 // плашка-сообщение и листы-вопросы.
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -32,43 +34,38 @@ class Backdrop extends StatelessWidget {
   final Color? tint;
   const Backdrop({super.key, required this.child, this.tint});
 
+  /// В браузере фон — одна готовая картинка, а не три заливки на весь экран
+  /// каждый кадр (Никита 17.10: PWA на iPhone листается рывками; без
+  /// подсветок кадр при прокрутке вдвое легче). Тесты включают сами.
+  static bool cheap = kIsWeb;
+
+  static List<RadialGradient> glows(Palette p, Color? tint) => [
+        RadialGradient(
+          center: const Alignment(-0.6, -1.1),
+          radius: 1.2,
+          colors: [(tint ?? p.glow1).withValues(alpha: p.dark ? 0.85 : 0.6), p.bg.withValues(alpha: 0)],
+        ),
+        RadialGradient(
+          center: const Alignment(-1, 1.2),
+          radius: 1.1,
+          colors: [p.glow2.withValues(alpha: p.dark ? 0.8 : 0.5), p.bg.withValues(alpha: 0)],
+        ),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
     final paper = !p.dark && s.look.light == LightTheme.notebook ? s.look.paper : Paper.smooth;
+    final g = glows(p, tint);
     return DecoratedBox(
-      decoration: BoxDecoration(color: p.bg),
+      decoration: BoxDecoration(color: cheap ? null : p.bg),
       child: Stack(
         children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-0.6, -1.1),
-                  radius: 1.2,
-                  colors: [
-                    (tint ?? p.glow1).withValues(alpha: p.dark ? 0.85 : 0.6),
-                    p.bg.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-1, 1.2),
-                  radius: 1.1,
-                  colors: [
-                    p.glow2.withValues(alpha: p.dark ? 0.8 : 0.5),
-                    p.bg.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          if (cheap)
+            Positioned.fill(child: _GlowImage(bg: p.bg, glows: g))
+          else
+            for (final gradient in g) Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: gradient))),
           if (paper != Paper.smooth)
             Positioned.fill(
               child: IgnorePointer(child: CustomPaint(painter: PaperPainter(paper, p.text))),
@@ -77,6 +74,61 @@ class Backdrop extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Фон с подсветками, нарисованный один раз в маленькую картинку (1/8 —
+/// подсветки плавные, растянутая картинка не отличается) и растянутый на экран.
+/// Пока картинка готовится — просто цвет темы.
+class _GlowImage extends StatefulWidget {
+  final Color bg;
+  final List<RadialGradient> glows;
+  const _GlowImage({required this.bg, required this.glows});
+
+  @override
+  State<_GlowImage> createState() => _GlowImageState();
+}
+
+class _GlowImageState extends State<_GlowImage> {
+  static const scale = 8;
+  // готовые фоны — общие для всех экранов (картинки крошечные: 1/8 экрана)
+  static final _cache = <Object, ui.Image>{};
+  static final _making = <Object, Future<ui.Image>>{};
+
+  static Future<ui.Image> _make(Size size, Color bg, List<RadialGradient> glows, Object key) =>
+      _making[key] ??= () async {
+        final w = math.max(1, (size.width / scale).ceil()), h = math.max(1, (size.height / scale).ceil());
+        final rect = Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble());
+        final rec = ui.PictureRecorder();
+        final c = Canvas(rec, rect);
+        c.drawRect(rect, Paint()..color = bg);
+        for (final g in glows) {
+          c.drawRect(rect, Paint()..shader = g.createShader(rect));
+        }
+        final pic = rec.endRecording();
+        final img = await pic.toImage(w, h);
+        pic.dispose();
+        if (_cache.length >= 12) _cache.remove(_cache.keys.first);
+        _making.remove(key);
+        return _cache[key] = img;
+      }();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, box) {
+      final size = box.biggest;
+      if (!size.isFinite) return ColoredBox(color: widget.bg);
+      // размер — с шагом 32 px: клавиатура и поворот не перерисовывают на каждый пиксель
+      final key = (widget.bg, Object.hashAll(widget.glows), (size.width / 32).ceil(), (size.height / 32).ceil());
+      final img = _cache[key];
+      if (img == null) {
+        _make(size, widget.bg, widget.glows, key).then((_) {
+          if (mounted) setState(() {});
+        });
+        return ColoredBox(color: widget.bg);
+      }
+      return RawImage(image: img, fit: BoxFit.fill, filterQuality: FilterQuality.low);
+    });
   }
 }
 

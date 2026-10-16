@@ -23,9 +23,27 @@
   <title>Капибара — учёба МИРЭА</title>
   <!-- тот же манифест, что у прежней PWA: id /app — установленная PWA остаётся собой -->
   <link rel="manifest" href="/manifest.webmanifest">
-  <style>html, body { margin: 0; background: #0f1115; }</style>
+  <style>
+    html, body { margin: 0; background: #141823; }
+    @media (prefers-color-scheme: light) { html, body { background: #e9e3d8; } }
+  </style>
 </head>
 <body>
+  <script id="uib-history">
+    // iPhone, PWA с экрана «Домой» (Никита 17.10, видео): свайп от левого края —
+    // это «назад» браузера, iOS листает к снимку страницы, а потом экран
+    // секунды чёрный, пока Flutter заново рисует. Flutter кладёт каждый экран
+    // в историю браузера (pushState), отсюда и «назад». Здесь истории не
+    // заводим: свайп от края ловит сам Flutter (как в приложении с iPhone), а
+    // из системы «назад» некуда. Android и браузер — как было (кнопка «назад»).
+    (function () {
+      if (window.navigator.standalone === true && window.history) {
+        window.history.pushState = function (state, title, url) {
+          window.history.replaceState(state, title, url);
+        };
+      }
+    })();
+  </script>
   <script>
     // До запуска Flutter (shared_preferences в вебе — localStorage, ключи
     // «flutter.<имя>», значения — JSON):
@@ -108,6 +126,11 @@
       probe.style.cssText = "position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;" +
         "padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
       document.body.appendChild(probe);
+      // фон страницы = фон приложения (lib/web_safe_area.dart, paintPage)
+      window.uibPaint = function (c) {
+        document.documentElement.style.background = c;
+        document.body.style.background = c;
+      };
       window.uibInsets = function () {
         var s = getComputedStyle(probe);
         return [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].map(parseFloat).join(",");
