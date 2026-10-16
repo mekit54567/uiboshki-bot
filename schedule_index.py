@@ -24,11 +24,10 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import aiosqlite
 import httpx
 
-import database
 from config import TIMEZONE
+from database import _conn
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +61,7 @@ async def _ensure_tables(db):
 
 
 async def _get_state(key: str) -> str | None:
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         cur = await db.execute("SELECT value FROM schedule_index_state WHERE key=?", (key,))
         row = await cur.fetchone()
@@ -70,7 +69,7 @@ async def _get_state(key: str) -> str | None:
 
 
 async def _set_state(key: str, value: str):
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         await db.execute("INSERT OR REPLACE INTO schedule_index_state (key, value) VALUES (?, ?)", (key, value))
         await db.commit()
@@ -97,7 +96,7 @@ async def fetch_title(client: httpx.AsyncClient, target_type: int, target_id: in
 async def _save(rows: list[tuple[int, int, str]]):
     if not rows:
         return
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         await db.executemany(
             "INSERT OR REPLACE INTO schedule_targets (type, id, title, title_lc) VALUES (?, ?, ?, ?)",
@@ -185,7 +184,7 @@ async def is_ready() -> bool:
 
 
 async def count() -> int:
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         cur = await db.execute("SELECT COUNT(*) FROM schedule_targets")
         return (await cur.fetchone())[0]
@@ -205,7 +204,7 @@ async def search(query: str, types: tuple[int, ...] = TYPES, limit: int = 20) ->
     min_year = datetime.now(ZoneInfo(TIMEZONE)).year % 100 - GROUP_MAX_AGE_YEARS
     group_year = "CAST(substr(title, -2) AS INTEGER)"
     has_year = "(type = 1 AND title GLOB '*-[0-9][0-9]')"
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         cur = await db.execute(
             f"""SELECT type, id, title FROM schedule_targets
@@ -221,7 +220,7 @@ async def search(query: str, types: tuple[int, ...] = TYPES, limit: int = 20) ->
 
 
 async def get_title(target_type: int, target_id: int) -> str | None:
-    async with aiosqlite.connect(database.DATABASE_PATH) as db:
+    async with _conn.connect() as db:
         await _ensure_tables(db)
         cur = await db.execute("SELECT title FROM schedule_targets WHERE type=? AND id=?", (target_type, target_id))
         row = await cur.fetchone()
