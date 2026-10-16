@@ -161,6 +161,24 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
 
 
 @pytest.mark.asyncio
+async def test_rank_bonus_waits_for_server_achievements(db, monkeypatch):
+    import sys
+    import types
+    closed = {"v": False}
+
+    async def rank_closed(uid, rank):
+        return closed["v"]
+    monkeypatch.setitem(sys.modules, "achievements", types.SimpleNamespace(rank_closed=rank_closed))
+    await db.upsert_user(ME, "", "u")
+    await _events(db.DATABASE_PATH, ME, 1)
+    with pytest.raises(referrals.BonusError) as e:
+        await referrals.claim_rank(ME, "dawn")
+    assert "уже" not in str(e.value) and "нет такого" not in str(e.value)   # приложение спросит снова
+    closed["v"] = True
+    assert (await referrals.claim_rank(ME, "dawn"))["days"] == 3
+
+
+@pytest.mark.asyncio
 async def test_invite_friend(db, monkeypatch):
     from database.billing import ref_code
     await db.upsert_user(ME, "", "u")

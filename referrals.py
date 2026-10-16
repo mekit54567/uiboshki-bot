@@ -1,8 +1,9 @@
 """Бонусные дни «Капибары+»: за закрытый ранг ачивок и «пригласи друга».
 
-Ранги (app/lib/achievements): ачивки пока живут на телефоне, сервер им на
-слово не верит — кроме «закрыл ранг» проверяет и настоящие дни с заходами
-(события stats.py). Каждый ранг — один раз на аккаунт.
+Ранги (app/lib/achievements): сервер приложению на слово не верит —
+проверяет настоящие дни с заходами (события stats.py), а когда ачивки
+хранятся на сервере (achievements.py, 5.91), — и что все ачивки ранга
+открыты. Каждый ранг — один раз на аккаунт.
 
 Приглашение: ссылка t.me/<бот>?start=ref_<код> (или /app?ref=<код>).
 Засчитывается только новому человеку (пришёл по ссылке впервые) и только
@@ -72,10 +73,22 @@ async def claim_rank(uid: int, rank: str) -> dict:
     if have < need:
         raise BonusError(f"для ранга «{RANK_TITLES[rank]}» нужно заходить хотя бы {need} разных дней "
                          f"(сейчас {have})")
+    if not await _rank_closed(uid, rank):
+        # без «уже»: приложение спросит ещё раз, когда отправит ачивки
+        raise BonusError(f"сервер пока не видит закрытый ранг «{RANK_TITLES[rank]}» — проверим позже")
     if not await add_bonus(uid, "rank", rank, days):
         raise BonusError("бонус за этот ранг уже получен")
     until = await billing.grant(uid, days, f"rank:{rank}")
     return {"days": days, "until": until}
+
+
+async def _rank_closed(uid: int, rank: str) -> bool:
+    """Ачивки на сервере (5.91) — все ачивки ранга открыты; без них — верим дням."""
+    try:
+        import achievements
+    except ImportError:
+        return True
+    return await achievements.rank_closed(uid, rank)
 
 
 async def link(uid: int) -> str:
