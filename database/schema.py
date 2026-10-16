@@ -131,6 +131,14 @@ async def init_db():
                 PRIMARY KEY (provider, subject)
             )
         """)
+        # Вход через Apple (apple_signin.py): refresh-токен Apple — только
+        # шифровкой, чтобы отозвать его при удалении аккаунта (требование Apple).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS apple_tokens (
+                user_id    INTEGER PRIMARY KEY,
+                token      TEXT NOT NULL
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS oauth_states (
                 state      TEXT PRIMARY KEY,

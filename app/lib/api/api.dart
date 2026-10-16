@@ -272,13 +272,21 @@ class Api {
   /// Какие входы кроме Telegram есть на сервере: [(id, название)].
   Future<List<({String id, String name})>> providers() async => (await loginOptions()).items;
 
-  /// То же + code: есть ли вход по коду для проверяющих магазинов (review_demo.py).
-  Future<({List<({String id, String name})> items, bool code})> loginOptions() async {
+  /// То же + code: есть ли вход по коду для проверяющих магазинов (review_demo.py),
+  /// apple: вход через Apple (apple_signin.py, только iPhone-приложение).
+  Future<({List<({String id, String name})> items, bool code, bool apple})> loginOptions() async {
     final r = await get('/auth/providers');
     return (
       items: [for (final p in r['items'] as List) (id: p['id'] as String, name: p['name'] as String)],
       code: r['code'] == true,
+      apple: r['apple'] == true,
     );
+  }
+
+  /// Вход через Apple: токен от системы → сессия.
+  Future<void> appleLogin({required String idToken, String code = '', String nonce = '', String name = ''}) async {
+    final r = await post('/auth/apple', {'id_token': idToken, 'code': code, 'nonce': nonce, 'name': name});
+    await saveToken(r['token'] as String);
   }
 
   /// Вход по коду доступа (демо-аккаунт для проверки в App Store / RuStore).

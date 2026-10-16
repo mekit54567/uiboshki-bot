@@ -46,6 +46,7 @@
  "GET /api/week",
  "PATCH /api/deadlines/{deadline_id}",
  "PATCH /api/files/{file_id}",
+ "POST /api/auth/apple",
  "POST /api/auth/logout",
  "POST /api/auth/poll",
  "POST /api/auth/review",

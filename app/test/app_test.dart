@@ -80,6 +80,68 @@ void main() {
     expect(api.token, 'rv.demo');
   });
 
+  testWidgets('вход через Apple: токен системы → сессия, отмена — без ошибки', (t) async {
+    phone(t);
+    final bodies = <String, Object?>{};
+    final api = fakeApi(
+      token: null,
+      bodies: bodies,
+      overrides: {
+        'GET /api/auth/providers': {'items': [], 'apple': true},
+      },
+    );
+    String? sentNonce;
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: LoginScreen(
+            api: api,
+            onDone: () {},
+            appleDevice: true,
+            appleAuth: (nonce) async {
+              sentNonce = nonce;
+              return (idToken: 'jwt', code: 'c-1', name: 'Аня Петрова');
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.byKey(const Key('login-apple')));
+    await settle(t);
+    final body = bodies['POST /api/auth/apple'] as Map;
+    expect(body['id_token'], 'jwt');
+    expect(body['nonce'], sentNonce);
+    expect(sentNonce!.length, 32);
+    expect(api.token, 'apple-tok');
+  });
+
+  testWidgets('кнопки Apple нет без ключей на сервере и не на iPhone', (t) async {
+    phone(t);
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: LoginScreen(
+            api: fakeApi(
+              token: null,
+              overrides: {
+                'GET /api/auth/providers': {'items': [], 'apple': true},
+              },
+            ),
+            onDone: () {},
+            appleDevice: false,
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.byKey(const Key('login-apple')), findsNothing);
+  });
+
   test('вход через бота отдаёт число для проверки в Telegram (как у Google)', () async {
     final r = await fakeApi(token: null).startLogin();
     expect(r.code, 'abc');
