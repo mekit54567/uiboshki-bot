@@ -135,6 +135,10 @@ async def test_api_plus_and_ios(db, client, robokassa):  # noqa: F811
     assert "МИРЭА" in d["invite"]["share_text"]
     ios = c.get("/api/plus", headers={**h, "X-App": "ios"}).json()
     assert ios == {"hidden": True}                                            # App Store: ни цен, ни «купить»
+    inv = c.get("/api/invite", headers={**h, "X-App": "ios"}).json()
+    assert inv["link"] == d["invite"]["link"] and "bonus_days" not in inv     # позвать — можно, про подписку — нет
+    assert inv["tg_share"].startswith("https://t.me/share/url?url=https%3A%2F%2Ft.me%2F")
+    assert c.get("/api/invite", headers=h).json()["bonus_days"] == referrals.REF_BONUS
 
 
 @pytest.mark.asyncio

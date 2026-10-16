@@ -39,6 +39,19 @@ async def api_plus(user: dict = CurrentUser, x_app: str = Header(default="")):
     return st
 
 
+@router.get("/api/invite")
+async def api_invite(user: dict = CurrentUser, x_app: str = Header(default="")):
+    """«Позвать друга»: готовый текст, картинка и личная ссылка — на всех
+    платформах; про дни подписки — только не в iOS-сборке."""
+    import referrals
+    d = await referrals.summary(user["id"])
+    out = {"link": d["link"], "share_text": d["share_text"], "share_image": d["share_image"],
+           "tg_share": referrals.tg_share_url(d["link"])}
+    if x_app != "ios":
+        out.update({k: d[k] for k in ("came", "rewarded", "bonus_days", "friend_days")})
+    return out
+
+
 class RankBody(BaseModel):
     rank: str
 

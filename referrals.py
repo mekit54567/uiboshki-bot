@@ -46,6 +46,12 @@ def share_button() -> str:
     return SHARE_BUTTON.format(name=NAME)
 
 
+def tg_share_url(link: str) -> str:
+    """t.me/share/url: Telegram сам предложит выбрать чат, сообщение уже готово."""
+    from urllib.parse import urlencode
+    return "https://t.me/share/url?" + urlencode({"url": link, "text": share_text()})
+
+
 def share_image() -> str:
     import billing
     return f"{billing.site()}/site/og.jpg"

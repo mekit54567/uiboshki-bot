@@ -19,6 +19,7 @@
  "GET /api/files/{file_id}/page/{page}",
  "GET /api/groups/search",
  "GET /api/homework",
+ "GET /api/invite",
  "GET /api/lecture-search",
  "GET /api/legal/{name}",
  "GET /api/lesson/groups",
