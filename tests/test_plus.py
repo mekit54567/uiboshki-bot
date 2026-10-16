@@ -102,6 +102,7 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
     st = await billing.status(ME)
     assert st["active"] and not st["founder"]
     assert c.get(f"/plus/state?k={key}").json()["active"]
+    assert c.get("/api/me", headers=_headers_for(ME)).json()["plus"] is True
     assert "Оферта" in c.get("/offer").text
 
 
