@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'achievements/store.dart';
 import 'achievements/ui.dart' show appNavigator;
 import 'api/api.dart';
+import 'plus/plus.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
 import 'theme/app_icon.dart';
@@ -25,6 +26,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final api = Api();
   await api.load();
+  if (kIsWeb) await PlusBonus.rememberRef(); // PWA: /app?ref=<код> — кто позвал
   final prefs = await SharedPreferences.getInstance();
   runApp(
     UiboApp(
