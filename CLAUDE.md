@@ -140,18 +140,20 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
   до применения. Догадки без примеров уже ошибались.
 
 ## Деплой
-`mekit54567/uiboshki-bot` (main) → форк **`Deployac/uiboshki-bot`** → Railway
-(деплой из форка). После мержа владелец жмёт в форке **Sync fork → Update
-branch** (в приложении GitHub на iOS такой кнопки нет — только в браузере).
-WebApp: `https://www.uiboshki.ru` (старый адрес `https://uiboshki-bot-production.up.railway.app` тоже работает), живёт в процессе
-бота (FastAPI + uvicorn, `webapp/server.py`, `bot.start_webapp`).
+С 16.10 бот живёт на **Amvera** (Москва_1, проект `kapibara-stud`): Amvera
+сама собирает и деплоит из `mekit54567/uiboshki-bot` (main) — Sync fork больше
+не нужен, после мержа бывает 2–3 сборки подряд (коммиты Actions в main).
+Railway остановлен (деплой удалён, сервис и переменные — запас на неделю),
+форк `Deployac/uiboshki-bot` пока не удалять. Переменные — в настройках
+проекта Amvera. Перенос базы — `/backup` на старом → `/restore` на новом.
+WebApp: `https://www.uiboshki.ru`, живёт в процессе бота (FastAPI + uvicorn,
+`webapp/server.py`, `bot.start_webapp`); запасной адрес Amvera —
+`kapibara-stud-partyk.msk1.amvera.tech` (с VPN «всё, кроме РФ» не
+открывается — .tech идёт через VPN).
 Домен `uiboshki.ru` (reg.ru, NS — Cloudflare, бесплатный тариф): CNAME `www` →
-**`uiboshki-bot-production.up.railway.app`** (серое облако), а не цель, которую
-предлагает Railway (`9rht1rl3.up.railway.app` = 69.46.46.125 — из России не
-открывается, 06.10 проверено у владельца; .5 под старым адресом открывается и
-отдаёт и www). TXT `_railway-verify.www` — подтверждение Railway. Корень `@` —
-A 192.0.2.1 с оранжевым облаком + Redirect Rule корень → www (на тарифе Railway
-один свой домен). Сайт и приложение только через серое облако: Cloudflare-прокси
+`edge.msk1.amvera.tech` (серое облако) + TXT `_amvera.www`, сертификат
+выдаёт Amvera. Корень `@` — A 192.0.2.1 с оранжевым облаком + Redirect Rule
+корень → www. Сайт и приложение только через серое облако: Cloudflare-прокси
 в России тормозят.
 
 Переменные окружения (см. `config.py`): `GROUP_NAME`, `BOT_USERNAME`,

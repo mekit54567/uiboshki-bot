@@ -359,3 +359,48 @@ def test_final_mark_without_words_when_digit():
     assert sf("Зачтено (5)") == "Зачтено (5)"      # не оценка экзамена — не трогаем
     rep = sdo_grades.parse_report(REPORT.replace(">Не зачтено<", ">2 (неудовлетворительно)<", 1))
     assert sdo_grades.summarize(rep, "Анализ данных_Экзамен")["final"] == "2"
+
+
+@pytest.mark.asyncio
+async def test_overview_retry_partial_and_dedup(monkeypatch):
+    """16.10 (Amvera): не открывшийся журнал пробуем ещё раз; неполный список
+    не кладём в кэш; одновременные запросы одного человека — один обход."""
+    import asyncio
+    import contextlib
+    import sdo_files
+    sdo_grades._cache.clear()
+    courses = [{"id": i, "name": f"Курс {i} [I.26-27]", "title": f"Курс {i}"} for i in (1, 2, 3)]
+    calls, broken = [], {2: 1, 3: 99}          # курс 2 падает один раз, курс 3 — всегда
+
+    @contextlib.asynccontextmanager
+    async def client(cookie):
+        yield None
+
+    async def listing(c):
+        calls.append("list")
+        await asyncio.sleep(0.01)
+        return courses
+
+    async def report(c, cid):
+        if broken.get(cid, 0) > 0:
+            broken[cid] -= 1
+            raise httpx.ConnectTimeout("нет")
+        return sdo_grades.parse_report(REPORT)
+
+    monkeypatch.setattr(sdo_files, "make_client", client)
+    monkeypatch.setattr(sdo_grades, "this_semester_courses", listing)
+    monkeypatch.setattr(sdo_grades, "_report", report)
+
+    a, b = await asyncio.gather(sdo_grades.overview(7, "k"), sdo_grades.overview(7, "k"))
+    assert calls == ["list"] and a is b                         # один обход на двоих
+    assert [x["id"] for x in a["courses"]] == [1, 2]            # 2 — со второй попытки
+    assert ("all", 7) not in sdo_grades._cache                  # 3 не открылся — не запоминаем
+
+    broken[3] = 0
+    full = await sdo_grades.overview(7, "k")
+    assert len(full["courses"]) == 3 and ("all", 7) in sdo_grades._cache
+
+    sdo_grades._cache.clear()
+    broken.update({1: 99, 2: 99, 3: 99})
+    with pytest.raises(httpx.HTTPError):                        # ничего — «СДО не отвечает»
+        await sdo_grades.overview(7, "k")

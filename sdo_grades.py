@@ -474,26 +474,59 @@ async def this_semester_courses(client: httpx.AsyncClient) -> list[dict]:
     return out
 
 
+_inflight: dict[int, asyncio.Future] = {}
+
+
 async def overview(user_id: int, cookie: str, fresh: bool = False) -> dict:
-    """Все предметы семестра со сводкой баллов. Кэш на 10 минут."""
+    """Все предметы семестра со сводкой баллов. Кэш на 10 минут.
+
+    16.10 (Amvera): приложение на старте спрашивало баллы трижды разом — 12
+    соединений к СДО, часть не открылась, и неполный список (4 предмета)
+    лёг в кэш на 10 минут. Теперь одновременные запросы одного человека
+    ждут один общий, а не открывшийся предмет пробуем ещё раз; не вышло —
+    отдаём что есть, но в кэш не кладём."""
     key = ("all", user_id)
     if not fresh and (hit := _cached(key)):
         return hit
+    if (running := _inflight.get(user_id)) is not None:
+        return await asyncio.shield(running)
+    fut = asyncio.get_running_loop().create_future()
+    _inflight[user_id] = fut
+    try:
+        result = await _overview(user_id, cookie, fresh)
+    except asyncio.CancelledError:
+        fut.cancel()
+        raise
+    except Exception as e:
+        fut.set_exception(e)
+        fut.exception()                # чтобы без ждущих не было «exception never retrieved»
+        raise
+    else:
+        fut.set_result(result)
+        return result
+    finally:
+        _inflight.pop(user_id, None)
+
+
+async def _overview(user_id: int, cookie: str, fresh: bool) -> dict:
+    key = ("all", user_id)
     if fresh:                  # «обновить» — и экраны предметов тоже, иначе там до 10 минут старое
         for k in [k for k in _cache if k[0] == "detail" and k[1] == user_id]:
             _cache.pop(k, None)
     from sdo_files import make_client
+    failed = object()
     async with make_client(cookie) as client:
         courses = await this_semester_courses(client)
         sem = asyncio.Semaphore(4)
 
-        async def one(c):
+        async def one(c, retry=False):
             async with sem:
                 try:
                     rep = await _report(client, c["id"])
                 except httpx.HTTPError as e:
-                    logger.info(f"Баллы СДО: курс {c['id']} не открылся: {type(e).__name__}")
-                    return None
+                    logger.info(f"Баллы СДО: курс {c['id']} не открылся{' (повтор)' if retry else ''}: "
+                                f"{type(e).__name__}")
+                    return failed
             s = summarize(rep, c["name"])
             if not s["categories"] and not s["works"]:
                 return None      # курс без журнала БРС («Учебный отдел» и т.п.)
@@ -501,9 +534,19 @@ async def overview(user_id: int, cookie: str, fresh: bool = False) -> dict:
             _store(("course", user_id, c["id"]), (c, s))
             return dict(s, id=c["id"], name=c["name"], title=c["title"])
 
-        items = [x for x in await asyncio.gather(*(one(c) for c in courses)) if x]
+        got = list(await asyncio.gather(*(one(c) for c in courses)))
+        for i, c in enumerate(courses):           # повтор по одному, не залпом
+            if got[i] is failed:
+                got[i] = await one(c, retry=True)
+    partial = any(x is failed for x in got)
+    items = [x for x in got if x and x is not failed]
     items.sort(key=lambda x: (x["closed"], x["need"] if not x["closed"] else -x["score"]))
-    return _store(key, {"courses": items, "updated": int(time.time())})
+    data = {"courses": items, "updated": int(time.time())}
+    if partial:
+        if not items:          # ни одного предмета — это «СДО не отвечает», а не пустой семестр
+            raise httpx.ConnectError("СДО не отдал ни одного журнала")
+        return data            # неполный список — показать, но не запоминать
+    return _store(key, data)
 
 
 async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
