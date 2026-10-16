@@ -17,8 +17,8 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1"
-DATE = "11.10.2026"
+VERSION = "2"                  # 16.10: Amvera и «Капибара+» (касса, чек, приглашения)
+DATE = "16.10.2026"
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
 

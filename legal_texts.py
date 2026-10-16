@@ -46,7 +46,7 @@ CONSENT = {
             "Telegram FZ-LLC (ОАЭ) — доставка сообщений бота;",
             "Telegram FZ-LLC (ОАЭ) — хранение ночной резервной копии базы у оператора;",
             "РТУ МИРЭА (СДО) — запросы от моего имени по моей куке, если я подключил СДО;",
-            "ООО НКО «ЮMoney» (ЮKassa, Россия) или ООО «Робокасса» (Россия) — при оплате подписки: "
+            "{PAYMENT} — при оплате подписки: "
             "номер и сумма платежа; данные карты я ввожу на их странице, сервису они не передаются;",
             "ФНС России («Мой налог») — чек об оплате подписки, без моих данных, кроме суммы.",
         ], "Я понимаю, что это трансграничная передача, в том числе в страны, которые не "
@@ -120,7 +120,7 @@ PRIVACY = {
             "Apple, Google, Mozilla — доставка пушей; содержимое пуша зашифровано, им видно только "
             "адрес устройства;",
             "VK и Яндекс — только если входишь через них;",
-            "ООО НКО «ЮMoney» (ЮKassa) или ООО «Робокасса» (Россия) — когда оплачиваешь подписку: "
+            "{PAYMENT} — когда оплачиваешь подписку: "
             "номер и сумма платежа; карту вводишь у них, нам её данные не приходят;",
             "ФНС России («Мой налог») — чек об оплате, без твоих данных, кроме суммы;",
             "СДО МИРЭА — запросы от твоего имени по твоей куке.",
@@ -161,12 +161,19 @@ from offer_text import OFFER  # noqa: E402 — оферта подписки, с
 DOCS = {"consent": CONSENT, "privacy": PRIVACY, "offer": OFFER}
 
 
+def payment_names() -> str:
+    """Касса, которая правда включена (billing.provider); не включена — обе возможные."""
+    import billing
+    names = {"yookassa": "ООО НКО «ЮMoney» (ЮKassa, Россия)", "robokassa": "ООО «Робокасса» (Россия)"}
+    return names.get(billing.provider(configured_only=True)) or " или ".join(names.values())
+
+
 def doc(name: str) -> dict:
     """Текст с подстановками — для страницы и для /api/legal/<имя>."""
     import privacy
     values = {"OPERATOR": privacy.OPERATOR, "CONTACT": privacy.CONTACT,
               "INACTIVE_DAYS": str(privacy.INACTIVE_DAYS), "SOLVER_DAYS": str(privacy.SOLVER_DAYS),
-              "ANSWER_DAYS": str(privacy.ANSWER_DAYS)}
+              "ANSWER_DAYS": str(privacy.ANSWER_DAYS), "PAYMENT": payment_names()}
 
     def fill(text: str) -> str:
         for k, v in values.items():

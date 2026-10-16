@@ -22,6 +22,9 @@ def robokassa(monkeypatch):
     monkeypatch.setattr(billing, "ROBOKASSA_PASS1", "p1")
     monkeypatch.setattr(billing, "ROBOKASSA_PASS2", "p2")
     monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "")
+    import privacy
+    for k, v in (("FIO", "Иванов Никита"), ("INN", "123456789012"), ("EMAIL", "a@b.ru")):
+        monkeypatch.setattr(privacy, k, v)
 
 
 def _today(monkeypatch, d: date):
@@ -214,3 +217,44 @@ async def test_erase_keeps_payments_without_person(db):
         row = await (await conn.execute("SELECT payer_id, amount FROM payments")).fetchone()
     assert row == (None, 249)                                                 # налоговый учёт — без человека
     assert await get_referral(FRIEND) is None
+
+
+def test_no_requisites_no_payment(monkeypatch, robokassa):
+    import legal_texts
+    import privacy
+    assert billing.provider() == "robokassa"
+    assert "Робокасса" in str(legal_texts.doc("privacy")) and "ЮKassa" not in str(legal_texts.doc("privacy"))
+    monkeypatch.setattr(privacy, "INN", "")                                   # оферта без ИНН — оплату не открываем
+    assert billing.provider() == "" and billing.provider(configured_only=True) == "robokassa"
+    assert billing.missing_requisites() == ["PD_INN"]
+
+
+@pytest.mark.asyncio
+async def test_yookassa_metadata_without_person(db, monkeypatch, robokassa):
+    """152-ФЗ: у кассы не должно оставаться id человека — связь только в payments."""
+    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "key")
+    sent = {}
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id": "yk-9", "confirmation": {"confirmation_url": "https://yoomoney.ru/pay"}}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def post(self, url, json, headers):
+            sent.update(json)
+            return Resp()
+
+    monkeypatch.setattr(billing, "_yk_client", lambda: Client())
+    await db.upsert_user(ME, "", "u")
+    assert await billing.create(ME, "month", "https://x/done") == "https://yoomoney.ru/pay"
+    assert str(ME) not in str(sent) and sent["metadata"] == {"plan": "month"}

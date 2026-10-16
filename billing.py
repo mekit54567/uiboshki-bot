@@ -49,13 +49,20 @@ YOOKASSA_API = "https://api.yookassa.ru/v3"
 ROBOKASSA_URL = "https://auth.robokassa.ru/Merchant/Index.aspx"
 
 
-def provider() -> str:
-    """Какая касса подключена: 'yookassa', 'robokassa' или ''."""
-    if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY:
-        return "yookassa"
-    if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2:
-        return "robokassa"
-    return ""
+def provider(configured_only: bool = False) -> str:
+    """Какая касса подключена: 'yookassa', 'robokassa' или ''. Пока нет
+    реквизитов исполнителя (PD_FIO, PD_INN, PD_EMAIL) — оферта без них, для
+    самозанятого так нельзя: оплата закрыта (configured_only — какая задана)."""
+    kind = ("yookassa" if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY else
+            "robokassa" if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2 else "")
+    if configured_only or not kind:
+        return kind
+    return "" if missing_requisites() else kind
+
+
+def missing_requisites() -> list[str]:
+    import privacy
+    return [k for k in privacy.operator_missing() if k != "PD_CITY"]
 
 
 def site() -> str:
@@ -186,7 +193,7 @@ async def create(uid: int, plan: str, return_url: str) -> str:
     await add_payment(local, kind, uid, plan, price, days)
     body = {"amount": {"value": f"{price}.00", "currency": "RUB"}, "capture": True,
             "confirmation": {"type": "redirect", "return_url": return_url},
-            "description": title, "metadata": {"user_id": str(uid), "plan": plan}}
+            "description": title, "metadata": {"plan": plan}}    # без id человека (152-ФЗ): связь — в payments
     try:
         async with _yk_client() as c:
             r = await c.post(f"{YOOKASSA_API}/payments", json=body, headers={"Idempotence-Key": local})
