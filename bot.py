@@ -211,6 +211,7 @@ async def main():
     # первый обход ~полчаса, дальше продолжается с места остановки.
     import schedule_index
     index_task = asyncio.create_task(schedule_index.ensure_fresh())
+    lag_task = asyncio.create_task(health.watch_loop())     # «самое долгое зависание» в /status
 
     logger.info(f"🚀 Бот {GROUP_NAME} запущен!")
     try:
@@ -229,6 +230,7 @@ async def main():
         raise
     finally:
         index_task.cancel()
+        lag_task.cancel()
         await stop_webapp(webapp_server, webapp_task)
         scheduler.shutdown()
         await bot.session.close()

@@ -166,6 +166,47 @@ def version() -> str:
         return ""
 
 
+# Задержка цикла событий (16.10, Amvera: ответы бота по 45–146 с): раз в
+# секунду спим 1 с и смотрим, на сколько проснулись позже. Большая задержка —
+# цикл занят (тяжёлый код без to_thread или не хватает процессора), а не база.
+_LAGS: deque = deque(maxlen=3600)       # (когда, задержка, с) — за последний час
+LAG_WARN = 2.0
+
+
+async def watch_loop(period: float = 1.0):
+    import asyncio
+    while True:
+        t = time.monotonic()
+        await asyncio.sleep(period)
+        lag = time.monotonic() - t - period
+        _LAGS.append((time.time(), lag))
+        if lag >= LAG_WARN:
+            logging.getLogger(__name__).warning(f"бот завис на {lag:.1f} с (цикл событий занят)")
+
+
+def loop_lag(now: float | None = None) -> float:
+    """Самая большая задержка за последний час, с."""
+    now = now or time.time()
+    return max((lag for t, lag in _LAGS if now - t <= 3600), default=0.0)
+
+
+async def db_probe() -> tuple[str, float, float]:
+    """(режим журнала, чтение мс, запись мс) — свежим подключением, как у
+    обработчиков: открыть базу + прочитать, открыть + записать в settings."""
+    from database._conn import connect
+    t = time.monotonic()
+    async with connect() as db:
+        mode = (await (await db.execute("PRAGMA journal_mode")).fetchone())[0]
+        await (await db.execute("SELECT value FROM settings WHERE key='health:probe'")).fetchone()
+    read = (time.monotonic() - t) * 1000
+    t = time.monotonic()
+    async with connect() as db:
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('health:probe', ?)",
+                         (datetime.now(TZ).isoformat(),))
+        await db.commit()
+    return mode, read, (time.monotonic() - t) * 1000
+
+
 async def report() -> str:
     from config import SDO_SESSION_COOKIE
     from database import get_sdo_sessions
@@ -177,6 +218,16 @@ async def report() -> str:
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
+
+    lines.append("<b>Сервер</b>")
+    try:
+        mode, read, write = await db_probe()
+        warn = "⚠️ " if mode != "wal" or read > 300 or write > 300 else ""
+        lines.append(f"{warn}База: {mode}, чтение {read:.0f} мс, запись {write:.0f} мс")
+    except Exception as e:
+        lines.append(f"⚠️ база: {type(e).__name__}: {e}")
+    lag = loop_lag()
+    lines += [("⚠️ " if lag >= LAG_WARN else "") + f"Самое долгое зависание за час: {lag:.1f} с", ""]
 
     lines.append("<b>СДО</b>")
     if not SDO_SESSION_COOKIE:

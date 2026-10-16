@@ -240,7 +240,8 @@ async def open_index():
     как m — файлы и предметы берутся оттуда живыми."""
     import database
     from config import GEMINI_EMBED_DIMS
-    db = await aiosqlite.connect(index_path())
+    from database._conn import BUSY_SECONDS
+    db = await aiosqlite.connect(index_path(), timeout=BUSY_SECONDS)
     try:
         await _load_vec(db)
         await db.execute("ATTACH DATABASE ? AS m", (database.DATABASE_PATH,))
