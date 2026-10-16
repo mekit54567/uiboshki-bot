@@ -65,11 +65,14 @@ class AppIcon {
   static Map<String, String>? unlockForTest;
 
   /// Что видно в «Оформлении»: без праздничных и убранных; подписочные —
-  /// только подписчикам (купить в приложении нельзя — нечего и дразнить).
+  /// только подписчикам (купить в приложении нельзя — нечего и дразнить),
+  /// а на iPhone — никому: подписка куплена не через Apple (App Store, 3.1.1).
   static List<AppIcon> get choosable => [
     for (final i in values)
-      if (i.season == null && i.unlock != 'none' && (i.unlock != 'sub' || premium.value)) i,
+      if (i.season == null && i.unlock != 'none' && (i.unlock != 'sub' || (premium.value && !_ios))) i,
   ];
+
+  static bool get _ios => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   /// Открыта ли: [got] — открытые ачивки (AchStore.got).
   bool isOpen(Map<String, Object> got) {

@@ -1,5 +1,6 @@
 // Иконки за ачивки и подписку (5.91): закрытые видны в листе с замком и
 // подсказкой, ачивки — ещё и на сервере (не пропадают при смене телефона).
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -41,6 +42,11 @@ void main() {
     AppIcon.premium.value = true;
     expect(AppIcon.choosable.map((x) => x.name), contains('domes'));
     expect(i('domes').isOpen({}), isTrue);
+    // на iPhone подписочных нет совсем — подписка куплена не через Apple
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(AppIcon.choosable.map((x) => x.name), isNot(contains('domes')));
+    expect(AppIcon.choosable.map((x) => x.name), contains('kremlin'));
+    debugDefaultTargetPlatformOverride = null;
     expect(i('kremlin').howToOpen, 'Откроется, когда соберёшь все ачивки ранга «Рассвет»');
     expect(i('astronaut').howToOpen, 'Откроется ачивкой «Первый вопрос»');
   });
