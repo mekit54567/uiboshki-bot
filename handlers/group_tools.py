@@ -1,5 +1,5 @@
 """Группа: зам старосты (/setzam), рейтинг активности (/rating), здоровье
-бота (/status), проверка Пульса (/pulsecheck), сети (/netcheck), векторов (/embedtest) и статистика (/stats) — у старосты."""
+бота (/status), проверка Пульса (/pulsecheck, разведка — /pulseprobe), сети (/netcheck), векторов (/embedtest) и статистика (/stats) — у старосты."""
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -168,6 +168,24 @@ async def cmd_pulsecheck(message: Message):
         return
     import pulse_check
     await message.answer(pulse_check.text(await pulse_check.check()))
+
+
+@router.message(Command("pulseprobe"))
+async def cmd_pulseprobe(message: Message):
+    """Разведка Пульса архивом (pulse_probe.py): файлы приложения и, с
+    PULSE_COOKIE, свои ответы методов — только староста."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import pulse_probe
+    from aiogram.types import BufferedInputFile
+    wait = await message.answer("Собираю Пульс: файлы приложения и свои данные…")
+    try:
+        data, summary = await pulse_probe.probe()
+    except Exception as e:
+        await wait.edit_text(f"Не вышло: {type(e).__name__}: {esc(str(e))}")
+        return
+    await message.answer_document(BufferedInputFile(data, filename="pulse-probe.zip"), caption=summary)
+    await wait.delete()
 
 
 
