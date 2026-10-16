@@ -10,3 +10,12 @@ String insets() {
     return '';
   }
 }
+
+@JS('uibPaint')
+external void _paint(JSString color);
+
+void paint(String color) {
+  try {
+    _paint(color.toJS);
+  } catch (_) {}
+}
