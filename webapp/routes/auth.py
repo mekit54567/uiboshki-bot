@@ -60,6 +60,21 @@ class PollBody(BaseModel):
     code: str
 
 
+@router.post("/api/auth/review")
+async def auth_review(body: PollBody, request: Request):
+    """Демо-вход проверяющих App Store / RuStore по коду REVIEW_CODE
+    (review_demo.py): данные — запись стенда, не чьи-то настоящие."""
+    import ratelimit
+    import review_demo
+    if not review_demo.enabled():
+        raise HTTPException(404, "Вход по коду выключен")
+    if not ratelimit.allow("auth_review", _client_ip(request)):
+        raise HTTPException(429, "Слишком много попыток — подожди 10 минут")
+    if not review_demo.check_code(body.code[:64]):
+        raise HTTPException(403, "Неверный код")
+    return {"status": "ok", "token": await review_demo.login(_device(request))}
+
+
 @router.post("/api/auth/poll")
 async def auth_poll(body: PollBody, request: Request):
     from database.sessions import get_login, redeem_login
@@ -148,9 +163,12 @@ def _page(title: str, text: str, extra: str = "", status: int = 200):
 
 @router.get("/api/auth/providers")
 async def auth_providers():
-    """Каким ещё входом можно войти (есть ключи в Railway)."""
+    """Каким ещё входом можно войти (есть ключи на хостинге); code — вход по
+    коду для проверяющих магазинов (review_demo.py)."""
     import oauth
-    return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()]}
+    import review_demo
+    return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()],
+            "code": review_demo.enabled()}
 
 
 class OAuthStart(BaseModel):

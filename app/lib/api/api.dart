@@ -270,9 +270,21 @@ class Api {
 
   // ── вход через VK ID / Яндекс ID (webapp/routes/auth.py) ──
   /// Какие входы кроме Telegram есть на сервере: [(id, название)].
-  Future<List<({String id, String name})>> providers() async {
+  Future<List<({String id, String name})>> providers() async => (await loginOptions()).items;
+
+  /// То же + code: есть ли вход по коду для проверяющих магазинов (review_demo.py).
+  Future<({List<({String id, String name})> items, bool code})> loginOptions() async {
     final r = await get('/auth/providers');
-    return [for (final p in r['items'] as List) (id: p['id'] as String, name: p['name'] as String)];
+    return (
+      items: [for (final p in r['items'] as List) (id: p['id'] as String, name: p['name'] as String)],
+      code: r['code'] == true,
+    );
+  }
+
+  /// Вход по коду доступа (демо-аккаунт для проверки в App Store / RuStore).
+  Future<void> reviewLogin(String code) async {
+    final r = await post('/auth/review', {'code': code.trim()});
+    await saveToken(r['token'] as String);
   }
 
   /// Ссылка на вход у провайдера; вернётся он на ru.uiboshki.app://auth#token=…

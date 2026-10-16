@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/api/models.dart';
 import 'package:uiboshki/main.dart';
 import 'package:uiboshki/screens/login.dart';
@@ -41,6 +42,42 @@ void main() {
     await settle(t);
     expect(opened, startsWith('https://id.vk.com/authorize'));
     expect(api.token, 'tok-123');
+  });
+
+  testWidgets('вход по коду для проверяющих: кнопка только когда сервер её даёт', (t) async {
+    phone(t);
+    Future<void> open(Api api) async {
+      await t.pumpWidget(
+        AppStyle(
+          p: Palette.depth,
+          font: FontChoice.book,
+          child: MaterialApp(
+            home: LoginScreen(key: UniqueKey(), api: api, onDone: () {}),
+          ),
+        ),
+      );
+      await settle(t);
+    }
+
+    await open(fakeApi(token: null));
+    expect(find.byKey(const Key('login-code')), findsNothing);
+
+    final bodies = <String, Object?>{};
+    final api = fakeApi(
+      token: null,
+      bodies: bodies,
+      overrides: {
+        'GET /api/auth/providers': {'items': [], 'code': true},
+      },
+    );
+    await open(api);
+    await t.tap(find.byKey(const Key('login-code')));
+    await settle(t);
+    await t.enterText(find.byType(TextField), ' kapibara-review ');
+    await t.tap(find.text('Войти'));
+    await settle(t);
+    expect(bodies['POST /api/auth/review'], {'code': 'kapibara-review'});
+    expect(api.token, 'rv.demo');
   });
 
   test('вход через бота отдаёт число для проверки в Telegram (как у Google)', () async {

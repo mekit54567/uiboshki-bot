@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
+import '../api/links.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/capy.dart';
@@ -56,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   int? _pick;
   bool _busy = false;
   List<({String id, String name})> _providers = [];
+  bool _codeLogin = false; // вход по коду для проверяющих App Store / RuStore (review_demo.py)
 
   // Начатый вход в вебе помним 10 минут (как код на сервере): iPhone часто
   // перезапускает PWA, пока человек в Telegram, — без этого число и ожидание
@@ -105,9 +107,14 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _restorePending();
     widget.api
-        .providers()
-        .then((p) {
-          if (mounted) setState(() => _providers = p);
+        .loginOptions()
+        .then((o) {
+          if (mounted) {
+            setState(() {
+              _providers = o.items;
+              _codeLogin = o.code;
+            });
+          }
         })
         .catchError((_) {});
   }
@@ -136,6 +143,24 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       }
     } catch (_) {
       if (mounted) setState(() => _note = 'Вход отменён.');
+    }
+  }
+
+  Future<void> _byCode() async {
+    tick();
+    final code = await inputSheet(
+      context,
+      title: 'Вход по коду доступа',
+      text: 'Код выдаём проверяющим App Store и RuStore. Внутри — пример данных, не настоящий студент.',
+      hint: 'Код',
+      action: 'Войти',
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    try {
+      await widget.api.reviewLogin(code);
+      widget.onDone();
+    } catch (e) {
+      if (mounted) setState(() => _note = errorText(e));
     }
   }
 
@@ -271,6 +296,22 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
+                      const SizedBox(height: Space.m),
+                      Center(
+                        child: Text(
+                          unofficialNote,
+                          textAlign: TextAlign.center,
+                          style: s.body(12, color: p.muted),
+                        ),
+                      ),
+                      if (_codeLogin)
+                        Center(
+                          child: TextButton(
+                            key: const Key('login-code'),
+                            onPressed: _byCode,
+                            child: Text('Вход по коду доступа', style: s.body(14, color: p.muted)),
+                          ),
+                        ),
                     ],
                   ),
                 ),

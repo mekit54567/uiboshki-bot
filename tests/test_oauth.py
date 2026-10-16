@@ -41,7 +41,7 @@ def _token(location: str) -> str:
 def test_no_keys_no_buttons(db, client, monkeypatch):  # noqa: F811
     for k in ("VK_CLIENT_ID", "YANDEX_CLIENT_ID", "YANDEX_CLIENT_SECRET"):
         monkeypatch.delenv(k, raising=False)
-    assert client.get("/api/auth/providers").json() == {"items": []}
+    assert client.get("/api/auth/providers").json() == {"items": [], "code": False}
     assert client.post("/api/auth/vk/start", json={}).status_code == 404
 
 

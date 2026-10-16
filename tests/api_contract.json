@@ -48,6 +48,7 @@
  "PATCH /api/files/{file_id}",
  "POST /api/auth/logout",
  "POST /api/auth/poll",
+ "POST /api/auth/review",
  "POST /api/auth/start",
  "POST /api/auth/{provider}/confirm",
  "POST /api/auth/{provider}/link",
