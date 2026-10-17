@@ -24,15 +24,26 @@ WEATHER_TTL = 20 * 60
 WEATHER_FAIL_TTL = 2 * 60
 WEATHER_TIMEOUT = 4
 _weather_cache: tuple[float, dict | None] | None = None   # (до какого времени верить, данные)
+# Open-Meteo иногда отвечает 503 (17.10 — 9 «ошибок» за ночь в /status): тогда
+# показываем последнюю удачную погоду, если ей не больше 3 часов.
+WEATHER_STALE = 3 * 60 * 60
+_last_good: tuple[float, dict] | None = None              # (когда скачана, данные)
 
 
 async def fetch_weather() -> dict | None:
     """Получаем погоду через Open-Meteo (бесплатно, без ключа)."""
-    global _weather_cache
+    global _weather_cache, _last_good
     if _weather_cache and _weather_cache[0] > time.monotonic():
         return _weather_cache[1]
     data = await _fetch_weather()
-    _weather_cache = (time.monotonic() + (WEATHER_TTL if data else WEATHER_FAIL_TTL), data)
+    now = time.monotonic()
+    if data:
+        _last_good = (now, data)
+        _weather_cache = (now + WEATHER_TTL, data)
+        return data
+    if _last_good and now - _last_good[0] < WEATHER_STALE:
+        data = _last_good[1]                  # сервис лежит — последняя удачная
+    _weather_cache = (now + WEATHER_FAIL_TTL, data)
     return data
 
 
@@ -49,7 +60,9 @@ async def _fetch_weather() -> dict | None:
             resp.raise_for_status()
             return resp.json()
     except Exception as e:
-        logger.error(f"Weather error: {e}")
+        # сбой чужого сервиса, а не бота: предупреждение, не ошибка — иначе
+        # 503 Open-Meteo будил «всплеск ошибок» старосте (health.alert_errors)
+        logger.warning(f"Weather error: {e}")
         return None
 
 
