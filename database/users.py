@@ -6,7 +6,7 @@ import time
 import aiosqlite
 
 import database
-from database._conn import connect
+from database._conn import connect, write_later
 
 # Amvera (16.10): запись в базу ~0,2 с (сетевой диск), а upsert_user шёл на
 # каждый запрос WebApp. Те же имя и ник — пишем не чаще раза в 10 минут
@@ -27,9 +27,11 @@ def forget_user(user_id: int | None = None):
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
-async def upsert_user(user_id: int, username: str, full_name: str, named: bool = True):
+async def upsert_user(user_id: int, username: str, full_name: str, named: bool = True, wait: bool = True):
     """До согласия на обработку данных (privacy.blocked) — только id, без
-    имени и ника (152-ФЗ); имя запишется при следующем заходе после согласия."""
+    имени и ника (152-ФЗ); имя запишется при следующем заходе после согласия.
+    wait=False (запросы WebApp): уже есть в базе — запись в фоне
+    (_conn.write_later), новый — сразу: дальше запрос читает его строку."""
     import privacy
     if not named or await privacy.blocked(user_id):
         username = full_name = ""
@@ -37,6 +39,14 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
     last = _upserted.get(key)
     if last and last[:2] == (username, full_name) and now - last[2] < UPSERT_EVERY:
         return
+    if not wait and await get_user(user_id):
+        _upserted[key] = (username, full_name, now)     # пачка запросов разом — одна запись
+        await write_later(_upsert(key, user_id, username, full_name, now))
+        return
+    await _upsert(key, user_id, username, full_name, now)
+
+
+async def _upsert(key, user_id: int, username: str, full_name: str, now: float):
     async with connect() as db:
         await db.execute("""
             INSERT INTO users (user_id, username, full_name, last_seen)
