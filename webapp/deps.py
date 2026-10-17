@@ -72,6 +72,8 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
     import stats                  # «кто, что, когда» для /stats старосты (без содержимого)
     await stats.track(user["id"], stats.kind_for(request.method, request.url.path))
     await stats.track(user["id"], stats.via(bool(x_telegram_init_data), request.headers.get("x-app", "")))
+    import plus_welcome           # подарок своей группе — одно сообщение при первом заходе (в Telegram и пушем)
+    plus_welcome.later(tg_bot() if BOT_TOKEN else None, user["id"])
     return user
 
 

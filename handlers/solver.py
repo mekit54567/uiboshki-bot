@@ -430,10 +430,11 @@ THINK_CB = "think:go"
 GONE_TEXT = "Этот вопрос уже не найти — задай его ещё раз"
 
 
-def think_kb(left: int) -> InlineKeyboardMarkup:
+def think_kb(left: int | None) -> InlineKeyboardMarkup:
+    """left=None — безлимит, без счётчика."""
     import think
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=f"🧠 {think.LABEL} · {left}", callback_data=THINK_CB)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=f"🧠 {think.LABEL}" + ("" if left is None else f" · {left}"), callback_data=THINK_CB)]])
 
 
 async def offer_think(uid: int, state: FSMContext, sent: list[Message], question: list, data: dict):
@@ -475,7 +476,9 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
         await wait.edit_text("⏳ " + str(e))
         if "не списана" in str(e):          # не ответила — кнопка снова под ответом
             try:
-                await callback.message.edit_reply_markup(reply_markup=think_kb(await think.left(uid)))
+                offer = await think.offer(uid)
+                if offer:
+                    await callback.message.edit_reply_markup(reply_markup=think_kb(offer["left"]))
             except Exception:
                 pass
         return

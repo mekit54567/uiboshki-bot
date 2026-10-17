@@ -56,7 +56,7 @@ String _days(int n) => '$n ${plural(n, 'день', 'дня', 'дней')}';
 
 /// Что даёт подписка — как PERKS на странице оплаты (webapp/routes/billing.py).
 const plusPerks = [
-  (Icons.auto_awesome_outlined, 'ИИ сверх пробы', 'для любой группы МИРЭА; твоей группе он и так бесплатный'),
+  (Icons.auto_awesome_outlined, 'ИИ сверх пробы', 'до 100 вопросов в день для любой группы МИРЭА'),
   (Icons.palette_outlined, 'Иконки и наряды капибары', 'те, что «по подписке», в «Оформлении»'),
   (Icons.workspace_premium_outlined, 'Значок «друг Капибары»', 'в профиле'),
   (Icons.upcoming_outlined, 'Дальше', 'ответы на экзаменационные билеты, «Пульс группы», «Архив потока»'),
@@ -110,6 +110,7 @@ class _PlusBody extends StatelessWidget {
     }
     final active = d['active'] == true;
     final gift = d['paid_until'] == null && d['gift'] is String;
+    final unlimited = d['unlimited'] == true;
     final founder = d['founder'] == true;
     final prices = [for (final x in d['prices'] as List? ?? const []) Map<String, dynamic>.from(x as Map)];
     final payUrl = '${d['pay_url'] ?? ''}';
@@ -140,7 +141,11 @@ class _PlusBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        gift
+                        unlimited
+                            ? (d['unlimited_until'] is String
+                                  ? 'Безлимит до ${plusUntil(d['unlimited_until'] as String?)}'
+                                  : 'Безлимит навсегда')
+                            : gift
                             ? 'Подарок группе до ${plusUntil(d['gift'] as String?)}'
                             : active
                             ? 'Действует до ${plusUntil(d['until'] as String?)}'
@@ -149,7 +154,9 @@ class _PlusBody extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        gift
+                        unlimited
+                            ? 'ИИ без дневных лимитов, платить не нужно'
+                            : gift
                             ? 'Платить не нужно — всё уже включено'
                             : active
                             ? 'Оплата добавит дни к этому сроку'

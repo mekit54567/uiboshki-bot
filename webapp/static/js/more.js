@@ -56,7 +56,10 @@ async function openPlus() {
   const inv = d.invite || {};
   const founderNote = d.founder ? "Ты «Основатель»: цена первых пользователей — за тобой навсегда"
     : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
-  const state = d.paid_until
+  const state = d.unlimited
+    ? statusCard("ok", "Безлимит" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : " навсегда"),
+      "ИИ без дневных лимитов, платить не нужно")
+    : d.paid_until
     ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
     : d.gift
       ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
@@ -68,7 +71,7 @@ async function openPlus() {
   box.innerHTML =
     '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("medal") + '</span><div><h3>Капибара+</h3>' +
       '<p>Подписка на Капибару</p></div></div>' + state +
-    secItem("sparkle", "Что даёт", "ИИ сверх пробы для любой группы (твоей группе он и так бесплатный), иконки и наряды капибары " +
+    secItem("sparkle", "Что даёт", "ИИ — до 100 вопросов в день для любой группы, иконки и наряды капибары " +
       "«по подписке», значок. Дальше — ответы на билеты, «Пульс группы», «Архив потока».") +
     prices +
     (d.pay_url

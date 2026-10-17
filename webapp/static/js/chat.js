@@ -467,8 +467,9 @@ function addQuickReplies() {
   if (last.think) {
     const b = document.createElement("button");
     b.className = "think";
-    b.textContent = last.think.label + " · " + last.think.left;
-    b.disabled = !last.think.left;
+    const left = last.think.left;              // null — безлимит
+    b.textContent = last.think.label + (left == null ? "" : " · " + left);
+    b.disabled = left === 0;
     b.onclick = thinkAgain;
     row.prepend(b);
   }

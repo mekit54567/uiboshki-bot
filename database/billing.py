@@ -89,6 +89,92 @@ async def set_founder(user_id: int, founder: bool):
         await db.commit()
 
 
+# ── Ручные выдачи (/grant, plus_grant.py) ────────────────────────────────────
+
+async def log_grant(user_id: int, kind: str, source: str | None, days: int | None,
+                    prev_until: str | None, until: str | None, by_id: int | None = None) -> int:
+    """Запись журнала: kind — sub (продление срока), unlimited, off."""
+    async with connect() as db:
+        cur = await db.execute(
+            "INSERT INTO plus_grants (user_id, by_id, kind, source, days, prev_until, until) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)", (user_id, by_id, kind, source, days, prev_until, until))
+        await db.commit()
+        return cur.lastrowid
+
+
+async def grant_log(user_id: int, limit: int | None = None) -> list[dict]:
+    """Журнал человека по порядку (limit — последние limit, новые первыми)."""
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        if limit:
+            rows = await (await db.execute(
+                "SELECT * FROM plus_grants WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, limit))).fetchall()
+        else:
+            rows = await (await db.execute(
+                "SELECT * FROM plus_grants WHERE user_id = ? ORDER BY id", (user_id,))).fetchall()
+        return [dict(r) for r in rows]
+
+
+async def revoke_grants(user_id: int, ids: list[int]):
+    if not ids:
+        return
+    async with connect() as db:
+        await db.execute(f"UPDATE plus_grants SET revoked = 1 WHERE user_id = ? AND id IN ({','.join('?' * len(ids))})",
+                         (user_id, *ids))
+        await db.commit()
+
+
+async def get_unlimited(user_id: int) -> dict | None:
+    """{until (None — навсегда), granted_by, at} или None."""
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute(
+            "SELECT until, granted_by, at FROM plus_unlimited WHERE user_id = ?", (user_id,))).fetchone()
+        return dict(row) if row else None
+
+
+async def put_unlimited(user_id: int, until: str | None, by_id: int | None):
+    async with connect() as db:
+        await db.execute(
+            "INSERT INTO plus_unlimited (user_id, until, granted_by) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET until = excluded.until, granted_by = excluded.granted_by, "
+            "at = datetime('now')", (user_id, until, by_id))
+        await db.commit()
+
+
+async def del_unlimited(user_id: int) -> bool:
+    async with connect() as db:
+        cur = await db.execute("DELETE FROM plus_unlimited WHERE user_id = ?", (user_id,))
+        await db.commit()
+        return cur.rowcount == 1
+
+
+async def manual_active(today: str) -> tuple[int, int]:
+    """(подписок с ручными днями, которые ещё идут; безлимитов, которые идут) — для /status."""
+    async with connect() as db:
+        subs = (await (await db.execute(
+            "SELECT COUNT(DISTINCT s.user_id) FROM subscriptions s JOIN plus_grants g ON g.user_id = s.user_id "
+            "WHERE s.until >= ? AND g.kind = 'sub' AND g.source = 'manual' AND g.revoked = 0",
+            (today,))).fetchone())[0]
+        unl = (await (await db.execute(
+            "SELECT COUNT(*) FROM plus_unlimited WHERE until IS NULL OR until >= ?", (today,))).fetchone())[0]
+        return subs, unl
+
+
+async def mark_welcome(user_id: int) -> bool:
+    """Отметить «приветствие «Капибары+» отправлено». True — только в первый раз."""
+    async with connect() as db:
+        cur = await db.execute("INSERT OR IGNORE INTO plus_welcome (user_id) VALUES (?)", (user_id,))
+        await db.commit()
+        return cur.rowcount == 1
+
+
+async def welcomed(user_id: int) -> bool:
+    async with connect() as db:
+        row = await (await db.execute("SELECT 1 FROM plus_welcome WHERE user_id = ?", (user_id,))).fetchone()
+        return row is not None
+
+
 # ── Бонусы ───────────────────────────────────────────────────────────────────
 
 async def add_bonus(user_id: int, kind: str, key: str, days: int) -> bool:

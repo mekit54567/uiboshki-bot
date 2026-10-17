@@ -13,6 +13,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
+import config
 from webapp import deps
 from webapp.deps import CurrentUser
 
@@ -121,7 +122,7 @@ a{{color:var(--link)}}
 </html>
 """
 
-PERKS = ["ИИ сверх пробы для любой группы МИРЭА (твоей группе он и так бесплатный)",
+PERKS = [f"ИИ сверх пробы для любой группы МИРЭА — до {config.AI_SUB_DAILY} вопросов в день",
          "иконки приложения и наряды капибары «только по подписке»",
          "значок «друг Капибары» в профиле",
          "дальше: ответы на экзаменационные билеты, «Пульс группы», «Архив потока»"]

@@ -616,6 +616,39 @@ async def init_db():
                 PRIMARY KEY (user_id, kind, key)
             )
         """)
+        # Ручные выдачи Никиты (/grant, plus_grant.py): безлимит (until NULL —
+        # навсегда), журнал всех продлений подписки (ручных, оплат, бонусов —
+        # чтобы «/grant off» снял только ручные дни) и отметка «приветствие
+        # «Капибары+» отправлено» (plus_welcome.py, один раз на человека).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_unlimited (
+                user_id    INTEGER PRIMARY KEY,
+                until      TEXT,
+                granted_by INTEGER,
+                at         TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_grants (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                by_id      INTEGER,
+                kind       TEXT NOT NULL,
+                source     TEXT,
+                days       INTEGER,
+                prev_until TEXT,
+                until      TEXT,
+                revoked    INTEGER DEFAULT 0,
+                at         TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_plus_grants_user ON plus_grants(user_id)")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_welcome (
+                user_id INTEGER PRIMARY KEY,
+                at      TEXT DEFAULT (datetime('now'))
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS ref_codes (
                 user_id  INTEGER PRIMARY KEY,

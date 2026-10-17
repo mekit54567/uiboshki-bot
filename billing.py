@@ -14,7 +14,9 @@ ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не от�
 Цена первых (Никита 17.10): пока не сказано иначе, все платят «early»-цену
 (месяц 149 ₽), и кто оплатил по ней — «Основатель», платит так навсегда.
 Новым — полная цена с `/plus stage full` (settings plus:stage). Своей группе
-— подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift). Июль и август в
+— подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift): с ним она в
+лимитах подписки (plans.py). Ручные продления и безлимит — `/grant`
+(plus_grant.py); все продления пишутся в журнал plus_grants. Июль и август в
 срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь."""
 
 import hashlib
@@ -138,17 +140,31 @@ async def gift_for(uid: int) -> str | None:
     return until if await plans._own(uid) else None
 
 
+async def unlimited_for(uid: int) -> dict | None:
+    """Безлимит, выданный Никитой (/grant), действует → {"until": день или
+    None — навсегда}; иначе None."""
+    from database.billing import get_unlimited
+    from utils import today_msk
+    un = await get_unlimited(uid)
+    if not un or (un["until"] and un["until"] < today_msk().isoformat()):
+        return None
+    return {"until": un["until"]}
+
+
 async def status(uid: int) -> dict:
-    """Подписка человека: active, until (оплата или подарок — что дольше),
-    paid_until, gift, founder, цены для него."""
+    """Подписка человека: active, until (оплата, подарок или безлимит до даты —
+    что дольше; безлимит навсегда — until может быть None), paid_until, gift,
+    unlimited (bool) и unlimited_until, founder, цены для него."""
     from database.billing import get_sub
     from utils import today_msk
     today = today_msk().isoformat()
     sub = await get_sub(uid)
     paid_until = sub["until"] if sub and sub["until"] >= today else None
     gift = await gift_for(uid)
-    until = max(filter(None, (paid_until, gift)), default=None)
-    return {"active": bool(until), "until": until, "paid_until": paid_until, "gift": gift,
+    unl = await unlimited_for(uid)
+    until = max(filter(None, (paid_until, gift, unl and unl["until"])), default=None)
+    return {"active": bool(until) or bool(unl), "until": until, "paid_until": paid_until, "gift": gift,
+            "unlimited": bool(unl), "unlimited_until": unl and unl["until"],
             "founder": bool(sub and sub["founder"]), "early": await early(),
             "prices": await prices(uid), "provider": provider()}
 
@@ -168,19 +184,27 @@ async def prices(uid: int) -> list[dict]:
             for key, p in PLANS.items()]
 
 
-async def grant(uid: int, days: int, source: str, founder: bool | None = None) -> str:
-    """Продлить подписку на days дней (без лета) — после оплаченного срока и
-    после подарка группе, если он ещё идёт. → новый последний день."""
-    from database.billing import get_sub, put_sub
+async def extend_from(uid: int, last: str | None, days: int) -> str:
+    """Последний день, если прибавить days дней (без лета) к сроку last —
+    после него и после подарка группе, если они ещё идут, иначе с сегодня."""
     from utils import today_msk
-    today = today_msk()
+    start = today_msk()
+    for end in (last, await gift_for(uid)):
+        if end and end >= start.isoformat():
+            start = date.fromisoformat(end) + timedelta(days=1)
+    return add_days(start, days).isoformat()
+
+
+async def grant(uid: int, days: int, source: str, founder: bool | None = None, by: int | None = None) -> str:
+    """Продлить подписку на days дней (без лета) — после оплаченного срока и
+    после подарка группе, если он ещё идёт. → новый последний день. Каждое
+    продление — в журнал plus_grants (source manual — вручную, /grant)."""
+    from database.billing import get_sub, log_grant, put_sub
     sub = await get_sub(uid)
-    start = today
-    for last in (sub["until"] if sub else None, await gift_for(uid)):
-        if last and last >= start.isoformat():
-            start = date.fromisoformat(last) + timedelta(days=1)
-    until = add_days(start, days).isoformat()
+    prev = sub["until"] if sub else None
+    until = await extend_from(uid, prev, days)
     await put_sub(uid, until, source, founder)
+    await log_grant(uid, "sub", source, days, prev, until, by)
     return until
 
 

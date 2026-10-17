@@ -74,6 +74,8 @@ AUTHOR_COLUMNS = (
     ("votes", "created_by"),
     ("file_summaries", "created_by"),
     ("group_admins", "added_by"),
+    ("plus_grants", "by_id"),             # кто выдал (Никита) — запись того, кому выдали, остаётся
+    ("plus_unlimited", "granted_by"),
 )
 
 

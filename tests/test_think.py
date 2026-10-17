@@ -144,3 +144,14 @@ async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on
     await press(dp, bot, solver.THINK_CB)
     assert asked == [[{"role": "user", "content": "Задание:\nчто такое NPV и как его посчитать"}]]
     assert "ответ подумав ещё" in bot.session.texts()[-1]
+
+
+@pytest.mark.asyncio
+async def test_unlimited_grant_has_no_think_limit(db, monkeypatch, on):
+    import plus_grant
+    await db.upsert_user(OTHER, "", "u")
+    await plus_grant.unlimited(OTHER, None, 1)                # /grant … unlimited
+    assert (await think.offer(OTHER))["left"] is None         # кнопка без счётчика
+    _openrouter(monkeypatch)
+    for _ in range(think.DAILY + 1):
+        await think.solve(OTHER, [{"role": "user", "content": "?"}])

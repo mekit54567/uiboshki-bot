@@ -1,6 +1,7 @@
 """«Капибара+» в боте: /plus — статус и кнопка «Оплатить на сайте» (счёт в
 Telegram не выставляем: цифровое внутри бота — только Stars), /invite —
-готовое сообщение для друга с личной ссылкой. В инлайне «@бот share» —
+готовое сообщение для друга с личной ссылкой, /grant — ручные выдачи
+Никиты (plus_grant.py). В инлайне «@бот share» —
 то же сообщение в любой чат (handlers/inline.py)."""
 
 from aiogram import F, Router
@@ -12,10 +13,15 @@ router = Router()
 
 async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     import billing
+    import config
     import referrals
     st = await billing.status(uid)
     inv = await referrals.summary(uid)
-    if st["paid_until"]:
+    if st["unlimited"]:
+        head = ("✨ <b>Капибара+</b> — безлимит "
+                + (f"до {billing.fmt_day(st['unlimited_until'])}" if st["unlimited_until"] else "навсегда")
+                + ": ИИ без дневных лимитов. Платить ничего не нужно.")
+    elif st["paid_until"]:
         head = f"✨ <b>Капибара+</b> до {billing.fmt_day(st['until'])}."
     elif st["gift"]:
         head = (f"✨ <b>Капибара+</b> — подарок твоей группе до {billing.fmt_day(st['gift'])}. "
@@ -28,7 +34,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     price_line = (f"Цены первых пользователей: {prices}. Кто оплатит по ним, так и платит всегда."
                   if st["prices"][0]["founder"] else f"Цены: {prices}.")
     lines = [head, "",
-             "Что даёт: ИИ сверх пробы для любой группы (твоей группе он и так бесплатный), "
+             f"Что даёт: ИИ — до {config.AI_SUB_DAILY} вопросов в день для любой группы, "
              "иконки и наряды капибары «по подписке», значок «друг Капибары».",
              price_line + " Без автосписаний, июль и август не считаются.",
              "Оплата — на сайте uiboshki.ru по кнопке ниже (или «Ещё → Капибара+» в приложении: "
@@ -42,7 +48,6 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     else:
         lines.append("\nОплата скоро заработает.")
     rows.append([InlineKeyboardButton(text="🎁 Позвать друга", callback_data="plus:invite")])
-    import config
     if config.is_starosta(uid):
         lines.append("\n" + await admin_text())
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
@@ -57,7 +62,9 @@ async def admin_text() -> str:
     gift_line = (f"подарок своей группе до {billing.fmt_day(gift)} — <code>/plus gift 15.01.2027</code> "
                  f"или <code>/plus gift off</code>" if gift else
                  "подарка своей группе нет — <code>/plus gift 31.12.2026</code>")
-    return f"<b>Для старосты:</b>\n• {stage}\n• {gift_line}"
+    return (f"<b>Для старосты:</b>\n• {stage}\n• {gift_line}\n"
+            "• <code>/grant @ник 3m</code> — продлить вручную, <code>/grant @ник unlimited</code> — безлимит, "
+            "<code>/grant</code> — подробнее")
 
 
 async def admin_cmd(uid: int, args: list[str]) -> str | None:
@@ -95,6 +102,19 @@ async def cmd_plus(message: Message):
     await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
+@router.message(Command("grant"))
+async def cmd_grant(message: Message):
+    """/grant — ручные выдачи «Капибары+» и безлимита (plus_grant.py). Только
+    Никита (config.is_starosta), старостам групп и замам — нет."""
+    import config
+    import plus_grant
+    if not config.is_starosta(message.from_user.id):
+        await message.answer("Эта команда только для владельца бота.")
+        return
+    args = (message.text or "").split()[1:]
+    await message.answer(await plus_grant.command(message.bot, message.from_user.id, args), parse_mode="HTML")
+
+
 # ── Рассылка о запуске «Капибары+» (только по кнопке старосты) ─────────────
 
 async def launch_text(uid: int) -> str:
@@ -112,8 +132,9 @@ async def launch_text(uid: int) -> str:
                   "платить ничего не нужно.", ""]
     else:
         lines += ["Расписание, дедлайны, баллы СДО, файлы и напоминания остаются бесплатными.", ""]
-    lines += ["Что даёт: ИИ сверх пробы для любой группы, иконки и наряды капибары «по подписке», "
-              "значок «друг Капибары».",
+    import config
+    lines += [f"Что даёт: ИИ — до {config.AI_SUB_DAILY} вопросов в день для любой группы, иконки и наряды "
+              "капибары «по подписке», значок «друг Капибары».",
               (f"Цена первых пользователей — {m['price']} ₽ в месяц, и кто оплатит по ней, так и платит "
                "всегда." if m["founder"] else f"Месяц — {m['price']} ₽."),
               "Оплата — на сайте uiboshki.ru: /plus здесь или «Ещё → Капибара+» в приложении. "

@@ -558,18 +558,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _thinkChip(AppStyle s, Map<String, dynamic> t) {
     final p = s.p;
-    final left = (t['left'] as num?)?.toInt() ?? 0;
+    final left = (t['left'] as num?)?.toInt(); // null — безлимит
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.s),
       child: Align(
         alignment: Alignment.centerLeft,
         child: ActionChip(
-          onPressed: left > 0 ? _think : null,
+          onPressed: left != 0 ? _think : null,
           backgroundColor: p.card,
-          side: BorderSide(color: left > 0 ? p.accent : p.line),
+          side: BorderSide(color: left != 0 ? p.accent : p.line),
           shape: const StadiumBorder(),
           avatar: Icon(Icons.psychology_outlined, size: 18, color: p.accent),
-          label: Text('${t['label'] ?? 'Подумать ещё'} · $left', style: s.body(13, weight: FontWeight.w600)),
+          label: Text(
+            '${t['label'] ?? 'Подумать ещё'}${left == null ? '' : ' · $left'}',
+            style: s.body(13, weight: FontWeight.w600),
+          ),
         ),
       ),
     );
