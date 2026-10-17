@@ -212,29 +212,59 @@ class Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = AppStyle.of(context).p;
     final r = BorderRadius.circular(radius);
-    return Material(
-      color: Colors.transparent,
-      // подсветка нажатия у строк внутри карточки — по её скруглённым углам
-      shape: RoundedRectangleBorder(borderRadius: r),
-      clipBehavior: Clip.antiAlias,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: gradient == null ? (color ?? p.card) : null,
-          gradient: gradient,
-          borderRadius: r,
-          border: Border.all(color: border ?? p.line),
-        ),
-        child: InkWell(
-          borderRadius: r,
-          onTap: onTap == null
-              ? null
-              : () {
-                  tick();
-                  onTap!();
-                },
-          child: Padding(padding: padding, child: child),
+    // Скруглённые углы режет ClipRRect, а не форма Material: та режет по
+    // контуру-пути, а в вебе это дорого на каждом кадре прокрутки (17.10).
+    return ClipRRect(
+      borderRadius: r,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: gradient == null ? (color ?? p.card) : null,
+            gradient: gradient,
+            borderRadius: r,
+            border: Border.all(color: border ?? p.line),
+          ),
+          child: InkWell(
+            borderRadius: r,
+            onTap: onTap == null
+                ? null
+                : () {
+                    tick();
+                    onTap!();
+                  },
+            child: Padding(padding: padding, child: child),
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// Бледнее (прошедшая пара, отменённая). В приложении — Opacity. В вебе
+/// Opacity — отдельный слой на каждую строку на каждом кадре прокрутки
+/// (Никита 17.10: «Неделя» в PWA листается рывками), поэтому там поверх
+/// кладём фон карточки с прозрачностью: на вид то же, а слоёв нет.
+class Faded extends StatelessWidget {
+  final double opacity;
+  final double radius;
+  final Widget child;
+  const Faded({super.key, required this.opacity, this.radius = 0, required this.child});
+
+  static bool cheap = kIsWeb;
+
+  @override
+  Widget build(BuildContext context) {
+    if (opacity >= 1) return child;
+    if (!cheap) return Opacity(opacity: opacity, child: child);
+    final p = AppStyle.of(context).p;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        color: p.cardSolid.withValues(alpha: 1 - opacity),
+        borderRadius: radius > 0 ? BorderRadius.circular(radius) : null,
+      ),
+      child: child,
     );
   }
 }

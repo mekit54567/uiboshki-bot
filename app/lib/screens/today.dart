@@ -1082,7 +1082,7 @@ class LessonCard extends StatelessWidget {
         ),
       ),
     );
-    return Opacity(opacity: past || gone ? 0.5 : 1, child: card);
+    return Faded(opacity: past || gone ? 0.5 : 1, radius: 18, child: card);
   }
 
   static Widget _withStripe(Color? c, Widget child) => c == null
@@ -1153,7 +1153,7 @@ class LessonList extends StatelessWidget {
                 final past = l.endAt != null && !at.isBefore(l.endAt!);
                 final live = l.startAt != null && !past && !at.isBefore(l.startAt!);
                 final gone = s.design2 && l.cancelled; // отменили (5.79) — серой и зачёркнутой
-                final row = Opacity(
+                final row = Faded(
                   opacity: past || gone ? 0.45 : 1,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),

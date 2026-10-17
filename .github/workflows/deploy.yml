@@ -1,0 +1,46 @@
+name: Выкладка на Amvera
+# Amvera собирает бота из ветки deploy, а не из main. После мержа в main
+# Actions докидывают ещё коммиты (CHANGELOG, веб-сборка PWA), и Amvera
+# пересобиралась 2–3 раза подряд: 10–15 минут перезапусков и «Сервер не
+# отвечает» (Никита 17.10). Здесь ждём, пока эти сборки main закончатся, и
+# двигаем deploy один раз — одна сборка на мерж.
+# Коммиты Actions (GITHUB_TOKEN) этот файл не запускают — только мерж.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true   # новый мерж, пока ждём, — ждём уже его
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Ждём CHANGELOG и веб-сборку PWA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep 20
+          for i in $(seq 1 60); do
+            busy=$(gh run list --repo "$GITHUB_REPOSITORY" --branch main --limit 30 \
+              --json workflowName,status \
+              --jq '[.[] | select((.workflowName == "CHANGELOG" or .workflowName == "PWA — веб-сборка приложения") and .status != "completed")] | length')
+            echo "ещё идут: $busy"
+            [ "$busy" = "0" ] && break
+            sleep 20
+          done
+      - name: deploy = свежий main
+        run: |
+          git fetch origin main
+          git push origin origin/main:refs/heads/deploy --force
