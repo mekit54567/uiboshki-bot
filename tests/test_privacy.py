@@ -168,6 +168,7 @@ def test_legal_texts_and_pages(monkeypatch):
     assert "Railway" not in text and "us-west" not in text  # переезд 16.10: сервер в России
     assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "перечень — на сайте Amvera" in text
     assert "Онланта" not in text and "доступа к содержимому у них нет" not in text   # договор поручения Amvera
+    assert "бесплатном тарифе" in text and "для улучшения своих моделей" in text   # ревью 17.10: Gemini
 
 
 @pytest.mark.asyncio
