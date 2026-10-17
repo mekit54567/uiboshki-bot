@@ -86,6 +86,9 @@ void main() {
       greaterThan(1.5 * pos.viewportDimension),
       reason: 'неделя длинная',
     );
+    // неделя открывается на сегодня: в субботу — почти у конца, где меню всегда видно
+    pos.jumpTo(pos.minScrollExtent);
+    await settle(t);
     expect(hidden(t), isFalse);
 
     await t.drag(weekList(), const Offset(0, -200));

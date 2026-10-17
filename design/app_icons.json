@@ -1,7 +1,7 @@
 {
   "_": "Иконки-картинки на выбор (5.84, Никита 13.10: 47 из 288, каждая светлая и тёмная). src — номер на странице выбора, name — имя в коде (AppIcon, Icon<Name> на iOS, .Icon<Name>[Dark] на Android). Сборка — python tools/app_icons.py. unlock (5.91) — как открыть иконку, любую, и нарисованные кодом: нет записи — бесплатно; sub — по подписке; ach:<id> — ачивка; rank:<dawn|noon|dusk|midnight> — закрыть ранг; all — все ачивки; none — убрана из выбора.",
   "groups": ["Москва", "Учёба и день", "Космос", "Праздники", "Формы", "Фактуры"],
-  "unlock": {},
+  "unlock": {"astronaut": "sub", "ballplanet": "none", "bridge": "sub", "bubbletea": "sub", "chalk": "ach:secret", "circle": "sub", "clay": "none", "closeup": "none", "curled": "sub", "depth": "none", "diagonal": "ach:look", "dj": "sub", "domes": "sub", "embroidery": "none", "headphones": "sub", "heart": "ach:month", "indigo": "none", "kremlin": "sub", "leaves": "none", "library": "none", "matryoshka": "all", "moon": "ach:t2222", "music": "ach:wave", "newyear": "ach:auto", "ninja": "none", "onball": "none", "origami": "sub", "ostankino": "sub", "page": "none", "park": "ach:week5", "peek": "ach:one_of_us", "pixel": "sub", "planet": "ach:found", "riso": "none", "stainedglass": "sub", "streetlamp": "ach:fri13", "submarine": "none", "sunrise": "rank:dawn", "sunset": "rank:dusk", "surf": "sub", "tree": "ach:clean", "university": "sub", "ushanka": "ach:submit"},
   "icons": [
     {"src": "09-city-01", "name": "kremlin", "label": "Кремль", "group": "Москва"},
     {"src": "09-city-02", "name": "university", "label": "Университет", "group": "Москва"},
