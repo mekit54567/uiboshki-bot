@@ -251,4 +251,14 @@ void main() {
     expect(find.text('Нажми «Помощник»'), findsOneWidget); // подсказка плашкой снизу
     await t.pump(const Duration(seconds: 6));
   });
+
+  test('адрес бота на полароиде — из /api/meta (BOT_USERNAME), без ответа — прежний', () {
+    expect(achBot, '@UiboshkiBot');
+    setAchBot(null);
+    setAchBot('');
+    expect(achBot, '@UiboshkiBot');
+    setAchBot('https://t.me/KapibaraBot');
+    expect(achBot, '@KapibaraBot');
+    setAchBot('https://t.me/UiboshkiBot');
+  });
 }

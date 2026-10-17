@@ -6,6 +6,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../achievements/store.dart';
 import '../api/models.dart';
 import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
@@ -640,6 +641,16 @@ class IconPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final all = AppIcon.choosable;
+    return ValueListenableBuilder<Map<String, DateTime>>(
+      valueListenable: AchStore.got,
+      builder: (context, got, _) => _grid(context, s, all, got),
+    );
+  }
+
+  /// Закрытая: как открыть (5.91) — своей плашкой, не системным окном.
+  void _howTo(BuildContext context, AppIcon i) => showToast(context, i.howToOpen);
+
+  Widget _grid(BuildContext context, AppStyle s, List<AppIcon> all, Map<String, DateTime> got) {
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * 0.86,
       child: CustomScrollView(
@@ -661,7 +672,13 @@ class IconPicker extends StatelessWidget {
                 children: [
                   for (final i in all)
                     if (i.group == g)
-                      _IconTile(icon: i, dark: dark, selected: i == current, onTap: () => Navigator.of(context).pop(i)),
+                      _IconTile(
+                        icon: i,
+                        dark: dark,
+                        selected: i == current,
+                        locked: !i.isOpen(got),
+                        onTap: () => i.isOpen(got) ? Navigator.of(context).pop(i) : _howTo(context, i),
+                      ),
                 ],
               ),
             ),
@@ -749,8 +766,15 @@ class _IconTile extends StatelessWidget {
   final AppIcon icon;
   final bool dark;
   final bool selected;
+  final bool locked;
   final VoidCallback onTap;
-  const _IconTile({required this.icon, required this.dark, required this.selected, required this.onTap});
+  const _IconTile({
+    required this.icon,
+    required this.dark,
+    required this.selected,
+    required this.onTap,
+    this.locked = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -759,7 +783,7 @@ class _IconTile extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      label: icon.label,
+      label: locked ? '${icon.label}, закрыта' : icon.label,
       excludeSemantics: true,
       child: InkWell(
         key: Key('look:icon:${icon.name}'),
@@ -774,7 +798,22 @@ class _IconTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(Radii.tile + 3),
                 border: Border.all(color: selected ? p.accent : Colors.transparent, width: 2),
               ),
-              child: IconArt(icon: icon, dark: dark),
+              child: !locked
+                  ? IconArt(icon: icon, dark: dark)
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Opacity(
+                          opacity: 0.4,
+                          child: IconArt(icon: icon, dark: dark),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(color: p.cardSolid, shape: BoxShape.circle),
+                          child: Icon(Icons.lock_rounded, size: 16, color: p.muted),
+                        ),
+                      ],
+                    ),
             ),
             const SizedBox(height: 4),
             Text(

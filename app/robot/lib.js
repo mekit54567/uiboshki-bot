@@ -51,6 +51,7 @@ function fallback(method, p) {
   if (p === '/api/notes') return { items: [] };
   if (p === '/api/search') return { items: [{ type: 2, id: 77, title: 'Сиганьков А. А.' }, { type: 1, id: 4927, title: 'УИБО-02-24' }, { type: 3, id: 900, title: 'А-17 (В-78)' }], ready: true };
   if (p === '/api/lecture-search') return { ready: true, items: [] };
+  if (p === '/api/achievements') return { items: {} };
   if (p === '/api/groups/search') return { items: [{ id: 4928, name: 'УИБО-03-24' }, { id: 4927, name: 'УИБО-02-24' }] };
   if (p === '/api/auth/start') return { code: 'abc', link: 'https://t.me/UiboshkiBot?start=login_abc', pick: 47 };
   if (p === '/api/auth/poll') return { status: 'wait' };

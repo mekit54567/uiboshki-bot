@@ -62,3 +62,18 @@ def test_dart_list_matches():
     for ic in ICONS["icons"]:
         for suf in ("", "_dark"):
             assert (APP / "assets" / "appicons" / f"{ic['name']}{suf}.png").exists()
+
+
+def test_unlock_rules_valid():
+    """unlock (5.91): известные иконки (и нарисованные кодом) и понятные правила."""
+    import achievements
+    drawn = {"classic", "depth", "indigo", "terracotta", "page", "sunset", "library"}
+    names = drawn | {i["name"] for i in ICONS["icons"]}
+    for name, rule in ICONS.get("unlock", {}).items():
+        assert name in names, name
+        assert name != "classic", "обычная иконка всегда открыта"
+        kind, _, arg = rule.partition(":")
+        assert rule in ("sub", "all", "none") or (kind == "ach" and arg in achievements.IDS) \
+            or (kind == "rank" and arg in achievements.RANKS), rule
+    dart = (APP / "lib" / "theme" / "app_icons_art.dart").read_text(encoding="utf-8")
+    assert dict(re.findall(r"'(\w+)': '([\w:]+)',", dart)) == ICONS.get("unlock", {})

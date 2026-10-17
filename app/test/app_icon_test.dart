@@ -73,7 +73,11 @@ Future<void> reach(WidgetTester t, String key) async {
 AppStyle styleOf(WidgetTester t) => AppStyle.of(t.element(find.byType(Scaffold).first));
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({'uib_toured': true}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({'uib_toured': true});
+    AppIcon.unlockForTest = {}; // здесь — про канал и выбор; кто что открывает — icon_unlock_test
+  });
+  tearDown(() => AppIcon.unlockForTest = null);
 
   testWidgets('на телефоне — выбор иконки: в канал и в настройки; «Вернуть как было» — обычная', (t) async {
     phone(t);
