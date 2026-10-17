@@ -10,6 +10,7 @@ import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/models.dart';
+import '../plus/plus.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
@@ -150,10 +151,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     Api.onOk = (method, path, body, result) => AchStore.onApi(method, path, body, result, now());
     AchStore.onUnlock = showUnlockBanner;
     AchStore.openTab = _open;
+    PlusBonus.api = widget.api;
     WidgetsBinding.instance.addObserver(this);
     _visit();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureGroup();
+      unawaited(PlusBonus.sendRef(widget.api)); // после согласия: до него API закрыт
       await _maybeTour();
     });
   }
@@ -164,6 +167,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     Api.onOk = null;
     AchStore.onUnlock = null;
     AchStore.openTab = null;
+    PlusBonus.api = null;
     super.dispose();
   }
 
@@ -177,6 +181,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     try {
       await AchStore.load();
       await AchStore.visit(now());
+      await PlusBonus.checkAll(); // ранги, закрытые раньше, — бонус ещё не забран
       final sink = HomeWidgets.sink;
       if (sink != null && await sink.installed() > 0) await AchStore.unlock('widget');
     } catch (_) {}

@@ -566,6 +566,8 @@
   .quick-replies button { flex: none; background: none; border: 1px solid var(--border); color: var(--text); border-radius: 999px;
                           padding: 5px 11px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
   .quick-replies button:active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .quick-replies button.think { border-color: var(--accent); color: var(--accent); }
+  .quick-replies button:disabled { opacity: .45; }
   .chat-item { display: flex; align-items: center; gap: 10px; background: var(--bg-card); border: 1px solid var(--border);
                border-radius: var(--radius-sm); padding: 11px 13px; margin-bottom: 6px; cursor: pointer; }
   .chat-item.cur { border-color: var(--accent); }
@@ -1119,6 +1121,7 @@
   .more-grid .sq.t-contact { background: linear-gradient(145deg, #2bb3a3, #12877c); }
   .more-grid .sq.t-share { background: linear-gradient(145deg, #f59e0b, #e8590c); }
   .more-grid .sq.t-group { background: linear-gradient(145deg, #34d399, #0f9d74); }
+  .more-grid .sq.t-plus { background: linear-gradient(145deg, #f2c46d, #c98a1e); }
   .share-row { display: flex; gap: 12px; align-items: center; padding: 12px 14px; margin: 10px 0; border-radius: var(--radius-sm); background: var(--bg-raised); }
   .share-row div { flex: 1; } .share-row b { display: block; font-size: 14px; } .share-row span { font-size: 12px; color: var(--hint); }
   #group-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -1271,3 +1274,9 @@
   .legal-text ul { margin: 0 0 8px; padding-left: 20px; }
   .legal-text li { margin-bottom: 4px; }
   .legal-lead { color: var(--hint); }
+
+/* «Капибара+»: цены в листе подписки (js/more.js, openPlus) */
+.plus-price { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px;
+  margin: 8px 0 0; border-radius: 14px; background: var(--card, rgba(127,127,127,.08)); }
+.plus-price i { font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #5a5ee0; color: #fff; margin-left: 4px; }
+.plus-price s { opacity: .55; font-weight: 400; margin-right: 4px; }

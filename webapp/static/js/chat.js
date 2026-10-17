@@ -336,11 +336,18 @@ async function sendChat() {
 // тот чат, где задан вопрос, а рисуется, только если он сейчас открыт.
 // Текст вложенного документа (file_text с сервера) хранится в записи вопроса
 // и уходит в историю следующих вопросов — иначе ИИ забывал файл со второго.
+// История для сервера: два ответа подряд («Подумать ещё» под ответом) —
+// уходит только последний, роли чередуются.
+function historyOf(log) {
+  const ok = log.filter(m => m.content && !m.failed);
+  return ok.filter((m, i) => !(m.role === "assistant" && ok[i + 1] && ok[i + 1].role === "assistant"))
+    .map(m => ({ role: m.role, content: m.content + (m.file_text ? "\n\n" + m.file_text : "") }));
+}
+
 async function requestAnswer(entry, att) {
   const pending = typingBubble();
   const myId = chatId;
-  const history = chatLog.filter(m => m.content && !m.failed)
-    .map(m => ({ role: m.role, content: m.content + (m.file_text ? "\n\n" + m.file_text : "") }));
+  const history = historyOf(chatLog);
   const body = { history: history, subject: document.getElementById("chat-subject").value };
   if (att) body.attachment = { name: att.name, mime: att.mime, data: att.data };
   try {
@@ -355,7 +362,8 @@ async function requestAnswer(entry, att) {
     delete entry.failed;
     if (data.file_text) entry.file_text = data.file_text;
     if (!log) return;                                 // чат удалили, пока ждали
-    log.push({ role: "assistant", content: data.content, html: data.html, files: data.files, sources: data.sources });
+    log.push({ role: "assistant", content: data.content, html: data.html, files: data.files, sources: data.sources,
+               think: data.think });
     if (!here) { saveChatLog(myId, log); return; }
     appendMsg("assistant", data.content, data.reasoning, data.html, null, true, data.files, data.sources);
     saveChatLog();
@@ -454,7 +462,48 @@ function addQuickReplies() {
     };
     row.appendChild(b);
   });
+  // «Подумать ещё» (подписка): тот же вопрос заново решает модель
+  // второго уровня, со своим дневным лимитом — он в подписи кнопки
+  if (last.think) {
+    const b = document.createElement("button");
+    b.className = "think";
+    const left = last.think.left;              // null — безлимит
+    b.textContent = last.think.label + (left == null ? "" : " · " + left);
+    b.disabled = left === 0;
+    b.onclick = thinkAgain;
+    row.prepend(b);
+  }
   bubble.after(row);
+}
+
+async function thinkAgain() {
+  const btn = document.getElementById("chat-send");
+  if (btn.disabled) return;
+  const idx = chatLog.length - 1;
+  if (idx < 1 || chatLog[idx].role !== "assistant") return;
+  btn.disabled = true;
+  dropQuickReplies();
+  const pending = typingBubble();
+  const myId = chatId;
+  const body = { history: historyOf(chatLog.slice(0, idx)), subject: document.getElementById("chat-subject").value,
+                 think: true };
+  try {
+    const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+    pending.remove();
+    const log = chatLogOf(myId);
+    if (!log) return;
+    log.push({ role: "assistant", content: data.content, html: data.html, sources: data.sources, think: data.think });
+    if (chatId !== myId) { saveChatLog(myId, log); return; }
+    appendMsg("assistant", data.content, data.reasoning, data.html, null, true, null, data.sources);
+    saveChatLog();
+    haptic("success");
+  } catch (e) {
+    pending.remove();
+    if (chatId === myId) showToast(e.message);
+  } finally {
+    btn.disabled = false;
+    if (chatId === myId) addQuickReplies();
+  }
 }
 
 // «По какому предмету?» — вопрос явно про лекции, а предмет не угадан.

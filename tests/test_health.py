@@ -104,6 +104,7 @@ async def test_report_ai_section(db, monkeypatch):
     import config
     import gemini_solver
     import health
+    monkeypatch.setattr(config, "AI_DAILY_LIMIT", 0)
     await ai_quota.take(1)
     await ai_quota.take(1)
     await ai_quota.take(2)

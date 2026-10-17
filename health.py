@@ -240,6 +240,10 @@ async def report() -> str:
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
+    import billing
+    if billing.provider(configured_only=True) and billing.missing_requisites():
+        lines += ["⚠️ Касса задана, но оплата «Капибары+» закрыта: в оферте нет реквизитов — задай "
+                  + ", ".join(billing.missing_requisites()), ""]
 
     lines.append("<b>Сервер</b>")
     try:
@@ -292,10 +296,16 @@ async def report() -> str:
         total, top = await ai_quota.summary()
         limit = f" · лимит {config.AI_DAILY_LIMIT} на человека" if config.AI_DAILY_LIMIT else " · дневного лимита нет"
         lines.append(f"Вопросов сегодня: {total}, у самого активного — {top}{limit}")
+        from database.billing import manual_active
+        from utils import today_msk
+        subs, unl = await manual_active(today_msk().isoformat())
+        lines.append(f"Ручные выдачи (/grant): подписок {subs} · безлимитов {unl}")
         rest, spare = gemini_solver.rest_status()
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "
                          f"запасные: {esc(', '.join(spare))}")
+        import think
+        lines.append(esc(await think.status_line()))
     except Exception as e:
         lines.append(f"⚠️ не узнал: {type(e).__name__}")
 
