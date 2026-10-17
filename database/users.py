@@ -1,10 +1,28 @@
 """Пользователи: регистрация, подписка, уведомления, календарный токен, предметы по выбору."""
 
 import secrets
+import time
 
 import aiosqlite
 
+import database
 from database._conn import connect
+
+# Amvera (16.10): запись в базу ~0,2 с (сетевой диск), а upsert_user шёл на
+# каждый запрос WebApp. Те же имя и ник — пишем не чаще раза в 10 минут
+# (last_seen для «Кто пользуется» точнее и не нужен). Ключ — с путём базы:
+# тесты и /restore подменяют её; удаление данных — forget_user.
+UPSERT_EVERY = 600
+_upserted: dict[tuple[str, int], tuple[str, str, float]] = {}
+
+
+def forget_user(user_id: int | None = None):
+    """Забыть, что человек уже записан (None — всех): после удаления или /restore."""
+    if user_id is None:
+        _upserted.clear()
+    else:
+        for key in [k for k in _upserted if k[1] == user_id]:
+            del _upserted[key]
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -15,6 +33,10 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
     import privacy
     if not named or await privacy.blocked(user_id):
         username = full_name = ""
+    key, now = (database.DATABASE_PATH, user_id), time.monotonic()
+    last = _upserted.get(key)
+    if last and last[:2] == (username, full_name) and now - last[2] < UPSERT_EVERY:
+        return
     async with connect() as db:
         await db.execute("""
             INSERT INTO users (user_id, username, full_name, last_seen)
@@ -25,6 +47,7 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
                 last_seen = excluded.last_seen
         """, (user_id, username, full_name))
         await db.commit()
+    _upserted[key] = (username, full_name, now)
 
 
 async def get_all_subscribed_users() -> list[int]:
