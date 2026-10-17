@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
+import '../api/links.dart';
 import '../api/models.dart';
 import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
@@ -196,6 +197,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     if (me == null || !mounted) return;
     achName = '${me['first_name'] ?? ''}'.trim();
+    appLinks(widget.api).then((l) => setAchBot(l['bot']), onError: (_) {});
     // подписочные иконки — только с подпиской (5.91): plus из /api/me
     // (у своей группы plan остаётся «own» и с подпиской), до него — plan
     AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
