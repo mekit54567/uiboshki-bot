@@ -518,6 +518,10 @@ async def init_db():
             await db.executemany("UPDATE file_text SET text_hash=? WHERE file_id=?",
                                  [(text_hash(c), fid) for fid, c in rows])
         await db.execute("CREATE INDEX IF NOT EXISTS idx_file_text_hash ON file_text(text_hash)")
+        # «у каких файлов есть текст» (/api/files) — по индексу, а не чтением
+        # всех текстов лекций: char_count лежит после content, и без индекса
+        # SQLite читал десятки МБ с медленного диска Amvera (17.10: 36 с)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_file_text_chars ON file_text(char_count)")
         for table in ("deadlines", "files", "lesson_notes"):
             try:
                 await db.execute(f"ALTER TABLE {table} ADD COLUMN group_id INTEGER")

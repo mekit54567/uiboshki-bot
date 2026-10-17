@@ -83,6 +83,7 @@ async def pace():
 
 
 PACE_SECONDS = 0.05
+INDEX_FIRST_DELAY = 10          # мин после запуска до первого прохода индекса лекций
 
 
 async def send_morning_schedule(bot: Bot):
@@ -478,7 +479,9 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
             await semantic_index.index_pending(bot)
         except Exception as e:
             logger.warning(f"индекс поиска: {type(e).__name__}: {e}")
-    scheduler.add_job(index_lectures, "interval", minutes=20, next_run_time=datetime.now(TZ) + timedelta(minutes=2))
+    # первый проход — не сразу: после выкладки все разом открывают приложение,
+    # а на Amvera пол-ядра (17.10: в первые минуты ответы по 35 с)
+    scheduler.add_job(index_lectures, "interval", minutes=20, next_run_time=datetime.now(TZ) + timedelta(minutes=INDEX_FIRST_DELAY))
     import local_embed
     scheduler.add_job(local_embed.unload_idle, "interval", minutes=5)    # своя модель векторов — из памяти после простоя
     # Копия базы старосте каждую ночь, без звука (backup.py).
