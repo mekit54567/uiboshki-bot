@@ -190,6 +190,28 @@ def loop_lag(now: float | None = None) -> float:
     return max((lag for t, lag in _LAGS if now - t <= 3600), default=0.0)
 
 
+_SLOW: deque = deque(maxlen=500)       # (когда, путь, с) — запросы приложения дольше SLOW_REQ
+SLOW_REQ = 5.0
+
+
+def note_request(path: str, seconds: float, now: float | None = None) -> None:
+    """Долгий запрос к API (webapp/server.py) — в «Сервер» у /status: какие
+    разделы отвечают по 40–60 с (17.10 по метрикам Amvera были такие)."""
+    if seconds >= SLOW_REQ:
+        _SLOW.append((now or time.time(), path, seconds))
+        logging.getLogger(__name__).info(f"долгий запрос {path}: {seconds:.1f} с")
+
+
+def slow_requests(now: float | None = None, top: int = 3) -> tuple[int, list[tuple[str, float]]]:
+    """(сколько долгих за час, самые долгие пути — по худшему разу)."""
+    now = now or time.time()
+    recent = [(p, s) for t, p, s in _SLOW if now - t <= 3600]
+    worst: dict[str, float] = {}
+    for p, s in recent:
+        worst[p] = max(worst.get(p, 0.0), s)
+    return len(recent), sorted(worst.items(), key=lambda x: -x[1])[:top]
+
+
 async def db_probe() -> tuple[str, float, float]:
     """(режим журнала, чтение мс, запись мс) — свежим подключением, как у
     обработчиков: открыть базу + прочитать, открыть + записать в settings."""
@@ -227,7 +249,11 @@ async def report() -> str:
     except Exception as e:
         lines.append(f"⚠️ база: {type(e).__name__}: {e}")
     lag = loop_lag()
-    lines += [("⚠️ " if lag >= LAG_WARN else "") + f"Самое долгое зависание за час: {lag:.1f} с", ""]
+    lines.append(("⚠️ " if lag >= LAG_WARN else "") + f"Самое долгое зависание за час: {lag:.1f} с")
+    n, worst = slow_requests()
+    lines += [f"Долгих запросов (от {SLOW_REQ:.0f} с) за час: {n} — "
+              + ", ".join(f"{p} {s:.0f} с" for p, s in worst) if n
+              else f"Долгих запросов (от {SLOW_REQ:.0f} с) за час нет", ""]
 
     lines.append("<b>СДО</b>")
     if not SDO_SESSION_COOKIE:
