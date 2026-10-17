@@ -66,3 +66,23 @@ async def test_rank_closed(db):
     assert not await achievements.rank_closed(UID, "dusk")
     await achievements.add(UID, {achievements.RANKS["dusk"][-1]: NOW}, NOW)
     assert await achievements.rank_closed(UID, "dusk")
+
+
+@pytest.mark.asyncio
+async def test_creator_has_all(client, db, monkeypatch):
+    """Никита 17.10: у создателя (оба аккаунта старосты) — все ачивки сразу,
+    открытые раньше — со своим временем; у остальных — только свои."""
+    import config
+    from tests.conftest import STAROSTA_ID
+    second = 112
+    monkeypatch.setattr(config, "STAROSTA_IDS", [STAROSTA_ID, second])
+    c, h = client
+    for uid in (STAROSTA_ID, second):
+        await db.upsert_user(uid, "", f"u{uid}")
+    first = NOW - 86400_000
+    c.post("/api/achievements", json={"items": {"lesson": first}}, headers=h(STAROSTA_ID))
+    got = c.get("/api/achievements", headers=h(STAROSTA_ID)).json()["items"]
+    assert set(got) == achievements.IDS and got["lesson"] == first
+    assert set(c.post("/api/achievements", json={"items": {}}, headers=h(second)).json()["items"]) == achievements.IDS
+    assert await achievements.rank_closed(second, "midnight")
+    assert c.get("/api/achievements", headers=h(UID)).json()["items"] == {}

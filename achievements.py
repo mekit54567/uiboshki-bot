@@ -41,6 +41,12 @@ async def add(user_id: int, items: dict, now_ms: int) -> dict[str, int]:
     return await of_user(user_id)
 
 
+async def grant_all(user_id: int, now_ms: int) -> dict[str, int]:
+    """Создателю (оба аккаунта из STAROSTA_ID, Никита 17.10: «открыть мне на
+    обоих акках все») — все ачивки сразу; открытые раньше сохраняют своё время."""
+    return await add(user_id, {a: now_ms for a in IDS}, now_ms)
+
+
 async def rank_closed(user_id: int, rank: str) -> bool:
     """Все ачивки ранга открыты (для дней подписки за ранг)."""
     got = await of_user(user_id)
