@@ -2,16 +2,20 @@
 // приложения. Логин и пароль вводятся на сайте МИРЭА, приложение их не видит;
 // когда СДО открылся уже не на странице входа, из куки WebView берётся только
 // MoodleSession и уходит на сервер (/sdo/connect) — как ручная вставка.
+// Куку HttpOnly из Dart не прочитать — её отдаёт канал uiboshki/cookies
+// (MainActivity.kt: CookieManager, AppDelegate.swift: WKHTTPCookieStore).
 // В браузере (PWA) чужую куку не прочитать — там остаётся ручная вставка.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'files.dart';
 
 const sdoBase = 'https://online-edu.mirea.ru';
+const _cookies = MethodChannel('uiboshki/cookies');
 
 /// Открыть вход и вернуть MoodleSession (null — человек закрыл экран).
 typedef SdoWebLogin = Future<String?> Function(BuildContext context);
@@ -36,11 +40,22 @@ class SdoLoginPage extends StatefulWidget {
 class _SdoLoginPageState extends State<SdoLoginPage> {
   double _progress = 0;
   bool _done = false;
+  late final WebViewController _web = WebViewController()
+    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    ..setNavigationDelegate(
+      NavigationDelegate(
+        onProgress: (v) {
+          if (mounted) setState(() => _progress = v / 100);
+        },
+        onPageFinished: (url) => _check(url),
+        onUrlChange: (c) => _check(c.url),
+      ),
+    )
+    ..loadRequest(Uri.parse('$sdoBase/my/'));
 
-  Future<void> _check(WebUri? url) async {
-    if (_done || !sdoLoggedIn(url)) return;
-    final c = await CookieManager.instance().getCookie(url: WebUri(sdoBase), name: 'MoodleSession');
-    final v = c?.value?.toString() ?? '';
+  Future<void> _check(String? url) async {
+    if (_done || !sdoLoggedIn(Uri.tryParse(url ?? ''))) return;
+    final v = await _cookies.invokeMethod<String>('get', {'url': sdoBase, 'name': 'MoodleSession'}) ?? '';
     if (v.isEmpty || _done || !mounted) return;
     _done = true;
     Navigator.pop(context, v);
@@ -80,15 +95,7 @@ class _SdoLoginPageState extends State<SdoLoginPage> {
               ),
             ),
             if (_progress < 1) LinearProgressIndicator(value: _progress, minHeight: 2, color: p.accent),
-            Expanded(
-              child: InAppWebView(
-                initialUrlRequest: URLRequest(url: WebUri('$sdoBase/my/')),
-                initialSettings: InAppWebViewSettings(incognito: false, clearCache: false),
-                onProgressChanged: (_, v) => setState(() => _progress = v / 100),
-                onLoadStop: (_, url) => _check(url),
-                onUpdateVisitedHistory: (_, url, _) => _check(url),
-              ),
-            ),
+            Expanded(child: WebViewWidget(controller: _web)),
           ],
         ),
       ),

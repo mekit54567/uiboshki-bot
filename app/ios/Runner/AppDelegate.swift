@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import WebKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -16,6 +17,11 @@ import UIKit
     let registrar: FlutterPluginRegistrar? = engineBridge.pluginRegistry.registrar(forPlugin: "AppIconPlugin")
     if let registrar = registrar {
       AppIconPlugin.register(with: registrar)
+    }
+    // вход в СДО страницей (5.93.2): кука MoodleSession из WKWebView
+    let cookies: FlutterPluginRegistrar? = engineBridge.pluginRegistry.registrar(forPlugin: "CookiesPlugin")
+    if let cookies = cookies {
+      CookiesPlugin.register(with: cookies)
     }
     // виджеты рабочего стола (WidgetBridge.swift)
     let widgets: FlutterPluginRegistrar? = engineBridge.pluginRegistry.registrar(forPlugin: "WidgetBridge")
@@ -89,6 +95,35 @@ class AppIconPlugin: NSObject, FlutterPlugin {
       }
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+}
+
+/// Кука из WKWebView (общее хранилище, как у webview_flutter): MoodleSession —
+/// HttpOnly, со страницы её не прочитать. get {url, name} → значение или nil.
+class CookiesPlugin: NSObject, FlutterPlugin {
+  static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(name: "uiboshki/cookies", binaryMessenger: registrar.messenger())
+    registrar.addMethodCallDelegate(CookiesPlugin(), channel: channel)
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard call.method == "get",
+          let args = call.arguments as? [String: Any],
+          let url = args["url"] as? String,
+          let name = args["name"] as? String,
+          let host = URL(string: url)?.host else {
+      result(FlutterMethodNotImplemented)
+      return
+    }
+    DispatchQueue.main.async {
+      WKWebsiteDataStore.default().httpCookieStore.getAllCookies { all in
+        let cookie = all.first { c in
+          let domain = c.domain.hasPrefix(".") ? String(c.domain.dropFirst()) : c.domain
+          return c.name == name && (host == domain || host.hasSuffix("." + domain))
+        }
+        result(cookie?.value)
+      }
     }
   }
 }

@@ -2,6 +2,7 @@ package ru.uiboshki.app
 
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import android.webkit.CookieManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -60,6 +61,18 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         // виджеты рабочего стола: снимок дня из приложения (widget/WidgetBridge.kt)
         WidgetBridge.attach(this, flutterEngine)
+        // вход в СДО страницей (5.93.2): кука MoodleSession — HttpOnly, из Dart её не видно
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "uiboshki/cookies").setMethodCallHandler { call, result ->
+            if (call.method != "get") return@setMethodCallHandler result.notImplemented()
+            val url = call.argument<String>("url") ?: ""
+            val name = call.argument<String>("name") ?: ""
+            val value = CookieManager.getInstance().getCookie(url).orEmpty()
+                .split(";")
+                .map { it.trim() }
+                .firstOrNull { it.startsWith("$name=") }
+                ?.substringAfter("=")
+            result.success(value)
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "uiboshki/icon").setMethodCallHandler { call, result ->
             when (call.method) {
                 "supported" -> result.success(true)
