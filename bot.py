@@ -128,7 +128,7 @@ async def setup_bot_menu(bot: Bot):
 
 def start_webapp(port: int):
     """WebApp (webapp/server.py) в том же процессе, что и бот: одна служба на
-    Railway, один том с SQLite — отдельный процесс не видел бы ту же базу.
+    хостинге, один диск с SQLite — отдельный процесс не видел бы ту же базу.
     Сигналы (SIGTERM при редеплое) ловит aiogram, uvicorn свои не ставит —
     останавливаем его сами (stop_webapp) после выхода из polling. Падение
     WebApp не роняет бота. Возвращает (server, task) или (None, None)."""
@@ -198,6 +198,9 @@ async def main():
         except Exception as e:
             logger.info(f"превью поста канала: {e}")
     asyncio.create_task(offer_post())
+
+    import sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
+    asyncio.create_task(sdo_accounts.rotate_all())
 
     import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
     if (missing := privacy.operator_missing()) and STAROSTA_ID:

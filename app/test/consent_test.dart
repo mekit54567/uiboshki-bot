@@ -20,7 +20,7 @@ const _doc = {
       'title': 'Кому передаются',
       'blocks': [
         {'p': 'Абзац'},
-        {'ul': ['Railway (США) — хостинг', 'Telegram — сообщения']},
+        {'ul': ['Amvera (Москва) — хостинг', 'Telegram — сообщения']},
       ],
     },
   ],
@@ -55,7 +55,7 @@ void main() {
     // синяя ссылка «согласие на обработку…» — текст поверх, галочка не ставится
     await t.tapOnText(find.textRange.ofSubstring('согласие на обработку персональных данных'));
     await settle(t);
-    expect(find.text('Railway (США) — хостинг'), findsOneWidget);
+    expect(find.text('Amvera (Москва) — хостинг'), findsOneWidget);
     expect(asked, contains('GET /api/legal/consent'));
     await t.tap(find.byTooltip('Назад'));
     await settle(t);

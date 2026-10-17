@@ -34,7 +34,7 @@
 > and as a native Flutter app for Android and iOS on the same versioned API.
 > Python · aiogram 3 · FastAPI · SQLite · Gemini · Flutter. Solo project:
 > ~20k lines of Python, ~6k of web frontend, ~10k of Dart, 770+ tests,
-> CI on every PR, deployed on Railway.
+> CI on every PR, deployed on Amvera (Moscow).
 
 <table>
 <tr>
@@ -181,7 +181,7 @@ flowchart LR
     API & BOT --> AI["Gemini / DeepSeek"]
 ```
 
-Бот и Mini App — один процесс и одна база (Railway). Фронтенд — обычные
+Бот и Mini App — один процесс и одна база (Amvera, Москва). Фронтенд — обычные
 скрипты без сборки; авторизация — по `initData` Telegram, вне Telegram —
 токен сессии устройства (вход через бота, VK ID или Яндекс ID). PWA и своё
 приложение ходят в версионированное API `/api/v1` (снимок контракта в тестах).

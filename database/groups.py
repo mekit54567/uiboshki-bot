@@ -12,6 +12,8 @@ from database._conn import connect
 # группы, без протаскивания group_id через каждый вызов. Нет запроса
 # (рассылки, синк) — своя группа бота.
 current_group: ContextVar[int | None] = ContextVar("current_group", default=None)
+# И кто сам этот человек — для ИИ «только старостам на Ling» (gemini_solver.ai_main).
+current_user: ContextVar[int | None] = ContextVar("current_user", default=None)
 
 
 async def upsert_group(group_id: int, name: str, own: bool = False):
@@ -154,6 +156,7 @@ async def enter(user_id: int) -> int:
     """Запомнить группу человека на время его запроса."""
     gid = await viewer_group(user_id)
     current_group.set(gid)
+    current_user.set(user_id)
     return gid
 
 

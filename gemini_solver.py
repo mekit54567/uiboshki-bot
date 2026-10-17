@@ -28,12 +28,13 @@ tier (и implicit, и explicit caching — платная фича) — поэт
 import base64
 import logging
 import time
+from collections import Counter
 
 import httpx
 
 import net
 
-from config import (AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME,
+from config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME,
                     GROUP_PROGRAM, OPENROUTER_API_KEY)
 
 logger = logging.getLogger(__name__)
@@ -101,12 +102,22 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
     fallback=False — без запасных моделей (классификатор намерений: их
     маленький дневной лимит — для настоящих вопросов, а не «привет»).
     Кидает GeminiError (RuntimeError) с понятным текстом при любой проблеме."""
-    if not GEMINI_API_KEY:
-        raise GeminiError("GEMINI_API_KEY не настроен на сервере")
-
     generation_config: dict = {"temperature": temperature}
     if max_output_tokens:
         generation_config["maxOutputTokens"] = max_output_tokens
+    ling_tried = False
+    if fallback and AI_SPARE_MODEL and await ling_first():
+        # своя группа на Ling (ai_main): Gemini — запасная, если Ling не ответила
+        try:
+            text = await _openrouter_once(contents, system_instruction, generation_config, timeout, mark_truncated)
+            answered["ling"] += 1
+            return text
+        except GeminiError as e:
+            logger.warning(f"{AI_SPARE_MODEL} не ответила: {e} — пробую Gemini")
+            answered["ling_failed"] += 1
+            ling_tried = True
+    if not GEMINI_API_KEY:
+        raise GeminiError("GEMINI_API_KEY не настроен на сервере")
     payload: dict = {"contents": contents, "generationConfig": generation_config}
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
@@ -123,7 +134,9 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
     limited = None
     for i, model in enumerate(models):
         try:
-            return await _generate_once(model, payload, timeout, mark_truncated)
+            text = await _generate_once(model, payload, timeout, mark_truncated)
+            answered["gemini"] += 1
+            return text
         except GeminiError as e:
             if model == GEMINI_MODEL and e.status == 429:
                 _rest_primary()
@@ -141,14 +154,48 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
                     continue
                 break
             raise
-    if limited and fallback and AI_SPARE_MODEL:     # у всех Gemini лимит (или страна) — запасная через OpenRouter
+    if limited and fallback and AI_SPARE_MODEL and not ling_tried:     # у всех Gemini лимит (или страна) — запасная через OpenRouter
         try:
             text = await _openrouter_once(contents, system_instruction, generation_config, timeout, mark_truncated)
             logger.info(f"Gemini: лимит у всех моделей — ответила {AI_SPARE_MODEL}")
+            answered["ling"] += 1
             return text
         except GeminiError as e:
             logger.warning(f"Запасная {AI_SPARE_MODEL} не ответила: {e}")
     raise limited or GeminiError("Gemini не ответил")
+
+
+# Кто сколько ответил с запуска — для /status (проверка Ling на своей группе).
+answered: Counter = Counter()
+
+MAIN_MODES = {"all": "все", "group": "своя группа", "me": "только старосты", "gemini": "никто"}
+
+
+async def ai_main() -> str:
+    """Кому Ling — основная: settings ai_main (/aimain) поверх config.AI_MAIN."""
+    try:
+        from database import get_setting
+        mode = await get_setting("ai_main")
+    except Exception as e:
+        logger.info(f"ai_main: {e}")
+        mode = None
+    mode = (mode or AI_MAIN or "gemini").strip().lower()
+    return mode if mode in MAIN_MODES else "gemini"
+
+
+async def ling_first() -> bool:
+    """Этот запрос — сначала Ling: все (all, Никита 17.10), своя группа (group)
+    или староста (me).
+    Группа и человек — того, чей запрос (database.groups, ставит бот и WebApp)."""
+    mode = await ai_main()
+    if mode in ("gemini", "all"):
+        return mode == "all"
+    from config import is_starosta
+    from database.groups import current_user, g_or_home, home
+    uid = current_user.get()
+    if uid and is_starosta(uid):
+        return True
+    return mode == "group" and g_or_home(None) == home()
 
 
 # Из России Gemini отвечает 400 «User location is not supported» (переезд,

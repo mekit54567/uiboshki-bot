@@ -90,7 +90,7 @@ async def test_consent_versions(db, monkeypatch):
     assert await privacy.needs(ME) and await privacy.needs(ME, "sdo")
     await privacy.give(ME, "pd", "bot")
     assert not await privacy.needs(ME) and await privacy.needs(ME, "sdo")
-    monkeypatch.setattr(privacy, "VERSION", "2")          # новый текст — спросить заново
+    monkeypatch.setattr(privacy, "VERSION", "99")         # новый текст — спросить заново
     assert await privacy.needs(ME)
     with pytest.raises(ValueError):
         await privacy.give(ME, "ads", "bot")
@@ -165,7 +165,10 @@ def test_legal_texts_and_pages(monkeypatch):
         assert page.status_code == 200 and title in page.text and privacy.DATE in page.text
     assert c.get("/api/legal/ads").status_code == 404
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
-    assert "Railway" in text and "США" in text            # правда о том, где сервер
+    assert "Railway" not in text and "us-west" not in text  # переезд 16.10: сервер в России
+    assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "перечень — на сайте Amvera" in text
+    assert "Онланта" not in text and "доступа к содержимому у них нет" not in text   # договор поручения Amvera
+    assert "бесплатном тарифе" in text and "для улучшения своих моделей" in text   # ревью 17.10: Gemini
 
 
 @pytest.mark.asyncio
@@ -312,7 +315,7 @@ async def test_old_users_never_blocked(db, monkeypatch):
     assert not await privacy.blocked(STAROSTA_ID)         # староста — оператор
     assert not hasattr(privacy, "GRACE_UNTIL")
     assert await privacy.ask_once(ME) and not await privacy.ask_once(ME)   # спросить — один раз
-    monkeypatch.setattr(privacy, "VERSION", "2")
+    monkeypatch.setattr(privacy, "VERSION", "99")
     assert await privacy.ask_once(ME)                     # новый текст — ещё раз
 
 
@@ -355,12 +358,14 @@ async def test_api_closed_until_consent(db, monkeypatch):
 
 
 def test_legal_texts_after_review(monkeypatch):
-    """Ревью 11.10: копии в Telegram (ОАЭ), цели, основание, поручение Railway,
+    """Ревью 11.10: копии в Telegram (ОАЭ), цели, основание, поручение хостингу,
     фото вопроса, срок ответа; данные оператора — из переменных окружения."""
     c, _ = _client(monkeypatch)
     for name in ("consent", "privacy"):
         text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
-        assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text and "по поручению" in text
+        assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text
+        assert "Амвера" in text and "договор поручения Amvera от 14.07.2026" in text   # ревью 17.10
+        assert "id от Apple" in text and "скрыт" in text and "только если" in text and "вход через Apple" in text   # #200
         assert "текст или фото" in text and "не дольше" not in text
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert '"Цели"' in text and "ст. 6 ч. 1 п. 1" in text and "п. 5" in text and "рабочих дней" in text
@@ -378,3 +383,46 @@ async def test_status_warns_without_operator(db, monkeypatch):
     for k in ("FIO", "INN", "EMAIL", "CITY"):
         monkeypatch.setattr(privacy, k, "x")
     assert privacy.operator_missing() == [] and "данных оператора" not in await health.report()
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_new_version_does_not_block_who_consented(db, monkeypatch):
+    """Переезд 16.10, новая версия текста: давший прошлую версию не
+    блокируется — его один раз спрашивают, как старых своих; новый — как раньше."""
+    import privacy
+    await db.upsert_user(ME, "me", "Я")
+    await db.upsert_user(OTHER, "other", "Он")
+    await privacy.give(ME, "pd", "bot")
+    monkeypatch.setattr(privacy, "VERSION", "99")
+    privacy._given.clear()
+    assert await privacy.needs(ME) and not await privacy.blocked(ME)
+    assert await privacy.should_ask(ME) and await privacy.ask_once(ME) and not await privacy.ask_once(ME)
+    assert await privacy.blocked(OTHER)
+
+
+def test_legal_backup_where(monkeypatch):
+    """Бэкап в российском S3 (BACKUP_S3_*) — в текстах хранилище вместо Telegram
+    и срок, за который удалённое уходит из копий; не задан — Telegram, как было."""
+    c, _ = _client(monkeypatch)
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "Telegram FZ-LLC (ОАЭ) — хранение ночной резервной копии" in text
+    for k in ("BACKUP_S3_BUCKET", "BACKUP_S3_KEY_ID", "BACKUP_S3_SECRET"):
+        monkeypatch.setenv(k, "x")
+    for name in ("consent", "privacy"):
+        text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
+        assert "резервной копии базы у оператора" not in text and "Yandex Cloud (Россия)" in text
+        assert "7 дней" in text and "год" not in text            # ст. 21 ч. 5: не дольше 30 дней
+
+
+def test_legal_proxy_as_configured(monkeypatch):
+    """Ревью 16.10: как уходят запросы за границу — как устроено на сервере:
+    туннель Xray на сервер оператора (страна — PROXY_COUNTRY) или сеть хостинга."""
+    c, _ = _client(monkeypatch)
+    monkeypatch.delenv("XRAY_CONFIG", raising=False)
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "через сеть хостинга Amvera" in text and "туннель" not in text
+    monkeypatch.setenv("XRAY_CONFIG", "x")
+    monkeypatch.setenv("PROXY_COUNTRY", "Нидерландах")
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "туннель на сервер оператора в Нидерландах" in text and "не расшифровывается" in text

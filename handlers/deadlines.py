@@ -374,13 +374,13 @@ async def cmd_sync_sdo(message: Message):
             await wait.edit_text(
                 "⚠️ Кука СДО не задана. Зайди в online-edu.mirea.ru в браузере, "
                 "возьми значение MoodleSession (F12 → Application → Cookies) и добавь "
-                "его в Railway → Variables как SDO_SESSION_COOKIE."
+                "его в переменные хостинга (Amvera → Переменные) как SDO_SESSION_COOKIE."
             )
         else:
             await wait.edit_text(
                 "⚠️ Кука СДО протухла: СДО открылся, но попросил войти заново. Зайди в "
                 "online-edu.mirea.ru в браузере, возьми свежее значение MoodleSession "
-                "(F12 → Application → Cookies) и обнови SDO_SESSION_COOKIE в Railway. "
+                "(F12 → Application → Cookies) и обнови SDO_SESSION_COOKIE в переменных хостинга. "
                 "В СДО потом не жми «Выйти» — это убивает сессию."
             )
         return

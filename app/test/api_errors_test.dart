@@ -35,7 +35,7 @@ void main() {
     expect(errorText(e), 'Сервер сейчас не отвечает (ошибка 500) — попробуй позже.');
   });
 
-  test('502 от Railway страницей и 502 с текстом сервера', () async {
+  test('502 от хостинга страницей и 502 с текстом сервера', () async {
     var e = await _fail(_api((_) async => http.Response('Bad Gateway', 502)).get('/me'));
     expect(errorText(e), contains('ошибка 502'));
     e = await _fail(

@@ -128,9 +128,10 @@ def _fresh_rate_limits():
     import gemini_solver
     gemini_solver._primary_rest_until = 0.0     # «основная модель отдыхает» после 429 — между тестами не тащим
     gemini_solver._missing.clear()              # и пропавшие запасные
-    spare = gemini_solver.AI_SPARE_MODEL
+    spare, main = gemini_solver.AI_SPARE_MODEL, gemini_solver.AI_MAIN
     gemini_solver.AI_SPARE_MODEL = ""           # запасная через OpenRouter — только где тест её включил
+    gemini_solver.AI_MAIN = "gemini"            # Ling основной — тоже (test_ling_main_for_own_group)
     yield
-    gemini_solver.AI_SPARE_MODEL = spare
+    gemini_solver.AI_SPARE_MODEL, gemini_solver.AI_MAIN = spare, main
     ratelimit.reset()
     mirea_schedule_api.reset_ical_cache()

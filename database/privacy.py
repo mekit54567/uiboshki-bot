@@ -31,6 +31,14 @@ async def has_consent(user_id: int, kind: str, version: str) -> bool:
         return row is not None
 
 
+async def has_any_consent(user_id: int, kind: str = "pd") -> bool:
+    """Давал согласие хоть какой-то версии текста."""
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT 1 FROM consents WHERE user_id=? AND kind=?", (user_id, kind))).fetchone()
+        return row is not None
+
+
 async def is_legacy(user_id: int) -> bool:
     """Пользовался ботом до согласий — пользуется и без него (Никита, 11.10)."""
     async with connect() as db:

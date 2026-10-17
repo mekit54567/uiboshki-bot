@@ -99,7 +99,7 @@ async function deleteMyData(confirmed) {
   document.getElementById("consent-body").innerHTML =
     '<div class="sec-hero"><span class="sec-shield">' + icon("check") + '</span><div><h3>Данные удалены</h3>' +
       '<p>Всё о тебе стёрто</p></div></div>' +
-    '<p class="sheet-hint">Из ночных копий базы оно уйдёт при ежемесячной чистке копий. Если вернёшься — начнём с нуля.</p>';
+    '<p class="sheet-hint">Из ночных копий базы оно уйдёт, когда старые копии сменятся новыми. Если вернёшься — начнём с нуля.</p>';
   document.getElementById("consent-sheet").classList.add("open");
   if (IN_TG) { setTimeout(() => { try { tg.close(); } catch (e) {} }, 2500); return; }
   saveToken("");

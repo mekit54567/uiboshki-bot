@@ -1,4 +1,4 @@
-"""152-ФЗ, пока бот на Railway: согласие, «удалить все мои данные», срок
+"""152-ФЗ (сервер в России, Amvera): согласие, «удалить все мои данные», срок
 хранения. Тексты — legal_texts.py (страницы /consent и /privacy, JSON
 /api/legal/<имя> — webapp/routes/legal.py).
 
@@ -17,8 +17,8 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1"
-DATE = "11.10.2026"
+VERSION = "2"
+DATE = "16.10.2026"
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
 
@@ -38,6 +38,40 @@ OPERATOR = ", ".join(x for x in (
     f"ИНН {INN}" if INN else "", f"г. {CITY}" if CITY else "") if x)
 CONTACT = "Telegram @Partykq" + (f" или почта {EMAIL}" if EMAIL else "")
 CONTACT_URL = "https://t.me/Partykq"
+
+
+def backup_texts() -> dict:
+    """Где резервные копии базы и как уходят запросы за границу — для
+    legal_texts: своё хранилище в России (BACKUP_S3_*, s3_store.py) или файлом
+    оператору в Telegram (ОАЭ); туннель Xray (XRAY_CONFIG, страна —
+    PROXY_COUNTRY) или сеть хостинга. Копии — не дольше 30 дней (ст. 21 ч. 5)."""
+    import s3_store
+    if os.getenv("XRAY_CONFIG", "").strip() or os.getenv("OUT_PROXY", "").strip():
+        country = os.getenv("PROXY_COUNTRY", "").strip()
+        proxy = ("Запросы к Telegram и ИИ уходят с сервера через зашифрованный туннель на сервер оператора"
+                 + (f" в {country}" if country else " за границей")
+                 + ": содержимое там не хранится и не расшифровывается (HTTPS). СДО МИРЭА, VK и Яндекс — напрямую.")
+    else:
+        proxy = ("Запросы к Telegram и ИИ уходят с сервера через сеть хостинга Amvera в зашифрованном виде "
+                 "(HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
+    if s3_store.configured():
+        return {
+            "PROXY": proxy,
+            "BACKUP_WHERE": "Раз в сутки делается резервная копия базы и ложится в хранилище в России "
+                            f"({s3_store.provider()}). Хранятся копии за последние 7 дней, каждая новая "
+                            "заменяет недельной давности, поэтому удалённое из базы уходит из копий за 7 дней.",
+            "BACKUP_TO": f"{s3_store.provider()} (Россия) — хранение резервной копии базы, по поручению "
+                         "оператора;",
+            "BACKUP_ERASE": "когда копия сменится новой, не позже чем через 7 дней",
+        }
+    return {
+        "PROXY": proxy,
+        "BACKUP_WHERE": "Раз в сутки делается резервная копия базы и приходит оператору в Telegram "
+                        "(Telegram FZ-LLC, ОАЭ). Копии старше 30 дней оператор удаляет вручную, поэтому "
+                        "удалённое из базы может до 30 дней оставаться в копиях.",
+        "BACKUP_TO": "Telegram FZ-LLC (ОАЭ) — хранение ночной резервной копии базы у оператора;",
+        "BACKUP_ERASE": "не позже чем через 30 дней, когда оператор удаляет старые копии",
+    }
 
 
 def operator_missing() -> list[str]:
@@ -62,15 +96,18 @@ async def blocked(user_id: int) -> bool:
     """Нельзя обрабатывать (кроме самого согласия, /privacy и /deleteme):
     согласия нет и человек новый. Без событий статистики, без имени и ника в
     базе, без рассылок. Кто был до согласий (users.legacy — пара своих),
-    пользуется и без него (Никита, 11.10). Старосты — операторы."""
+    пользуется и без него (Никита, 11.10). Давал согласие прошлой версии
+    текста — тоже: новую спросят один раз (ask_once), не блокируя (переезд
+    16.10). Старосты — операторы."""
     if user_id in STAROSTA_IDS or not await needs(user_id):
         return False
-    from database.privacy import is_legacy
-    return not await is_legacy(user_id)
+    from database.privacy import has_any_consent, is_legacy
+    return not await is_legacy(user_id) and not await has_any_consent(user_id)
 
 
 async def should_ask(user_id: int) -> bool:
-    """Кто был до согласий и ещё не видел просьбу этой версии (без отметки)."""
+    """Кто был до согласий или давал прошлую версию и ещё не видел просьбу
+    этой версии (без отметки)."""
     if user_id in STAROSTA_IDS or not await needs(user_id):
         return False
     from database.privacy import asked_version
@@ -110,8 +147,8 @@ async def seen(user_id: int):
 
 
 async def erase(user_id: int) -> dict:
-    """Всё о человеке — из базы и кэшей. Из ночных копий базы (у оператора в
-    Telegram) — при ежемесячной ручной чистке (политика это говорит)."""
+    """Всё о человеке — из базы и кэшей. Из ночных копий базы — когда они
+    сменятся (backup_texts, политика это говорит)."""
     from database.privacy import erase_user
     from database.service import drop_events
     from database.users import forget_user
