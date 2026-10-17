@@ -166,8 +166,8 @@ def test_legal_texts_and_pages(monkeypatch):
     assert c.get("/api/legal/ads").status_code == 404
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert "Railway" not in text and "us-west" not in text  # переезд 16.10: сервер в России
-    assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "дата-центре ООО «Онланта»" in text
-    assert "Амвера» (Москва" not in text and "доступа к содержимому у них нет" in text   # не «по поручению»
+    assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "перечень — на сайте Amvera" in text
+    assert "Онланта" not in text and "доступа к содержимому у них нет" not in text   # договор поручения Amvera
 
 
 @pytest.mark.asyncio
@@ -363,7 +363,7 @@ def test_legal_texts_after_review(monkeypatch):
     for name in ("consent", "privacy"):
         text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
         assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text
-        assert "Амвера" in text and "по поручению" not in text   # оферта Amvera без поручения (ревью 17.10)
+        assert "Амвера" in text and "договор поручения Amvera от 14.07.2026" in text   # ревью 17.10
         assert "текст или фото" in text and "не дольше" not in text
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert '"Цели"' in text and "ст. 6 ч. 1 п. 1" in text and "п. 5" in text and "рабочих дней" in text
