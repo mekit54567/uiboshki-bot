@@ -19,11 +19,13 @@
 до конца индексации — по словам, с нужной страницей.
 """
 
+import asyncio
 import io
 import logging
 import os
 import re
 import struct
+import time
 from contextlib import asynccontextmanager
 
 import aiosqlite
@@ -34,6 +36,13 @@ CHUNK = 1100          # символов в куске: абзац-два — с
 MIN_PAGE = 220        # слайд короче — склеиваем с соседним
 OVERLAP = 150         # перехлёст длинных страниц, чтобы мысль не рвалась на стыке
 EMBED_BATCH = 64
+# Своя модель считает на процессоре сервера, а на Amvera его пол-ядра (17.10:
+# проход раз в 20 минут — троттлинг CPU до 90%, ответы по 10–60 с). Поэтому
+# пачки мельче, после каждой — отдых втрое дольше счёта (модель берёт не
+# больше четверти процессора), и на проход не больше LOCAL_BUDGET секунд.
+LOCAL_BATCH = 16
+LOCAL_REST = 3.0
+LOCAL_BUDGET = 15 * 60
 KINDS = {".pdf": "стр.", ".pptx": "слайд"}    # у DOCX/TXT страниц нет — «часть»
 
 VEC_OK: bool | None = None      # загрузилось ли sqlite-vec (None — ещё не пробовали)
@@ -269,7 +278,6 @@ async def index_file(file_id: int, data: bytes | None = None, file_name: str = "
     """Нарезать файл в индекс (векторы — потом, фоном). data — байты файла:
     тогда с номерами страниц и слайдов; без них — части сохранённого текста.
     → сколько кусков."""
-    import asyncio
     kind, pages = ("", [])
     if data:
         kind, pages = await asyncio.to_thread(pages_of, data, file_name)
@@ -292,21 +300,26 @@ async def embed_pending(max_batches: int = 8, pause: float = 1.0, p: str | None 
     """Досчитать векторы кускам без них — пачками, пока не кончатся или Gemini
     не скажет «лимит» (тогда — в следующий проход). p — модель (embedder.py),
     по умолчанию та, что ищет сейчас. → сколько посчитано."""
-    import asyncio
     import embedder
     p = p or embedder.provider()
     table, done_t = embedder.vec_table(p), embedder.done_table(p)
     todo = f"c.id NOT IN (SELECT id FROM {done_t})" if done_t else "c.embedded = 0"
+    local = p != embedder.GEMINI
+    batch = LOCAL_BATCH if local else EMBED_BATCH
     done = 0
+    began = time.monotonic()
     async with open_index() as db:
         if not VEC_OK:
             return 0
-        for _ in range(max_batches):
+        while done < max_batches * EMBED_BATCH:
+            if local and time.monotonic() - began > LOCAL_BUDGET:
+                break
             rows = await (await db.execute(
                 "SELECT c.id, c.text, COALESCE(f.title, '') FROM chunks c LEFT JOIN m.files f ON f.id = c.file_id "
-                f"WHERE {todo} ORDER BY c.id LIMIT ?", (EMBED_BATCH,))).fetchall()
+                f"WHERE {todo} ORDER BY c.id LIMIT ?", (batch,))).fetchall()
             if not rows:
                 break
+            started = time.monotonic()
             try:
                 vecs = await embedder.embed([r[1] for r in rows], titles=[r[2] for r in rows], p=p)
             except embedder.EmbedError as e:
@@ -320,8 +333,9 @@ async def embed_pending(max_batches: int = 8, pause: float = 1.0, p: str | None 
                 await db.executemany("UPDATE chunks SET embedded=1 WHERE id=?", [(r[0],) for r in rows])
             await db.commit()
             done += len(rows)
-            if pause:
-                await asyncio.sleep(pause)
+            rest = max(pause, LOCAL_REST * (time.monotonic() - started) if local else 0)
+            if rest:
+                await asyncio.sleep(rest)
     return done
 
 
