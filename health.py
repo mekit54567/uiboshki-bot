@@ -223,6 +223,8 @@ async def report() -> str:
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "
                          f"запасные: {esc(', '.join(spare))}")
+        import think
+        lines.append(esc(await think.status_line()))
     except Exception as e:
         lines.append(f"⚠️ не узнал: {type(e).__name__}")
 

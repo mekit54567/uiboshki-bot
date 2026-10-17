@@ -38,6 +38,9 @@ class ChatMsg {
   /// Вопрос без ответа (ошибка) — в историю не идёт, иначе ИИ отвечал на него позже.
   bool failed;
 
+  /// Кнопка «Подумать ещё» под ответом (подписка): {label, left, daily}.
+  final Map<String, dynamic>? think;
+
   ChatMsg(
     this.role,
     this.content, {
@@ -49,6 +52,7 @@ class ChatMsg {
     this.att,
     this.fileText = '',
     this.failed = false,
+    this.think,
   });
 
   Map<String, dynamic> toJson() => {
@@ -60,6 +64,7 @@ class ChatMsg {
     if (att != null) 'att': {'name': att!.name, 'image': att!.image},
     if (fileText.isNotEmpty) 'file_text': fileText,
     if (failed) 'failed': true,
+    if (think != null) 'think': think,
   };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) {
@@ -73,6 +78,7 @@ class ChatMsg {
       att: a is Map ? (name: '${a['name'] ?? 'файл'}', image: a['image'] == true) : null,
       fileText: j['file_text'] ?? '',
       failed: j['failed'] == true,
+      think: j['think'] is Map ? Map<String, dynamic>.from(j['think']) : null,
     );
   }
 }
@@ -454,12 +460,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _waiting = true;
     });
     _toEnd();
-    final history = [
-      for (final m in _log)
-        if (!m.error && !m.failed && m.content.isNotEmpty && m.choose.isEmpty)
-          {'role': m.role, 'content': m.fileText.isEmpty ? m.content : '${m.content}\n\n${m.fileText}'},
-    ];
-    final body = <String, dynamic>{'history': history, 'subject': _subject};
+    final body = <String, dynamic>{'history': _history(_log), 'subject': _subject};
     if (att != null) body['attachment'] = {'name': att.name, 'mime': att.mime, 'data': base64Encode(att.bytes)};
     ChatMsg answer;
     try {
@@ -473,6 +474,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         sources: [for (final s in (r['sources'] as List? ?? [])) Map<String, dynamic>.from(s)],
         files: [for (final f in (r['files'] as List? ?? [])) Map<String, dynamic>.from(f)],
         choose: choose,
+        think: r['think'] is Map ? Map<String, dynamic>.from(r['think']) : null,
       );
       if (choose.isNotEmpty) _chooseAtt = att; // выберет предмет — вложение уйдёт ещё раз
       if (_left != null && _left! > 0 && choose.isEmpty && answer.files.isEmpty) _left = _left! - 1;
@@ -483,6 +485,55 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       entry.failed = true;
       answer = ChatMsg('assistant', errorText(e), error: true);
     }
+    await _deliver(log, id, answer);
+  }
+
+  /// История для сервера: без ошибок и вопросов без ответа; два ответа
+  /// подряд («Подумать ещё») — только последний, роли чередуются.
+  List<Map<String, String>> _history(List<ChatMsg> log) {
+    final ok = [
+      for (final m in log)
+        if (!m.error && !m.failed && m.content.isNotEmpty && m.choose.isEmpty) m,
+    ];
+    return [
+      for (var i = 0; i < ok.length; i++)
+        if (!(ok[i].role == 'assistant' && i + 1 < ok.length && ok[i + 1].role == 'assistant'))
+          {
+            'role': ok[i].role,
+            'content': ok[i].fileText.isEmpty ? ok[i].content : '${ok[i].content}\n\n${ok[i].fileText}',
+          },
+    ];
+  }
+
+  /// «Подумать ещё»: тот же вопрос заново решает модель второго уровня
+  /// (подписка, свой дневной лимит); новый ответ — под прежним.
+  Future<void> _think() async {
+    if (_waiting || _log.length < 2 || _log.last.role != 'assistant') return;
+    tick();
+    final log = _log;
+    final id = _id;
+    setState(() => _waiting = true);
+    _toEnd();
+    final body = {'history': _history(_log.sublist(0, _log.length - 1)), 'subject': _subject, 'think': true};
+    ChatMsg answer;
+    try {
+      final r = await widget.api.post('/chat', body);
+      answer = ChatMsg(
+        'assistant',
+        r['content'] ?? '',
+        html: r['html'] ?? '',
+        sources: [for (final s in (r['sources'] as List? ?? [])) Map<String, dynamic>.from(s)],
+        think: r['think'] is Map ? Map<String, dynamic>.from(r['think']) : null,
+      );
+    } on ApiError catch (e) {
+      answer = ChatMsg('assistant', e.message, error: true);
+    } catch (e) {
+      answer = ChatMsg('assistant', errorText(e), error: true);
+    }
+    await _deliver(log, id, answer);
+  }
+
+  Future<void> _deliver(List<ChatMsg> log, String? id, ChatMsg answer) async {
     if (!mounted) return;
     if (!identical(log, _log)) {
       // пока ждали, ушли в другой чат — ответ в свой (если его не удалили)
@@ -504,6 +555,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   ChatAttachment? _chooseAtt;
+
+  Widget _thinkChip(AppStyle s, Map<String, dynamic> t) {
+    final p = s.p;
+    final left = (t['left'] as num?)?.toInt() ?? 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.s),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ActionChip(
+          onPressed: left > 0 ? _think : null,
+          backgroundColor: p.card,
+          side: BorderSide(color: left > 0 ? p.accent : p.line),
+          shape: const StadiumBorder(),
+          avatar: Icon(Icons.psychology_outlined, size: 18, color: p.accent),
+          label: Text('${t['label'] ?? 'Подумать ещё'} · $left', style: s.body(13, weight: FontWeight.w600)),
+        ),
+      ),
+    );
+  }
 
   void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scroll.hasClients) {
@@ -649,6 +719,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               _send(again: lastQ.content, againAtt: _chooseAtt);
                             },
                           ),
+                        if (!_waiting && _log.isNotEmpty && _log.last.think != null) _thinkChip(s, _log.last.think!),
                         if (_waiting)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.xl, 0),
