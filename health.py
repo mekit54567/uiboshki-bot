@@ -240,6 +240,10 @@ async def report() -> str:
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
+    import billing
+    if billing.provider(configured_only=True) and billing.missing_requisites():
+        lines += ["⚠️ Касса задана, но оплата «Капибары+» закрыта: в оферте нет реквизитов — задай "
+                  + ", ".join(billing.missing_requisites()), ""]
 
     lines.append("<b>Сервер</b>")
     try:
@@ -296,6 +300,8 @@ async def report() -> str:
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "
                          f"запасные: {esc(', '.join(spare))}")
+        import think
+        lines.append(esc(await think.status_line()))
     except Exception as e:
         lines.append(f"⚠️ не узнал: {type(e).__name__}")
 

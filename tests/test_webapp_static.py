@@ -522,13 +522,13 @@ def _more_menu():
 
 
 def test_more_menu_tiles_with_actions():
-    # 12 плиток: прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам», «Группа», «Позвать»
+    # 13 плиток: прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам», «Группа», «Позвать», «Капибара+»
     menu = _more_menu()
     labels = re.findall(r'<span class="lbl">([^<]+)</span>', menu)
     assert labels == ["Файлы", "Дедлайны", "ДЗ", "Календарь", "Уведомления", "Безопасность",
-                      "Установить", "Что нового", "Канал бота", "Написать нам", "Моя группа", "Позвать"]
+                      "Установить", "Что нового", "Канал бота", "Написать нам", "Моя группа", "Позвать", "Капибара+"]
     for call in ("openHomework()", "showWhatsNew()", "openConfigLink(CHANNEL_URL)", "openConfigLink(CONTACT_URL)",
-                 "shareBot()", "openGroup()"):
+                 "shareBot()", "openGroup()", "openPlus()"):
         assert f'toggleMore(false); {call}"' in menu, call
     assert 'href="#i-send"' in menu and 'href="#i-message"' in menu and 'href="#i-sparkle"' in menu
     # ДЗ — функцией, а не кликом по кнопке сегмента
@@ -732,7 +732,28 @@ function clearAttachment() {}
 function renderChat() {}
 function scrollChatToEnd() {}
 """
-CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "requestAnswer", "sendChat"]
+CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "historyOf",
+            "requestAnswer", "sendChat", "thinkAgain"]
+
+
+@node
+def test_chat_think_again_resends_question_without_old_answer():
+    # «Подумать ещё»: тот же вопрос без прошлого ответа, новый ответ — под ним;
+    # дальше в истории из двух ответов подряд уходит только последний
+    think_body, shown, next_hist = _front("js/chat.js", CHAT_FNS, CHAT_STUBS, """
+      const q = { role: "user", content: "что такое NPV?" };
+      chatLog.push(q); saveChatLog();
+      const p = requestAnswer(q, null);
+      calls[0].res({ content: "коротко", html: "коротко", think: { label: "Подумать ещё", left: 3 } }); await p;
+      const p2 = thinkAgain();
+      calls[1].res({ content: "глубже", html: "глубже", think: { label: "Подумать ещё", left: 2 } }); await p2;
+      const e = { role: "user", content: "а пример?" };
+      chatLog.push(e); requestAnswer(e, null);
+      console.log(JSON.stringify([calls[1].body, shownMsgs, calls[2].body.history.map(m => m.content)]));
+    """)
+    assert think_body["think"] is True and [m["content"] for m in think_body["history"]] == ["что такое NPV?"]
+    assert shown == ["assistant:коротко", "assistant:глубже"]
+    assert next_hist == ["что такое NPV?", "глубже", "а пример?"]
 
 
 @node

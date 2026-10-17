@@ -70,8 +70,9 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     чате). Само «/start file_…» стираем, чтобы чат не зарастал. Просто
     /start без параметра идёт в обычный cmd_start ниже."""
     user = message.from_user
-    await upsert_user(user.id, user.username or "", user.full_name or "")
     payload = command.args or ""
+    existed = (payload.startswith("ref_") or payload == "plus") and await get_user(user.id) is not None
+    await upsert_user(user.id, user.username or "", user.full_name or "")
     if payload.startswith(("file_", "hw_")):
         is_file = payload.startswith("file_")
         key = payload.split("_", 1)[1]
@@ -86,6 +87,14 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         return
     if payload.startswith("login_"):            # вход в приложение без Telegram (webapp/routes/auth.py)
         await ask_login(message, payload[6:])
+        return
+    if payload.startswith("ref_"):              # пришёл по приглашению друга (referrals.py)
+        import referrals
+        await referrals.bind(user.id, payload[4:], was_new=not existed)
+    if payload == "plus" and existed:           # с сайта /plus: «Капибара+» и оплата (новым — приветствие)
+        from handlers.plus import plus_text
+        text, kb = await plus_text(user.id)
+        await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
         return
     if payload == "site":                       # кнопка «Открыть бота» на сайте /about — для /stats
         import stats
@@ -318,7 +327,8 @@ def start_text(first_name: str) -> str:
         "И можно просто написать мне: «скинь лекцию 3 по анализу данных», "
         "задать вопрос или прислать фото задачи — отвечу.\n\n"
         "📱 Без Telegram — тоже: <b>uiboshki.ru/app</b> ставится на экран телефона "
-        "или компьютера как приложение (как — в приложении: Ещё → Установить)."
+        "или компьютера как приложение (как — в приложении: Ещё → Установить).\n\n"
+        "✨ Всё это бесплатно. Хочешь больше — /plus: подписка «Капибара+», оплата на сайте."
     )
 
 
@@ -341,7 +351,12 @@ HELP_TEXT = (
     "В приложении: ☰ Ещё → Уведомления — дни, погода, корпус, напоминания.\n"
     "/settings — коротко в чате · /optional — предметы по выбору\n\n"
     "💬 <b>Группа</b>\n"
-    "/anon — анонимный вопрос старосте · /feed — «Подслушано» · /vote — голосование\n\n"
+    "/anon — анонимный вопрос старосте · /feed — «Подслушано» · /vote — голосование\n"
+    "/invite — позвать друга: готовое сообщение с твоей ссылкой\n\n"
+    "✨ <b>Капибара+</b>\n"
+    "/plus — подписка: что даёт, сколько стоит, дни в подарок за друзей и ранги ачивок. "
+    "Оплата — на сайте uiboshki.ru (кнопка в /plus или «Ещё → Капибара+» в приложении), "
+    "работает везде, и на iPhone\n\n"
     "🔒 <b>Твои данные</b>\n"
     "/privacy — согласие и политика обработки персональных данных · /deleteme — удалить всё о себе"
 )
@@ -360,6 +375,9 @@ STAROSTA_HELP = (
     "/channel — посты канала: превью и выпуск · <code>/channel edit 1 4</code> — поправить выпущенные\n"
     "/pulsecheck — пускает ли Пульс · /pulseprobe — разведка Пульса архивом · /netcheck — сеть сервера (прокси, кто отвечает)\n"
     "/embedtest — своя модель векторов против Gemini (для переезда)\n"
+    "/plusnews — рассылка о «Капибаре+» (превью, потом кнопка) · <code>/plus stage full</code> — "
+    "новым полная цена · <code>/plus gift 31.12.2026</code> / <code>off</code> — подарок группе\n"
+    "/aithink on|off — кнопка «Подумать ещё» у подписчиков (DeepSeek)\n"
     "/delpost ID — удалить пост из ленты · /delnote — удалить заметку к паре\n"
     "/clearsem — сбросить всё под новый семестр"
 )

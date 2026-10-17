@@ -541,6 +541,21 @@ JSON приложения VPN (секрет хостинга, в репозит�
   в базе, лист — `POST /api/consent/asked`), не каждый день. В тестах согласие дано (`conftest._consent_given`), настоящая
   проверка — метка `consent_real`. Оператор в текстах — `PD_FIO`, `PD_INN`,
   `PD_EMAIL`, `PD_CITY` (переменные окружения).
+- **«Капибара+»** (`billing.py`, `referrals.py`, `webapp/routes/billing.py`,
+  `handlers/plus.py`): оплата **только на сайте** `/plus` по личной ссылке
+  (Telegram — кнопкой-ссылкой: цифровое в боте — только Stars); в
+  iOS-сборке — ни цен, ни экрана, ни ссылок (`X-App: ios` → `hidden`, App
+  Store 3.1.1), о плате говорим вне приложения (бот, сайт, канал). Цена
+  первых (Никита 17.10) — 149 ₽ навсегда для оплативших по ней, полная новым —
+  `/plus stage full` только по его слову; своей группе — подарок
+  (`/plus gift`); рассылка `/plusnews` — только по его кнопке. Касса ЮKassa,
+  запасная Robokassa; без `PD_*` оплата закрыта.
+  **«Подумать ещё»** (5.95, `think.py`): подписчикам под ответом — тот же
+  вопрос заново решает `AI_THINK_MODEL` (DeepSeek V4.1 Flash, платный через
+  OpenRouter, `data_collection: deny`; не `:free` — 152-ФЗ), на время
+  запроса — `gemini_solver.forced_model`, без запасных. Лимит
+  `AI_THINK_DAILY` (10) и `AI_THINK_DAY_USD` на всех; сбой не списывается;
+  на iPhone и к фото/файлам — нет; откат `/aithink off`, траты — `/status`.
 - **Прочее**: длинные сообщения режутся на части (`long_messages.py`,
   middleware сессии бота); ночной бэкап базы старосте в 04:40 и `/backup`
   (`backup.py`); задачи по расписанию — `scheduler.py` (APScheduler).
