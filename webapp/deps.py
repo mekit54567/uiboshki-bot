@@ -56,7 +56,7 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
         # full_name — как у бота (aiogram User.full_name = "first last"), иначе каждый
         # заход в WebApp перетирал в users фамилию, записанную ботом.
         full_name = " ".join(p for p in (user.get("first_name", ""), user.get("last_name", "")) if p)
-        await upsert_user(user["id"], user.get("username", ""), full_name)
+        await upsert_user(user["id"], user.get("username", ""), full_name, wait=False)
     import privacy                # 152-ФЗ: без согласия — только согласие, тексты и удаление
     if await privacy.blocked(user["id"]):
         path = request.url.path.replace("/api/v1/", "/api/", 1)

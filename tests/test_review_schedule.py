@@ -393,3 +393,47 @@ async def test_fetch_ical_cached_single_flight(monkeypatch):
     assert await api.fetch_ical(13, 1) is None and await api.fetch_ical(13, 1) is None
     assert calls.count((1, 13)) == 2
     assert (1, 13) not in api._ical_locks and (1, 4928) in api._ical_locks     # замки сбоев не копятся
+
+
+@pytest.mark.asyncio
+async def test_weather_down_keeps_last_good(monkeypatch, caplog):
+    # Open-Meteo отвечал 503 (17.10, 9 «ошибок» в /status): показываем
+    # последнюю удачную погоду до 3 часов, в лог — предупреждение, не ошибка
+    import logging
+    from types import SimpleNamespace
+
+    import httpx
+
+    import handlers.weather as weather
+    real_fetch = weather._fetch_weather
+    clock = [1000.0]
+    monkeypatch.setattr(weather, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    answers = [{"current": {"temperature_2m": 9.9}}, None, None]
+
+    async def fetch():
+        return answers.pop(0)
+
+    monkeypatch.setattr(weather, "_fetch_weather", fetch)
+    monkeypatch.setattr(weather, "_weather_cache", None)
+    monkeypatch.setattr(weather, "_last_good", None)
+    good = await weather.fetch_weather()
+    clock[0] += weather.WEATHER_TTL + 1
+    assert await weather.fetch_weather() == good           # сбой — прежняя
+    clock[0] += weather.WEATHER_STALE
+    assert await weather.fetch_weather() is None           # старше 3 часов — уже нет
+
+    class Down:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *e):
+            return False
+
+        async def get(self, url):
+            raise httpx.HTTPStatusError("503", request=httpx.Request("GET", url),
+                                        response=httpx.Response(503))
+
+    monkeypatch.setattr(weather.net, "client", lambda **kw: Down())
+    with caplog.at_level(logging.WARNING, logger=weather.__name__):
+        assert await real_fetch() is None
+    assert [r.levelno for r in caplog.records] == [logging.WARNING]

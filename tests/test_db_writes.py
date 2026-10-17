@@ -70,3 +70,46 @@ async def test_upsert_user_after_erase_writes_again(db, throttled):
     await privacy.erase(6)
     await db.upsert_user(6, "n", "N")
     assert await _count(db, "SELECT COUNT(*) FROM users WHERE user_id=6") == 1
+
+
+async def test_seen_marks_do_not_wait_for_busy_db(db, monkeypatch):
+    # после перезапуска почти каждый запрос писал «заходил» (сессия, users,
+    # last_seen) и ждал замок базы до 15 с, пока писал кто-то другой:
+    # дедлайны, ДЗ, «СДО» по 30–35 с (Никита 17.10, /status). Теперь — в фоне.
+    import time
+
+    import aiosqlite
+
+    import database
+    import database._conn as conn
+    import database.sessions as sessions
+    import privacy
+    monkeypatch.setattr(conn, "WAIT", False)
+    monkeypatch.setattr(privacy, "_seen", {})
+    await db.upsert_user(5, "u", "U")
+    token = await sessions.create_session(5, "test")
+    async with conn.connect() as c:                     # сессия «давно не продлевалась»
+        await c.execute("UPDATE sessions SET last_seen = '2000-01-01 00:00:00'")
+        await c.commit()
+
+    busy = await aiosqlite.connect(database.DATABASE_PATH)
+    await busy.execute("BEGIN IMMEDIATE")               # кто-то держит запись
+    monkeypatch.setattr(conn, "BUSY_SECONDS", 5)
+    t = time.monotonic()
+    assert await sessions.session_user(token) == 5
+    await db.upsert_user(5, "u2", "U2", wait=False)
+    await privacy.seen(5)
+    assert time.monotonic() - t < 1                     # никто не ждал замок
+    await busy.rollback()
+    await busy.close()
+    await asyncio.gather(*list(conn._background))
+    assert (await db.get_user(5))["username"] == "u2"
+    assert await _count(db, "SELECT COUNT(*) FROM sessions WHERE last_seen > '2001'") == 1
+
+
+async def test_new_user_upsert_is_written_at_once(db, monkeypatch):
+    # нового в базе ещё нет — его строку запрос читает дальше: пишем сразу
+    import database._conn as conn
+    monkeypatch.setattr(conn, "WAIT", False)
+    await db.upsert_user(6, "n", "N", wait=False)
+    assert (await db.get_user(6))["username"] == "n"
