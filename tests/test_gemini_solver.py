@@ -324,6 +324,11 @@ async def test_ling_main_for_own_group(db, monkeypatch):
         assert await ask() == "ответ Gemini" and calls == ["gemini"]
 
         calls.clear()
+        await set_setting("ai_main", "all")                                 # 17.10: всем — и другой группе
+        assert await ask() == "ответ Ling" and calls == ["ling"]
+        await set_setting("ai_main", "group")
+
+        calls.clear()
         await set_setting("ai_main", "me")                                  # /aimain me: только староста
         current_group.set(None)
         assert await ask() == "ответ Gemini"
@@ -355,6 +360,8 @@ async def test_aimain_command(db, monkeypatch):
     msg = lambda uid, text: SimpleNamespace(from_user=SimpleNamespace(id=uid), text=text, answer=answer)  # noqa: E731
     await cmd_aimain(msg(STAROSTA_ID, "/aimain"))
     assert "своя группа" in sent[-1]
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")             # по умолчанию с 17.10 — все
+    assert await gemini_solver.ai_main() == "all"
     await cmd_aimain(msg(STAROSTA_ID, "/aimain me"))
     assert "только старосты" in sent[-1] and await gemini_solver.ai_main() == "me"
     await cmd_aimain(msg(424242, "/aimain gemini"))                 # не староста — ничего

@@ -180,7 +180,8 @@ WebApp: `https://www.uiboshki.ru`, живёт в процессе бота (Fast
 `AI_SPARE_MODEL` (с `OPENROUTER_API_KEY`: модель OpenRouter, когда у всех Gemini
 лимит 429, по умолчанию `inclusionai/ling-3.0-flash-vl`; пусто — без неё;
 классификатор и `/aitest` её не зовут), `AI_MAIN` (кому она основная, а Gemini
-— запасная: `group` — своя группа и старосты, по умолчанию, Никита 16.10;
+— запасная: `all` — всем, по умолчанию, Никита 17.10: «бот не только для моей
+группы», расход OpenRouter он смотрит сам; `group` — своя группа и старосты;
 `me` — только старосты; `gemini` — никому; без деплоя — `/aimain` у старосты,
 settings `ai_main`; кто сколько ответил — `/status`), `WEBAPP_URL`, `PORT`, `SDO_SESSION_COOKIE`,
 `SDO_SYNC_INTERVAL_HOURS` (6), `SDO_CRYPT_KEY` или `SDO_CRYPT_PASSPHRASE` (ключ шифрования

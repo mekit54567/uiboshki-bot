@@ -168,7 +168,7 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
 # Кто сколько ответил с запуска — для /status (проверка Ling на своей группе).
 answered: Counter = Counter()
 
-MAIN_MODES = {"group": "своя группа", "me": "только старосты", "gemini": "никто"}
+MAIN_MODES = {"all": "все", "group": "своя группа", "me": "только старосты", "gemini": "никто"}
 
 
 async def ai_main() -> str:
@@ -184,11 +184,12 @@ async def ai_main() -> str:
 
 
 async def ling_first() -> bool:
-    """Этот запрос — сначала Ling: своя группа (group) или староста (me).
+    """Этот запрос — сначала Ling: все (all, Никита 17.10), своя группа (group)
+    или староста (me).
     Группа и человек — того, чей запрос (database.groups, ставит бот и WebApp)."""
     mode = await ai_main()
-    if mode == "gemini":
-        return False
+    if mode in ("gemini", "all"):
+        return mode == "all"
     from config import is_starosta
     from database.groups import current_user, g_or_home, home
     uid = current_user.get()
