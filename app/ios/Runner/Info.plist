@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Чтобы приложить фото к вопросу помощнику или сдать работу в СДО.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDisplayName</key>
 	<string>Kapibara</string>
 	<key>CFBundleExecutable</key>

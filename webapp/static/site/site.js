@@ -18,7 +18,7 @@
   if (share && navigator.share) {
     share.hidden = false;
     share.addEventListener("click", () => navigator.share({
-      title: "УИБО-бот", text: "Бот нашей группы: расписание, дедлайны и баллы СДО, лекции и ИИ по ним",
+      title: "Капибара", text: "Учёба МИРЭА: расписание, дедлайны и баллы СДО, лекции и ИИ по ним",
       url: location.origin + "/about",
     }).catch(() => {}));
   }

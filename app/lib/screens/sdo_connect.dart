@@ -13,6 +13,7 @@ import '../widgets/common.dart';
 import 'files.dart';
 import '../api/links.dart';
 import 'legal.dart';
+import 'sdo_login.dart';
 
 /// Что даёт свой вход — без него экран объясняет, зачем подключаться.
 const sdoPerks = [
@@ -39,7 +40,11 @@ String checkedAgo(String? at) {
 
 class SdoConnectScreen extends StatefulWidget {
   final Api api;
-  const SdoConnectScreen({super.key, required this.api});
+
+  /// Вход страницей СДО (тесты подменяют); webLogin — есть ли он (по умолчанию — телефон, не браузер).
+  final SdoWebLogin? sdoLogin;
+  final bool? webLogin;
+  const SdoConnectScreen({super.key, required this.api, this.sdoLogin, this.webLogin});
 
   @override
   State<SdoConnectScreen> createState() => _SdoConnectScreenState();
@@ -49,6 +54,10 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
   Map<String, dynamic>? _st;
   String? _error, _loadError;
   bool _busy = false;
+
+  /// На телефоне главный путь — страница входа СДО; вставка куки — запасной.
+  bool _manual = false;
+  bool get _web => widget.webLogin ?? sdoWebLoginAvailable;
 
   /// Галочка согласия (152-ФЗ): без неё сервер куку не возьмёт.
   bool _agree = false;
@@ -105,6 +114,15 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
       _cookie.clear();
       HapticFeedback.mediumImpact();
     }
+  }
+
+  Future<void> _byPage() async {
+    if (!_agree) return;
+    tick();
+    final v = await (widget.sdoLogin ?? systemSdoLogin)(context);
+    if (v == null || v.isEmpty || !mounted) return;
+    _cookie.text = v;
+    await _connect();
   }
 
   Future<void> _paste() async {
@@ -262,38 +280,51 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
           ),
         ],
         const Section('Как подключить'),
-        Padding(padding: pad, child: const _Steps()),
-        _GuideLink(api: widget.api, pad: pad),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
-          child: TextField(
-            controller: _cookie,
-            autocorrect: false,
-            enableSuggestions: false,
-            style: s.body(15),
-            onSubmitted: (_) => _connect(),
-            decoration: InputDecoration(
-              hintText: 'Вставь MoodleSession…',
-              hintStyle: s.body(15, color: p.muted),
-              filled: true,
-              fillColor: p.card,
-              contentPadding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: 14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(Radii.chip),
-                borderSide: BorderSide(color: p.line),
+        if (_web && !_manual)
+          Padding(
+            padding: pad,
+            child: Tile(
+              child: Text(
+                'Откроется обычная страница входа СДО МИРЭА. Войди как всегда — бот подключится сам.',
+                style: s.body(14),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(Radii.chip),
-                borderSide: BorderSide(color: p.line),
-              ),
-              suffixIcon: IconButton(
-                tooltip: 'Вставить',
-                onPressed: _paste,
-                icon: Icon(Icons.content_paste_rounded, color: p.muted, size: 20),
+            ),
+          )
+        else ...[
+          Padding(padding: pad, child: const _Steps()),
+          _GuideLink(api: widget.api, pad: pad),
+        ],
+        if (!_web || _manual)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
+            child: TextField(
+              controller: _cookie,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: s.body(15),
+              onSubmitted: (_) => _connect(),
+              decoration: InputDecoration(
+                hintText: 'Вставь MoodleSession…',
+                hintStyle: s.body(15, color: p.muted),
+                filled: true,
+                fillColor: p.card,
+                contentPadding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(Radii.chip),
+                  borderSide: BorderSide(color: p.line),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(Radii.chip),
+                  borderSide: BorderSide(color: p.line),
+                ),
+                suffixIcon: IconButton(
+                  tooltip: 'Вставить',
+                  onPressed: _paste,
+                  icon: Icon(Icons.content_paste_rounded, color: p.muted, size: 20),
+                ),
               ),
             ),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
           child: ConsentCheck(
@@ -314,11 +345,28 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
                 foregroundColor: p.onAccent,
                 shape: const StadiumBorder(),
               ),
-              onPressed: _busy || !_agree ? null : _connect,
-              child: Text(_busy ? 'Проверяю…' : 'Проверить и сохранить'),
+              onPressed: _busy || !_agree ? null : (_web && !_manual ? _byPage : _connect),
+              child: Text(
+                _busy
+                    ? 'Проверяю…'
+                    : _web && !_manual
+                    ? 'Войти в СДО'
+                    : 'Проверить и сохранить',
+              ),
             ),
           ),
         ),
+        if (_web)
+          Center(
+            child: TextButton(
+              key: const Key('sdo-manual'),
+              onPressed: () => setState(() => _manual = !_manual),
+              child: Text(
+                _manual ? 'Войти страницей СДО' : 'Вставить MoodleSession вручную',
+                style: s.body(14, weight: FontWeight.w600, color: p.accent),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Space.xl, Space.m, Space.xl, 0),
           child: Row(

@@ -41,7 +41,7 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
     subs = await get_push_subs(user_id)
     if not subs:
         return 0
-    data = {"title": title or TITLES.get(kind, "УИБО-бот"), "body": _body(html, title),
+    data = {"title": title or TITLES.get(kind, "Капибара"), "body": _body(html, title),
             "url": "/app" + (f"?tab={tab}" if tab else ""), "tag": kind}
     sent = 0
     for sub in subs:

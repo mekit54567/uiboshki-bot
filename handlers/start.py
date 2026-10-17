@@ -104,7 +104,7 @@ async def ask_login(message: Message, code: str):
         InlineKeyboardButton(text="✅ Да, это я", callback_data=f"login:ok:{code}"),
         InlineKeyboardButton(text="Нет", callback_data=f"login:no:{code}"),
     ]])
-    await message.answer(f"🔐 Войти в приложение УИБО-бота на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
+    await message.answer(f"🔐 Войти в приложение Капибары на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
                          "Если это не ты нажал «Войти» — жми «Нет». Дальше попрошу нажать число с экрана устройства.",
                          parse_mode="HTML", reply_markup=kb)
 
