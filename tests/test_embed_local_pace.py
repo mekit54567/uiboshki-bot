@@ -63,3 +63,22 @@ async def test_gemini_keeps_big_batches_without_rest(db, embed, monkeypatch):  #
     monkeypatch.setattr(si.asyncio, "sleep", fake_sleep)
     assert await si.embed_pending(pause=0) > 0
     assert sleeps == []
+
+
+@pytest.mark.asyncio
+async def test_local_model_runs_in_low_priority_thread(monkeypatch):
+    import os
+    import local_embed
+    seen = []
+    monkeypatch.setattr(local_embed, "_pool", None)
+    monkeypatch.setattr(local_embed, "_encode_sync", lambda key, texts: seen.append(os.getpriority(os.PRIO_PROCESS, 0)) or [[0.0]])
+
+    async def no_download(key):
+        return ""
+
+    monkeypatch.setattr(local_embed, "download", no_download)
+    key = next(iter(local_embed.MODELS))
+    assert await local_embed.embed(key, ["текст"]) == [[0.0]]
+    assert seen == [local_embed.NICE]                       # поток модели — nice 19
+    assert os.getpriority(os.PRIO_PROCESS, 0) != local_embed.NICE  # остальной процесс — как был
+    local_embed._pool.shutdown()
