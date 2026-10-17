@@ -364,6 +364,7 @@ def test_legal_texts_after_review(monkeypatch):
         text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
         assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text
         assert "Амвера" in text and "договор поручения Amvera от 14.07.2026" in text   # ревью 17.10
+        assert "id от Apple" in text and "скрыт" in text and "только если" in text and "вход через Apple" in text   # #200
         assert "текст или фото" in text and "не дольше" not in text
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert '"Цели"' in text and "ст. 6 ч. 1 п. 1" in text and "п. 5" in text and "рабочих дней" in text
