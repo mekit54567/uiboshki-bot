@@ -137,6 +137,31 @@
       };
     })();
   </script>
+  <script id="uib-height">
+    // iPhone, PWA с экрана «Домой» (Никита 17.10, скрин: снизу полоса, приложение
+    // обрезано): страница заходит под часы (black-translucent), а высоту окна
+    // iOS отдаёт без них — снизу остаётся полоса высотой с часы. Flutter на iOS
+    // берёт высоту из documentElement.clientHeight, а body у него position:fixed
+    // до низа этого окна. Здесь окно — весь экран: на iPhone PWA с «Домой» и есть
+    // весь экран (screen.* на iOS не поворачиваются — берём по ориентации).
+    (function () {
+      if (window.navigator.standalone !== true || !/iPhone|iPod/.test(navigator.userAgent)) return;
+      var de = document.documentElement;
+      var real = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight").get;
+      function full() {
+        var h = real.call(de), w = de.clientWidth;
+        var a = screen.width, b = screen.height;
+        return Math.max(h, w > h ? Math.min(a, b) : Math.max(a, b));
+      }
+      Object.defineProperty(de, "clientHeight", { configurable: true, get: full });
+      var st = document.createElement("style");
+      function css() { st.textContent = "body{bottom:auto!important;height:" + full() + "px!important}"; }
+      css();
+      document.head.appendChild(st);
+      window.addEventListener("resize", css);
+      window.addEventListener("orientationchange", css);
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
