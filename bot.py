@@ -235,6 +235,11 @@ async def main():
         index_task.cancel()
         lag_task.cancel()
         await stop_webapp(webapp_server, webapp_task)
+        try:
+            from database.service import flush_events
+            await flush_events()            # события /stats копятся пачкой — дописать перед выходом
+        except Exception as e:
+            logger.info(f"события /stats при выходе: {e}")
         scheduler.shutdown()
         await bot.session.close()
 

@@ -116,6 +116,23 @@ class Api {
   /// Когда сервер в последний раз ответил (любым кодом) — см. [get].
   DateTime? _lastOk;
 
+  /// Проверка «сервер вообще отвечает» (/meta — лёгкий, без базы и СДО);
+  /// несколько повисших запросов разом ждут одну проверку.
+  Future<bool>? _ping;
+  static const pingTimeout = Duration(seconds: 4);
+
+  Future<bool> _alive() => _ping ??= () async {
+    try {
+      await _client.get(_uri('/meta'), headers: _headers).timeout(pingTimeout);
+      _lastOk = DateTime.now();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _ping = null;
+    }
+  }();
+
   /// Внутри [fromCache] get берёт только запомненное и в сеть не ходит;
   /// значение зоны — [_CacheRead], куда get пишет время запомненного.
   static const _cacheOnly = #uibCacheOnly;
@@ -180,6 +197,11 @@ class Api {
       // плашку не ставим.
       final ok = _lastOk;
       if (e is TimeoutException && ok != null && !ok.isBefore(started)) {
+        return cached.body;
+      }
+      // Сам сервер жив, тупит один раздел (СДО, ИИ) — тоже не «Сервер не
+      // отвечает» (Никита 17.10: плашка пугала, хотя бот отвечал).
+      if (e is TimeoutException && await _alive()) {
         return cached.body;
       }
       offlineSlow.value = e is TimeoutException;

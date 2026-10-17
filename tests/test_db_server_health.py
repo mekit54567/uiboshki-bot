@@ -31,3 +31,29 @@ async def test_watch_loop_notices_blocked_loop(monkeypatch):
     await asyncio.sleep(0.1)
     task.cancel()
     assert health.loop_lag() >= 0.2
+
+
+async def test_status_shows_slow_requests(db, monkeypatch):
+    now = time.time()
+    monkeypatch.setattr(health, "_SLOW", health.deque(maxlen=10))
+    health.note_request("/api/today", 0.4, now)                      # быстрый — не в счёт
+    health.note_request("/api/sdo/grades", 52.3, now - 60)
+    health.note_request("/api/sdo/grades", 12.0, now - 30)
+    health.note_request("/api/chat", 31.0, now - 10)
+    health.note_request("/api/files", 70.0, now - 7200)              # старше часа
+    assert health.slow_requests(now) == (3, [("/api/sdo/grades", 52.3), ("/api/chat", 31.0)])
+    text = await health.report()
+    assert "Долгих запросов (от 5 с) за час: 3 — /api/sdo/grades 52 с, /api/chat 31 с" in text
+
+    monkeypatch.setattr(health, "_SLOW", health.deque(maxlen=10))
+    assert "Долгих запросов (от 5 с) за час нет" in await health.report()
+
+
+def test_server_notes_api_requests_by_route(monkeypatch):
+    from fastapi.testclient import TestClient
+    from webapp import server
+    seen = []
+    monkeypatch.setattr(health, "note_request", lambda path, s, now=None: seen.append(path))
+    TestClient(server.app).get("/api/v1/meta")
+    TestClient(server.app).get("/health")
+    assert seen == ["/api/meta"]                 # v1 → тот же путь, /health не API
