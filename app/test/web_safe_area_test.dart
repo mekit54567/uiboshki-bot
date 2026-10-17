@@ -14,4 +14,10 @@ void main() {
     expect(parseInsets('a,b,c,d'), EdgeInsets.zero);
     expect(parseInsets('-5,0,0,0'), EdgeInsets.zero);
   });
+
+  test('фон страницы под Flutter — цветом темы, #rrggbb (17.10: чёрная полоса снизу)', () {
+    expect(cssColor(const Color(0xFFE9E3D8)), '#e9e3d8');
+    expect(cssColor(const Color(0xCC202434)), '#202434');
+    expect(cssColor(const Color(0xFF000000)), '#000000');
+  });
 }

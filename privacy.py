@@ -113,7 +113,11 @@ async def erase(user_id: int) -> dict:
     """Всё о человеке — из базы и кэшей. Из ночных копий базы (у оператора в
     Telegram) — при ежемесячной ручной чистке (политика это говорит)."""
     from database.privacy import erase_user
+    from database.service import drop_events
+    from database.users import forget_user
+    drop_events(user_id)
     done = await erase_user(user_id, STAROSTA_IDS)
+    forget_user(user_id)
     _seen.pop(user_id, None)
     _given.difference_update({g for g in _given if g[0] == user_id})
     try:

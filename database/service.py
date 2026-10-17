@@ -2,6 +2,7 @@
 
 import aiosqlite
 
+import database
 from database._conn import connect
 
 
@@ -44,13 +45,56 @@ async def clear_semester_data():
         await db.commit()
 
 
+# События /stats — пачкой раз в EVENT_FLUSH_SECONDS, а не commit на каждый
+# запрос (Amvera 16.10: запись ~0,2 с, Mini App при открытии шлёт несколько
+# запросов — записи вставали в очередь). Падение процесса теряет события за
+# эти секунды — для статистики не страшно. 0 — сразу (так в тестах).
+EVENT_FLUSH_SECONDS = 10.0
+_pending: dict[str, list[tuple[int, str, str]]] = {}     # путь базы → (кто, что, когда)
+_flusher = None
+
+
 async def add_event(user_id: int, kind: str):
+    import asyncio
+    from datetime import datetime, timezone
+    at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")      # как datetime('now')
+    _pending.setdefault(database.DATABASE_PATH, []).append((user_id, kind, at))
+    if EVENT_FLUSH_SECONDS <= 0:
+        await flush_events()
+        return
+    global _flusher
+    if _flusher is None or _flusher.done() or _flusher.get_loop() is not asyncio.get_running_loop():
+        _flusher = asyncio.create_task(_flush_later())
+
+
+async def _flush_later():
+    import asyncio
+    import logging
+    await asyncio.sleep(EVENT_FLUSH_SECONDS)
+    try:
+        await flush_events()
+    except Exception as e:
+        logging.getLogger(__name__).info(f"stats: события не записались: {e}")
+
+
+async def flush_events():
+    """Записать накопленные события текущей базы."""
+    rows = _pending.pop(database.DATABASE_PATH, [])
+    if not rows:
+        return
     async with connect() as db:
-        await db.execute("INSERT INTO events (user_id, kind) VALUES (?, ?)", (user_id, kind))
+        await db.executemany("INSERT INTO events (user_id, kind, at) VALUES (?, ?, ?)", rows)
         await db.commit()
 
 
+def drop_events(user_id: int):
+    """Удаление данных человека: его ещё не записанные события — тоже прочь."""
+    for path, rows in _pending.items():
+        _pending[path] = [r for r in rows if r[0] != user_id]
+
+
 async def events_since(days: int) -> list[tuple[int, str, str]]:
+    await flush_events()
     async with connect() as db:
         cursor = await db.execute(
             "SELECT user_id, kind, at FROM events WHERE at >= datetime('now', ?)", (f"-{int(days)} days",))

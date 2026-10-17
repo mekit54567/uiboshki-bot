@@ -86,7 +86,8 @@ void main() {
       greaterThan(1.5 * pos.viewportDimension),
       reason: 'неделя длинная',
     );
-    // неделя открывается на сегодня: в субботу — почти у конца, где меню всегда видно
+    // неделя открывается на сегодня, а в субботу до конца списка рукой подать
+    // (17.10 тест упал в субботу) — листаем с понедельника
     pos.jumpTo(pos.minScrollExtent);
     await settle(t);
     expect(hidden(t), isFalse);
