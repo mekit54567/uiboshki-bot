@@ -193,4 +193,6 @@ async def apply_backup(tmp_path: str):
         _drop_search_index()
     except Exception as e:
         logger.error(f"restore: индекс поиска не удалился: {e}")
+    from database.users import forget_user
+    forget_user()               # «уже записан» относилось к прежней базе
     await database.init_db()

@@ -254,6 +254,28 @@ _models: dict[str, Encoder] = {}
 _used: dict[str, float] = {}
 _lock = threading.Lock()
 
+# Модель считает в своём потоке с самым низким приоритетом (nice 19): на
+# Amvera пол-ядра, и ответы приложению должны идти первыми (17.10: проход
+# векторов — троттлинг CPU до 90%, ответы по 10–60 с). Отдых между пачками —
+# semantic_index.embed_pending.
+NICE = 19
+_pool = None
+
+
+def _lower_priority():
+    try:
+        os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE)
+    except (AttributeError, OSError):       # не Linux — без приоритета
+        pass
+
+
+def _executor():
+    global _pool
+    if _pool is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _pool = ThreadPoolExecutor(1, thread_name_prefix="embed", initializer=_lower_priority)
+    return _pool
+
 
 def _get(key: str) -> Encoder:
     if key not in _models:
@@ -294,5 +316,5 @@ async def embed(key: str, texts: list[str], query: bool = False) -> list[list[fl
         raise EmbedUnavailable(f"неизвестная модель векторов {key}")
     await download(key)
     prefix = MODELS[key]["query" if query else "doc"]
-    return await asyncio.to_thread(_encode_sync, key, [prefix + t for t in texts])
+    return await asyncio.get_running_loop().run_in_executor(_executor(), _encode_sync, key, [prefix + t for t in texts])
 

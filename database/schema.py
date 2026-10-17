@@ -1,5 +1,7 @@
 """Схема базы: таблицы, индексы, миграции (init_db)."""
 
+import logging
+
 from config import STAROSTA_ID
 from database._conn import connect
 
@@ -8,7 +10,9 @@ async def init_db():
     async with connect() as db:
         # WAL снижает риск "database is locked" при параллельных cron-джобах
         # (scheduler.py гоняет несколько задач) вместе с обычными хендлерами.
-        await db.execute("PRAGMA journal_mode=WAL;")
+        mode = (await (await db.execute("PRAGMA journal_mode=WAL;")).fetchone())[0]
+        if mode != "wal":       # диск не дал WAL (сетевой?) — чтения ждут каждую запись; видно и в /status
+            logging.getLogger(__name__).warning(f"база не в WAL, а в {mode} — возможны «database is locked»")
         cursor = await db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='deadline_done'"
         )
@@ -508,7 +512,6 @@ async def init_db():
             # (апгрейд существующей базы) — досыпаем индекс задним числом.
             await db.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')")
         except Exception as e:
-            import logging
             logging.getLogger(__name__).warning(f"FTS5 недоступен, поиск по файлам работать не будет: {e}")
 
         # Отпечаток текста лекции (этап 1 (в)): та же лекция у другой группы —
@@ -523,6 +526,10 @@ async def init_db():
             await db.executemany("UPDATE file_text SET text_hash=? WHERE file_id=?",
                                  [(text_hash(c), fid) for fid, c in rows])
         await db.execute("CREATE INDEX IF NOT EXISTS idx_file_text_hash ON file_text(text_hash)")
+        # «у каких файлов есть текст» (/api/files) — по индексу, а не чтением
+        # всех текстов лекций: char_count лежит после content, и без индекса
+        # SQLite читал десятки МБ с медленного диска Amvera (17.10: 36 с)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_file_text_chars ON file_text(char_count)")
         for table in ("deadlines", "files", "lesson_notes"):
             try:
                 await db.execute(f"ALTER TABLE {table} ADD COLUMN group_id INTEGER")

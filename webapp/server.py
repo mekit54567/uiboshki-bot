@@ -24,6 +24,7 @@ initData и общее для них — webapp/deps.py.
 
 import logging
 import re
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -31,6 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
+import health as bot_health
 from webapp import deps
 from webapp.routes import account, aitest, auth, channel, chat, deadlines, files, legal, meta, push, schedule, sdo, site
 
@@ -130,7 +132,13 @@ async def security_headers(request: Request, call_next):
         limit = next((n for p, n in BODY_LIMITS if request.url.path.startswith(p)), BODY_LIMIT_DEFAULT)
         if int(length) > limit:
             return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
+    started = time.monotonic()
     resp = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        # путь шаблоном (/api/sdo/task/{cmid}), чтобы долгие сводились по разделам
+        route = request.scope.get("route")
+        path = getattr(route, "path", request.url.path).replace("/api/v1/", "/api/", 1)
+        bot_health.note_request(path, time.monotonic() - started)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")

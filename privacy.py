@@ -118,7 +118,11 @@ async def erase(user_id: int) -> dict:
         await apple_signin.revoke_for(user_id)    # вход через Apple — отозвать у Apple (их правило)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"отзыв входа Apple: {e}")
+    from database.service import drop_events
+    from database.users import forget_user
+    drop_events(user_id)
     done = await erase_user(user_id, STAROSTA_IDS)
+    forget_user(user_id)
     _seen.pop(user_id, None)
     _given.difference_update({g for g in _given if g[0] == user_id})
     try:
