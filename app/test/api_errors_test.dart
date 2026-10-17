@@ -95,12 +95,22 @@ void main() {
     expect(await slow, {'ok': '/api/v1/sdo/grades'});
     expect(api.offlineSince.value, isNull);
 
-    // а если за это время сервер ничего не ответил — плашка на месте
+    // сервер за это время ничего не ответил, но /meta отвечает — сам он жив,
+    // висит только СДО (Никита 17.10): плашки нет
     expect(await api.get('/sdo/grades'), isNotNull);
-    expect(api.offlineSince.value, isNotNull);
+    expect(api.offlineSince.value, isNull);
     final cold = _api(answer);
     expect(await cold.get('/sdo/grades'), isNotNull);
-    expect(cold.offlineSince.value, isNotNull);
-    expect(cold.offlineSlow.value, isTrue);
+    expect(cold.offlineSince.value, isNull);
+
+    // а если и /meta молчит — сервер правда не отвечает, плашка на месте
+    hang = false;
+    final down = _api((r) async => hang ? throw TimeoutException('висит') : answer(r));
+    await down.get('/sdo/grades');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    hang = true;
+    expect(await down.get('/sdo/grades'), isNotNull);
+    expect(down.offlineSince.value, isNotNull);
+    expect(down.offlineSlow.value, isTrue);
   });
 }
