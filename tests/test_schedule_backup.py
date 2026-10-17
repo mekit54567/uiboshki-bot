@@ -142,3 +142,24 @@ async def test_no_copy_failure_not_waited_again(db, mirror, monkeypatch):
         with pytest.raises(httpx.HTTPError):
             await schedule_parser.fetch_schedule_raw()
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_cold_start_serves_copy_without_waiting_mirror(db, mirror, monkeypatch):
+    # после перезапуска первый заход ждал зеркало до 30 с (дедлайны, ДЗ, СДО по
+    # 30–35 с в /status 17.10): копия из базы — сразу, свежее — в фоне
+    assert await schedule_parser.fetch_schedule_raw(force=True) == ICS
+    schedule_parser._cache_data = None                     # «перезапуск»
+    fresh = ICS.replace(b"Lecture", b"Seminar")
+    gate = asyncio.Event()
+
+    async def slow_download():
+        await gate.wait()
+        return fresh
+
+    monkeypatch.setattr(schedule_parser, "_download", slow_download)
+    got = await asyncio.wait_for(schedule_parser.fetch_schedule_raw(), 1)
+    assert got == ICS and schedule_parser.stale_label() is None
+    gate.set()
+    await schedule_parser._inflight                        # фон докачал — дальше свежее
+    assert await schedule_parser.fetch_schedule_raw() == fresh
