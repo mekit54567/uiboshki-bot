@@ -115,6 +115,7 @@ async def test_delete_account_revokes_apple(client, apple):
     url, data = apple[-1]
     assert url == apple_signin.REVOKE_URL and data["token"] == "rt-1"
     assert await apple_signin.revoke_for(uid) is False                 # токена больше нет
+    assert await find_user("apple", "001234.abc") is None              # привязки Apple тоже нет
 
 
 def test_client_secret_is_es256_jwt(apple):
