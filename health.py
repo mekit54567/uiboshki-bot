@@ -240,6 +240,10 @@ async def report() -> str:
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
+    import billing
+    if billing.provider(configured_only=True) and billing.missing_requisites():
+        lines += ["⚠️ Касса задана, но оплата «Капибары+» закрыта: в оферте нет реквизитов — задай "
+                  + ", ".join(billing.missing_requisites()), ""]
 
     lines.append("<b>Сервер</b>")
     try:
