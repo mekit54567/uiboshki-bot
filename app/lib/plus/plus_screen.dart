@@ -109,6 +109,7 @@ class _PlusBody extends StatelessWidget {
       );
     }
     final active = d['active'] == true;
+    final gift = d['paid_until'] == null && d['gift'] is String;
     final founder = d['founder'] == true;
     final prices = [for (final x in d['prices'] as List? ?? const []) Map<String, dynamic>.from(x as Map)];
     final payUrl = '${d['pay_url'] ?? ''}';
@@ -139,12 +140,18 @@ class _PlusBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        active ? 'Действует до ${plusUntil(d['until'] as String?)}' : 'Подписки нет',
+                        gift
+                            ? 'Подарок группе до ${plusUntil(d['gift'] as String?)}'
+                            : active
+                            ? 'Действует до ${plusUntil(d['until'] as String?)}'
+                            : 'Подписки нет',
                         style: s.body(17, weight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        active
+                        gift
+                            ? 'Платить не нужно — всё уже включено'
+                            : active
                             ? 'Оплата добавит дни к этому сроку'
                             : 'Всё главное работает и без неё — она для тех, кому нужно больше',
                         style: s.body(13, color: p.muted),
@@ -157,7 +164,10 @@ class _PlusBody extends StatelessWidget {
                             if (founderPrice != null) ...[
                               const SizedBox(width: Space.s),
                               Expanded(
-                                child: Text('месяц для тебя — $founderPrice ₽', style: s.body(13, color: p.muted)),
+                                child: Text(
+                                  'месяц для тебя — $founderPrice ₽, навсегда',
+                                  style: s.body(13, color: p.muted),
+                                ),
                               ),
                             ],
                           ],
@@ -186,7 +196,7 @@ class _PlusBody extends StatelessWidget {
           ),
         ),
         if (prices.isNotEmpty) ...[
-          const Section('Цены'),
+          Section(prices.any((x) => x['founder'] == true) ? 'Цены первых пользователей' : 'Цены'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.l),
             child: Tile(

@@ -7,12 +7,15 @@
 
 Касса — та, ключи которой заданы: ЮKassa (YOOKASSA_SHOP_ID +
 YOOKASSA_SECRET_KEY) или Robokassa (ROBOKASSA_LOGIN + ROBOKASSA_PASS1 +
-ROBOKASSA_PASS2). Нет ключей — «оплата скоро», статус и бонусы работают.
-Автосписаний нет: каждый месяц оплачивается отдельно, срок складывается.
+ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не ответила, Robokassa.
+Нет ключей — «оплата скоро», статус и бонусы работают. Автосписаний нет:
+каждый срок оплачивается отдельно, срок складывается.
 
-«Основатели»: первые FOUNDERS_LIMIT, кто оплатил месяц, платят FOUNDER_PRICE,
-пока не прервались дольше FOUNDER_GRACE дней. Июль и август в срок не
-считаются (пауза на лето): оплаченные дни переносятся на сентябрь."""
+Цена первых (Никита 17.10): пока не сказано иначе, все платят «early»-цену
+(месяц 149 ₽), и кто оплатил по ней — «Основатель», платит так навсегда.
+Новым — полная цена с `/plus stage full` (settings plus:stage). Своей группе
+— подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift). Июль и август в
+срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь."""
 
 import hashlib
 import hmac
@@ -28,13 +31,11 @@ import config
 
 logger = logging.getLogger(__name__)
 
-PLANS = {
-    "month": {"days": 30, "price": 249, "title": "Месяц"},
-    "semester": {"days": 150, "price": 790, "title": "Семестр"},
+PLANS = {                             # price — полная, early — цена первых («Основатель»)
+    "month": {"days": 30, "price": 249, "early": 149, "title": "Месяц"},
+    "semester": {"days": 150, "price": 790, "early": 649, "title": "Семестр"},
 }
-FOUNDER_PRICE = 149
-FOUNDERS_LIMIT = 100
-FOUNDER_GRACE = 30
+GIFT_UNTIL = "2026-12-31"             # подарок своей группе (Никита 17.10: «месяц или два»)
 SUMMER = (7, 8)                       # месяцы паузы: оплаченные дни в них не идут
 
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "").strip()
@@ -49,12 +50,16 @@ YOOKASSA_API = "https://api.yookassa.ru/v3"
 ROBOKASSA_URL = "https://auth.robokassa.ru/Merchant/Index.aspx"
 
 
+def _kassas() -> list[str]:
+    return ((["yookassa"] if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY else []) +
+            (["robokassa"] if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2 else []))
+
+
 def provider(configured_only: bool = False) -> str:
     """Какая касса подключена: 'yookassa', 'robokassa' или ''. Пока нет
     реквизитов исполнителя (PD_FIO, PD_INN, PD_EMAIL) — оферта без них, для
     самозанятого так нельзя: оплата закрыта (configured_only — какая задана)."""
-    kind = ("yookassa" if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY else
-            "robokassa" if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2 else "")
+    kind = (_kassas() or [""])[0]
     if configured_only or not kind:
         return kind
     return "" if missing_requisites() else kind
@@ -110,60 +115,71 @@ def add_days(start: date, days: int) -> date:
         d += timedelta(days=1)
 
 
+async def early() -> bool:
+    """Действует ли цена первых для новых (пока Никита не скажет «249»)."""
+    from database import get_setting
+    return (await get_setting("plus:stage")) != "full"
+
+
+async def gift_until() -> str | None:
+    """До какого дня подарок своей группе (включительно) или None — выключен."""
+    from database import get_setting
+    v = await get_setting("plus:gift")
+    return None if v == "off" else (v or GIFT_UNTIL)
+
+
+async def gift_for(uid: int) -> str | None:
+    """Подарок действует для него (своя группа и срок не прошёл) → последний день."""
+    import plans
+    from utils import today_msk
+    until = await gift_until()
+    if not until or until < today_msk().isoformat():
+        return None
+    return until if await plans._own(uid) else None
+
+
 async def status(uid: int) -> dict:
-    """Подписка человека: active, until, founder, цены для него."""
+    """Подписка человека: active, until (оплата или подарок — что дольше),
+    paid_until, gift, founder, цены для него."""
     from database.billing import get_sub
     from utils import today_msk
-    today = today_msk()
+    today = today_msk().isoformat()
     sub = await get_sub(uid)
-    until = sub["until"] if sub else None
-    active = bool(until and until >= today.isoformat())
-    founder = bool(sub and sub["founder"]) and not _lapsed(until, today)
-    return {"active": active, "until": until if active else None, "founder": founder,
+    paid_until = sub["until"] if sub and sub["until"] >= today else None
+    gift = await gift_for(uid)
+    until = max(filter(None, (paid_until, gift)), default=None)
+    return {"active": bool(until), "until": until, "paid_until": paid_until, "gift": gift,
+            "founder": bool(sub and sub["founder"]), "early": await early(),
             "prices": await prices(uid), "provider": provider()}
 
 
-def _lapsed(until: str | None, today: date) -> bool:
-    if not until:
-        return True
-    return date.fromisoformat(until) < today - timedelta(days=FOUNDER_GRACE)
-
-
 async def founder_price_for(uid: int) -> bool:
-    """Платит ли он за месяц как «Основатель»: уже основатель и не прерывался,
-    или места ещё есть, и он его ещё не занимал."""
-    from database.billing import ever_founder_slots_taken, get_bonuses, get_sub
-    from utils import today_msk
+    """Платит ли он по цене первых: она ещё действует для новых или он уже
+    «Основатель» (оплатил по ней — навсегда, перерывы не важны)."""
+    from database.billing import get_sub
     sub = await get_sub(uid)
-    if sub and sub["founder"]:
-        return not _lapsed(sub["until"], today_msk())
-    if any(b["kind"] == "founder" for b in await get_bonuses(uid)):
-        return False                  # был основателем и прервался — место не возвращается
-    return await ever_founder_slots_taken() < FOUNDERS_LIMIT
+    return bool(sub and sub["founder"]) or await early()
 
 
 async def prices(uid: int) -> list[dict]:
     founder = await founder_price_for(uid)
-    out = []
-    for key, p in PLANS.items():
-        price = FOUNDER_PRICE if key == "month" and founder else p["price"]
-        out.append({"plan": key, "title": p["title"], "days": p["days"], "price": price,
-                    "full": p["price"], "founder": key == "month" and founder})
-    return out
+    return [{"plan": key, "title": p["title"], "days": p["days"],
+             "price": p["early"] if founder else p["price"], "full": p["price"], "founder": founder}
+            for key, p in PLANS.items()]
 
 
 async def grant(uid: int, days: int, source: str, founder: bool | None = None) -> str:
-    """Продлить подписку на days дней (без лета). → новый последний день."""
+    """Продлить подписку на days дней (без лета) — после оплаченного срока и
+    после подарка группе, если он ещё идёт. → новый последний день."""
     from database.billing import get_sub, put_sub
     from utils import today_msk
     today = today_msk()
     sub = await get_sub(uid)
     start = today
-    if sub and sub["until"] >= today.isoformat():
-        start = date.fromisoformat(sub["until"]) + timedelta(days=1)
+    for last in (sub["until"] if sub else None, await gift_for(uid)):
+        if last and last >= start.isoformat():
+            start = date.fromisoformat(last) + timedelta(days=1)
     until = add_days(start, days).isoformat()
-    if founder is None and sub and sub["founder"] and _lapsed(sub["until"], today):
-        founder = False               # прервался дольше FOUNDER_GRACE — цена «Основателя» ушла
     await put_sub(uid, until, source, founder)
     return until
 
@@ -176,7 +192,7 @@ class PayError(Exception):
 
 async def create(uid: int, plan: str, return_url: str) -> str:
     """Создать платёж и вернуть адрес страницы кассы."""
-    from database.billing import add_payment, set_payment_id
+    from database.billing import add_payment
     kind = provider()
     if not kind:
         raise PayError("оплата ещё не подключена")
@@ -185,12 +201,22 @@ async def create(uid: int, plan: str, return_url: str) -> str:
     price = next(p["price"] for p in await prices(uid) if p["plan"] == plan)
     days = PLANS[plan]["days"]
     title = f"Подписка «Капибара+» на {days} дней"
-    if kind == "robokassa":
-        inv = await _new_inv_id()
-        await add_payment(str(inv), kind, uid, plan, price, days)
-        return robokassa_url(inv, price, title)
+    if kind == "yookassa":
+        try:
+            return await _yookassa_create(uid, plan, price, days, title, return_url)
+        except PayError:
+            if "robokassa" not in _kassas():
+                raise
+            logger.warning("ЮKassa не ответила — платёж через Robokassa")
+    inv = await _new_inv_id()
+    await add_payment(str(inv), "robokassa", uid, plan, price, days)
+    return robokassa_url(inv, price, title)
+
+
+async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: str, return_url: str) -> str:
+    from database.billing import add_payment, mark_payment, set_payment_id
     local = f"local-{uuid.uuid4()}"
-    await add_payment(local, kind, uid, plan, price, days)
+    await add_payment(local, "yookassa", uid, plan, price, days)
     body = {"amount": {"value": f"{price}.00", "currency": "RUB"}, "capture": True,
             "confirmation": {"type": "redirect", "return_url": return_url},
             "description": title, "metadata": {"plan": plan}}    # без id человека (152-ФЗ): связь — в payments
@@ -201,6 +227,7 @@ async def create(uid: int, plan: str, return_url: str) -> str:
         data = r.json()
     except Exception as e:
         logger.warning(f"ЮKassa: платёж не создан: {e}")
+        await mark_payment(local, "canceled")
         raise PayError("касса не отвечает — попробуй через минуту")
     await set_payment_id(local, data["id"])
     return data["confirmation"]["confirmation_url"]
@@ -270,7 +297,8 @@ async def paid(pid: str, bot=None) -> bool:
         return False
     uid = pay["payer_id"]
     founder = None
-    if pay["plan"] == "month" and pay["amount"] == FOUNDER_PRICE < PLANS["month"]["price"]:
+    plan = PLANS.get(pay["plan"])
+    if plan and pay["amount"] < plan["price"]:          # оплачено по цене первых — «Основатель» навсегда
         await add_bonus(uid, "founder", "slot", 0)
         founder = True
     until = await grant(uid, pay["days"], "pay", founder)

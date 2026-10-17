@@ -134,9 +134,11 @@ def _page(body: str, status: int = 200) -> HTMLResponse:
 
 def _no_key() -> HTMLResponse:
     import config
-    return _page(f'<p class="lead">Ссылка на оплату личная и живёт сутки. Открой её заново из приложения '
-                 f'(«Ещё → Капибара+») или из бота командой /plus.</p>'
-                 f'<p><a href="https://t.me/{escape(config.BOT_USERNAME)}">Открыть бота</a></p>', 403)
+    return _page(f'<p class="lead">Оплата — по личной ссылке, она живёт сутки. Её дают бот (команда /plus) '
+                 f'и приложение: «Ещё → Капибара+» в Telegram, на Android и на сайте uiboshki.ru/app. '
+                 f'Подписка работает везде, и на iPhone.</p>'
+                 f'<p><a href="https://t.me/{escape(config.BOT_USERNAME)}?start=plus">Открыть бота</a> · '
+                 f'<a href="/app">Открыть приложение</a></p>', 403)
 
 
 def _plans_form(key: str, st: dict) -> str:
@@ -157,10 +159,17 @@ async def plus_page(k: str = ""):
     if not uid:
         return _no_key()
     st = await billing.status(uid)
-    state = (f"Подписка действует до <b>{billing.fmt_day(st['until'])}</b>. Оплата добавит дни к этому сроку."
-             if st["active"] else "Подписки сейчас нет.")
+    if st["paid_until"]:
+        state = f"Подписка действует до <b>{billing.fmt_day(st['until'])}</b>. Оплата добавит дни к этому сроку."
+    elif st["gift"]:
+        state = (f"У твоей группы «Капибара+» в подарок до <b>{billing.fmt_day(st['gift'])}</b>. Оплата "
+                 f"нужна только тем, кто хочет продлить заранее: дни добавятся после подарка.")
+    else:
+        state = "Подписки сейчас нет."
     if st["founder"]:
-        state += " Ты «Основатель»: месяц для тебя — 149 ₽, пока продлеваешь без долгих перерывов."
+        state += " Ты «Основатель»: цена первых пользователей остаётся за тобой навсегда."
+    elif st["prices"][0]["founder"]:
+        state += " Сейчас действует цена первых пользователей: кто оплатит по ней, так и платит всегда."
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
     if not st["provider"]:
         pay = '<p class="state">Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.</p>'

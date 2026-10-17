@@ -152,7 +152,7 @@ void main() {
     expect(find.byType(PlusScreen), findsOneWidget);
     expect(find.text('Действует до 14 ноября'), findsOneWidget);
     expect(find.text('Основатель'), findsWidgets);
-    expect(find.text('месяц для тебя — 149 ₽'), findsOneWidget);
+    expect(find.text('месяц для тебя — 149 ₽, навсегда'), findsOneWidget);
     expect(find.text('ИИ сверх пробы'), findsOneWidget);
     await _see(t, 'plus:price:half');
     expect(find.byKey(const Key('plus:price:month')), findsOneWidget);
@@ -178,6 +178,19 @@ void main() {
     expect(find.text('Рассвет · +3 дня'), findsOneWidget);
     expect(find.text('получено'), findsOneWidget);
     expect(find.text('Полночь · +14 дней'), findsOneWidget);
+  });
+
+  testWidgets('подарок своей группе — «Подарок группе до …», платить не нужно', (t) async {
+    phone(t);
+    final api = fakeApi(
+      overrides: {
+        'GET /api/plus': {..._plus, 'until': '2026-12-31', 'paid_until': null, 'gift': '2026-12-31', 'founder': false},
+      },
+    );
+    await t.pumpWidget(_host(PlusScreen(api: api)));
+    await settle(t);
+    expect(find.text('Подарок группе до 31 декабря'), findsOneWidget);
+    expect(find.text('Платить не нужно — всё уже включено'), findsOneWidget);
   });
 
   testWidgets('касса не подключена — «Оплата скоро заработает», кнопки оплаты нет', (t) async {

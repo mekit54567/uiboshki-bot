@@ -56,9 +56,9 @@ def test_pay_link_key():
 
 
 @pytest.mark.asyncio
-async def test_grant_extends_and_founders(db, monkeypatch, robokassa):
+async def test_grant_extends_and_founders_forever(db, monkeypatch, robokassa):
+    from database import set_setting
     _today(monkeypatch, date(2026, 10, 16))
-    monkeypatch.setattr(billing, "FOUNDERS_LIMIT", 1)
     for uid in (ME, FRIEND):
         await db.upsert_user(uid, "", "u")
     assert (await billing.prices(ME))[0] == {"plan": "month", "title": "Месяц", "days": 30, "price": 149,
@@ -68,13 +68,52 @@ async def test_grant_extends_and_founders(db, monkeypatch, robokassa):
     assert await billing.paid(pid) and not await billing.paid(pid)           # повтор уведомления — не продлевает
     st = await billing.status(ME)
     assert st["active"] and st["until"] == "2026-11-14" and st["founder"]
-    assert (await billing.prices(FRIEND))[0]["price"] == 249                 # место одно — уже занято
     assert await billing.grant(ME, 5, "test") == "2026-11-19"                # продление — от конца срока
 
-    _today(monkeypatch, date(2027, 1, 1))                                    # перерыв больше 30 дней
-    assert (await billing.prices(ME))[0]["price"] == 249
+    await set_setting("plus:stage", "full")                                  # Никита: «249 — я скажу»
+    assert [p["price"] for p in await billing.prices(FRIEND)] == [249, 790]  # новым — полная
+    _today(monkeypatch, date(2027, 3, 1))                                    # долгий перерыв — цена та же
+    assert [p["price"] for p in await billing.prices(ME)] == [149, 649]
     await billing.grant(ME, 30, "pay")
-    assert not (await billing.status(ME))["founder"]
+    assert (await billing.status(ME))["founder"]
+
+
+@pytest.mark.asyncio
+async def test_gift_for_own_group(db, monkeypatch):
+    import plans
+    from database import set_setting
+    _today(monkeypatch, date(2026, 10, 20))
+    await db.upsert_user(ME, "", "u")
+
+    async def own(uid):
+        return uid == ME
+    monkeypatch.setattr(plans, "_own", own)
+    st = await billing.status(ME)
+    assert st["active"] and st["gift"] == billing.GIFT_UNTIL and not st["paid_until"]
+    assert await plans.has_plus(ME) and not await plans.has_plus(FRIEND)
+    assert await billing.grant(ME, 30, "pay") == "2027-01-30"               # оплата — после подарка
+    await set_setting("plus:gift", "off")
+    assert not (await billing.status(ME))["gift"]
+    _today(monkeypatch, date(2027, 2, 1))
+    await set_setting("plus:gift", "2027-01-31")                             # прошёл — не действует
+    assert not await billing.gift_for(ME)
+
+
+@pytest.mark.asyncio
+async def test_yookassa_down_falls_back_to_robokassa(db, monkeypatch, robokassa):
+    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "secret")
+    await db.upsert_user(ME, "", "u")
+    assert billing.provider() == "yookassa"
+
+    async def down(*a, **k):
+        raise billing.PayError("касса не отвечает")
+    monkeypatch.setattr(billing, "_yookassa_create", down)
+    url = await billing.create(ME, "month", "https://x/done")
+    assert url.startswith(billing.ROBOKASSA_URL)
+    monkeypatch.setattr(billing, "ROBOKASSA_PASS2", "")                      # Robokassa нет — ошибка как есть
+    with pytest.raises(billing.PayError):
+        await billing.create(ME, "month", "https://x/done")
 
 
 async def _payments(db):
@@ -98,12 +137,12 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
         sig = hashlib.md5(f"{out_sum}:{inv}:{sig_pass}".encode()).hexdigest().upper()
         return c.post("/api/billing/robokassa", data={"OutSum": out_sum, "InvId": inv, "SignatureValue": sig})
 
-    assert hook("790.00", "чужой").status_code == 400                        # подпись не та
+    assert hook("649.00", "чужой").status_code == 400                        # подпись не та
     assert hook("10.00").status_code == 400                                  # сумма меньше
-    assert hook("790.00").text == f"OK{inv}"
-    assert hook("790.00").text == f"OK{inv}"                                 # повтор — без второго продления
+    assert hook("649.00").text == f"OK{inv}"
+    assert hook("649.00").text == f"OK{inv}"                                 # повтор — без второго продления
     st = await billing.status(ME)
-    assert st["active"] and not st["founder"]
+    assert st["active"] and st["founder"]                                    # по цене первых — «Основатель»
     assert c.get(f"/plus/state?k={key}").json()["active"]
     assert c.get("/api/me", headers=_headers_for(ME)).json()["plus"] is True
     assert "Оферта" in c.get("/offer").text
@@ -221,6 +260,59 @@ async def test_invite_command_and_inline(db, bot, dp):  # noqa: F811
     assert url.startswith("https://t.me/") and "start=ref_" in url
     await send(dp, bot, "/plus", uid=ME)
     assert "Капибара+" in bot.session.texts()[-1]
+
+
+@pytest.mark.asyncio
+async def test_starosta_switches_and_launch_news(db, bot, dp, monkeypatch):  # noqa: F811
+    from database import get_setting
+    from tests.conftest import STAROSTA_ID
+    from tests.test_review_bot import press
+    import scheduler
+    monkeypatch.setattr(scheduler, "PACE_SECONDS", 0)
+    await send(dp, bot, "/plus stage full", uid=ME)                          # не староста — обычный /plus
+    assert await get_setting("plus:stage") is None
+    await send(dp, bot, "/plus stage full", uid=STAROSTA_ID)
+    assert await get_setting("plus:stage") == "full" and "полная цена" in bot.session.texts()[-1]
+    await send(dp, bot, "/plus gift 15.01.2027", uid=STAROSTA_ID)
+    assert await billing.gift_until() == "2027-01-15"
+    await send(dp, bot, "/plus gift завтра", uid=STAROSTA_ID)
+    assert await billing.gift_until() == "2027-01-15" and "Так:" in bot.session.texts()[-1]
+
+    await db.upsert_user(ME, "", "u")
+    await send(dp, bot, "/plusnews", uid=STAROSTA_ID)                        # превью, ничего не разослано
+    assert "Появилась «Капибара+»" in bot.session.texts()[-2]
+    assert await get_setting("plus:announced") is None
+    before = len(bot.session.texts())
+    await press(dp, bot, "plus:news:go", uid=STAROSTA_ID)
+    sent = bot.session.texts()[before:]
+    assert any("Появилась «Капибара+»" in t and "uiboshki.ru" in t for t in sent)
+    assert await get_setting("plus:announced")
+
+
+@pytest.mark.asyncio
+async def test_launch_text_gift_and_where_to_pay(db, monkeypatch, robokassa):
+    import plans
+    from handlers.plus import launch_text, plus_text
+    await db.upsert_user(ME, "", "u")
+
+    async def own(uid):
+        return uid == ME
+    monkeypatch.setattr(plans, "_own", own)
+    mine, other = await launch_text(ME), await launch_text(FRIEND)
+    assert "в подарок до 31 декабря" in mine and "подарок" not in other
+    assert "149 ₽" in other and "навсегда" not in other and "так и платит всегда" in other
+    assert "на сайте uiboshki.ru" in other and "iPhone" in other
+    text, kb = await plus_text(ME)
+    assert "подарок твоей группе" in text and "Платить ничего не нужно" in text
+
+
+@pytest.mark.asyncio
+async def test_start_plus_deeplink(db, bot, dp):  # noqa: F811
+    await db.upsert_user(ME, "", "u")
+    await send(dp, bot, "/start plus", uid=ME)
+    assert "Капибара+" in bot.session.texts()[-1]
+    await send(dp, bot, "/start plus", uid=FRIEND)                           # новый — сначала приветствие
+    assert any("Привет" in t for t in bot.session.texts())
 
 
 @pytest.mark.asyncio

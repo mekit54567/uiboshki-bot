@@ -27,12 +27,14 @@ async def plan_of(user_id: int) -> str:
 
 
 async def has_plus(user_id: int) -> bool:
-    """Оплачена ли «Капибара+» (или подарена бонусом) — для платных мелочей:
-    иконки и скины «по подписке», значок. Своей группе ИИ и так бесплатно."""
+    """Оплачена ли «Капибара+» (или подарена: бонусом или своей группе до
+    billing.GIFT_UNTIL) — для платных мелочей: иконки и скины «по подписке»,
+    значок. Своей группе ИИ и так бесплатно."""
+    import billing
     from database import get_subscription
     from utils import today_msk
     until = await get_subscription(user_id)
-    return bool(until and until >= today_msk().isoformat())
+    return bool(until and until >= today_msk().isoformat()) or bool(await billing.gift_for(user_id))
 
 
 async def _own(user_id: int) -> bool:

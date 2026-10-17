@@ -89,15 +89,6 @@ async def set_founder(user_id: int, founder: bool):
         await db.commit()
 
 
-async def ever_founder_slots_taken() -> int:
-    """Сколько мест «Основателей» уже выдано — за всё время: место не
-    возвращается, когда кто-то перестал платить (иначе «первые 100» не первые)."""
-    async with connect() as db:
-        row = await (await db.execute(
-            "SELECT COUNT(*) FROM bonuses WHERE kind = 'founder'")).fetchone()
-        return row[0]
-
-
 # ── Бонусы ───────────────────────────────────────────────────────────────────
 
 async def add_bonus(user_id: int, kind: str, key: str, days: int) -> bool:

@@ -54,9 +54,13 @@ async function openPlus() {
   try { d = await api("/api/plus"); }
   catch (e) { box.innerHTML = '<p class="sheet-hint">' + escapeHtml(e.message) + '</p>'; return; }
   const inv = d.invite || {};
-  const state = d.active
-    ? statusCard("ok", "Подписка до " + fmtDay(d.until), d.founder ? "Ты «Основатель»: месяц — 149 ₽, пока продлеваешь без долгих перерывов" : "Оплата добавит дни к этому сроку")
-    : statusCard("off", "Подписки нет", "Всё бесплатное — расписание, сроки, баллы, файлы — остаётся бесплатным");
+  const founderNote = d.founder ? "Ты «Основатель»: цена первых пользователей — за тобой навсегда"
+    : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
+  const state = d.paid_until
+    ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
+    : d.gift
+      ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
+      : statusCard("off", "Подписки нет", founderNote || "Всё бесплатное — расписание, сроки, баллы, файлы — остаётся бесплатным");
   const prices = (d.prices || []).map(p => '<div class="plus-price"><span>' + escapeHtml(p.title) + ' · ' + p.days + ' дней' +
     (p.founder ? ' <i>Основатель</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + ' ₽</s> ' : '') + p.price + ' ₽</b></div>').join("");
   const ranks = Object.entries(inv.ranks || {}).map(([k, r]) =>
