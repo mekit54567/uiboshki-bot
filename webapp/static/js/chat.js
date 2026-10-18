@@ -267,6 +267,7 @@ document.getElementById("chat-file").addEventListener("change", (e) => {
 function renderAttachment() {
   const box = document.getElementById("attach-preview");
   box.innerHTML = "";
+  renderThinkToggle();                 // к фото и файлу «Подумать» нет
   if (!pendingAttachment) return;
   const chip = document.createElement("div");
   chip.className = "attach-chip";
@@ -288,10 +289,47 @@ function clearAttachment() {
   syncNavHeight();
 }
 
+// ── «Подумать» до вопроса (подписка, think.py) ──
+// Переключатель над полем ввода (Никита 18.10: «выбрать перед ответом
+// сразу»): включил — следующий вопрос сразу решает модель второго уровня,
+// без обычного ответа. Одноразовый: вопрос ушёл — выключается сам, чтобы
+// дневной лимит не уходил случайно. Нет подписки — переключателя нет;
+// кончилось на сегодня или прикреплён файл — серый.
+let thinkOffer = null, thinkArmed = false;     // {label, left, daily} с сервера
+
+function setThinkOffer(o) {
+  thinkOffer = o || null;
+  renderThinkToggle();
+}
+
+function renderThinkToggle() {
+  const box = document.getElementById("think-toggle");
+  if (!thinkOffer) {
+    thinkArmed = false;
+    box.innerHTML = "";
+  } else {
+    const can = thinkOffer.left > 0 && !pendingAttachment;
+    if (!can) thinkArmed = false;
+    box.innerHTML = '<button class="think-toggle' + (thinkArmed ? " on" : "") + '" onclick="toggleThink()" aria-pressed="' +
+      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать · " + thinkOffer.left + "</button>" +
+      '<span class="think-note">' + (thinkArmed ? "следующий вопрос решит DeepSeek, подумав"
+        : thinkOffer.left > 0 ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
+  }
+  syncNavHeight();
+}
+
+function toggleThink() {
+  if (!thinkOffer || !(thinkOffer.left > 0) || pendingAttachment) return;
+  thinkArmed = !thinkArmed;
+  haptic();
+  renderThinkToggle();
+}
+
 // ── предметы (с лекциями — чат опирается на них) ──
 async function loadChatSubjects() {
   try {
     const data = await api("/api/subjects");
+    setThinkOffer(data.think);
     const sel = document.getElementById("chat-subject");
     data.subjects.forEach(s => {
       const o = document.createElement("option");
@@ -319,6 +357,11 @@ async function sendChat() {
   // В истории для сервера — только текст; само вложение уходит отдельным полем.
   const content = text || (att ? (att.image ? "Реши задание на фото." : "Разбери этот файл.") : "");
   const entry = { role: "user", content: content, att: shownAtt ? { name: shownAtt.name, image: shownAtt.image } : null };
+  if (thinkArmed && !att) {            // «Подумать» — на один вопрос
+    entry.deep = true;
+    thinkArmed = false;
+    renderThinkToggle();
+  }
   chatLog.push(entry);
   saveChatLog();
   try {
@@ -350,16 +393,20 @@ async function requestAnswer(entry, att) {
   const history = historyOf(chatLog);
   const body = { history: history, subject: document.getElementById("chat-subject").value };
   if (att) body.attachment = { name: att.name, mime: att.mime, data: att.data };
+  if (entry.deep) body.think_first = true;
   try {
     const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
     pending.remove();
+    if (data.think) setThinkOffer(data.think);
     const here = chatId === myId, log = chatLogOf(myId);
     if (data.choose && data.choose.length) {
+      // выберет предмет — вопрос уйдёт заново, «Подумать» остаётся при нём
       if (here) askSubject(entry, att, data);
       else if (log) { entry.failed = true; saveChatLog(myId, log); }
       return;
     }
     delete entry.failed;
+    delete entry.deep;
     if (data.file_text) entry.file_text = data.file_text;
     if (!log) return;                                 // чат удалили, пока ждали
     log.push({ role: "assistant", content: data.content, html: data.html, files: data.files, sources: data.sources,
@@ -372,6 +419,7 @@ async function requestAnswer(entry, att) {
   } catch (e) {
     pending.remove();
     entry.failed = true;
+    delete entry.deep;                 // «Повторить» — уже обычным вопросом
     if (chatId !== myId) { const log = chatLogOf(myId); if (log) saveChatLog(myId, log); return; }
     saveChatLog();
     const bubble = appendMsg("assistant", "⚠️ " + e.message);
@@ -490,6 +538,7 @@ async function thinkAgain() {
   try {
     const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
     pending.remove();
+    if (data.think) setThinkOffer(data.think);
     const log = chatLogOf(myId);
     if (!log) return;
     log.push({ role: "assistant", content: data.content, html: data.html, sources: data.sources, think: data.think });
