@@ -63,9 +63,10 @@ async def cmd_status(message: Message):
 
 @router.message(Command("aimain"))
 async def cmd_aimain(message: Message):
-    """Кому Ling — основная модель ИИ (Gemini тогда запасная), только староста:
-    /aimain all — все, group — своя группа, me — только старосты, gemini — все
-    на Gemini. Без аргумента — что сейчас."""
+    """Кому Ling — основная модель ИИ (Gemini тогда запасная). Переключает
+    только староста, на всех сразу: /aimain plus — староста и «Капибара+» (по
+    умолчанию), all — все, me — только старосты, gemini — все на Gemini. Без
+    аргумента — что сейчас."""
     if STAROSTA_ID and not is_starosta(message.from_user.id):
         return
     import gemini_solver
@@ -78,10 +79,12 @@ async def cmd_aimain(message: Message):
         await set_setting("ai_main", args[0].lower())
     mode = await gemini_solver.ai_main()
     await message.answer(
-        f"Ling основная: <b>{gemini_solver.MAIN_MODES[mode]}</b>. Ling не ответила — отвечает Gemini; "
-        "у кого основная Gemini и она упёрлась в лимит — тоже Ling.\n\n/aimain all — все\n"
-        "/aimain group — своя группа\n/aimain me — только старосты\n"
-        "/aimain gemini — все на Gemini\n\nКто сколько ответил — в /status.", parse_mode="HTML")
+        f"Ling основная: <b>{gemini_solver.MAIN_MODES[mode]}</b>. У остальных основная — Gemini, "
+        "а Ling отвечает, только когда у Gemini кончился лимит. Ling не ответила — отвечает Gemini.\n\n"
+        "Переключаешь только ты, сразу для всех:\n"
+        "/aimain plus — ты и у кого «Капибара+» (по умолчанию)\n/aimain all — все\n"
+        "/aimain me — только старосты\n/aimain gemini — все на Gemini\n\n"
+        "Кто сколько ответил — в /status.", parse_mode="HTML")
 
 
 @router.message(Command("aitest"))

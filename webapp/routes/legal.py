@@ -128,7 +128,10 @@ async def api_give_consent(body: ConsentBody, user: dict = CurrentUser,
     import privacy
     if body.kind not in privacy.KINDS:
         raise HTTPException(400, "нет такого согласия")
-    await privacy.give(user["id"], body.kind, _via(x_telegram_init_data, x_app))
+    try:
+        await privacy.give(user["id"], body.kind, _via(x_telegram_init_data, x_app))
+    except privacy.Erasing as e:
+        raise HTTPException(409, str(e))
     return await api_consent(user)
 
 
@@ -143,17 +146,28 @@ async def api_consent_asked(user: dict = CurrentUser):
 
 class DeleteBody(BaseModel):
     confirm: bool = False
+    phrase: str = ""
 
 
 @router.post("/api/me/delete")
 async def api_delete_me(body: DeleteBody, user: dict = CurrentUser):
-    """«Удалить все мои данные» (152-ФЗ, ст. 21): сразу и насовсем. Входы и
-    устройства тоже стираются — после ответа сессия уже недействительна."""
+    """«Удалить все мои данные» (152-ФЗ, ст. 21), Никита 18.10: фраза
+    privacy.ERASE_PHRASE руками; сразу — входы и устройства (после ответа
+    сессия недействительна), полностью — через ERASE_DAYS дней. Не давал
+    согласия (отказ на листе согласия) — confirm и сразу насовсем."""
     import privacy
     import ratelimit
-    if not body.confirm:
-        raise HTTPException(400, "нужно подтверждение")
-    if not ratelimit.allow("deadline", user["id"]):
+    uid = user["id"]
+    due = await privacy.erasing(uid)
+    if not due and await privacy.blocked(uid):
+        if not body.confirm:
+            raise HTTPException(400, "нужно подтверждение")
+        await privacy.erase(uid)
+        return {"ok": True, "now": True}
+    if not due and not privacy.phrase_ok(body.phrase):
+        raise HTTPException(400, f"Введи фразу: {privacy.ERASE_PHRASE}")
+    if not ratelimit.allow("deadline", uid):
         raise HTTPException(429, "Подожди пару минут")
-    await privacy.erase(user["id"])
-    return {"ok": True}
+    from webapp import deps
+    due = await privacy.request_erase(uid, deps.tg_bot() if deps.BOT_TOKEN else None)
+    return {"ok": True, "due": due, "days": privacy.ERASE_DAYS, "text": privacy.erasing_text(due)}

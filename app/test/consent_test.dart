@@ -98,10 +98,15 @@ void main() {
     expect(find.byType(ConsentScreen), findsNothing);
   });
 
-  testWidgets('удалить все мои данные: с подтверждением, потом выход', (t) async {
+  testWidgets('удалить все мои данные: фразой руками, потом выход', (t) async {
     phone(t);
     final asked = <String>[];
-    final api = fakeApi(requests: asked, overrides: {'POST /api/me/delete': {'ok': true}});
+    final api = fakeApi(
+      requests: asked,
+      overrides: {
+        'POST /api/me/delete': {'ok': true, 'due': '2026-10-15', 'text': 'Твои данные удаляются: полностью — 15.10.2026.'},
+      },
+    );
     late BuildContext ctx;
     await t.pumpWidget(_wrap(Builder(builder: (c) {
       ctx = c;
@@ -110,11 +115,29 @@ void main() {
     bool? done;
     deleteMyData(ctx, api).then((v) => done = v);
     await settle(t);
-    await t.tap(find.text('Удалить всё'));
+    await t.enterText(find.byType(TextField), 'да');          // не та фраза — ничего
+    await t.tap(find.text('Удалить'));
     await settle(t);
-    await t.pump(const Duration(seconds: 5)); // тост уходит
+    await t.pump(const Duration(seconds: 5));
+    expect(done, isFalse);
+    expect(asked, isNot(contains('POST /api/me/delete')));
+
+    deleteMyData(ctx, api).then((v) => done = v);
+    await settle(t);
+    await t.enterText(find.byType(TextField), 'Удалить мои данные.');
+    await t.tap(find.text('Удалить'));
+    await settle(t);
+    expect(find.textContaining('полностью — 15.10.2026'), findsOneWidget);
+    await t.tap(find.text('Понятно'));
+    await settle(t);
     expect(done, isTrue);
     expect(asked, contains('POST /api/me/delete'));
     expect(api.token, isNull);
+  });
+
+  test('фраза удаления — как на сервере', () {
+    expect(erasePhraseOk(' Удалить  мои данные. '), isTrue);
+    expect(erasePhraseOk('«удалить мои данные»'), isTrue);
+    expect(erasePhraseOk('удалить'), isFalse);
   });
 }

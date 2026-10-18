@@ -45,6 +45,7 @@ async function openLegal(ev, name) {
 let CONSENT_BLOCKED = false;
 
 function maybeConsent(me) {
+  if (me && me.erasing) return showErasing(me.erasing.text, false);
   if (!me || !me.consent_needed) return;
   CONSENT_BLOCKED = !!me.consent_blocked;
   document.getElementById("consent-body").innerHTML =
@@ -84,25 +85,71 @@ async function refuseConsent() {
   await deleteMyData(true);
 }
 
-// «Удалить все мои данные» (ст. 21): сразу и насовсем — профиль, группа, вход
-// в СДО, история баллов, личные дедлайны, устройства, входы VK и Яндекс.
-async function deleteMyData(confirmed) {
-  if (!confirmed && !(await confirmDialog("Удалить все твои данные? Профиль, группу, вход в СДО, историю " +
-      "баллов и посещений, личные дедлайны, устройства. Отменить нельзя."))) return;
+// «Удалить все мои данные» (ст. 21, Никита 18.10): фразой руками; сразу —
+// выход везде и из СДО, полностью — через 7 дней (до этого можно попросить
+// вернуть). Отказ от согласия до первого входа (confirmed) — сразу насовсем.
+const ERASE_PHRASE = "удалить мои данные";
+
+function erasePhraseOk(text) {
+  const t = (text || "").toLowerCase().replace(/ё/g, "е").split(/\s+/).filter(Boolean).join(" ")
+    .replace(/^[\s.!«»"']+|[\s.!«»"']+$/g, "");
+  return t === ERASE_PHRASE;
+}
+
+function deleteMyData(confirmed) {
+  if (confirmed) return eraseNow();
+  haptic();
+  document.getElementById("consent-body").innerHTML =
+    '<div class="sec-hero"><span class="sec-shield">' + icon("trash") + '</span><div><h3>Удалить все твои данные?</h3>' +
+      '<p>Профиль, группу, вход в СДО, историю баллов и посещений, личные дедлайны, устройства</p></div></div>' +
+    '<p class="sheet-hint">Сразу — выход со всех устройств и из СДО, рассылки и ИИ остановятся. Полностью всё ' +
+      'сотрём через 7 дней: если удалил по ошибке, до этого можно написать Никите (@Partykq) — вернём вручную, ' +
+      'если получится, без гарантии.</p>' +
+    '<p class="sheet-hint">Чтобы удалить, впиши: <b>' + ERASE_PHRASE + '</b></p>' +
+    '<input class="searchbox" id="erase-phrase" autocomplete="off" autocapitalize="off" spellcheck="false" ' +
+      'placeholder="' + ERASE_PHRASE + '" oninput="document.getElementById(\'erase-go\').disabled = !erasePhraseOk(this.value)">' +
+    '<button class="primary danger" id="erase-go" disabled onclick="eraseByPhrase()">Удалить</button>' +
+    '<button class="ghost" onclick="closeSheet(\'consent-sheet\')">Оставить</button>';
+  document.getElementById("consent-sheet").classList.add("open");
+}
+
+async function eraseByPhrase() {
+  const phrase = document.getElementById("erase-phrase").value;
+  if (!erasePhraseOk(phrase)) return;
+  document.getElementById("erase-go").disabled = true;
+  let r;
+  try { r = await api("/api/me/delete", { method: "POST", body: JSON.stringify({ phrase }) }); } catch (e) {
+    document.getElementById("erase-go").disabled = false;
+    showToast("⚠️ " + e.message);
+    return;
+  }
+  haptic("success");
+  showErasing(r.text, true);
+}
+
+async function eraseNow() {
   try { await api("/api/me/delete", { method: "POST", body: JSON.stringify({ confirm: true }) }); } catch (e) {
     showToast("⚠️ " + e.message);
     return;
   }
-  ERASED = true;
   haptic("success");
+  showErasing("", true);
+}
+
+// Данные удаляются (или уже удалены): лист мимо не закрывается. leave — сразу
+// после удаления: закрыть Mini App или выйти из PWA.
+function showErasing(text, leave) {
+  ERASED = true;
   document.querySelectorAll(".sheet-backdrop.open").forEach(s => s.classList.remove("open"));
   document.getElementById("consent-body").innerHTML =
-    '<div class="sec-hero"><span class="sec-shield">' + icon("check") + '</span><div><h3>Данные удалены</h3>' +
-      '<p>Всё о тебе стёрто</p></div></div>' +
-    '<p class="sheet-hint">Из ночных копий базы оно уйдёт, когда старые копии сменятся новыми. Если вернёшься — начнём с нуля.</p>';
+    '<div class="sec-hero"><span class="sec-shield">' + icon("check") + '</span><div><h3>' +
+      (text ? "Данные удаляются" : "Данные удалены") + '</h3><p>' +
+      (text ? "Вход на всех устройствах и в СДО уже удалён" : "Всё о тебе стёрто") + '</p></div></div>' +
+    '<p class="sheet-hint">' + escapeHtml(text || "Если вернёшься — начнём с нуля.") + '</p>';
   document.getElementById("consent-sheet").classList.add("open");
-  if (IN_TG) { setTimeout(() => { try { tg.close(); } catch (e) {} }, 2500); return; }
+  if (!leave) return;
+  if (IN_TG) { setTimeout(() => { try { tg.close(); } catch (e) {} }, 4000); return; }
   saveToken("");
   try { navigator.serviceWorker.controller.postMessage("logout"); } catch (e) {}
-  setTimeout(() => location.replace("/app"), 2500);
+  setTimeout(() => location.replace("/app"), 4000);
 }

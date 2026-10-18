@@ -192,6 +192,12 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     if (me == null || !mounted) return;
     achName = '${me['first_name'] ?? ''}'.trim();
+    // попросил удалить данные — до полного стирания только это, потом ко входу
+    final erasing = me['erasing'];
+    if (erasing is Map) {
+      await confirmSheet(context, title: 'Данные удаляются', text: '${erasing['text']}', action: 'Понятно', cancel: 'Закрыть');
+      return widget.onLogout();
+    }
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;

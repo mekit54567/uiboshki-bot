@@ -23,10 +23,13 @@ async def api_me(user: dict = CurrentUser):
 async def consent_state(uid: int) -> dict:
     """Лист согласия (152-ФЗ): новому — пока не согласится (API закрыт), кто
     был до согласий — один раз, закрывается: показал — POST /api/consent/asked.
+    Попросил удалить данные — erasing (день и текст), вместо согласия.
     /api/me ничего не отмечает — его зовут несколько экранов сразу."""
     import privacy
     blocked = await privacy.blocked(uid)
-    return {"consent_needed": blocked or await privacy.should_ask(uid), "consent_blocked": blocked}
+    due = await privacy.erasing(uid) if blocked else None
+    return {"consent_needed": blocked or await privacy.should_ask(uid), "consent_blocked": blocked,
+            "erasing": {"due": due, "text": privacy.erasing_text(due)} if due else None}
 
 
 @router.get("/api/groups/search")

@@ -61,7 +61,8 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
     if await privacy.blocked(user["id"]):
         path = request.url.path.replace("/api/v1/", "/api/", 1)
         if path not in CONSENT_FREE:
-            raise HTTPException(status_code=403, detail=CONSENT_NEEDED)
+            due = await privacy.erasing(user["id"])
+            raise HTTPException(status_code=403, detail=privacy.erasing_text(due) if due else CONSENT_NEEDED)
         return user
     from optional_subjects import apply_for
     await apply_for(user["id"])   # пары предметов по выбору, на которые не ходит — скрыть

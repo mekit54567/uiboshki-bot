@@ -147,9 +147,62 @@ async def test_api_consent_and_delete(db, monkeypatch):
     assert c.get("/api/me", headers=h).json()["consent_needed"] is False
     assert (await get_consents(ME))[0]["via"] == "tg"
 
-    assert c.post("/api/me/delete", json={}, headers=h).status_code == 400   # без подтверждения — нет
-    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).json() == {"ok": True}
-    assert await db.get_user(ME) is None and await get_consents(ME) == []
+    assert c.post("/api/me/delete", json={}, headers=h).status_code == 400   # без фразы — нет
+    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).status_code == 400
+    assert c.post("/api/me/delete", json={"phrase": "удалить"}, headers=h).status_code == 400
+    r = c.post("/api/me/delete", json={"phrase": " Удалить мои  данные. "}, headers=h).json()
+    assert r["ok"] and r["days"] == 7 and "без гарантии" in r["text"]
+    assert await db.get_user(ME) and await get_consents(ME) == []     # сразу — согласия, данные — через 7 дней
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_erase_after_seven_days(db, monkeypatch):
+    """Никита 18.10: «удалить мои данные» — фразой; сразу выход везде и из СДО,
+    обработка встаёт; полностью — через 7 дней; до этого староста может
+    вернуть (/undelete), согласие тогда спросят заново."""
+    from datetime import date, timedelta
+
+    import privacy
+    from database.sessions import create_session
+    c, h = _client(monkeypatch)
+    await db.upsert_user(ME, "me", "Я")
+    await privacy.give(ME, "pd", "tg")
+    token = await create_session(ME, "Chrome")
+    assert c.get("/api/notify", headers=h).status_code == 200
+    r = c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h).json()
+    assert r["due"] == (date.today() + timedelta(days=7)).isoformat()
+    assert c.get("/api/notify", headers={"Authorization": "Bearer " + token}).status_code == 401  # вышли везде
+    assert await privacy.blocked(ME)                                   # ничего не обрабатываем
+    res = c.get("/api/notify", headers=h)
+    assert res.status_code == 403 and "удаляются" in res.json()["detail"]
+    me = c.get("/api/me", headers=h).json()
+    assert me["erasing"]["due"] == r["due"] and me["consent_blocked"]
+    assert c.post("/api/consent", json={"kind": "pd"}, headers=h).status_code == 409   # согласие не берём
+    assert not await privacy.ask_once(ME)
+
+    await privacy.purge()                                              # рано — ещё есть
+    assert await db.get_user(ME)
+    assert await privacy.undo_erase(ME) and not await privacy.erasing(ME)   # вернули по заявке
+    assert await privacy.blocked(ME)                                   # но согласие — заново
+    await privacy.give(ME, "pd", "tg")
+    assert not await privacy.blocked(ME)
+
+    c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h)
+    import utils
+    monkeypatch.setattr(utils, "today_msk", lambda: date.today() + timedelta(days=7))
+    await privacy.purge()                                              # прошло 7 дней — насовсем
+    assert await db.get_user(ME) is None and not await privacy.erasing(ME)
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_refuse_consent_erases_now(db, monkeypatch):
+    """Новый человек отказался от согласия на листе — хранить нечего, сразу."""
+    c, h = _client(monkeypatch)
+    c.get("/api/me", headers=h)
+    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).json() == {"ok": True, "now": True}
+    assert await db.get_user(ME) is None
 
 
 def test_legal_texts_and_pages(monkeypatch):
@@ -169,18 +222,33 @@ def test_legal_texts_and_pages(monkeypatch):
     assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "перечень — на сайте Amvera" in text
     assert "Онланта" not in text and "доступа к содержимому у них нет" not in text   # договор поручения Amvera
     assert "бесплатном тарифе" in text and "для улучшения своих моделей" in text   # ревью 17.10: Gemini
+    for name in ("consent", "privacy"):                    # Никита 18.10: компании, не модели ИИ
+        text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
+        assert "Gemini" not in text and "Ling" not in text and "OpenRouter, Inc. (США)" in text
+        assert "удалить мои данные" in text and "7 дней" in text and "без гарантии" in text
+    from pathlib import Path
+    assert "Gemini" not in Path("webapp/static/js/more.js").read_text(encoding="utf-8").split("Вопросы к ИИ")[1][:300]
 
 
 @pytest.mark.asyncio
 async def test_bot_deleteme(db, dp, bot):  # noqa: F811
+    """/deleteme — фразой руками; не та — ничего; та — через 7 дней, старосте
+    сообщение с /undelete; /undelete — вернуть."""
+    import privacy
     await db.upsert_user(ME, "", "x")
     await send(dp, bot, "/deleteme")
-    assert "Удалить все твои данные" in bot.session.texts()[-1]
-    await press(dp, bot, "erase:no")
+    assert "Удалить все твои данные" in bot.session.texts()[-1] and "удалить мои данные" in bot.session.texts()[-1]
+    await send(dp, bot, "да")
+    assert "не совпала" in bot.session.texts()[-1] and not await privacy.erasing(ME)
+    await send(dp, bot, "/deleteme")
+    await send(dp, bot, "удалить мои данные")
+    assert await privacy.erasing(ME) and await db.get_user(ME)
+    assert "без гарантии" in bot.session.texts()[-1]
+    assert any(f"/undelete {ME}" in t for t in bot.session.texts())     # старосте
+    await press(dp, bot, "erase:yes")                                  # старая кнопка — ничего
     assert await db.get_user(ME)
-    await press(dp, bot, "erase:yes")
-    assert await db.get_user(ME) is None
-    assert "всё о тебе удалено" in bot.session.named("EditMessageText")[-1].text
+    await send(dp, bot, f"/undelete {ME}", uid=STAROSTA_ID)
+    assert not await privacy.erasing(ME) and "Вернул" in " ".join(bot.session.texts())
 
 
 @pytest.mark.asyncio

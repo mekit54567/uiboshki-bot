@@ -278,11 +278,13 @@ async def test_spare_openrouter_model_when_gemini_limited(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ling_main_for_own_group(db, monkeypatch):
-    """16.10, Никита: его и всю группу — на Ling; Gemini — запасная. Другие
-    группы — как раньше на Gemini; /aimain me — только староста; gemini — никто."""
+async def test_ling_main_by_subscription(db, monkeypatch):
+    """18.10, Никита: Ling основная — у него и у кого «Капибара+», у остальных
+    Gemini (Ling — запасная). /aimain all — все, me — только староста,
+    gemini — никто; старое «group» в настройке — как по умолчанию."""
     from config import STAROSTA_ID
     from database import set_setting
+    from database import set_subscription_until
     from database.groups import current_group, current_user
     calls = []
     ling_ok = {"v": True}
@@ -304,11 +306,12 @@ async def test_ling_main_for_own_group(db, monkeypatch):
     monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", [])
     monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
-    monkeypatch.setattr(gemini_solver, "AI_MAIN", "group")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "plus")
     ask = lambda **kw: gemini_solver.generate_text([{"role": "user", "content": "?"}], "s", **kw)  # noqa: E731
 
     gemini_solver.answered.clear()
-    tok_g, tok_u = current_group.set(None), current_user.set(555)          # своя группа
+    await set_subscription_until(555, "2099-01-01")
+    tok_g, tok_u = current_group.set(99999), current_user.set(555)         # у 555 — «Капибара+»
     try:
         assert await ask() == "ответ Ling" and calls == ["ling"]
         calls.clear()
@@ -320,17 +323,20 @@ async def test_ling_main_for_own_group(db, monkeypatch):
         assert gemini_solver.answered["ling"] == 1 and gemini_solver.answered["ling_failed"] == 1
 
         calls.clear()
-        current_group.set(99999)                                            # другая группа — Gemini
+        current_user.set(777)                                               # без подписки — Gemini
         assert await ask() == "ответ Gemini" and calls == ["gemini"]
+        current_user.set(STAROSTA_ID)                                       # Никита — Ling
+        assert await ask() == "ответ Ling"
+        current_user.set(777)
 
         calls.clear()
-        await set_setting("ai_main", "all")                                 # 17.10: всем — и другой группе
+        await set_setting("ai_main", "all")                                 # /aimain all — всем
         assert await ask() == "ответ Ling" and calls == ["ling"]
-        await set_setting("ai_main", "group")
+        await set_setting("ai_main", "group")                               # старое значение — по умолчанию
+        assert await gemini_solver.ai_main() == "plus"
 
-        calls.clear()
         await set_setting("ai_main", "me")                                  # /aimain me: только староста
-        current_group.set(None)
+        current_user.set(555)
         assert await ask() == "ответ Gemini"
         current_user.set(STAROSTA_ID)
         assert await ask() == "ответ Ling"
@@ -351,7 +357,7 @@ async def test_aimain_command(db, monkeypatch):
     from config import STAROSTA_ID
     from handlers.group_tools import cmd_aimain
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
-    monkeypatch.setattr(gemini_solver, "AI_MAIN", "group")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "plus")
     sent = []
 
     async def answer(text, **kw):
@@ -359,9 +365,9 @@ async def test_aimain_command(db, monkeypatch):
 
     msg = lambda uid, text: SimpleNamespace(from_user=SimpleNamespace(id=uid), text=text, answer=answer)  # noqa: E731
     await cmd_aimain(msg(STAROSTA_ID, "/aimain"))
-    assert "своя группа" in sent[-1]
-    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")             # по умолчанию с 17.10 — все
-    assert await gemini_solver.ai_main() == "all"
+    assert "«Капибара+»" in sent[-1] and "только ты" in sent[-1]   # по умолчанию — по подписке
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "")
+    assert await gemini_solver.ai_main() == "plus"
     await cmd_aimain(msg(STAROSTA_ID, "/aimain me"))
     assert "только старосты" in sent[-1] and await gemini_solver.ai_main() == "me"
     await cmd_aimain(msg(424242, "/aimain gemini"))                 # не староста — ничего

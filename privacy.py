@@ -8,7 +8,13 @@
 Поменял текст согласия по смыслу — подними VERSION: всех спросят заново.
 
 Срок хранения: год без заходов — всё стирается той же erase_user; запросы
-решалки — полгода."""
+решалки — полгода.
+
+«Удалить мои данные» (Никита 18.10) — вводом фразы ERASE_PHRASE руками.
+Сразу — согласия, выход со всех устройств и из СДО, обработка встаёт
+(blocked): ни рассылок, ни ИИ, ни событий. Полностью стирается через
+ERASE_DAYS дней (purge); до этого староста может восстановить по заявке
+(/undelete), без гарантии. Отказ от согласия до первого входа — сразу (erase)."""
 
 import logging
 import os
@@ -24,6 +30,8 @@ VIAS = ("bot", "pwa", "tg", "app")
 
 INACTIVE_DAYS = 365
 SOLVER_DAYS = 180
+ERASE_DAYS = 7                 # «удалил по ошибке» — столько дней можно попросить восстановить
+ERASE_PHRASE = "удалить мои данные"
 ANSWER_DAYS = 10               # ответ на запрос о данных — рабочих дней (ст. 14 ч. 3, ст. 20)
 
 # Кто оператор и как связаться — в текстах согласия и политики (legal_texts.py).
@@ -102,6 +110,8 @@ async def blocked(user_id: int) -> bool:
     if user_id in STAROSTA_IDS or not await needs(user_id):
         return False
     from database.privacy import has_any_consent, is_legacy
+    if await erasing(user_id):       # попросил удалить — до полного стирания ничего не обрабатываем
+        return True
     return not await is_legacy(user_id) and not await has_any_consent(user_id)
 
 
@@ -109,6 +119,8 @@ async def should_ask(user_id: int) -> bool:
     """Кто был до согласий или давал прошлую версию и ещё не видел просьбу
     этой версии (без отметки)."""
     if user_id in STAROSTA_IDS or not await needs(user_id):
+        return False
+    if await erasing(user_id):
         return False
     from database.privacy import asked_version
     return await asked_version(user_id) != VERSION
@@ -120,6 +132,8 @@ async def ask_once(user_id: int) -> bool:
     базе, после деплоя не повторится)."""
     if user_id in STAROSTA_IDS or not await needs(user_id):
         return False
+    if await erasing(user_id):
+        return False
     from database.privacy import mark_asked
     return await mark_asked(user_id, VERSION)
 
@@ -128,6 +142,9 @@ async def give(user_id: int, kind: str, via: str):
     from database.privacy import give_consent
     if kind not in KINDS:
         raise ValueError(kind)
+    due = await erasing(user_id)
+    if due:
+        raise Erasing(erasing_text(due))
     await give_consent(user_id, kind, VERSION, via if via in VIAS else "pwa")
     _given.add((user_id, kind, VERSION))
 
@@ -166,9 +183,82 @@ async def erase(user_id: int) -> dict:
     return done
 
 
+def phrase_ok(text: str) -> bool:
+    """Фраза подтверждения введена руками: регистр, «ё», пробелы, кавычки и
+    точка в конце не важны."""
+    t = " ".join((text or "").lower().replace("ё", "е").split()).strip(" .!«»\"'")
+    return t == ERASE_PHRASE.replace("ё", "е")
+
+
+async def erasing(user_id: int) -> str | None:
+    """Попросил удалить данные: день полного стирания (ГГГГ-ММ-ДД) или None."""
+    from database.privacy import erase_due
+    return await erase_due(user_id)
+
+
+def fmt_day(day: str) -> str:
+    y, m, d = day.split("-")
+    return f"{d}.{m}.{y}"
+
+
+async def request_erase(user_id: int, bot=None) -> str:
+    """«Удалить мои данные»: сразу — согласия, входы на устройствах и в СДО,
+    пуши; обработка встаёт. Полностью — через ERASE_DAYS дней (purge).
+    Старосте — сообщение с /undelete на случай заявки. Возвращает день."""
+    from datetime import timedelta
+
+    from database.privacy import request_erase as _request
+    from utils import today_msk
+    due = await erasing(user_id) or (today_msk() + timedelta(days=ERASE_DAYS)).isoformat()
+    await _request(user_id, due)
+    _given.difference_update({g for g in _given if g[0] == user_id})
+    try:
+        import sdo_grades
+        sdo_grades.forget(user_id)
+    except Exception:
+        pass
+    logger.info(f"запрос на удаление данных, полностью — {due}")
+    if bot and STAROSTA_IDS:
+        from database import get_user
+        from utils import esc
+        u = await get_user(user_id) or {}
+        name = esc(u.get("full_name") or u.get("username") or "без имени")
+        try:
+            await bot.send_message(
+                STAROSTA_IDS[0], f"🗑 {name} (<code>{user_id}</code>) удаляет свои данные: полностью — "
+                f"{fmt_day(due)}. Попросит вернуть до этого — <code>/undelete {user_id}</code>.",
+                parse_mode="HTML")
+        except Exception as e:
+            logger.info(f"удаление: старосте не ушло: {e}")
+    return due
+
+
+def erasing_text(due: str) -> str:
+    """Что сказать тому, кто попросил удалить данные, — бот, API, приложение."""
+    day = fmt_day(due)
+    return (f"Твои данные удаляются: полностью — {day}. До этого с ними ничего не делаем. "
+            f"Удалил по ошибке — напиши {CONTACT} до {day}: вернём вручную, если получится, "
+            "без гарантии. Входы на устройствах и в СДО уже удалены — войдёшь заново.")
+
+
+class Erasing(Exception):
+    """Попросил удалить данные — согласие и вход до полного стирания не берём."""
+
+
+async def undo_erase(user_id: int) -> bool:
+    """Восстановить по заявке (староста, /undelete): данные на месте, кроме
+    входов и согласий — согласие спросят заново."""
+    from database.privacy import cancel_erase
+    return await cancel_erase(user_id)
+
+
 async def purge():
-    """Раз в сутки (scheduler): год без заходов — стереть; старые запросы решалки."""
-    from database.privacy import inactive_users, purge_solver_history
+    """Раз в сутки (scheduler): попросил удалить и прошло ERASE_DAYS — стереть
+    полностью; год без заходов — тоже; старые запросы решалки."""
+    from database.privacy import due_erasures, inactive_users, purge_solver_history
+    from utils import today_msk
+    for uid in await due_erasures(today_msk().isoformat()):
+        await erase(uid)
     gone = [u for u in await inactive_users(INACTIVE_DAYS) if u not in STAROSTA_IDS]
     for uid in gone:
         await erase(uid)

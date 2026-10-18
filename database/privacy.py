@@ -147,6 +147,41 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
 
 # ── Срок хранения ────────────────────────────────────────────────────────────
 
+# ── Отложенное удаление (7 дней на «удалил по ошибке») ──────────────────────
+
+async def request_erase(user_id: int, due: str):
+    """Запрос «удалить мои данные»: сразу — согласия, входы на устройствах,
+    пуши и вход в СДО; остальное стирает erase_user в день due."""
+    async with connect() as db:
+        await db.execute("INSERT OR REPLACE INTO erase_requests (user_id, due) VALUES (?, ?)", (user_id, due))
+        for table in ("consents", "sessions", "push_subs", "sdo_sessions"):
+            await db.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+        # восстановили — согласие спросят заново, «был до согласий» больше не в счёт
+        await db.execute("UPDATE users SET legacy=0, consent_asked=NULL WHERE user_id=?", (user_id,))
+        await db.commit()
+
+
+async def erase_due(user_id: int) -> str | None:
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT due FROM erase_requests WHERE user_id=?", (user_id,))).fetchone()
+        return row[0] if row else None
+
+
+async def due_erasures(today: str) -> list[int]:
+    async with connect() as db:
+        rows = await (await db.execute(
+            "SELECT user_id FROM erase_requests WHERE due <= ?", (today,))).fetchall()
+        return [r[0] for r in rows]
+
+
+async def cancel_erase(user_id: int) -> bool:
+    async with connect() as db:
+        cur = await db.execute("DELETE FROM erase_requests WHERE user_id=?", (user_id,))
+        await db.commit()
+        return cur.rowcount > 0
+
+
 async def touch_seen(user_id: int):
     async with connect() as db:
         await db.execute("UPDATE users SET last_seen=datetime('now') WHERE user_id=?", (user_id,))

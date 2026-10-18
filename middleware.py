@@ -119,6 +119,9 @@ class ConsentMiddleware(BaseMiddleware):
     /privacy, /deleteme, вход в приложение (/start login_…, кнопки login:), сами
     кнопки согласия и удаления; остальное не обрабатывается. В группах — молча.
 
+    Попросил удалить данные (privacy.erasing) — на всё, вход в приложение тоже,
+    один ответ: данные удаляются, до какого дня можно попросить вернуть.
+
     Кто пользовался ботом до согласий, работает как раньше и один раз (на
     версию текста, отметка в базе — privacy.ask_once) после ответа бота
     получает то же сообщение.
@@ -145,6 +148,11 @@ class ConsentMiddleware(BaseMiddleware):
 
     async def _blocked(self, handler, event, data):
         from aiogram.types import CallbackQuery, InlineQuery, InlineQueryResultsButton
+        import privacy
+        user = data.get("event_from_user")
+        due = await privacy.erasing(user.id)
+        if due:                                         # попросил удалить данные — только это
+            return await self._erasing(event, privacy.erasing_text(due))
         if isinstance(event, CallbackQuery):
             if (event.data or "").startswith(self.FREE_CALLBACKS):
                 return await handler(event, data)
@@ -164,6 +172,20 @@ class ConsentMiddleware(BaseMiddleware):
             return await handler(event, data)
         from handlers.privacy import ask_consent
         await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name)
+        return None
+
+    async def _erasing(self, event, text: str):
+        from aiogram.types import CallbackQuery, InlineQuery, InlineQueryResultsButton
+        if isinstance(event, CallbackQuery):
+            await event.answer(text[:200], show_alert=True)
+            return None
+        if isinstance(event, InlineQuery):
+            await event.answer([], cache_time=0, is_personal=True, button=InlineQueryResultsButton(
+                text="Твои данные удаляются", start_parameter="erasing"))
+            return None
+        chat = getattr(event, "chat", None)
+        if chat and chat.type == "private":
+            await event.answer("🗑 " + text)
         return None
 
     async def _remind(self, event, data, user_id: int):

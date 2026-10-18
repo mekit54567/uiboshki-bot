@@ -299,29 +299,55 @@ class _ConsentScreenState extends State<ConsentScreen> {
   }
 }
 
-/// «Удалить все мои данные» (ст. 21): сразу и насовсем, с телефона тоже.
+/// Фраза, которую вписывают руками, чтобы удалить данные (privacy.ERASE_PHRASE).
+const erasePhrase = 'удалить мои данные';
+
+/// Регистр, «ё», лишние пробелы, кавычки и точка в конце не важны — как на сервере.
+bool erasePhraseOk(String text) {
+  final t = text.toLowerCase().replaceAll('ё', 'е').split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+  return t.replaceAll(RegExp('^[\\s.!«»"\']+|[\\s.!«»"\']+\$'), '') == erasePhrase;
+}
+
+/// «Удалить все мои данные» (ст. 21, Никита 18.10): фразой руками; сразу —
+/// выход везде и из СДО, полностью — через 7 дней (до этого можно попросить
+/// вернуть). Отказ от согласия до первого входа (confirmed) — сразу насовсем.
 /// true — удалено (вход на этом устройстве уже недействителен).
 Future<bool> deleteMyData(BuildContext context, Api api, {bool confirmed = false}) async {
+  Map<String, dynamic> body = {'confirm': true};
   if (!confirmed) {
-    final ok = await confirmSheet(
+    final typed = await inputSheet(
       context,
       title: 'Удалить все твои данные?',
       text: 'Профиль, группу, вход в СДО, историю баллов и посещений, личные дедлайны, устройства, '
-          'входы через VK и Яндекс. Отменить нельзя.',
-      action: 'Удалить всё',
-      cancel: 'Оставить',
-      danger: true,
+          'входы через VK, Яндекс и Apple. Сразу — выход со всех устройств и из СДО, рассылки и ИИ '
+          'остановятся. Полностью всё сотрём через 7 дней: если удалил по ошибке, до этого можно '
+          'написать Никите (@Partykq) — вернём вручную, если получится, без гарантии.\n\n'
+          'Чтобы удалить, впиши: $erasePhrase',
+      hint: erasePhrase,
+      action: 'Удалить',
     );
-    if (!ok) return false;
+    if (typed == null) return false;
+    if (!erasePhraseOk(typed)) {
+      if (context.mounted) showToast(context, 'Фраза не совпала — ничего не удаляю', kind: ToastKind.error);
+      return false;
+    }
+    body = {'phrase': typed};
   }
+  Map? r;
   try {
-    await api.post('/me/delete', {'confirm': true});
+    r = await api.post('/me/delete', body) as Map?;
   } on ApiError catch (e) {
     if (context.mounted) showToast(context, e.message, kind: ToastKind.error);
     return false;
   }
   await api.saveToken(null);
   await api.clearCache();
-  if (context.mounted) showToast(context, 'Готово: всё о тебе удалено', kind: ToastKind.done);
+  final text = '${r?['text'] ?? ''}';
+  if (!context.mounted) return true;
+  if (text.isEmpty) {
+    showToast(context, 'Готово: всё о тебе удалено', kind: ToastKind.done);
+  } else {
+    await confirmSheet(context, title: 'Данные удаляются', text: text, action: 'Понятно', cancel: 'Закрыть');
+  }
   return true;
 }

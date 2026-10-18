@@ -540,6 +540,16 @@ async def init_db():
                 PRIMARY KEY (user_id, kind, version)
             )
         """)
+        # «Удалить мои данные» (Никита 18.10): сразу — выход везде и вход в СДО,
+        # обработка встаёт (privacy.blocked); полностью стирает privacy.purge
+        # в день due — до него можно восстановить по заявке старосте (/undelete).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS erase_requests (
+                user_id      INTEGER PRIMARY KEY,
+                due          TEXT NOT NULL,
+                requested_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
         except Exception:
