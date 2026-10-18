@@ -440,3 +440,24 @@ async def test_invite_limit_shown_everywhere(db, bot, dp, client, robokassa):  #
     assert "Ты уже позвал 3 друзей — бонус за приглашения закончился" in bot.session.texts()[-1]
     await send(dp, bot, "/invite", uid=ME)
     assert "друзьям дни по-прежнему дают" in bot.session.texts()[-1]
+
+
+def test_invite_image_is_own_light_picture(client):  # noqa: F811
+    # Никита 18.10: «Картинка приложения нужна будет в светлой теме» — своя картинка
+    # приглашения (tools/site_og.py --invite), превью сайта og.jpg остаётся как было
+    import io
+    from pathlib import Path
+
+    from PIL import Image, ImageStat
+    c, _ = client
+    assert referrals.share_image() == f"{billing.site()}/site/invite.jpg"
+    r = c.get("/site/invite.jpg")
+    assert r.status_code == 200 and r.content[:3] == b"\xff\xd8\xff"
+    img = Image.open(io.BytesIO(r.content)).convert("L")
+    assert img.size == (1200, 630)
+    phone = img.crop((800, 130, 1070, 600))                                   # экран приложения в телефоне
+    assert ImageStat.Stat(phone).mean[0] > 170                                # светлый (у og.jpg ~60)
+    tool = Path("tools/site_og.py").read_text(encoding="utf-8")
+    assert "--invite" in tool and "invite.jpg" in tool and 'colorScheme: "light"' in tool
+    html = Path("webapp/static/site/index.html").read_text(encoding="utf-8")
+    assert "/site/og.jpg" in html and "invite.jpg" not in html               # превью сайта — прежнее

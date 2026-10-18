@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<!-- Картинка приглашения друга (webapp/static/site/invite.jpg, 1200×630):
+     её шлют /invite и «@бот share» в боте, отдают /api/invite (referrals.share_image).
+     Как превью сайта (tools/site_og.html), но приложение в телефоне — в светлой
+     теме (Никита 18.10) и текст не про одну группу: друг может быть из любой.
+     Снимает tools/site_og.py --invite. -->
+<link rel="stylesheet" href="/site/site.css">
+<style>
+html,body{margin:0;width:1200px;height:630px;overflow:hidden;background:var(--paper)}
+.og{position:relative;width:1200px;height:630px;display:flex;align-items:center;padding:0 0 0 84px;box-sizing:border-box}
+.og-copy{width:640px}
+.og .eyebrow{font-size:15px;color:var(--secondary)}
+.og h1{font-size:92px;line-height:1.02;margin:22px 0 26px}
+.og .sub{font-size:25px;line-height:1.45;color:var(--secondary)}
+.og .bot{margin-top:34px;display:inline-flex;align-items:center;gap:14px;font-size:24px;font-weight:600}
+.og .bot img{width:44px;height:44px}
+.og-stage{position:absolute;right:70px;top:46px;width:390px;height:538px;border-radius:200px 200px 26px 26px;background:var(--peach);display:flex;justify-content:center;padding-top:34px;box-sizing:border-box}
+.og .phone{transform:scale(1.25);transform-origin:top center;background:#d9d4cb;box-shadow:1px 2px 0 1px #b9b1a4,9px 17px 24px #5c40221f}
+.og .phone-screen{background:#f2f2f7}
+.og .phone-screen iframe{color-scheme:light}
+.og .star{position:absolute;color:var(--accent);font-size:64px;right:36px;top:30px}
+</style></head><body>
+<div class="og">
+  <div class="og-copy">
+    <p class="eyebrow"><span class="tiny-dot accent"></span> Капибара · РТУ МИРЭА · любая группа</p>
+    <h1>Учёба.<br>В одном <span class="underlined">месте<svg viewBox="0 0 290 14" fill="none"><path d="M2 10C81 1 189 1 284 7M17 13C111 6 204 7 273 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>.</h1>
+    <p class="sub">Расписание, дедлайны и баллы СДО.<br>Сама напомнит о паре и горящем сроке</p>
+    <div class="bot"><img src="/site/capy.svg" alt="">@UiboshkiBot</div>
+  </div>
+  <div class="og-stage"><span class="star">✳</span>
+    <div class="phone"><div class="phone-island"></div><div class="phone-screen"><iframe src="/about/demo"></iframe></div></div>
+  </div>
+</div></body></html>

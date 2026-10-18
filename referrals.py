@@ -54,8 +54,10 @@ def tg_share_url(link: str) -> str:
 
 
 def share_image() -> str:
+    """Картинка приглашения — своя, приложение в светлой теме (Никита 18.10):
+    tools/site_og.py --invite; превью сайта og.jpg — отдельно."""
     import billing
-    return f"{billing.site()}/site/og.jpg"
+    return f"{billing.site()}/site/invite.jpg"
 
 
 class BonusError(Exception):
