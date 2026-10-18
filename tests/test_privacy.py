@@ -279,6 +279,7 @@ def test_erasing_text_official():
     t = privacy.erasing_text("2026-10-25")
     assert "войдёшь заново" not in t and "ничего не делаем" not in t
     assert "Повторный вход до 25.10.2026 удаление не отменяет" in t
+    assert "не обрабатываются" not in t and "только хранятся, никак не используются и никому не видны" in t
     assert "После 25.10.2026 данные восстановить нельзя" in t and "без гарантии" in t
 
 
