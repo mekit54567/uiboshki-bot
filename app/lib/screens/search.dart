@@ -560,7 +560,7 @@ class _TargetScreenState extends State<TargetScreen> {
                   ],
                   at: t,
                   showGroups: widget.type != 1,
-                  onLesson: (l) => openLesson(context, widget.api, l),
+                  onLesson: (l) => openLesson(context, widget.api, l, own: false),
                 ),
           ],
         ],

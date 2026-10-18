@@ -448,6 +448,19 @@ async def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Реакции на пару (lesson_reactions.py, 5.100): одна на человека,
+        # счёт — группе. lesson — «начало|название», day — дата для чистки.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_reactions (
+                group_id  INTEGER NOT NULL,
+                lesson    TEXT NOT NULL,
+                user_id   INTEGER NOT NULL,
+                kind      TEXT NOT NULL,
+                day       TEXT NOT NULL,
+                PRIMARY KEY (group_id, lesson, user_id)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_lesson_reactions_day ON lesson_reactions(day)")
         # ── Лента "Подслушано" ───────────────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS feed_posts (
