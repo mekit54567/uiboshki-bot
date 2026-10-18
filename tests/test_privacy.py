@@ -161,7 +161,9 @@ async def test_erase_after_seven_days(db, monkeypatch):
     """Никита 18.10: «удалить мои данные» — фразой; сразу выход везде и из СДО,
     обработка встаёт; полностью — через 7 дней; до этого староста может
     вернуть (/undelete), согласие тогда спросят заново."""
-    from datetime import date, timedelta
+    from datetime import timedelta
+
+    from utils import today_msk
 
     import privacy
     from database.sessions import create_session
@@ -171,7 +173,7 @@ async def test_erase_after_seven_days(db, monkeypatch):
     token = await create_session(ME, "Chrome")
     assert c.get("/api/notify", headers=h).status_code == 200
     r = c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h).json()
-    assert r["due"] == (date.today() + timedelta(days=7)).isoformat()
+    assert r["due"] == (today_msk() + timedelta(days=7)).isoformat()
     assert c.get("/api/notify", headers={"Authorization": "Bearer " + token}).status_code == 401  # вышли везде
     assert await privacy.blocked(ME)                                   # ничего не обрабатываем
     res = c.get("/api/notify", headers=h)
@@ -190,7 +192,8 @@ async def test_erase_after_seven_days(db, monkeypatch):
 
     c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h)
     import utils
-    monkeypatch.setattr(utils, "today_msk", lambda: date.today() + timedelta(days=7))
+    later = today_msk() + timedelta(days=7)
+    monkeypatch.setattr(utils, "today_msk", lambda: later)
     await privacy.purge()                                              # прошло 7 дней — насовсем
     assert await db.get_user(ME) is None and not await privacy.erasing(ME)
 
