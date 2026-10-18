@@ -57,7 +57,7 @@ void main() {
     await t.tap(find.byKey(const Key('think-toggle')));
     await t.pump();
     expect(toggle(t).selected, isTrue);
-    expect(find.textContaining('решит DeepSeek'), findsOneWidget);
+    expect(find.textContaining('Капибара решит, подумав подольше'), findsOneWidget);
 
     await ask(t, 'Что такое NPV?');
     final first = bodies['POST /api/chat'] as Map;
@@ -99,6 +99,19 @@ void main() {
     final chip = t.getRect(find.byKey(const Key('think-toggle')));
     final icon = t.getRect(find.descendant(of: find.byKey(const Key('think-toggle')), matching: find.byType(Icon)));
     final text = t.getRect(find.text('Подумать · 7'));
+    expect(((icon.left - chip.left) - (chip.right - text.right)).abs(), lessThanOrEqualTo(1));
+  });
+
+  testWidgets('у чипа «Подумать ещё» под ответом отступы тоже одинаковые', (t) async {
+    phone(t);
+    await t.pumpWidget(host(ChatScreen(api: fakeApi(overrides: withThink(7)))));
+    await settle(t);
+    await ask(t, 'Что такое NPV?');
+    final label = find.text('Подумать ещё · 6');
+    final chipF = find.ancestor(of: label, matching: find.byType(ActionChip));
+    final chip = t.getRect(chipF);
+    final icon = t.getRect(find.descendant(of: chipF, matching: find.byType(Icon)));
+    final text = t.getRect(label);
     expect(((icon.left - chip.left) - (chip.right - text.right)).abs(), lessThanOrEqualTo(1));
   });
 

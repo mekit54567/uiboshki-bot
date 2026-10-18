@@ -49,7 +49,7 @@ async def test_solve_uses_model_counts_and_refunds(db, monkeypatch, on):
     _openrouter(monkeypatch, seen=seen)
     q = [{"role": "user", "content": "Что такое NPV?"}]
     answer = await think.solve(ME, q, lectures="=== Лекция 1 ===\nNPV — чистая приведённая стоимость")
-    assert answer.startswith("глубокий ответ") and "DeepSeek" in answer
+    assert answer.startswith("глубокий ответ") and "подумала подольше" in answer and "DeepSeek" not in answer
     body = seen[0]
     assert body["model"] == think.MODEL and body["provider"] == {"data_collection": "deny"}   # 152-ФЗ
     assert "Подумать ещё" in body["messages"][0]["content"] and "NPV" in body["messages"][-1]["content"]
@@ -111,7 +111,7 @@ async def test_webapp_chat_button_and_think_request(db, client, monkeypatch, on)
     asked = (await ai_quota.today()).get(ME, 0)
     r = c.post("/api/chat", headers=_headers_for(ME), json={**q, "think": True}).json()
     assert r["content"].startswith("ответ " + think.MODEL) and r["think"]["left"] == 1
-    assert "<i>↪ «Подумать ещё» — ответил DeepSeek.</i>" in r["html"] and "_↪" not in r["html"]   # курсив, не «_»
+    assert "<i>↪ «Подумать ещё» — Капибара подумала подольше.</i>" in r["html"] and "_↪" not in r["html"]   # курсив, не «_»
     assert (await ai_quota.today()).get(ME, 0) == asked       # в обычный дневной счёт не идёт
 
     await db.upsert_user(OTHER, "", "u")
@@ -174,7 +174,7 @@ async def test_solve_first_has_own_note_and_footer(db, monkeypatch, on):
     seen = []
     _openrouter(monkeypatch, seen=seen)
     answer = await think.solve(ME, [{"role": "user", "content": "Что такое NPV?"}], first=True)
-    assert answer.endswith(think.FOOTER_FIRST) and "«Подумать» — ответил DeepSeek" in answer
+    assert answer.endswith(think.FOOTER_FIRST) and "«Подумать» — Капибара подумала подольше" in answer
     system = seen[0]["messages"][0]["content"]
     assert think.NOTE_FIRST in system and "повторный ответ" not in system     # первого ответа не было
     assert await think.left(ME) == 1
@@ -227,7 +227,7 @@ async def test_webapp_think_first_answers_without_ordinary_answer(db, client, mo
     asked = (await ai_quota.today()).get(ME, 0)
     r = c.post("/api/chat", headers=_headers_for(ME), json=q).json()
     assert r["content"].startswith("ответ " + think.MODEL) and len(systems) == 1     # сразу DeepSeek, одним запросом
-    assert think.NOTE_FIRST in systems[0] and "<i>↪ «Подумать» — ответил DeepSeek.</i>" in r["html"]
+    assert think.NOTE_FIRST in systems[0] and "<i>↪ «Подумать» — Капибара подумала подольше.</i>" in r["html"]
     assert r["think"]["left"] == 1                             # счётчик для переключателя и «Подумать ещё»
     assert (await ai_quota.today()).get(ME, 0) == asked       # обычный дневной счёт не трогаем
 
@@ -360,3 +360,13 @@ async def test_bot_think_command(db, dp, bot, monkeypatch, on):  # noqa: F811
     await send(dp, bot, "а чем IRR отличается от NPV")
     assert asked[-1] == ("Задание:\nа чем IRR отличается от NPV", True)
     assert await ctx(dp, bot).get_state() is None
+
+
+def test_model_not_named_to_user():
+    # Никита 18.10: модели нигде не называем — ни в подписи ответа, ни в подсказках
+    from pathlib import Path
+    from handlers import solver
+    texts = [think.FOOTER, think.FOOTER_FIRST, solver.ARM_TEXT, solver.THINK_ASK]
+    texts += [Path(f).read_text(encoding="utf-8") for f in ("webapp/static/js/chat.js", "app/lib/screens/chat.dart")]
+    assert not any("DeepSeek" in t for t in texts)
+    assert "Капибара решит" in solver.ARM_TEXT and "подумав подольше" in solver.THINK_ASK
