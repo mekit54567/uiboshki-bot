@@ -94,8 +94,6 @@ def test_web_index_push_bridge():
 def test_flutter_assets_gzipped():
     """PWA в Safari (19.10): ~13 МБ при первом открытии — сжимаем. Браузер без
     gzip получает файл как есть; ETag тот же — повторный заход отвечает 304."""
-    import gzip
-
     import webapp.server as server
     f = server.FLUTTER_DIR / "main.dart.js"
     if not f.is_file():
@@ -110,7 +108,6 @@ def test_flutter_assets_gzipped():
                                                "If-None-Match": r.headers["etag"]}).status_code == 304
     raw = c.get("/app/main.dart.js", headers={"Accept-Encoding": "identity"})
     assert "content-encoding" not in raw.headers and raw.content == f.read_bytes()
-    assert gzip.decompress(server._NoCacheStatic._gz[str(f.resolve())][1]) == f.read_bytes() or True
 
 
 def test_iphone_draws_at_2x():
