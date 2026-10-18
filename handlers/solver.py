@@ -1,4 +1,6 @@
 import logging
+import re
+
 from aiogram import Router, F, Bot
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -70,12 +72,48 @@ async def solve_subject_kb() -> ReplyKeyboardMarkup:
 
 
 async def _lectures_for(data: dict, query: str = "") -> str:
-    """Лекции выбранного предмета, подходящие к вопросу (lecture_picker;
-    пусто — если лекций нет или это DeepSeek)."""
+    """Лекции выбранного предмета под вопрос: сначала поиск по смыслу (куски
+    с номерами [n], как в чате приложения: ~16 тыс. символов вместо целых
+    лекций — в ~10 раз дешевле, 5.94), иначе — целыми лекциями (lecture_picker):
+    «объясни 3 лекцию», пустой индекс, пустой вопрос. Пусто — если лекций нет."""
     if not data.get("has_lectures"):
         return ""
     import lecture_picker
-    return lecture_picker.pick(await get_subject_lecture_context(data.get("subject", "")), query)
+    subject = data.get("subject", "")
+    if query.strip() and not lecture_picker.wants_course(query):
+        try:
+            import semantic_search
+            if await semantic_search.ready():
+                hits = await semantic_search.search(query, subject)
+                if hits:
+                    return semantic_search.build_context(hits)[0]
+        except Exception as e:
+            logger.warning(f"поиск по смыслу в боте: {type(e).__name__}: {e} — подбираю лекции по словам")
+    return lecture_picker.pick(await get_subject_lecture_context(subject), query)
+
+
+_CHUNK_HEAD = re.compile(r"^=== \[(\d+)\] (.+) ===$", re.M)
+
+
+BOT_TITLE = 40      # название лекции в строке источников (робот 18.10: 28 резало «Лекция 5. Дисконтир…»)
+
+
+def with_sources(answer: str, lectures: str) -> str:
+    """Под ответом по кускам поиска — откуда они («[2] Лекция 5 · слайд 12»):
+    в приложении это чипы, в боте — строка. Только номера, на которые ИИ сослался."""
+    if not answer or not lectures.lstrip().startswith("=== [1]"):
+        return answer
+    from semantic_search import short_title
+    heads = {}
+    for n, head in _CHUNK_HEAD.findall(lectures):
+        title = head.split(": ", 1)[-1]
+        name, _, where = title.rpartition(" · ")
+        heads[n] = (f"{short_title(name, BOT_TITLE)} · {where}" if name   # в строке места больше, чем в чипе
+                    else short_title(title, BOT_TITLE))
+    cited = [n for n in dict.fromkeys(re.findall(r"\[(\d+)\]", answer)) if n in heads]
+    if not cited:
+        return answer
+    return answer + "\n\n📚 " + "; ".join(f"[{n}] {heads[n]}" for n in cited)
 
 
 class SolverState(StatesGroup):
@@ -213,7 +251,8 @@ async def handle_first_task(message: Message, state: FSMContext):
     await drop_arm(message, state, data)
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
-        answer = await solve_text(message.text, subject, backend=backend, lectures=await _lectures_for(data, message.text))
+        lectures = await _lectures_for(data, message.text)
+        answer = with_sources(await solve_text(message.text, subject, backend=backend, lectures=lectures), lectures)
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог обработать. Попробуй переформулировать.")
             return
@@ -247,9 +286,9 @@ async def _photo_answer(message: Message, bot: Bot, data: dict, history: list | 
     file       = await bot.get_file(photo.file_id)
     file_bytes = await bot.download_file(file.file_path)
     caption    = message.caption or ""
-    return await solve_image(file_bytes.read(), subject=data.get("subject", ""),
-                             lectures=await _lectures_for(data, caption),
-                             prompt=_photo_prompt(caption, history))
+    lectures   = await _lectures_for(data, caption)
+    return with_sources(await solve_image(file_bytes.read(), subject=data.get("subject", ""), lectures=lectures,
+                                          prompt=_photo_prompt(caption, history)), lectures)
 
 
 def _photo_task(message: Message) -> str:
@@ -312,7 +351,8 @@ async def handle_dialog(message: Message, state: FSMContext):
     try:
         # «а почему?», «подробнее» — лекции ищем по теме прошлых вопросов
         query = lecture_picker.search_query(history)
-        answer = await solve_with_history(history, subject, backend=backend, lectures=await _lectures_for(data, query))
+        lectures = await _lectures_for(data, query)
+        answer = with_sources(await solve_with_history(history, subject, backend=backend, lectures=lectures), lectures)
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text("🤔 Не смог ответить. Попробуй иначе.")
             return
