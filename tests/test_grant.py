@@ -211,3 +211,20 @@ async def test_erase_removes_grants(db, bot, monkeypatch):  # noqa: F811
     await plus_grant.command(bot, STAROSTA_ID, [str(ME), "45d"])
     await privacy.erase(ME)
     assert await grant_log(ME) == [] and await get_unlimited(ME) is None and not await welcomed(ME)
+
+
+@pytest.mark.asyncio
+async def test_plus_for_unlimited_has_no_prices_or_pay(db, bot, monkeypatch):  # noqa: F811
+    # робот 18.10: у безлимита /plus показывал цены и «Оплатить на сайте»
+    from handlers.plus import plus_text
+    monkeypatch.setattr(billing, "provider", lambda configured_only=False: "yookassa")
+    await db.upsert_user(ME, "vasya", "Вася")
+    text, kb = await plus_text(ME)
+    assert "₽" in text and any("Оплатить" in b.text for row in kb.inline_keyboard for b in row)
+    await plus_grant.command(bot, STAROSTA_ID, ["@vasya", "unlimited"])
+    text, kb = await plus_text(ME)
+    assert "У тебя безлимит</b> «Капибары+» навсегда" in text
+    assert "₽" not in text and "Оплата" not in text
+    assert not any("Оплатить" in b.text for row in kb.inline_keyboard for b in row)
+    await plus_grant.command(bot, STAROSTA_ID, ["@vasya", "unlimited", "20.12.2099"])
+    assert "безлимит</b> «Капибары+» до 20 декабря 2099" in (await plus_text(ME))[0]

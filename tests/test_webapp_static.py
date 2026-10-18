@@ -1239,3 +1239,9 @@ def test_plus_sheet_price_on_one_line_and_no_double_dot():
     assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)
     more = JS["js/more.js"]
     assert '" дн."' in more and 'ranks + ".")' not in more
+
+
+def test_plus_sheet_unlimited_without_prices():
+    # робот 18.10: у безлимита в листе «Капибара+» были цены и «Оплатить на сайте»
+    more = JS["js/more.js"]
+    assert '"У тебя безлимит"' in more and '(d.unlimited ? "" : prices +' in more

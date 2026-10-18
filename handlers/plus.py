@@ -18,7 +18,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     st = await billing.status(uid)
     inv = await referrals.summary(uid)
     if st["unlimited"]:
-        head = ("✨ <b>Капибара+</b> — безлимит "
+        head = ("✨ <b>У тебя безлимит</b> «Капибары+» "
                 + (f"до {billing.fmt_day(st['unlimited_until'])}" if st["unlimited_until"] else "навсегда")
                 + ": ИИ без дневных лимитов. Платить ничего не нужно.")
     elif st["paid_until"]:
@@ -33,19 +33,20 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     prices = " · ".join(f"{p['title'].lower()} {p['price']} ₽" for p in st["prices"])
     price_line = (f"Цены первых пользователей: {prices}. Кто оплатит по ним, так и платит всегда."
                   if st["prices"][0]["founder"] else f"Цены: {prices}.")
-    lines = [head, "",
-             f"Что даёт: ИИ — до {config.AI_SUB_DAILY} вопросов в день для любой группы, "
-             "иконки и наряды капибары «по подписке», значок «друг Капибары».",
-             price_line + " Без автосписаний, июль и август не считаются.",
-             "Оплата — на сайте uiboshki.ru по кнопке ниже (или «Ещё → Капибара+» в приложении: "
-             "здесь, на Android и на uiboshki.ru/app). Подписка работает везде, и на iPhone.", "",
-             f"🎁 Позови друга: когда он попользуется {inv['friend_days']} дня, вам обоим "
-             f"+{inv['bonus_days']} дней. Пришло по твоей ссылке: {inv['came']}, засчитано: {inv['rewarded']}.",
-             "🏅 Закрыл ранг ачивок в приложении — тоже дни подписки (Ещё → Ачивки)."]
+    lines = [head, ""]
+    if not st["unlimited"]:      # безлимиту цены и оплата ни к чему (робот 18.10)
+        lines += [f"Что даёт: ИИ — до {config.AI_SUB_DAILY} вопросов в день для любой группы, "
+                  "иконки и наряды капибары «по подписке», значок «друг Капибары».",
+                  price_line + " Без автосписаний, июль и август не считаются.",
+                  "Оплата — на сайте uiboshki.ru по кнопке ниже (или «Ещё → Капибара+» в приложении: "
+                  "здесь, на Android и на uiboshki.ru/app). Подписка работает везде, и на iPhone.", ""]
+    lines += [f"🎁 Позови друга: когда он попользуется {inv['friend_days']} дня, вам обоим "
+              f"+{inv['bonus_days']} дней. Пришло по твоей ссылке: {inv['came']}, засчитано: {inv['rewarded']}.",
+              "🏅 Закрыл ранг ачивок в приложении — тоже дни подписки (Ещё → Ачивки)."]
     rows = []
-    if st["provider"]:
+    if st["provider"] and not st["unlimited"]:
         rows.append([InlineKeyboardButton(text="💳 Оплатить на сайте", url=billing.pay_link(uid))])
-    else:
+    elif not st["unlimited"]:
         lines.append("\nОплата скоро заработает.")
     rows.append([InlineKeyboardButton(text="🎁 Позвать друга", callback_data="plus:invite")])
     if config.is_starosta(uid):
