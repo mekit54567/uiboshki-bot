@@ -74,43 +74,33 @@ void main() {
     expect(find.textContaining('интернет'), findsNothing);
   });
 
-  test('висит один путь, а сервер отвечает — без плашки «Сервер не отвечает»', () async {
-    var hang = false;
-    final sdo = Completer<void>();
-    Future<http.Response> answer(http.Request r) async {
-      if (hang && r.url.path.contains('/sdo/')) {
-        await sdo.future;
-        throw TimeoutException('СДО висит');
-      }
-      return http.Response(jsonEncode({'ok': r.url.path}), 200, headers: {'content-type': 'application/json'});
-    }
-
-    final api = _api(answer);
-    await api.get('/sdo/grades'); // запомнили
-    await Future<void>.delayed(const Duration(milliseconds: 50)); // запас пишется в фоне
-    hang = true;
+  // 5.101 (Никита 18.10): плашки «Сервер не отвечает · данные от …» больше
+  // нет — её время скакало между путями. Медленный ответ не теряется: экран
+  // сразу получает запас, а опоздавший ответ ложится в запас к следующему разу.
+  testWidgets('не дождались — запас сразу, опоздавший ответ ложится в запас', (t) async {
+    var wait = Duration.zero;
+    var n = 0;
+    final api = _api((r) async {
+      await Future<void>.delayed(wait);
+      return http.Response(jsonEncode({'n': ++n}), 200, headers: {'content-type': 'application/json'});
+    });
+    Object? got;
+    await t.runAsync(() async {
+      got = await api.get('/sdo/grades');
+      await Future<void>.delayed(const Duration(milliseconds: 50)); // запас пишется в фоне
+    });
+    expect(got, {'n': 1});
+    wait = const Duration(seconds: 20);
     final slow = api.get('/sdo/grades');
-    await api.get('/today'); // пока СДО висит, сервер ответил на другое
-    sdo.complete();
-    expect(await slow, {'ok': '/api/v1/sdo/grades'});
-    expect(api.offlineSince.value, isNull);
-
-    // сервер за это время ничего не ответил, но /meta отвечает — сам он жив,
-    // висит только СДО (Никита 17.10): плашки нет
-    expect(await api.get('/sdo/grades'), isNotNull);
-    expect(api.offlineSince.value, isNull);
-    final cold = _api(answer);
-    expect(await cold.get('/sdo/grades'), isNotNull);
-    expect(cold.offlineSince.value, isNull);
-
-    // а если и /meta молчит — сервер правда не отвечает, плашка на месте
-    hang = false;
-    final down = _api((r) async => hang ? throw TimeoutException('висит') : answer(r));
-    await down.get('/sdo/grades');
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    hang = true;
-    expect(await down.get('/sdo/grades'), isNotNull);
-    expect(down.offlineSince.value, isNotNull);
-    expect(down.offlineSlow.value, isTrue);
+    await t.pump(Api.timeout + const Duration(milliseconds: 10));
+    expect(await slow, {'n': 1}); // экран не ждёт: прошлый ответ
+    expect(api.offlineSince.value, isNotNull);
+    await t.pump(const Duration(seconds: 15));
+    wait = Duration.zero;
+    Object? cached;
+    await t.runAsync(() async {
+      cached = await Api.fromCache<dynamic>(() => api.get('/sdo/grades'));
+    });
+    expect(cached, {'n': 2}); // свежий ответ уже в запасе
   });
 }

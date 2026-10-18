@@ -2,7 +2,6 @@
 // по приложению (tour.dart).
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +9,6 @@ import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
-import '../api/models.dart';
 import '../plus/plus.dart';
 import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
@@ -304,7 +302,6 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           bottom: false,
           child: Column(
             children: [
-              OfflineBanner(since: widget.api.offlineSince, slow: widget.api.offlineSlow),
               Expanded(
                 child: IndexedStack(
                   index: _index,
@@ -328,165 +325,4 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
-/// «Без сети · данные от 10:07» — пока ответы идут из памяти телефона.
-///
-/// Новый дизайн («Загрузка», Никита 12.10): «Нет сети» — когда связи правда
-/// нет, «Сервер не отвечает» — когда сеть есть, а сервер не ответил вовремя
-/// (значок — не облако: читалось как погода). И тонкая строка «Обновляю ·
-/// данные от 09:41», пока экран показывает запас и ждёт сеть дольше 600 мс.
-class OfflineBanner extends StatefulWidget {
-  final ValueListenable<DateTime?> since;
-
-  /// Из запаса, потому что сервер не ответил вовремя (а не нет сети).
-  final ValueListenable<bool>? slow;
-
-  /// Экраны показывают запас и ждут сеть: время их данных ([Api.refreshing]).
-  final ValueListenable<DateTime?>? refreshing;
-  const OfflineBanner({super.key, required this.since, this.slow, this.refreshing});
-
-  /// Через сколько показывать «Обновляю»: быстрая сеть не мигает строкой.
-  static const refreshDelay = Duration(milliseconds: 600);
-
-  /// «09:05», «вчера 22:10», «1 октября 08:00».
-  static String stamp(DateTime at, DateTime today) {
-    final hm = '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
-    final days = DateTime(today.year, today.month, today.day).difference(DateTime(at.year, at.month, at.day)).inDays;
-    final day = switch (days) {
-      0 => '',
-      1 => 'вчера ',
-      _ => '${at.day} ${monthsGen[at.month - 1]} ',
-    };
-    return '$day$hm';
-  }
-
-  static String label(DateTime at, DateTime today, {String what = 'Без сети'}) =>
-      '$what · данные от ${stamp(at, today)}';
-
-  @override
-  State<OfflineBanner> createState() => _OfflineBannerState();
-}
-
-class _OfflineBannerState extends State<OfflineBanner> {
-  Timer? _timer;
-
-  /// Строка «Обновляю» видна (прошло [OfflineBanner.refreshDelay]).
-  bool _late = false;
-
-  ValueListenable<DateTime?> get _refreshing => widget.refreshing ?? Api.refreshing;
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshing.addListener(_onRefreshing);
-    _onRefreshing();
-  }
-
-  @override
-  void didUpdateWidget(OfflineBanner old) {
-    super.didUpdateWidget(old);
-    final was = old.refreshing ?? Api.refreshing;
-    if (!identical(was, _refreshing)) {
-      was.removeListener(_onRefreshing);
-      _refreshing.addListener(_onRefreshing);
-      _onRefreshing();
-    }
-  }
-
-  @override
-  void dispose() {
-    _refreshing.removeListener(_onRefreshing);
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _onRefreshing() {
-    if (_refreshing.value == null) {
-      _timer?.cancel();
-      _timer = null;
-      if (_late) setState(() => _late = false);
-    } else {
-      _timer ??= Timer(OfflineBanner.refreshDelay, () {
-        _timer = null;
-        if (mounted && _refreshing.value != null) setState(() => _late = true);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStyle.of(context);
-    return ListenableBuilder(
-      listenable: Listenable.merge([widget.since, ?widget.slow, _refreshing]),
-      builder: (context, _) {
-        final at = widget.since.value;
-        final busy = _refreshing.value;
-        final Widget child;
-        if (at != null) {
-          child = _pill(s, at);
-        } else if (s.design2 && _late && busy != null) {
-          child = _line(s, busy);
-        } else {
-          child = const SizedBox(width: double.infinity);
-        }
-        return AnimatedSize(duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic, child: child);
-      },
-    );
-  }
-
-  /// Плашка «нет сети»: в старом дизайне — «Без сети» с облаком.
-  Widget _pill(AppStyle s, DateTime at) {
-    final slow = widget.slow?.value ?? false;
-    final (icon, what) = !s.design2
-        ? (Icons.cloud_off_rounded, 'Без сети')
-        : slow
-        ? (Icons.hourglass_bottom_rounded, 'Сервер не отвечает')
-        : (Icons.wifi_off_rounded, 'Нет сети');
-    return Padding(
-      key: const ValueKey('banner:offline'),
-      padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.s),
-        decoration: BoxDecoration(
-          color: s.p.warn.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(Radii.pill),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: s.p.warn),
-            const SizedBox(width: Space.s),
-            Expanded(
-              child: Text(
-                OfflineBanner.label(at, now(), what: what),
-                style: s.body(13, weight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Тонкая приглушённая строка: экран показывает запас и ждёт свежие данные.
-  Widget _line(AppStyle s, DateTime at) => Padding(
-    key: const ValueKey('banner:refresh'),
-    padding: const EdgeInsets.fromLTRB(Space.l, Space.xs, Space.l, 0),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(Icons.sync_rounded, size: 13, color: s.p.muted),
-        const SizedBox(width: Space.xs),
-        Flexible(
-          child: Text(
-            'Обновляю · данные от ${OfflineBanner.stamp(at, now())}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: s.body(12, color: s.p.muted),
-          ),
-        ),
-      ],
-    ),
-  );
 }

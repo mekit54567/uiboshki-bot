@@ -542,22 +542,6 @@ void main() {
     });
   }
 
-  // Без сети — баннер наверху, ниже часов, не налезает на заголовок.
-  for (final d in devices) {
-    testWidgets('баннер «без сети»: ${d.name}', (t) async {
-      useDevice(t, d);
-      final api = longApi();
-      await t.pumpWidget(UiboApp(api: api));
-      await settle(t);
-      api.offlineSince.value = DateTime(2026, 10, 7, 10, 7);
-      await settle(t);
-      _belowNotch(t, d);
-      final banner = t.getRect(find.textContaining('Без сети'));
-      final title = t.getRect(find.byKey(const ValueKey('today:top')));
-      expect(banner.bottom, lessThanOrEqualTo(title.top));
-    });
-  }
-
   // Тур при первом запуске на маленьком экране с крупным шрифтом: каждый шаг
   // помещается, кнопка — над капсулой и на экране.
   testWidgets('тур на маленьком экране', (t) async {
