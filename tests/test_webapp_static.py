@@ -1340,3 +1340,9 @@ def test_plus_tag_whole_and_invite_own_icon():
     assert re.search(r'shareBot\(\)"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/>',
                      HTML)
     assert "  invite: '" in JS["js/icons.js"]
+
+
+def test_think_note_wraps_not_cut():
+    # робот 18.10: «следующий вопрос решит DeepS…» обрезалось — подсказка переносится, а не режется
+    rule = re.search(r"\.think-note \{([^}]*)\}", CSS).group(1)
+    assert "nowrap" not in rule and "ellipsis" not in rule

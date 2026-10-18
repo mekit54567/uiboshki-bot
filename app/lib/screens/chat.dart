@@ -975,6 +975,8 @@ class _ThinkToggle extends StatelessWidget {
               side: BorderSide(color: on || can ? p.accent : p.line),
               shape: const StadiumBorder(),
               avatar: Icon(Icons.psychology_outlined, size: 18, color: fg),
+              // справа у чипа было вдвое больше места, чем слева (робот 18.10): у подписи — отступ только от значка
+              labelPadding: const EdgeInsets.only(left: 6),
               label: Text(
                 'Подумать · ${left < 0 ? 0 : left}',
                 style: s.body(13, weight: FontWeight.w600, color: fg),
