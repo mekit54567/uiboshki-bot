@@ -178,7 +178,7 @@ void main() {
     await t.runAsync(() => syncAppIcon(AppIcon.classic)); // и напрямую — тихо
   });
 
-  testWidgets('картинка: на Android — светлая или тёмная (свой alias), на iPhone — одно имя', (t) async {
+  testWidgets('картинка: светлая или тёмная по выбору — и на Android, и на iPhone (своя иконка …Dark)', (t) async {
     phone(t);
     final fake = FakeIcons();
     await t.pumpWidget(UiboApp(api: fakeApi(overrides: meta(true)), design2: true));
@@ -193,17 +193,14 @@ void main() {
     await settle(t);
     expect(fake.current, 'kremlin');
     expect(styleOf(t).look.icon, AppIcon.byName('kremlin'));
-    final android = defaultTargetPlatform == TargetPlatform.android;
-    expect(find.byKey(const Key('look:icon-shade:dark')), android ? findsOneWidget : findsNothing);
-    if (android) {
-      await t.tap(find.byKey(const Key('look:icon-shade:dark')));
-      await settle(t);
-      expect(fake.sets, ['kremlin', 'kremlinDark']);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('uib_look_icon_dark'), isTrue);
-    } else {
-      expect(find.textContaining('iOS 18'), findsOneWidget);
-    }
+    // Никита 18.10: на iPhone выбрал тёмную — на экране была светлая
+    expect(find.byKey(const Key('look:icon-shade:dark')), findsOneWidget);
+    await t.tap(find.byKey(const Key('look:icon-shade:dark')));
+    await settle(t);
+    expect(fake.sets, ['kremlin', 'kremlinDark']);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('uib_look_icon_dark'), isTrue);
+    expect(find.textContaining('iOS 18'), findsNothing);
   }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 
   testWidgets('31.10 — у всех Хэллоуин, на следующий день — снова своя', (t) async {

@@ -198,7 +198,7 @@ class LookScreen extends StatelessWidget {
                     onPick: (i) => set(look.copyWith(icon: i)),
                   ),
                 ),
-                if (defaultTargetPlatform == TargetPlatform.android && look.icon.art) ...[
+                if (look.icon.art) ...[
                   const SizedBox(height: Space.s),
                   _Pad(
                     _Seg<_Shade>(
@@ -210,9 +210,7 @@ class LookScreen extends StatelessWidget {
                   ),
                 ],
                 if (defaultTargetPlatform == TargetPlatform.android)
-                  const _Hint('На Android ярлык на рабочем столе может переставиться.')
-                else if (look.icon.art)
-                  const _Hint('В тёмной теме iPhone (iOS 18) иконка сама станет тёмной.'),
+                  const _Hint('На Android ярлык на рабочем столе может переставиться.'),
               ],
 
               if (changed) ...[
@@ -578,9 +576,7 @@ enum _Shade { light, dark }
 
 /// Какую версию иконки-картинки показывать образцом: на Android — выбранную,
 /// на iPhone — по теме телефона (её подставляет сама iOS 18).
-bool _iconDark(BuildContext context, Look look) => defaultTargetPlatform == TargetPlatform.android
-    ? look.iconDark
-    : MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+bool _iconDark(BuildContext context, Look look) => look.iconDark;
 
 /// Строка «иконка приложения»: нынешняя и «Выбрать» — все листом.
 class _IconRow extends StatelessWidget {

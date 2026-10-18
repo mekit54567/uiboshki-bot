@@ -5,8 +5,9 @@
 // его нет — тихо ничего не делаем.
 //
 // 5.84: плюс иконки-картинки (Никита 13.10: 47 из 288 вариантов ChatGPT),
-// каждая светлая и тёмная. iOS 18 сам берёт тёмную в тёмной теме телефона,
-// Android так не умеет — там переключатель «Тёмная версия» (alias …Dark).
+// каждая светлая и тёмная — по выбору человека: Android — alias …Dark, iOS —
+// свой набор Icon<Имя>Dark (5.91.6, Никита 18.10: «выбираешь тёмную, а она не
+// тёмная» — appearance dark у альтернативной иконки iPhone не включал).
 // Список — design/app_icons.json → app_icons_art.dart.
 //
 // 5.91: часть иконок открывается ачивкой (ранг, все ачивки) или подпиской —
@@ -171,12 +172,12 @@ bool get appIconSupported =>
     const bool.fromEnvironment('ICONS') ||
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
-/// Имя для канала: на Android у картинок тёмная версия — отдельный alias.
-/// null — основная иконка.
+/// Имя для канала: у картинок тёмная версия — отдельная иконка (Android —
+/// alias, iOS — набор Icon<Имя>Dark). null — основная иконка.
 @visibleForTesting
 String? channelName(AppIcon icon, {bool dark = false}) {
   if (icon == AppIcon.classic) return null;
-  if (icon.art && dark && defaultTargetPlatform == TargetPlatform.android) return '${icon.name}Dark';
+  if (icon.art && dark) return '${icon.name}Dark';
   return icon.name;
 }
 
