@@ -84,7 +84,7 @@ async def test_new_user_login_waits_for_channel(env, db):
     code = await create_login("Chrome · Android")
     await _say(dp, bot, text=f"/start login_{code}")
     text = bot.session.sent_texts[-1][1]
-    assert "подпишись на канал" in text and "Да, это я" not in str(bot.session.keyboards[-1])
+    assert "Чтобы войти, подпишись на канал" in text and "Да, это я" not in str(bot.session.keyboards[-1])
     assert bot.session.keyboards[-1] == ["Открыть канал", "Я в канале, дальше"]       # без «Позже»
 
     await _say(dp, bot, data=f"chan:ok:login:{code}")                              # ещё не подписан
@@ -147,7 +147,8 @@ async def test_new_user_start_then_welcome(env, db):
     bot, dp = env
     await _since_before_user(db)
     await _say(dp, bot, text="/start")
-    assert "подпишись на канал" in bot.session.sent_texts[-1][1]
+    text = bot.session.sent_texts[-1][1]
+    assert "Чтобы пользоваться Капибарой, подпишись на канал" in text and "войти" not in text  # входа тут нет
     bot.session.members.add(UID)
     await _say(dp, bot, data="chan:ok:start")
     assert any("Привет" in t for _, t in bot.session.sent_texts[-3:])

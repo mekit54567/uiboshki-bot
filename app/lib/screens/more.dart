@@ -205,6 +205,15 @@ class MoreScreen extends StatelessWidget {
               ),
             ),
           ),
+          // магазины (App Store 5.2.1): не выдавать себя за приложение института
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.xl, Space.l, Space.xl, 0),
+            child: Text(
+              unofficialNote,
+              textAlign: TextAlign.center,
+              style: s.body(12, color: p.muted),
+            ),
+          ),
         ],
       ),
     );

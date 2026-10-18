@@ -117,7 +117,7 @@ def login_prompt(code: str, login: dict) -> tuple[str, InlineKeyboardMarkup]:
         InlineKeyboardButton(text="✅ Да, это я", callback_data=f"login:ok:{code}"),
         InlineKeyboardButton(text="Нет", callback_data=f"login:no:{code}"),
     ]])
-    return (f"🔐 Войти в приложение УИБО-бота на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
+    return (f"🔐 Войти в приложение Капибары на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
             "Если это не ты нажал «Войти» — жми «Нет». Дальше попрошу нажать число с экрана устройства."), kb
 
 
@@ -201,7 +201,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     await upsert_user(user.id, user.username or "", user.full_name or "")
     import login_channel
     if not checked and await login_channel.needed(message.bot, user.id):
-        await message.answer(login_channel.text(False),
+        await message.answer(login_channel.text(False, login=False),
                              reply_markup=login_channel.keyboard("start:ios" if store else "start", False))
         return
     # Одно короткое сообщение с одной кнопкой. Сначала оно уходит с

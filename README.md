@@ -1,4 +1,4 @@
-# УИБО-бот
+# Капибара — учёба МИРЭА
 
 [![CI](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
@@ -16,6 +16,9 @@
 [@UiboshkiBot](https://t.me/UiboshkiBot) группы УИБО-03-24, теперь — для любой
 группы РТУ МИРЭА.
 
+> Неофициальный проект студентов. Не связан с РТУ МИРЭА и не заменяет его
+> официальные сервисы.
+
 **[Сайт с живым демо](https://www.uiboshki.ru)** ·
 **[Бот в Telegram](https://t.me/UiboshkiBot)** ·
 **[Без Telegram — uiboshki.ru/app](https://www.uiboshki.ru/app)** ·
@@ -24,40 +27,41 @@
 <p align="center"><a href="https://www.uiboshki.ru">
 <img src="webapp/static/site/og.jpg" width="720" alt="Сайт бота: живое приложение и поиск расписания"></a></p>
 
-> **In English.** A Telegram bot and Mini App for a university group
-> (RTU MIREA, Moscow): schedule search across the whole university, grades
+> **In English.** «Kapibara» — an unofficial, student-made Telegram bot,
+> Mini App and mobile app for RTU MIREA (Moscow), not affiliated with the university: schedule search across the whole university, grades
 > and assignment submission scraped from Moodle, deadline reminders, course
 > files with full-text and semantic search, and an AI assistant grounded in the
 > group's own lecture slides (hybrid RAG: SQLite FTS5/BM25 + sqlite-vec,
 > RRF + MMR, answers cite the exact slide). Works in Telegram, as an
-> installable PWA with web push (uiboshki.ru/app, login via Telegram or VK ID)
+> installable PWA with web push (uiboshki.ru/app, login via Telegram, VK ID or Yandex ID)
 > and as a native Flutter app for Android and iOS on the same versioned API.
 > Python · aiogram 3 · FastAPI · SQLite · Gemini · Flutter. Solo project:
 > ~20k lines of Python, ~6k of web frontend, ~10k of Dart, 770+ tests,
-> CI on every PR, deployed on Railway.
+> CI on every PR, deployed on Amvera (Moscow).
 
 <table>
 <tr>
-<td><img src="docs/screens/1-home.png" width="190" alt="Главная"></td>
-<td><img src="docs/screens/2-week.png" width="190" alt="Неделя с баллами"></td>
-<td><img src="docs/screens/3-sdo.png" width="190" alt="Баллы СДО"></td>
-<td><img src="docs/screens/4-deadlines.png" width="190" alt="Дедлайны"></td>
-<td><img src="docs/screens/5-notify.png" width="190" alt="Уведомления"></td>
+<td><img src="docs/screens/1-today.png" width="190" alt="Сегодня: идёт пара, сколько до конца, где следующая"></td>
+<td><img src="docs/screens/2-week.png" width="190" alt="Неделя"></td>
+<td><img src="docs/screens/3-deadlines.png" width="190" alt="Сдать: сроки и работы"></td>
+<td><img src="docs/screens/4-study.png" width="190" alt="Учёба: баллы БРС по предметам"></td>
+<td><img src="docs/screens/5-more.png" width="190" alt="Ещё: профиль, ачивки, настройки"></td>
 </tr>
 <tr>
-<td align="center">Главная</td><td align="center">Неделя + баллы</td><td align="center">СДО</td>
-<td align="center">Дедлайны</td><td align="center">Уведомления</td>
+<td align="center">Сегодня</td><td align="center">Неделя</td><td align="center">Сдать</td>
+<td align="center">Учёба</td><td align="center">Ещё</td>
 </tr>
 </table>
 
-<sub>Скриншоты — на демо-данных: ничьих настоящих баллов и файлов.</sub>
+<sub>Приложение «Капибара» (Flutter), снято роботом-проверкой на демо-данных:
+ничьих настоящих баллов и файлов.</sub>
 
 ## Где пользоваться
 
 | | Как открыть | Что особенного |
 |---|---|---|
 | **Telegram** | [@UiboshkiBot](https://t.me/UiboshkiBot) → «Открыть приложение» | бот сам пишет про пары и сроки, inline-режим в любом чате |
-| **Телефон без Telegram (PWA)** | [uiboshki.ru/app](https://www.uiboshki.ru/app) → iPhone: «Поделиться → На экран „Домой“», Android: «Установить приложение» | вход через Telegram или VK ID, уведомления пушем, расписание без сети |
+| **Телефон без Telegram (PWA)** | [uiboshki.ru/app](https://www.uiboshki.ru/app) → iPhone: «Поделиться → На экран „Домой“», Android: «Установить приложение» | вход через Telegram, VK ID или Яндекс ID, уведомления пушем, расписание без сети |
 | **Компьютер** | тот же адрес в Chrome, Edge или Яндекс Браузере → «Установить» | отдельное окно, как обычная программа |
 | **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`) — сборки APK и IPA в [GitHub Actions](https://github.com/mekit54567/uiboshki-bot/actions/workflows/app-build.yml) | скоро в RuStore; пока — тестовые сборки |
 
@@ -181,7 +185,7 @@ flowchart LR
     API & BOT --> AI["Gemini / DeepSeek"]
 ```
 
-Бот и Mini App — один процесс и одна база (Railway). Фронтенд — обычные
+Бот и Mini App — один процесс и одна база (Amvera, Москва). Фронтенд — обычные
 скрипты без сборки; авторизация — по `initData` Telegram, вне Telegram —
 токен сессии устройства (вход через бота, VK ID или Яндекс ID). PWA и своё
 приложение ходят в версионированное API `/api/v1` (снимок контракта в тестах).

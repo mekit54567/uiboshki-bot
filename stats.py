@@ -324,7 +324,7 @@ def render(s: dict) -> bytes:
     W, H = 1200, 1560
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
-    d.text((48, 44), "УИБО-бот · статистика", font=_font(46, True), fill=TEXT)
+    d.text((48, 44), "Капибара · статистика", font=_font(46, True), fill=TEXT)
     d.text((48, 104), f"за {s['days']} дн. · {s['since']:%d.%m} – {s['today']:%d.%m.%Y}", font=_font(26), fill=HINT)
 
     # плитки

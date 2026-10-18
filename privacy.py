@@ -113,6 +113,11 @@ async def erase(user_id: int) -> dict:
     """Всё о человеке — из базы и кэшей. Из ночных копий базы (у оператора в
     Telegram) — при ежемесячной ручной чистке (политика это говорит)."""
     from database.privacy import erase_user
+    try:
+        import apple_signin
+        await apple_signin.revoke_for(user_id)    # вход через Apple — отозвать у Apple (их правило)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"отзыв входа Apple: {e}")
     from database.service import drop_events
     from database.users import forget_user
     drop_events(user_id)
