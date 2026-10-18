@@ -267,6 +267,7 @@ document.getElementById("chat-file").addEventListener("change", (e) => {
 function renderAttachment() {
   const box = document.getElementById("attach-preview");
   box.innerHTML = "";
+  renderThinkToggle();                 // к фото и файлу «Подумать» нет
   if (!pendingAttachment) return;
   const chip = document.createElement("div");
   chip.className = "attach-chip";
@@ -288,10 +289,51 @@ function clearAttachment() {
   syncNavHeight();
 }
 
+// ── «Подумать» до вопроса (подписка, think.py) ──
+// Переключатель над полем ввода (Никита 18.10: «выбрать перед ответом
+// сразу»): включил — следующий вопрос сразу решает модель второго уровня,
+// без обычного ответа. Одноразовый: вопрос ушёл — выключается сам, чтобы
+// дневной лимит не уходил случайно. Нет подписки — переключателя нет;
+// кончилось на сегодня или прикреплён файл — серый.
+let thinkOffer = null, thinkArmed = false;     // {label, left, daily} с сервера
+
+function setThinkOffer(o) {
+  thinkOffer = o || null;
+  renderThinkToggle();
+}
+
+function thinkHasLeft() {               // left null — безлимит (/grant … unlimited)
+  return !!thinkOffer && (thinkOffer.left == null || thinkOffer.left > 0);
+}
+
+function renderThinkToggle() {
+  const box = document.getElementById("think-toggle");
+  if (!thinkOffer) {
+    thinkArmed = false;
+    box.innerHTML = "";
+  } else {
+    const can = thinkHasLeft() && !pendingAttachment;
+    if (!can) thinkArmed = false;
+    box.innerHTML = '<button class="think-toggle' + (thinkArmed ? " on" : "") + '" onclick="toggleThink()" aria-pressed="' +
+      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать" + (thinkOffer.left == null ? "" : " · " + thinkOffer.left) + "</button>" +
+      '<span class="think-note">' + (thinkArmed ? "следующий вопрос Капибара решит, подумав подольше"
+        : thinkHasLeft() ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
+  }
+  syncNavHeight();
+}
+
+function toggleThink() {
+  if (!thinkHasLeft() || pendingAttachment) return;
+  thinkArmed = !thinkArmed;
+  haptic();
+  renderThinkToggle();
+}
+
 // ── предметы (с лекциями — чат опирается на них) ──
 async function loadChatSubjects() {
   try {
     const data = await api("/api/subjects");
+    setThinkOffer(data.think);
     const sel = document.getElementById("chat-subject");
     data.subjects.forEach(s => {
       const o = document.createElement("option");
@@ -319,6 +361,11 @@ async function sendChat() {
   // В истории для сервера — только текст; само вложение уходит отдельным полем.
   const content = text || (att ? (att.image ? "Реши задание на фото." : "Разбери этот файл.") : "");
   const entry = { role: "user", content: content, att: shownAtt ? { name: shownAtt.name, image: shownAtt.image } : null };
+  if (thinkArmed && !att) {            // «Подумать» — на один вопрос
+    entry.deep = true;
+    thinkArmed = false;
+    renderThinkToggle();
+  }
   chatLog.push(entry);
   saveChatLog();
   try {
@@ -336,26 +383,38 @@ async function sendChat() {
 // тот чат, где задан вопрос, а рисуется, только если он сейчас открыт.
 // Текст вложенного документа (file_text с сервера) хранится в записи вопроса
 // и уходит в историю следующих вопросов — иначе ИИ забывал файл со второго.
+// История для сервера: два ответа подряд («Подумать ещё» под ответом) —
+// уходит только последний, роли чередуются.
+function historyOf(log) {
+  const ok = log.filter(m => m.content && !m.failed);
+  return ok.filter((m, i) => !(m.role === "assistant" && ok[i + 1] && ok[i + 1].role === "assistant"))
+    .map(m => ({ role: m.role, content: m.content + (m.file_text ? "\n\n" + m.file_text : "") }));
+}
+
 async function requestAnswer(entry, att) {
   const pending = typingBubble();
   const myId = chatId;
-  const history = chatLog.filter(m => m.content && !m.failed)
-    .map(m => ({ role: m.role, content: m.content + (m.file_text ? "\n\n" + m.file_text : "") }));
+  const history = historyOf(chatLog);
   const body = { history: history, subject: document.getElementById("chat-subject").value };
   if (att) body.attachment = { name: att.name, mime: att.mime, data: att.data };
+  if (entry.deep) body.think_first = true;
   try {
     const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
     pending.remove();
+    if (data.think) setThinkOffer(data.think);
     const here = chatId === myId, log = chatLogOf(myId);
     if (data.choose && data.choose.length) {
+      // выберет предмет — вопрос уйдёт заново, «Подумать» остаётся при нём
       if (here) askSubject(entry, att, data);
       else if (log) { entry.failed = true; saveChatLog(myId, log); }
       return;
     }
     delete entry.failed;
+    delete entry.deep;
     if (data.file_text) entry.file_text = data.file_text;
     if (!log) return;                                 // чат удалили, пока ждали
-    log.push({ role: "assistant", content: data.content, html: data.html, files: data.files, sources: data.sources });
+    log.push({ role: "assistant", content: data.content, html: data.html, files: data.files, sources: data.sources,
+               think: data.think });
     if (!here) { saveChatLog(myId, log); return; }
     appendMsg("assistant", data.content, data.reasoning, data.html, null, true, data.files, data.sources);
     saveChatLog();
@@ -364,6 +423,7 @@ async function requestAnswer(entry, att) {
   } catch (e) {
     pending.remove();
     entry.failed = true;
+    delete entry.deep;                 // «Повторить» — уже обычным вопросом
     if (chatId !== myId) { const log = chatLogOf(myId); if (log) saveChatLog(myId, log); return; }
     saveChatLog();
     const bubble = appendMsg("assistant", "⚠️ " + e.message);
@@ -454,7 +514,49 @@ function addQuickReplies() {
     };
     row.appendChild(b);
   });
+  // «Подумать ещё» (подписка): тот же вопрос заново решает модель
+  // второго уровня, со своим дневным лимитом — он в подписи кнопки
+  if (last.think) {
+    const b = document.createElement("button");
+    b.className = "think";
+    const left = last.think.left;              // null — безлимит
+    b.textContent = last.think.label + (left == null ? "" : " · " + left);
+    b.disabled = left === 0;
+    b.onclick = thinkAgain;
+    row.prepend(b);
+  }
   bubble.after(row);
+}
+
+async function thinkAgain() {
+  const btn = document.getElementById("chat-send");
+  if (btn.disabled) return;
+  const idx = chatLog.length - 1;
+  if (idx < 1 || chatLog[idx].role !== "assistant") return;
+  btn.disabled = true;
+  dropQuickReplies();
+  const pending = typingBubble();
+  const myId = chatId;
+  const body = { history: historyOf(chatLog.slice(0, idx)), subject: document.getElementById("chat-subject").value,
+                 think: true };
+  try {
+    const data = await api("/api/chat", { method: "POST", body: JSON.stringify(body) });
+    pending.remove();
+    if (data.think) setThinkOffer(data.think);
+    const log = chatLogOf(myId);
+    if (!log) return;
+    log.push({ role: "assistant", content: data.content, html: data.html, sources: data.sources, think: data.think });
+    if (chatId !== myId) { saveChatLog(myId, log); return; }
+    appendMsg("assistant", data.content, data.reasoning, data.html, null, true, null, data.sources);
+    saveChatLog();
+    haptic("success");
+  } catch (e) {
+    pending.remove();
+    if (chatId === myId) showToast(e.message);
+  } finally {
+    btn.disabled = false;
+    if (chatId === myId) addQuickReplies();
+  }
 }
 
 // «По какому предмету?» — вопрос явно про лекции, а предмет не угадан.

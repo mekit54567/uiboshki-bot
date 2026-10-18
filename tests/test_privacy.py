@@ -147,37 +147,182 @@ async def test_api_consent_and_delete(db, monkeypatch):
     assert c.get("/api/me", headers=h).json()["consent_needed"] is False
     assert (await get_consents(ME))[0]["via"] == "tg"
 
-    assert c.post("/api/me/delete", json={}, headers=h).status_code == 400   # без подтверждения — нет
-    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).json() == {"ok": True}
-    assert await db.get_user(ME) is None and await get_consents(ME) == []
+    assert c.post("/api/me/delete", json={}, headers=h).status_code == 400   # без фразы — нет
+    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).status_code == 400
+    assert c.post("/api/me/delete", json={"phrase": "удалить"}, headers=h).status_code == 400
+    r = c.post("/api/me/delete", json={"phrase": " Удалить мои  данные. "}, headers=h).json()
+    assert r["ok"] and r["days"] == 7 and "без гарантии" in r["text"]
+    assert await db.get_user(ME) and await get_consents(ME) == []     # сразу — согласия, данные — через 7 дней
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_erase_after_seven_days(db, monkeypatch):
+    """Никита 18.10: «удалить мои данные» — фразой; сразу выход везде и из СДО,
+    обработка встаёт; полностью — через 7 дней; до этого староста может
+    вернуть (/undelete), согласие тогда спросят заново."""
+    from datetime import timedelta
+
+    from utils import today_msk
+
+    import privacy
+    from database.sessions import create_session
+    c, h = _client(monkeypatch)
+    await db.upsert_user(ME, "me", "Я")
+    await privacy.give(ME, "pd", "tg")
+    token = await create_session(ME, "Chrome")
+    assert c.get("/api/notify", headers=h).status_code == 200
+    r = c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h).json()
+    assert r["due"] == (today_msk() + timedelta(days=7)).isoformat()
+    assert c.get("/api/notify", headers={"Authorization": "Bearer " + token}).status_code == 401  # вышли везде
+    assert await privacy.blocked(ME)                                   # ничего не обрабатываем
+    res = c.get("/api/notify", headers=h)
+    assert res.status_code == 403 and "удаляются" in res.json()["detail"]
+    me = c.get("/api/me", headers=h).json()
+    assert me["erasing"]["due"] == r["due"] and me["consent_blocked"]
+    assert c.post("/api/consent", json={"kind": "pd"}, headers=h).status_code == 409   # согласие не берём
+    assert not await privacy.ask_once(ME)
+
+    await privacy.purge()                                              # рано — ещё есть
+    assert await db.get_user(ME)
+    assert await privacy.undo_erase(ME) and not await privacy.erasing(ME)   # вернули по заявке
+    assert await privacy.blocked(ME)                                   # но согласие — заново
+    await privacy.give(ME, "pd", "tg")
+    assert not await privacy.blocked(ME)
+
+    c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h)
+    import utils
+    later = today_msk() + timedelta(days=7)
+    monkeypatch.setattr(utils, "today_msk", lambda: later)
+    await privacy.purge()                                              # прошло 7 дней — насовсем
+    assert await db.get_user(ME) is None and not await privacy.erasing(ME)
+
+
+@pytest.mark.asyncio
+async def test_erasing_hidden_everywhere(db):
+    """Ревью 152-ФЗ 18.10: в эти 7 дней человек не попадает ни в рассылки, ни
+    в /stats, ни в выборки по людям (NOT_ERASING)."""
+    import privacy
+    from database import count_users, events_since, get_all_subscribed_users, get_all_users, get_reminder_users
+    from database.service import add_event, flush_events
+    for uid in (ME, OTHER):
+        await db.upsert_user(uid, "u", "U")
+        await add_event(uid, "bot")
+    await flush_events()
+    await privacy.request_erase(ME)
+    assert ME not in await get_all_subscribed_users() and OTHER in await get_all_subscribed_users()
+    assert ME not in {u["user_id"] for u in await get_reminder_users()}
+    assert ME not in {u["user_id"] for u in await get_all_users()} and await count_users() == 1
+    assert {e[0] for e in await events_since(1)} == {OTHER}
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_refuse_consent_erases_now(db, monkeypatch):
+    """Новый человек отказался от согласия на листе — хранить нечего, сразу."""
+    c, h = _client(monkeypatch)
+    c.get("/api/me", headers=h)
+    assert c.post("/api/me/delete", json={"confirm": True}, headers=h).json() == {"ok": True, "now": True}
+    assert await db.get_user(ME) is None
 
 
 def test_legal_texts_and_pages(monkeypatch):
+    import legal_texts
     import privacy
     c, _ = _client(monkeypatch)
+    # у согласия версия — privacy.VERSION (по ней спрашивают заново); у политики может быть своя,
+    # не ниже: 2.1 — «Поддержка проекта» (донат — исполнение договора, согласие не меняется)
+    assert legal_texts.PRIVACY["version"] >= privacy.VERSION and "поддержк" in str(legal_texts.PRIVACY)
     for name, title in (("consent", "Согласие на обработку персональных данных"),
                         ("privacy", "Политика обработки персональных данных")):
         d = c.get("/api/legal/" + name).json()
-        assert d["title"] == title and d["version"] == privacy.VERSION and d["sections"]
+        src = legal_texts.DOCS[name]
+        version, date = src.get("version", privacy.VERSION), src.get("date", privacy.DATE)
+        assert d["title"] == title and d["version"] == version and d["date"] == date and d["sections"]
         assert all(set(b) in ({"p"}, {"ul"}) for s in d["sections"] for b in s["blocks"])   # JSON без HTML
         assert "{" not in json.dumps(d, ensure_ascii=False).replace('{"', "").replace("{}", "")  # всё подставлено
         page = c.get("/" + name)
-        assert page.status_code == 200 and title in page.text and privacy.DATE in page.text
+        assert page.status_code == 200 and title in page.text and date in page.text
     assert c.get("/api/legal/ads").status_code == 404
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
-    assert "Railway" in text and "США" in text            # правда о том, где сервер
+    assert "Railway" not in text and "us-west" not in text  # переезд 16.10: сервер в России
+    assert "на платформе Amvera" in text and "ИНН 9724135016" in text and "перечень — на сайте Amvera" in text
+    assert "Онланта" not in text and "доступа к содержимому у них нет" not in text   # договор поручения Amvera
+    assert "бесплатном тарифе" in text and "для улучшения своих моделей" in text   # ревью 17.10: Gemini
+    for name in ("consent", "privacy"):                    # Никита 18.10: компании, не модели ИИ
+        text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
+        assert "Gemini" not in text and "Ling" not in text and "OpenRouter, Inc. (США)" in text
+        assert "удалить мои данные" in text and "7 дней" in text and "без гарантии" in text
+    from pathlib import Path
+    assert "Gemini" not in Path("webapp/static/js/more.js").read_text(encoding="utf-8").split("Вопросы к ИИ")[1][:300]
+
+
+def test_legal_short_and_more(monkeypatch):
+    """Никита 18.10: в длинных разделах сразу главное, полный текст — по
+    «Подробнее»; сам полный текст на месте."""
+    import legal_texts
+    c, _ = _client(monkeypatch)
+    want = {"consent": {"Срок и отзыв"}, "privacy": {"Что храним и сколько", "Твои права"}}
+    for name, titles in want.items():
+        d = c.get("/api/legal/" + name).json()
+        short = {s["title"] for s in d["sections"] if s.get("short")}
+        assert short == titles
+        for s in d["sections"]:
+            assert all(set(b) in ({"p"}, {"ul"}) for b in s.get("short", []))
+        full = json.dumps(d["sections"], ensure_ascii=False)
+        assert "{" not in full.replace('{"', "")
+        assert all(len(json.dumps(s["short"], ensure_ascii=False)) < len(json.dumps(s["blocks"], ensure_ascii=False))
+                   for s in d["sections"] if s.get("short"))
+        assert len(legal_texts.DOCS[name]["sections"]) == len(d["sections"])
+        page = c.get("/" + name).text
+        assert page.count("<summary>Подробнее</summary>") == len(titles)
+    d = c.get("/api/legal/consent").json()
+    term = next(s for s in d["sections"] if s["title"] == "Срок и отзыв")
+    assert "удалить мои данные" in json.dumps(term["blocks"], ensure_ascii=False)   # фраза — в полном тексте
+
+
+def test_erasing_text_official():
+    """Никита 18.10: строка «войдёшь заново» звучала как сленг — что будет до
+    и после срока, официально."""
+    import privacy
+    t = privacy.erasing_text("2026-10-25")
+    assert "войдёшь заново" not in t and "ничего не делаем" not in t
+    assert "Повторный вход до 25.10.2026 удаление не отменяет" in t
+    assert "не обрабатываются" not in t and "только хранятся, никак не используются и никому не видны" in t
+    assert "После 25.10.2026 данные восстановить нельзя" in t and "без гарантии" in t
+
+
+def test_erase_phrase_no_paste():
+    """Никита 18.10: фразу удаления не вставить и не скопировать из текста выше."""
+    from pathlib import Path
+    js = Path("webapp/static/js/privacy.js").read_text(encoding="utf-8")
+    field = js[js.index('id="erase-phrase"'):js.index('id="erase-go"')]
+    assert 'onpaste="return false"' in field and 'ondrop="return false"' in field and "noPasteInput" in field
+    assert '<b class="no-copy"' in js
+    assert "user-select: none" in Path("webapp/static/app.css").read_text(encoding="utf-8").split(".no-copy")[1][:120]
+    dart = Path("app/lib/screens/legal.dart").read_text(encoding="utf-8")
+    assert "noPaste: true" in dart
 
 
 @pytest.mark.asyncio
 async def test_bot_deleteme(db, dp, bot):  # noqa: F811
+    """/deleteme — фразой руками; не та — ничего; та — через 7 дней, старосте
+    сообщение с /undelete; /undelete — вернуть."""
+    import privacy
     await db.upsert_user(ME, "", "x")
     await send(dp, bot, "/deleteme")
-    assert "Удалить все твои данные" in bot.session.texts()[-1]
-    await press(dp, bot, "erase:no")
+    assert "Удалить все твои данные" in bot.session.texts()[-1] and "удалить мои данные" in bot.session.texts()[-1]
+    await send(dp, bot, "да")
+    assert "не совпала" in bot.session.texts()[-1] and not await privacy.erasing(ME)
+    await send(dp, bot, "/deleteme")
+    await send(dp, bot, "удалить мои данные")
+    assert await privacy.erasing(ME) and await db.get_user(ME)
+    assert "без гарантии" in bot.session.texts()[-1]
+    assert any(f"/undelete {ME}" in t for t in bot.session.texts())     # старосте
+    await press(dp, bot, "erase:yes")                                  # старая кнопка — ничего
     assert await db.get_user(ME)
-    await press(dp, bot, "erase:yes")
-    assert await db.get_user(ME) is None
-    assert "всё о тебе удалено" in bot.session.named("EditMessageText")[-1].text
+    await send(dp, bot, f"/undelete {ME}", uid=STAROSTA_ID)
+    assert not await privacy.erasing(ME) and "Вернул" in " ".join(bot.session.texts())
 
 
 @pytest.mark.asyncio
@@ -355,12 +500,14 @@ async def test_api_closed_until_consent(db, monkeypatch):
 
 
 def test_legal_texts_after_review(monkeypatch):
-    """Ревью 11.10: копии в Telegram (ОАЭ), цели, основание, поручение Railway,
+    """Ревью 11.10: копии в Telegram (ОАЭ), цели, основание, поручение хостингу,
     фото вопроса, срок ответа; данные оператора — из переменных окружения."""
     c, _ = _client(monkeypatch)
     for name in ("consent", "privacy"):
         text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
-        assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text and "по поручению" in text
+        assert "Telegram FZ-LLC (ОАЭ)" in text and "резервн" in text
+        assert "Амвера" in text and "договор поручения Amvera от 14.07.2026" in text   # ревью 17.10
+        assert "id от Apple" in text and "скрыт" in text and "только если" in text and "вход через Apple" in text   # #200
         assert "текст или фото" in text and "не дольше" not in text
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert '"Цели"' in text and "ст. 6 ч. 1 п. 1" in text and "п. 5" in text and "рабочих дней" in text
@@ -378,3 +525,46 @@ async def test_status_warns_without_operator(db, monkeypatch):
     for k in ("FIO", "INN", "EMAIL", "CITY"):
         monkeypatch.setattr(privacy, k, "x")
     assert privacy.operator_missing() == [] and "данных оператора" not in await health.report()
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_new_version_does_not_block_who_consented(db, monkeypatch):
+    """Переезд 16.10, новая версия текста: давший прошлую версию не
+    блокируется — его один раз спрашивают, как старых своих; новый — как раньше."""
+    import privacy
+    await db.upsert_user(ME, "me", "Я")
+    await db.upsert_user(OTHER, "other", "Он")
+    await privacy.give(ME, "pd", "bot")
+    monkeypatch.setattr(privacy, "VERSION", "99")
+    privacy._given.clear()
+    assert await privacy.needs(ME) and not await privacy.blocked(ME)
+    assert await privacy.should_ask(ME) and await privacy.ask_once(ME) and not await privacy.ask_once(ME)
+    assert await privacy.blocked(OTHER)
+
+
+def test_legal_backup_where(monkeypatch):
+    """Бэкап в российском S3 (BACKUP_S3_*) — в текстах хранилище вместо Telegram
+    и срок, за который удалённое уходит из копий; не задан — Telegram, как было."""
+    c, _ = _client(monkeypatch)
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "Telegram FZ-LLC (ОАЭ) — хранение ночной резервной копии" in text
+    for k in ("BACKUP_S3_BUCKET", "BACKUP_S3_KEY_ID", "BACKUP_S3_SECRET"):
+        monkeypatch.setenv(k, "x")
+    for name in ("consent", "privacy"):
+        text = json.dumps(c.get("/api/legal/" + name).json(), ensure_ascii=False)
+        assert "резервной копии базы у оператора" not in text and "Yandex Cloud (Россия)" in text
+        assert "7 дней" in text and "год" not in text            # ст. 21 ч. 5: не дольше 30 дней
+
+
+def test_legal_proxy_as_configured(monkeypatch):
+    """Ревью 16.10: как уходят запросы за границу — как устроено на сервере:
+    туннель Xray на сервер оператора (страна — PROXY_COUNTRY) или сеть хостинга."""
+    c, _ = _client(monkeypatch)
+    monkeypatch.delenv("XRAY_CONFIG", raising=False)
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "через сеть хостинга Amvera" in text and "туннель" not in text
+    monkeypatch.setenv("XRAY_CONFIG", "x")
+    monkeypatch.setenv("PROXY_COUNTRY", "Нидерландах")
+    text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
+    assert "туннель на сервер оператора в Нидерландах" in text and "не расшифровывается" in text

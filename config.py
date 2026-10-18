@@ -13,6 +13,12 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 # бесплатный лимит (429): по отбору /aitest 10.10 — Ling 3.0 Flash VL, почти
 # на уровне Gemini, видит фото, ~10 ₽ за 1000 вопросов. Пусто — без неё.
 AI_SPARE_MODEL = os.getenv("AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl") if OPENROUTER_API_KEY else ""
+# Кому эта модель (Ling) — основная, а Gemini — запасная (Никита 18.10: «Ling
+# основной у всех», своя группа — как все): all — все; на случай отката: plus —
+# староста и у кого «Капибара+», me — только старосты, gemini — все на Gemini.
+# Меняется без деплоя только старостой: /aimain (settings ai_main поверх этой
+# переменной).
+AI_MAIN = os.getenv("AI_MAIN", "all").strip().lower()
 ICAL_URL      = os.getenv("ICAL_URL", "https://english.mirea.ru/schedule/api/ical/1/4928")
 
 # ─── БД ───────────────────────────────────────────────────────────────────────
@@ -38,6 +44,9 @@ def channel_id_from(explicit: str, url: str) -> str:
 
 
 CHANNEL_ID = channel_id_from(os.getenv("CHANNEL_ID", ""), CHANNEL_URL)
+# Открытый канал, на который подписывается новый человек при первом входе через
+# Telegram (login_channel.py): «@имя» или t.me/<имя>. Пусто — без проверки.
+LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.
@@ -120,10 +129,12 @@ GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_FALLBACK_MODELS = [m.strip() for m in os.getenv("GEMINI_FALLBACK_MODELS",
                                                        "gemini-flash-latest,gemini-2.5-flash").split(",")
                           if m.strip()]
-# Вопросов к ИИ в сутки на человека (ИИ-чат, решалка, конспекты); 0 — без
-# дневного лимита. Бесплатный лимит Gemini — один на всю группу: если его
-# начнут выжигать за день — задать, например, 40. Старосты — без лимита.
-AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "0") or 0)
+# Вопросов к ИИ в сутки на человека (ИИ-чат, решалка, конспекты) у своей
+# группы без «Капибары+» (с подарком — AI_SUB_DAILY): по умолчанию 20
+# (Никита 17.10: «совсем без лимита — не очень»), 0 — без дневного лимита.
+# Без лимита — только Никита (STAROSTA_ID) и безлимит от него (/grant),
+# старосты групп — как все.
+AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "20") or 0)
 # Любая группа института (этап 1, PLAN.md «Своё приложение»). «Своя» группа
 # (id на зеркале — из ICAL_URL) пользуется ИИ как раньше; другие группы —
 # база: проба ИИ (AI_TRIAL_DAILY вопросов в день на человека и не больше
@@ -146,8 +157,8 @@ GEMINI_EMBED_DIMS = int(os.getenv("GEMINI_EMBED_DIMS", "768"))
 # это не критическая функция, ничего не падает без неё.
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 # Порт HTTP-сервера WebApp внутри того же процесса, что и бот (см. bot.py).
-# Railway сам кладёт PORT в окружение сервиса и проксирует на него публичный
-# домен. 0 — WebApp не поднимаем (локальный запуск без WEBAPP_URL и PORT).
+# Хостинг кладёт PORT в окружение (на Amvera — 8080 из Dockerfile, amvera.yml)
+# и проксирует на него публичный домен. 0 — WebApp не поднимаем (локальный запуск без WEBAPP_URL и PORT).
 WEBAPP_PORT = int(os.getenv("PORT") or os.getenv("WEBAPP_PORT") or (8080 if WEBAPP_URL else 0))
 
 # ─── Расписание рассылок ──────────────────────────────────────────────────────

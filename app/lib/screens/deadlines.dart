@@ -22,6 +22,7 @@ import '../widget_data.dart';
 import '../widgets/capy.dart';
 import '../widgets/cheer.dart';
 import '../widgets/common.dart';
+import '../widgets/report.dart' show openReportMenu;
 import 'deadline_edit.dart';
 import 'homework.dart';
 import 'submit.dart';
@@ -153,6 +154,8 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
           if (mounted) snack(context, 'Снова как у всей группы', kind: ToastKind.done);
           await reload();
         }
+      case DlAction.report:
+        await openReportMenu(context, api, kind: 'deadline', id: d.id, onChanged: reload);
     }
   }
 

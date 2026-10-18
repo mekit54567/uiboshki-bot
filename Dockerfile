@@ -1,5 +1,4 @@
-# Образ бота для своего сервера (переезд в Россию, PLAN.md). На Railway
-# по-прежнему собирается Nixpacks (railway.toml), этот файл ему не мешает.
+# Образ бота на Amvera (сервер в России, amvera.yml, PLAN.md).
 # Внутри — бот и Xray: если задан XRAY_CONFIG, бот ходит за границу через
 # него (docker/start.sh, tools/xray_conf.py). База и модели — на постоянном
 # диске: DATABASE_PATH=/data/mirea_bot.db.

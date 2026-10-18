@@ -261,6 +261,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       ),
                     ),
                   ),
+                _HiddenAuthors(api: api),
                 const Section('Твои данные'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.l),
@@ -273,6 +274,61 @@ class _SecurityScreenState extends State<SecurityScreen> {
       ),
     ),
   );
+}
+
+/// Авторы, которых человек скрыл у себя («⋯» у записи, 5.99), — вернуть всех.
+/// Никого не скрыл — строки нет.
+class _HiddenAuthors extends StatefulWidget {
+  final Api api;
+  const _HiddenAuthors({required this.api});
+
+  @override
+  State<_HiddenAuthors> createState() => _HiddenAuthorsState();
+}
+
+class _HiddenAuthorsState extends State<_HiddenAuthors> {
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.get('/hidden-authors').then((r) {
+      if (mounted) setState(() => _count = (r['count'] as num?)?.toInt() ?? 0);
+    }, onError: (_) {});
+  }
+
+  Future<void> _show() async {
+    tick();
+    try {
+      await widget.api.delete('/hidden-authors');
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.message, kind: ToastKind.error);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _count = 0);
+    showToast(context, 'Снова видны все записи группы', kind: ToastKind.done);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_count == 0) return const SizedBox.shrink();
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
+      child: Tile(
+        child: Row(
+          children: [
+            Icon(Icons.visibility_off_outlined, color: p.accent, size: 22),
+            const SizedBox(width: Space.m),
+            Expanded(child: Text('Скрытые авторы: $_count — их записей ты не видишь', style: s.body(14))),
+            TextButton(key: const Key('unhide'), onPressed: _show, child: const Text('Показать')),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// «сегодня», «вчера», «8 октября» — время с сервера в UTC.
@@ -315,9 +371,15 @@ List<(IconData, String, String, String)> _facts(Map s) {
     ),
     (
       Icons.auto_awesome_outlined,
-      'ИИ (Gemini от Google)',
+      'Вопросы к ИИ',
       'Уходит только вопрос, история чата и нужные куски лекций. Имя и вход в СДО — нет.',
-      'Google не узнает, кто спрашивал. Но личное в вопросы лучше не писать.',
+      'ИИ не узнает, кто спрашивал. Но личное в вопросы лучше не писать.',
+    ),
+    (
+      Icons.dns_outlined,
+      'Сервер — в России',
+      'Бот, приложение и база — на хостинге Amvera в Москве.',
+      'За границу уходят только сообщения Telegram, уведомления и вопросы к ИИ — в зашифрованном виде.',
     ),
     (
       Icons.insights_outlined,
@@ -485,7 +547,10 @@ class _MyDataState extends State<_MyData> {
             style: TextButton.styleFrom(padding: EdgeInsets.zero),
             onPressed: widget.onErase,
             icon: Icon(Icons.delete_outline_rounded, color: p.danger, size: 20),
-            label: Text('Удалить все мои данные', style: s.body(15, weight: FontWeight.w600, color: p.danger)),
+            label: Text(
+              'Удалить все мои данные',
+              style: s.body(15, weight: FontWeight.w600, color: p.danger),
+            ),
           ),
         ],
       ),

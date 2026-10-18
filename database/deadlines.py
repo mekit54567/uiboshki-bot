@@ -283,11 +283,14 @@ async def get_deadline_stats(viewer_id: int) -> dict:
         return {"total": total, "done": done, "overdue": overdue, "active": active}
 
 
-async def mark_deadline_done(did: int, user_id: int):
+async def mark_deadline_done(did: int, user_id: int, via: str | None = None):
+    """via='sdo' — сдачу подтвердило СДО: такая отметка идёт в опыт (xp.py),
+    галочка от руки — нет; подтверждение поверх галочки её «повышает»."""
     async with connect() as db:
         await db.execute(
-            "INSERT OR IGNORE INTO deadline_done (deadline_id, user_id) VALUES (?, ?)",
-            (did, user_id)
+            "INSERT INTO deadline_done (deadline_id, user_id, via) VALUES (?, ?, ?) "
+            "ON CONFLICT(deadline_id, user_id) DO UPDATE SET via = COALESCE(excluded.via, via)",
+            (did, user_id, via)
         )
         await db.commit()
 

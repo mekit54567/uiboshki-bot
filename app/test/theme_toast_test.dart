@@ -153,9 +153,12 @@ void main() {
     await settle(t);
     await t.tap(find.bySemanticsLabel('Ещё'));
     await settle(t);
-    // список «Ещё» — до конца: строка не под меню-капсулой
-    await t.drag(find.byType(MoreScreen), const Offset(0, -2000));
-    await settle(t);
+    // список «Ещё» — до конца: строка не под меню-капсулой. Дважды: рейтинг и
+    // «Поддержать» догружаются после первой прокрутки, и список растёт
+    for (var i = 0; i < 2; i++) {
+      await t.drag(find.byType(MoreScreen), const Offset(0, -2000));
+      await settle(t);
+    }
     await t.tap(find.text('Выйти'));
     await settle(t);
     expect(find.byType(AlertDialog), findsNothing);

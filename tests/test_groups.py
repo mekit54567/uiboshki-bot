@@ -70,13 +70,15 @@ async def test_choose_and_plans(db, index):
     assert await groups.of_user(10) == {"id": OTHER, "name": "УИБО-01-24", "own": False}
     assert await plans.plan_of(10) == plans.BASE
     await groups.choose(10, HOME)
-    assert (await groups.of_user(10))["own"] and await plans.plan_of(10) == plans.OWN
+    assert (await groups.of_user(10))["own"] and await plans.plan_of(10) == plans.SUB     # подарок «Капибары+»
+    await db.set_setting("plus:gift", "off")
+    assert await plans.plan_of(10) == plans.OWN                             # подарок кончился — своя группа
     await groups.choose(10, OTHER)
     await db.set_subscription_until(10, "2999-01-01")
     assert await plans.plan_of(10) == plans.SUB
     await db.set_subscription_until(10, "2000-01-01")                       # кончилась
     assert await plans.plan_of(10) == plans.BASE
-    assert await plans.plan_of(STAROSTA_ID) == plans.OWN                    # староста — всегда
+    assert await plans.plan_of(STAROSTA_ID) == plans.OWN                    # Никита — всегда
     assert groups.ical_url(OTHER).endswith("/ical/1/5001") and groups.ical_url(HOME) == config.ICAL_URL
 
 
@@ -133,6 +135,7 @@ async def test_ai_left_for_chat_screen(db, index, monkeypatch):
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)
     monkeypatch.setattr(config, "AI_DAILY_LIMIT", 10)
+    await db.set_setting("plus:gift", "off")                                # своя группа без подарка
     await db.upsert_user(30, "u", "U")
     await db.set_user_group(30, HOME)
     await db.upsert_user(31, "u", "U")
@@ -199,7 +202,9 @@ async def test_bot_asks_group_and_saves_choice(db, index, monkeypatch):
 # ── WebApp: /api/me и выбор группы ───────────────────────────────────────────
 
 def test_webapp_group_api(db, index, monkeypatch):
+    import billing
     import webapp.server as server
+    monkeypatch.setattr(billing, "GIFT_UNTIL", "2999-12-31")
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
     c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
@@ -209,4 +214,4 @@ def test_webapp_group_api(db, index, monkeypatch):
     assert c.post("/api/me/group", json={"id": 1}, headers=h).status_code == 404
     assert c.post("/api/me/group", json={"id": HOME}, headers=h).json()["group"]["own"] is True
     me = c.get("/api/me", headers=h).json()
-    assert me["group"]["name"] == config.GROUP_NAME and me["plan"] == "own"
+    assert me["group"]["name"] == config.GROUP_NAME and me["plan"] == "sub"   # своя — с подарком «Капибары+»

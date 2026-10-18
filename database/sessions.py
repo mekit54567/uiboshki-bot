@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
-from database._conn import connect
+from database._conn import connect, write_later
 
 LOGIN_TTL = timedelta(minutes=10)
 SESSION_TTL = timedelta(days=90)          # продлевается при каждом заходе
@@ -94,11 +94,23 @@ async def session_user(token: str) -> int | None:
                                       "WHERE token_hash = ? AND revoked = 0", (h,))).fetchone()
         if not row or row[2] < _ts(_now()):
             return None
-        if row[3] < _ts(_now() - timedelta(minutes=10)):          # продлеваем не чаще раза в 10 минут
+    if row[3] < _ts(_now() - timedelta(minutes=10)) and row[0] not in _prolonging:
+        _prolonging.add(row[0])                                   # продлеваем не чаще раза в 10 минут,
+        await write_later(_prolong(row[0]))                       # и запрос этого не ждёт
+    return row[1]
+
+
+_prolonging: set[int] = set()       # пачка запросов разом — одно продление
+
+
+async def _prolong(session_id: int):
+    try:
+        async with connect() as db:
             await db.execute("UPDATE sessions SET last_seen = ?, expires_at = ? WHERE id = ?",
-                             (_ts(_now()), _ts(_now() + SESSION_TTL), row[0]))
+                             (_ts(_now()), _ts(_now() + SESSION_TTL), session_id))
             await db.commit()
-        return row[1]
+    finally:
+        _prolonging.discard(session_id)
 
 
 async def list_sessions(user_id: int) -> list[dict]:

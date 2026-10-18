@@ -111,7 +111,9 @@ async def test_delete_account_revokes_apple(client, apple):
     r = client.post("/api/auth/apple", json={"id_token": id_token(), "code": "c-1", "nonce": "raw-nonce"})
     uid = await find_user("apple", "001234.abc")
     h = {"Authorization": "Bearer " + r.json()["token"]}
-    assert client.post("/api/me/delete", json={"confirm": True}, headers=h).status_code == 200
+    assert client.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h).status_code == 200
+    import privacy                                                     # удаление насовсем — через 7 дней (#201)
+    await privacy.erase(uid)
     url, data = apple[-1]
     assert url == apple_signin.REVOKE_URL and data["token"] == "rt-1"
     assert await apple_signin.revoke_for(uid) is False                 # токена больше нет

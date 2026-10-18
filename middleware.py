@@ -101,7 +101,8 @@ class GroupContextMiddleware(BaseMiddleware):
 
 
 class StatsMiddleware(BaseMiddleware):
-    """Сообщение боту в личку — событие «чат с ботом» для /stats (stats.py)."""
+    """Сообщение боту в личку — событие «чат с ботом» для /stats (stats.py);
+    после ответа — приветствие «Капибары+», если ещё не было (plus_welcome)."""
     async def __call__(self, handler, event, data):
         user = getattr(event, "from_user", None)
         chat = getattr(event, "chat", None)
@@ -109,6 +110,10 @@ class StatsMiddleware(BaseMiddleware):
                 and not is_anonymous(getattr(event, "text", None), data.get("raw_state")):
             import stats
             await stats.track(user.id, "bot")
+            result = await handler(event, data)
+            import plus_welcome                 # подарок своей группе — одно сообщение при первом заходе
+            plus_welcome.later(data.get("bot"), user.id)
+            return result
         return await handler(event, data)
 
 
@@ -119,13 +124,16 @@ class ConsentMiddleware(BaseMiddleware):
     /privacy, /deleteme, вход в приложение (/start login_…, кнопки login:), сами
     кнопки согласия и удаления; остальное не обрабатывается. В группах — молча.
 
+    Попросил удалить данные (privacy.erasing) — на всё, вход в приложение тоже,
+    один ответ: данные удаляются, до какого дня можно попросить вернуть.
+
     Кто пользовался ботом до согласий, работает как раньше и один раз (на
     версию текста, отметка в базе — privacy.ask_once) после ответа бота
     получает то же сообщение.
     Стоит на message, callback_query и inline_query (bot.py)."""
 
     FREE_COMMANDS = ("deleteme", "privacy")
-    FREE_CALLBACKS = ("consent:", "erase:", "login:")
+    FREE_CALLBACKS = ("consent:", "erase:", "login:", "chan:ok:login:", "chan:later:login:")
 
     async def __call__(self, handler, event, data):
         user = data.get("event_from_user")
@@ -145,6 +153,11 @@ class ConsentMiddleware(BaseMiddleware):
 
     async def _blocked(self, handler, event, data):
         from aiogram.types import CallbackQuery, InlineQuery, InlineQueryResultsButton
+        import privacy
+        user = data.get("event_from_user")
+        due = await privacy.erasing(user.id)
+        if due:                                         # попросил удалить данные — только это
+            return await self._erasing(event, privacy.erasing_text(due))
         if isinstance(event, CallbackQuery):
             if (event.data or "").startswith(self.FREE_CALLBACKS):
                 return await handler(event, data)
@@ -163,7 +176,22 @@ class ConsentMiddleware(BaseMiddleware):
         if name in self.FREE_COMMANDS or (name == "start" and " login_" in text):
             return await handler(event, data)
         from handlers.privacy import ask_consent
-        await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name)
+        await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name,
+                          store=name == "start" and text.split()[1:] == ["ios"])
+        return None
+
+    async def _erasing(self, event, text: str):
+        from aiogram.types import CallbackQuery, InlineQuery, InlineQueryResultsButton
+        if isinstance(event, CallbackQuery):
+            await event.answer(text[:200], show_alert=True)
+            return None
+        if isinstance(event, InlineQuery):
+            await event.answer([], cache_time=0, is_personal=True, button=InlineQueryResultsButton(
+                text="Твои данные удаляются", start_parameter="erasing"))
+            return None
+        chat = getattr(event, "chat", None)
+        if chat and chat.type == "private":
+            await event.answer("🗑 " + text)
         return None
 
     async def _remind(self, event, data, user_id: int):

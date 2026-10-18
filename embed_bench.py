@@ -150,7 +150,7 @@ async def run(keys: list[str] | None = None) -> str:
         results["gemini"] = await _gemini_run(hay, targets, questions)
     except Exception as e:
         results["gemini"] = {"error": f"{type(e).__name__}: {e}"}
-    # модели — во временную папку, если своя не задана (на Railway том маленький)
+    # модели — во временную папку, если своя не задана (на старом хостинге том был маленький)
     own_dir = os.environ.get("EMBED_DIR")
     if not own_dir:
         os.environ["EMBED_DIR"] = os.path.join(tempfile.gettempdir(), "uiboshki-models")

@@ -143,7 +143,7 @@ async def test_homework_and_files_api(db, client):
     c, headers = client
     hw = c.get("/api/homework", headers=headers).json()["items"]
     assert hw == [{"id": 1, "subject": "Анализ", "content": "задачи 1–5", "lesson_date": "2099-09-29",
-                   "created_at": hw[0]["created_at"], "has_file": True}]
+                   "created_at": hw[0]["created_at"], "has_file": True, "mine": hw[0]["mine"]}]
     files = {f["title"]: f["has_text"] for f in c.get("/api/files", headers=headers).json()["items"]}
     assert files == {"Лекция 1": True, "Фото": False}
 

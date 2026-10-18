@@ -164,7 +164,29 @@ async def fetch_schedule_raw(force: bool = False, group_id: int | None = None) -
         return _cache_data
     if not force and _fail_exc is not None and _fail_at is not None and now - _fail_at < RETRY_AFTER_FAIL:
         raise _fail_exc               # ни кэша, ни копии, и только что не вышло — не ждём снова 30 с
+    if not force and _fail_exc is None and await _from_backup():
+        return _cache_data
     return await asyncio.shield(_start_refresh())
+
+
+async def _from_backup() -> bool:
+    """Сразу после перезапуска (память пуста) — копия из базы, а свежее — в
+    фоне. Раньше первый заход ждал зеркало до 30 с (Никита 17.10, /status:
+    дедлайны, ДЗ и СДО по 30–35 с в первые минуты после деплоя)."""
+    global _cache_data, _cache_time, _ok_at
+    try:
+        from database import load_schedule_backup
+        saved = await load_schedule_backup()
+    except Exception as e:
+        logger.info(f"запасная копия расписания не прочиталась: {e!r}")
+        return False
+    if not saved:
+        return False
+    if _cache_data is None:           # пока читали, могло скачаться свежее
+        _cache_data, _ok_at = saved[0], datetime.fromisoformat(saved[1])
+        _cache_time = time.monotonic() - SCHEDULE_CACHE_TTL_SECONDS - 1
+        _start_refresh()
+    return True
 
 
 async def _raw(group_id: int | None = None, force: bool = False) -> bytes:

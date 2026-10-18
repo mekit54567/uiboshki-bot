@@ -13,6 +13,7 @@ import 'achievements/ui.dart' show appNavigator;
 import 'api/api.dart';
 import 'plus/plus.dart';
 import 'screens/login.dart';
+import 'screens/sdo_relogin.dart';
 import 'screens/shell.dart';
 import 'theme/app_icon.dart';
 import 'theme/app_theme.dart';
@@ -136,6 +137,7 @@ class _UiboAppState extends State<UiboApp> {
   Future<void> _logout() async {
     await widget.api.logout();
     unawaited(HomeWidgets.clear()); // чужому телефону — без расписания на экране
+    unawaited(SdoRelogin.forget()); // и без единого входа МИРЭА в окне СДО
     if (mounted) setState(() => _loggedIn = false);
   }
 

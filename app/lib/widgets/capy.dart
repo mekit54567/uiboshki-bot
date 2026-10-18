@@ -18,7 +18,7 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import 'common.dart';
 
-enum CapyPose { morning, day, evening, night, joy, sad, splash, surf }
+enum CapyPose { morning, day, evening, night, joy, sad, splash, surf, angry }
 
 /// Часы — как в WebApp (core.js: capyForHour).
 CapyPose poseAt(int hour) {

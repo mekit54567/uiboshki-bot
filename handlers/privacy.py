@@ -1,6 +1,8 @@
 """152-ФЗ в боте (privacy.py): согласие на обработку персональных данных
 кнопкой «Даю согласие», /privacy — ссылки на тексты, /deleteme — удалить
-все свои данные с подтверждением.
+все свои данные: фразой privacy.ERASE_PHRASE, полностью — через 7 дней
+(до этого староста может вернуть — /undelete). Кто ещё не дал согласия —
+кнопкой и сразу.
 
 Согласие спрашивает ConsentMiddleware (middleware.py): новый человек до
 «Даю согласие» получает только это сообщение (и /privacy, /deleteme); после
@@ -10,6 +12,7 @@
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 router = Router()
@@ -45,19 +48,26 @@ def consent_text(new: bool = False, first_name: str = "") -> str:
 
 CONSENT_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="✅ Даю согласие", callback_data="consent:pd")]])
+# пришёл по ссылке из приложения в App Store (/start ios) — приветствие потом без строк об оплате
+CONSENT_KB_IOS = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="✅ Даю согласие", callback_data="consent:pd:ios")]])
 
 
-async def ask_consent(bot, chat_id: int, new: bool = False, first_name: str = ""):
-    await bot.send_message(chat_id, consent_text(new, first_name), parse_mode="HTML", reply_markup=CONSENT_KB,
-                           disable_web_page_preview=True)
+async def ask_consent(bot, chat_id: int, new: bool = False, first_name: str = "", store: bool = False):
+    await bot.send_message(chat_id, consent_text(new, first_name), parse_mode="HTML",
+                           reply_markup=CONSENT_KB_IOS if store else CONSENT_KB, disable_web_page_preview=True)
 
 
-@router.callback_query(F.data == "consent:pd")
+@router.callback_query(F.data.in_({"consent:pd", "consent:pd:ios"}))
 async def consent_given(callback: CallbackQuery, state: FSMContext | None = None):
     import privacy
     user = callback.from_user
     first = await privacy.blocked(user.id)          # новый — дальше приветствие, как у /start
-    await privacy.give(user.id, "pd", "bot")
+    try:
+        await privacy.give(user.id, "pd", "bot")
+    except privacy.Erasing as e:
+        await callback.answer(str(e)[:200], show_alert=True)
+        return
     consent, policy = links()
     try:
         await callback.message.edit_text(
@@ -69,7 +79,7 @@ async def consent_given(callback: CallbackQuery, state: FSMContext | None = None
     await callback.answer("Готово")
     if first:
         from handlers.start import welcome
-        await welcome(callback.message, user, state)
+        await welcome(callback.message, user, state, store=callback.data.endswith(":ios"))
 
 
 @router.message(Command("privacy"))
@@ -91,17 +101,79 @@ DELETE_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Отмена", callback_data="erase:no")]])
 
 
+class EraseFlow(StatesGroup):
+    phrase = State()
+
+
 @router.message(Command("deleteme"))
-async def cmd_deleteme(message: Message):
+async def cmd_deleteme(message: Message, state: FSMContext):
+    import privacy
     _, policy = links()
+    uid = message.from_user.id
+    due = await privacy.erasing(uid)
+    if due:
+        await message.answer("🗑 " + privacy.erasing_text(due))
+        return
+    if await privacy.blocked(uid):      # согласия ещё не давал — хранить нечего, кнопкой и сразу
+        await message.answer(
+            "🗑 <b>Удалить все твои данные?</b>\n\nСогласия ты ещё не давал — сотру то немногое, что "
+            f"есть: id и отметки о входе. Подробнее — в {policy}.",
+            parse_mode="HTML", reply_markup=DELETE_KB, disable_web_page_preview=True)
+        return
+    await state.set_state(EraseFlow.phrase)
     await message.answer(
         "🗑 <b>Удалить все твои данные?</b>\n\n"
         "Сотру профиль, группу, настройки, вход в СДО, историю баллов и посещений, личные "
-        "дедлайны, напоминания, устройства и входы через VK и Яндекс, согласия. "
+        "дедлайны, напоминания, устройства и входы через VK, Яндекс и Apple, согласия. "
         "Общее для группы (дедлайны старосты, файлы, ДЗ) останется, но без твоего имени.\n\n"
-        "Отменить нельзя. Если потом напишешь боту — начнём с нуля.\n"
-        f"Подробнее — в {policy}.",
-        parse_mode="HTML", reply_markup=DELETE_KB, disable_web_page_preview=True)
+        f"Сразу — выход со всех устройств и из СДО, рассылки и ИИ остановятся. Полностью — через "
+        f"{privacy.ERASE_DAYS} дней: если удалил по ошибке, до этого можно попросить вернуть "
+        f"({privacy.CONTACT}), без гарантии.\n\n"
+        f"Чтобы удалить, отправь фразой: <code>{privacy.ERASE_PHRASE}</code>\n"
+        f"Передумал — /cancel. Подробнее — в {policy}.",
+        parse_mode="HTML", disable_web_page_preview=True)
+
+
+@router.message(EraseFlow.phrase)
+async def erase_phrase(message: Message, state: FSMContext):
+    import privacy
+    await state.clear()
+    if not privacy.phrase_ok(message.text or ""):
+        await message.answer("Фраза не совпала — ничего не удаляю. Начать заново — /deleteme.")
+        return
+    due = await privacy.request_erase(message.from_user.id, message.bot)
+    await message.answer(
+        f"✅ Готово: вход на всех устройствах и в СДО удалён, рассылки остановлены. Полностью "
+        f"всё сотру {privacy.fmt_day(due)}, из ночных копий базы — "
+        f"{privacy.backup_texts()['BACKUP_ERASE']}.\n\n"
+        f"Удалил по ошибке — напиши {privacy.CONTACT} до {privacy.fmt_day(due)}: вернём вручную, "
+        "если получится, без гарантии.")
+
+
+@router.message(Command("undelete"))
+async def cmd_undelete(message: Message):
+    """Вернуть данные по заявке (староста): /undelete <id>, до полного стирания."""
+    from config import is_starosta
+    import privacy
+    if not is_starosta(message.from_user.id):
+        return
+    args = (message.text or "").split()[1:]
+    if not args or not args[0].isdigit():
+        await message.answer("Кого вернуть: /undelete <id> — id из сообщения об удалении.")
+        return
+    uid = int(args[0])
+    due = await privacy.erasing(uid)
+    if not due or not await privacy.undo_erase(uid):
+        await message.answer("Этого человека нет среди удаляющих: уже стёрт или не просил.")
+        return
+    await message.answer(
+        f"✅ Вернул <code>{uid}</code>: профиль и данные на месте. Входы на устройствах и в СДО были "
+        "удалены сразу — войдёт заново; согласие бот спросит снова.", parse_mode="HTML")
+    try:
+        await message.bot.send_message(uid, "↩️ Твои данные вернули. Войди в приложение и СДО заново "
+                                            "и дай согласие на обработку данных — бот спросит.")
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("erase:"))
@@ -111,8 +183,12 @@ async def erase_decision(callback: CallbackQuery):
         await callback.answer()
         return
     import privacy
+    if not await privacy.blocked(callback.from_user.id) or await privacy.erasing(callback.from_user.id):
+        await callback.message.edit_text("Удаление — через /deleteme, фразой.")   # старая кнопка
+        await callback.answer()
+        return
     await privacy.erase(callback.from_user.id)
     await callback.message.edit_text(
-        "✅ Готово: всё о тебе удалено. Из ночных копий базы оно уйдёт при ежемесячной чистке копий.\n\n"
-        "Сообщения в этом чате можешь удалить сам. Если напишешь снова — начнём с нуля.")
+        "✅ Готово: всё о тебе удалено. Сообщения в этом чате можешь удалить сам. "
+        "Если напишешь снова — начнём с нуля.")
     await callback.answer("Удалено")

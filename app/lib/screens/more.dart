@@ -1,6 +1,7 @@
 // «Ещё» (дизайн 23Б, владелец 09.10): сверху кто я и группа, под ними баллы
 // БРС одной цифрой и одной фразой (нажал — «Учёба»), ниже настройки плитками
 // по две; действия с пояснениями — строками под плитками.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -9,6 +10,7 @@ import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
 import '../api/models.dart';
+import '../plus/donate.dart';
 import '../plus/plus_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
@@ -17,6 +19,7 @@ import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
 import 'look_screen.dart';
 import 'notify.dart';
+import 'rating.dart';
 import 'sdo_connect.dart';
 import 'security.dart';
 import 'study.dart';
@@ -76,6 +79,11 @@ class MoreScreen extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: Space.l),
             child: AchievementsRow(),
+          ),
+          const SizedBox(height: Space.s),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.l),
+            child: RatingRow(api: api, onUnauthorized: onUnauthorized),
           ),
           const SizedBox(height: Space.m),
           Padding(
@@ -168,10 +176,40 @@ class MoreScreen extends StatelessWidget {
                     Divider(height: 1, color: p.line),
                   ],
                   _MenuRow(
+                    icon: Icons.devices_other_outlined,
+                    title: 'Капибара в других местах',
+                    sub: 'Telegram-бот, браузер и компьютер',
+                    onTap: () async {
+                      final l = await appLinks(api);
+                      if (context.mounted) showLinksSheet(context, places(l), title: 'Капибара в других местах');
+                    },
+                  ),
+                  Divider(height: 1, color: p.line),
+                  _MenuRow(
                     icon: Icons.group_add_outlined,
                     title: 'Позвать',
                     sub: 'готовое сообщение со ссылкой — другу или в чат группы',
                     onTap: () => showInviteSheet(context, api),
+                  ),
+                  // «Поддержать проект» — строкой, не плиткой (Никита 18.10: без перегруза); на iPhone — нет
+                  FutureBuilder<bool>(
+                    future: donateShown(api),
+                    builder: (context, snap) => snap.data != true
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              Divider(height: 1, color: p.line),
+                              KeyedSubtree(
+                                key: const Key('more:donate'),
+                                child: _MenuRow(
+                                  icon: Icons.favorite_border_rounded,
+                                  title: 'Поддержать проект',
+                                  sub: 'разово, сумма на выбор',
+                                  onTap: () => showDonateSheet(context, api),
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                   if (me['group'] != null && me['group']['own'] != true) ...[
                     Divider(height: 1, color: p.line),
@@ -241,6 +279,39 @@ class MoreScreen extends StatelessWidget {
         _url(l['contact']!),
       ),
   ];
+
+  /// «Капибара в других местах» (5.97): бот, браузер и компьютер, канал —
+  /// без слов о цене (правило Apple 3.1.1). С iPhone бот открывается со
+  /// start=ios — приветствие без строк об оплате (handlers/start.py).
+  @visibleForTesting
+  static List<(IconData, String, String, String, String)> places(
+    Map<String, String> l, {
+    bool? ios,
+    bool web = kIsWeb,
+  }) {
+    final bot = l['bot'] ?? '';
+    final fromIos = ios ?? (!web && defaultTargetPlatform == TargetPlatform.iOS);
+    return [
+      if (bot.isNotEmpty)
+        (
+          Icons.send_outlined,
+          'Telegram-бот',
+          'Расписание в чате, напоминания до пары и приложение прямо в Telegram',
+          'Открыть',
+          fromIos ? '$bot?start=ios' : bot,
+        ),
+      if (!web)
+        (
+          Icons.laptop_mac_outlined,
+          'В браузере и на компьютере',
+          'uiboshki.ru/app — тот же вход, можно поставить на экран «Домой»',
+          'Открыть',
+          '$_origin/app',
+        ),
+      if ((l['news'] ?? '').isNotEmpty)
+        (Icons.campaign_outlined, 'Канал Капибары', 'Новости и обновления', 'Открыть', _url(l['news']!)),
+    ];
+  }
 
   /// «@имя» → https://t.me/имя
   static String _url(String v) => v.startsWith('@') ? 'https://t.me/${v.substring(1)}' : v;
@@ -1127,21 +1198,26 @@ class _AdminRequestState extends State<_AdminRequest> {
 }
 
 /// Лист «Новости и связь»: что за ссылка — и кнопка «Перейти», решает человек.
-Future<void> showLinksSheet(BuildContext context, List<(IconData, String, String, String, String)> links) {
+Future<void> showLinksSheet(
+  BuildContext context,
+  List<(IconData, String, String, String, String)> links, {
+  String title = 'Новости и связь',
+}) {
   final s = AppStyle.of(context);
   final p = s.p;
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: p.cardSolid,
     showDragHandle: true,
+    // прокрутка — на маленьком экране три строки «других мест» не влезали
     builder: (ctx) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.l),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Новости и связь', style: s.title(22)),
+            Text(title, style: s.title(22)),
             const SizedBox(height: Space.m),
             for (final (icon, title, sub, button, url) in links)
               Padding(

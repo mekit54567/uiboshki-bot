@@ -2,8 +2,10 @@
 Вопросы к ИИ: минутный лимит (ratelimit «ai») и дневной — по тарифу
 человека (plans.py, PLAN.md «ИИ и подписка»):
 
-  own  — своя группа: config.AI_DAILY_LIMIT (0 — без него), старостам — без;
-  sub  — подписка: config.AI_SUB_DAILY;
+  own  — своя группа без «Капибары+»: config.AI_DAILY_LIMIT (0 — без него);
+         Никите (config.is_starosta) — без лимитов, старостам групп — как всем;
+  unl  — безлимит от Никиты (/grant): без дневных лимитов, конспекты тоже;
+  sub  — «Капибара+», и подарок своей группе тоже: config.AI_SUB_DAILY;
   base — другие группы: проба AI_TRIAL_DAILY вопросов в день и не больше
          AI_TRIAL_DAY_TOTAL на всех за день (потолок пробы); новые конспекты —
          SUMMARY_WEEKLY в неделю (готовые читать — без лимита).
@@ -80,7 +82,9 @@ async def take(user_id: int, kind: str = "ask") -> str | None:
     async with locks.lock("ai_day"):
         counts = await today()
         n = counts.get(user_id, 0)
-        if plan == plans.OWN:
+        if plan == plans.UNL:
+            pass
+        elif plan == plans.OWN:
             limit = 0 if config.is_starosta(user_id) else config.AI_DAILY_LIMIT
             if limit > 0 and n >= limit:
                 return "day"
@@ -109,12 +113,14 @@ async def take(user_id: int, kind: str = "ask") -> str | None:
 
 async def left(user_id: int) -> dict | None:
     """Сколько вопросов к ИИ осталось сегодня: {"left", "limit"}; None —
-    дневного лимита нет (староста, AI_DAILY_LIMIT=0). Для строки на пустом
+    дневного лимита нет (Никита, безлимит, AI_DAILY_LIMIT=0). Для строки на пустом
     экране помощника в приложении — та же логика, что в take()."""
     import config
     import plans
     plan = await plans.plan_of(user_id)
     n = (await today()).get(user_id, 0)
+    if plan == plans.UNL:
+        return None
     if plan == plans.OWN:
         limit = 0 if config.is_starosta(user_id) else config.AI_DAILY_LIMIT
     elif plan == plans.SUB:

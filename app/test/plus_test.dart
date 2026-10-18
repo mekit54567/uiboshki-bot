@@ -147,6 +147,9 @@ void main() {
     phone(t);
     await t.pumpWidget(_more(fakeApi(overrides: {'GET /api/plus': _plus, 'GET /api/invite': _invite})));
     await settle(t);
+    // строка рейтинга (#216) сдвигает плитку ниже экрана — сначала докрутить
+    await t.scrollUntilVisible(find.byKey(const Key('more:plus')), 300, scrollable: find.byType(Scrollable).first);
+    await settle(t);
     await t.tap(find.byKey(const Key('more:plus')));
     await settle(t);
     expect(find.byType(PlusScreen), findsOneWidget);
@@ -245,6 +248,38 @@ void main() {
     await settle(t);
     expect(find.text('Подарок группе до 31 декабря'), findsOneWidget);
     expect(find.text('Платить не нужно — всё уже включено'), findsOneWidget);
+  });
+
+  testWidgets('безлимит — без цен и оплаты, ИИ «без ограничений»', (t) async {
+    // робот 18.10: у безлимита были цены 149/649 ₽, «Оплатить на сайте» и «до 100 вопросов»
+    phone(t);
+    var api = fakeApi(
+      overrides: {
+        'GET /api/plus': {..._plus, 'unlimited': true, 'unlimited_until': null},
+      },
+    );
+    await t.pumpWidget(_host(PlusScreen(api: api)));
+    await settle(t);
+    expect(find.text('У тебя безлимит навсегда'), findsOneWidget);
+    expect(find.text('ИИ без ограничений'), findsOneWidget);
+    expect(find.text('без дневных лимитов, навсегда'), findsOneWidget);
+    await _see(t, 'plus:invite');
+    expect(find.byKey(const Key('plus:pay')), findsNothing);
+    expect(find.byKey(const Key('plus:soon')), findsNothing);
+    expect(find.byKey(const Key('plus:offer')), findsNothing);
+    expect(find.byKey(const Key('plus:price:month')), findsNothing);
+    expect(find.textContaining('₽'), findsNothing);
+    expect(find.textContaining('100 вопросов'), findsNothing);
+
+    api = fakeApi(
+      overrides: {
+        'GET /api/plus': {..._plus, 'unlimited': true, 'unlimited_until': '2026-12-20'},
+      },
+    );
+    await t.pumpWidget(_host(PlusScreen(key: const Key('again'), api: api)));
+    await settle(t);
+    expect(find.text('У тебя безлимит до 20 декабря'), findsOneWidget);
+    expect(find.text('без дневных лимитов до 20 декабря'), findsOneWidget);
   });
 
   testWidgets('касса не подключена — «Оплата скоро заработает», кнопки оплаты нет', (t) async {

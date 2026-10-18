@@ -27,6 +27,10 @@ bool get sdoWebLoginAvailable =>
 Future<String?> systemSdoLogin(BuildContext context) =>
     Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => const SdoLoginPage()));
 
+/// MoodleSession из куки окна (HttpOnly — через канал uiboshki/cookies); '' — нет.
+Future<String> readSdoCookie() async =>
+    await _cookies.invokeMethod<String>('get', {'url': sdoBase, 'name': 'MoodleSession'}) ?? '';
+
 /// Человек уже вошёл: открыта страница СДО, и это не вход (единый вход МИРЭА — на другом адресе).
 bool sdoLoggedIn(Uri? url) => url != null && url.host == Uri.parse(sdoBase).host && !url.path.startsWith('/login');
 
@@ -55,7 +59,7 @@ class _SdoLoginPageState extends State<SdoLoginPage> {
 
   Future<void> _check(String? url) async {
     if (_done || !sdoLoggedIn(Uri.tryParse(url ?? ''))) return;
-    final v = await _cookies.invokeMethod<String>('get', {'url': sdoBase, 'name': 'MoodleSession'}) ?? '';
+    final v = await readSdoCookie();
     if (v.isEmpty || _done || !mounted) return;
     _done = true;
     Navigator.pop(context, v);

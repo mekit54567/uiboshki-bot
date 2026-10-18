@@ -257,6 +257,7 @@ async def test_spare_openrouter_model_when_gemini_limited(monkeypatch):
     monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", ["spare"])
     monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "gemini")     # своя группа — на Gemini (Ling только запасная)
     text = await gemini_solver.generate_from_image(b"img", "image/png", "реши", "система")
     assert text == "ответ Ling" and calls == ["main", "spare", "ling"]
     msg = sent[0]
@@ -274,3 +275,102 @@ async def test_spare_openrouter_model_when_gemini_limited(monkeypatch):
     with pytest.raises(gemini_solver.GeminiError, match="Лимит"):
         await gemini_solver.generate_text([{"role": "user", "content": "?"}], "s")
     assert "ling" not in calls
+
+
+@pytest.mark.asyncio
+async def test_ling_main_by_subscription(db, monkeypatch):
+    """18.10, Никита: Ling основная у всех (по умолчанию), Gemini — запасная.
+    На случай отката: /aimain plus — он и у кого «Капибара+», me — только
+    староста, gemini — никто; старое «group» в настройке — как по умолчанию."""
+    from config import STAROSTA_ID
+    from database import set_setting
+    from database import set_subscription_until
+    from database.groups import current_group, current_user
+    calls = []
+    ling_ok = {"v": True}
+
+    def handler(request):
+        if request.url.host == "openrouter.ai":
+            calls.append("ling")
+            if not ling_ok["v"]:
+                return httpx.Response(502, json={})
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ответ Ling"},
+                                                          "finish_reason": "stop"}]})
+        calls.append("gemini")
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "ответ Gemini"}]}}]})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(gemini_solver.httpx, "AsyncClient",
+                        lambda *a, **kw: real_client(*a, transport=httpx.MockTransport(handler), **kw))
+    monkeypatch.setattr(gemini_solver, "GEMINI_API_KEY", "k")
+    monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", [])
+    monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
+    monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")
+    ask = lambda **kw: gemini_solver.generate_text([{"role": "user", "content": "?"}], "s", **kw)  # noqa: E731
+
+    gemini_solver.answered.clear()
+    await set_setting("ai_main", "plus")
+    await set_subscription_until(555, "2099-01-01")
+    tok_g, tok_u = current_group.set(99999), current_user.set(555)         # у 555 — «Капибара+»
+    try:
+        assert await ask() == "ответ Ling" and calls == ["ling"]
+        calls.clear()
+        assert await ask(fallback=False) == "ответ Gemini" and calls == ["gemini"]   # классификатор — Gemini
+        calls.clear()
+        ling_ok["v"] = False                                                # Ling упала — отвечает Gemini
+        assert await ask() == "ответ Gemini" and calls == ["ling", "gemini"]
+        ling_ok["v"] = True
+        assert gemini_solver.answered["ling"] == 1 and gemini_solver.answered["ling_failed"] == 1
+
+        calls.clear()
+        current_user.set(777)                                               # без подписки — Gemini
+        assert await ask() == "ответ Gemini" and calls == ["gemini"]
+        current_user.set(STAROSTA_ID)                                       # Никита — Ling
+        assert await ask() == "ответ Ling"
+        current_user.set(777)
+
+        calls.clear()
+        await set_setting("ai_main", "all")                                 # /aimain all — всем
+        assert await ask() == "ответ Ling" and calls == ["ling"]
+        await set_setting("ai_main", "group")                               # старое значение — по умолчанию
+        assert await gemini_solver.ai_main() == "all"
+
+        await set_setting("ai_main", "me")                                  # /aimain me: только староста
+        current_user.set(555)
+        assert await ask() == "ответ Gemini"
+        current_user.set(STAROSTA_ID)
+        assert await ask() == "ответ Ling"
+
+        await set_setting("ai_main", "gemini")                              # /aimain gemini — никто
+        calls.clear()
+        assert await ask() == "ответ Gemini" and calls == ["gemini"]
+    finally:
+        current_group.reset(tok_g)
+        current_user.reset(tok_u)
+
+
+@pytest.mark.asyncio
+async def test_aimain_command(db, monkeypatch):
+    """/aimain у старосты меняет, кому Ling основная, без деплоя; чужим — молчит."""
+    from types import SimpleNamespace
+
+    from config import STAROSTA_ID
+    from handlers.group_tools import cmd_aimain
+    monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")
+    sent = []
+
+    async def answer(text, **kw):
+        sent.append(text)
+
+    msg = lambda uid, text: SimpleNamespace(from_user=SimpleNamespace(id=uid), text=text, answer=answer)  # noqa: E731
+    await cmd_aimain(msg(STAROSTA_ID, "/aimain"))
+    assert "Ling основная: <b>все</b>" in sent[-1] and "только ты" in sent[-1]
+    assert "основная — Gemini" not in sent[-1]                       # 18.10: Ling у всех
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "")
+    assert await gemini_solver.ai_main() == "all"
+    await cmd_aimain(msg(STAROSTA_ID, "/aimain me"))
+    assert "только старосты" in sent[-1] and await gemini_solver.ai_main() == "me"
+    await cmd_aimain(msg(424242, "/aimain gemini"))                 # не староста — ничего
+    assert len(sent) == 2 and await gemini_solver.ai_main() == "me"

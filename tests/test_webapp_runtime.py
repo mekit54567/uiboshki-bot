@@ -1,6 +1,6 @@
 """
 WebApp живёт в том же процессе, что и бот (bot.start_webapp): одна служба
-на Railway, один том с SQLite. Плюс кнопка меню бота открывает WebApp сама
+на хостинге, один диск с SQLite. Плюс кнопка меню бота открывает WebApp сама
 (без BotFather), и чат WebApp работает на Gemini, если ключа DeepSeek нет.
 """
 import asyncio

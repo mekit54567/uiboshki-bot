@@ -34,15 +34,16 @@ def is_submitted(status: str | None) -> bool:
 
 async def mark(user_id: int, cmids) -> int:
     """Отметить сданными дедлайны с этими заданиями (cmid). → сколько отмечено."""
-    from database import get_active_deadlines, set_deadline_done
+    from database import get_active_deadlines, mark_deadline_done
     cmids = {int(c) for c in cmids if c}
     if not cmids:
         return 0
     n = 0
-    for d in await get_active_deadlines(user_id):
-        if not d.get("done") and cmid_of(d.get("description")) in cmids:
-            await set_deadline_done(d["id"], user_id, True)
-            n += 1
+    for d in await get_active_deadlines(user_id, include_done=True):
+        if cmid_of(d.get("description")) in cmids:
+            # и поверх своей галочки: подтверждение СДО идёт в опыт (xp.py)
+            await mark_deadline_done(d["id"], user_id, via="sdo")
+            n += not d.get("done")
     if n:
         logger.info(f"СДО: {user_id} — {n} дедлайн(ов) отмечено сданными по журналу")
     return n

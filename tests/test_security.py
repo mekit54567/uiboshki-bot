@@ -19,6 +19,32 @@ def test_passphrase_key_and_rotation(monkeypatch):
     assert sdo_accounts.decrypt(new) is None                      # без фразы не прочитать
 
 
+@pytest.mark.asyncio
+async def test_rotate_all_on_new_key(db, monkeypatch):
+    """152-ФЗ, 16.10: задали отдельный ключ — при запуске все входы (и
+    устаревшие) перешифровываются, не дожидаясь проверки; /status больше не
+    предупреждает про ключ от BOT_TOKEN."""
+    import health
+    from database import get_sdo_sessions, save_sdo_session, set_sdo_status
+    monkeypatch.delenv("SDO_CRYPT_KEY", raising=False)
+    monkeypatch.delenv("SDO_CRYPT_PASSPHRASE", raising=False)
+    await save_sdo_session(1, sdo_accounts.encrypt("cookie-one-0123456789"))
+    await save_sdo_session(2, sdo_accounts.encrypt("cookie-two-0123456789"))
+    await set_sdo_status(2, "expired")
+    assert "ключом от BOT_TOKEN" in await health.report()
+    assert await sdo_accounts.rotate_all() == {"rotated": 0, "unreadable": 0}
+
+    monkeypatch.setenv("SDO_CRYPT_KEY", "-" * 43 + "=")            # 32 байта в base64 — годный ключ Fernet
+    assert await sdo_accounts.rotate_all() == {"rotated": 2, "unreadable": 0}
+    rows = await get_sdo_sessions("ok") + await get_sdo_sessions("expired")
+    assert all(not sdo_accounts.needs_rotation(r["cookie_enc"]) for r in rows)
+    assert {sdo_accounts.decrypt(r["cookie_enc"]) for r in rows} == {"cookie-one-0123456789", "cookie-two-0123456789"}
+    assert "ключом от BOT_TOKEN" not in await health.report()
+    monkeypatch.setenv("BOT_TOKEN", "другой")                      # токен бота больше не нужен для куки
+    monkeypatch.setattr(sdo_accounts, "BOT_TOKEN", "другой")
+    assert sdo_accounts.decrypt(rows[0]["cookie_enc"]) is not None
+
+
 def test_rate_limit():
     ratelimit.reset()
     assert all(ratelimit.allow("submit", 1) for _ in range(6))
@@ -43,8 +69,8 @@ def test_ratelimit_forgets_stale_keys(monkeypatch):
 @pytest.mark.asyncio
 async def test_ai_daily_limit_switch(db, monkeypatch):
     """AI_DAILY_LIMIT: 0 — без дневного лимита (но счёт идёт — для /stats);
-    задан — после N вопросов за календарный день МСК «day»; старосте не
-    действует; счёт в базе — деплой его не обнуляет; новый день — заново."""
+    задан — после N вопросов за календарный день МСК «day»; Никите
+    (config.is_starosta) не действует; счёт в базе — деплой его не обнуляет; новый день — заново."""
     import ai_quota
     import config
     import database.homework
@@ -55,6 +81,7 @@ async def test_ai_daily_limit_switch(db, monkeypatch):
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)      # минутный — не о том
     await db.upsert_user(555, "u", "U")
     await db.set_user_group(555, config.HOME_GROUP_ID)                     # своя группа — тариф own
+    await db.set_setting("plus:gift", "off")                               # (без подарка «Капибары+»)
     for _ in range(5):
         assert await ai_quota.gate(555) is None                            # по умолчанию выключен
     assert (await ai_quota.today())[555] == 5

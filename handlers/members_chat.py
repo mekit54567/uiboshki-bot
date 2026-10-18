@@ -22,7 +22,7 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     if status not in ("member", "administrator") or not config.is_starosta(event.from_user.id):
         return
     if config.GROUP_CHAT_ID and config.GROUP_CHAT_ID != event.chat.id:
-        return                                  # чат задан в Railway — он главнее
+        return                                  # чат задан в переменных хостинга — он главнее
     if await members.chat_id() == event.chat.id:
         return
     await set_setting("group_chat_id", str(event.chat.id))

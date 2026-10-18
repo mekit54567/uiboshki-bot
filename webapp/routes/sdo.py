@@ -22,6 +22,7 @@ router = APIRouter()
 class SdoConnect(BaseModel):
     cookie: str
     agree: bool = False    # галочка «Даю согласие» у поля куки (152-ФЗ, privacy.py)
+    via: str = ""          # page | silent | paste — от этого зависит, что бот напишет, когда вход устареет
 
 
 class SdoFile(BaseModel):
@@ -71,7 +72,8 @@ async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
     if body.agree:
         from webapp.routes.legal import _via
         await privacy.give(user["id"], "sdo", _via(x_telegram_init_data, x_app))
-    await save_sdo_session(user["id"], sdo_accounts.encrypt(cookie), sdo_accounts.first_check_at())
+    via = body.via if body.via in sdo_accounts.VIA else "paste"
+    await save_sdo_session(user["id"], sdo_accounts.encrypt(cookie), sdo_accounts.first_check_at(), via)
     import sdo_grades
     sdo_grades.forget(user["id"])
     return await sdo_accounts.status_for(user["id"])

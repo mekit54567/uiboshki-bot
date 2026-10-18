@@ -39,10 +39,12 @@ async def db(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _write_through(monkeypatch):
     """События /stats пишутся пачкой раз в 10 с, а users — не чаще раза в
-    10 минут (Amvera, v5.89.7); в тестах — сразу, как раньше. Свои тесты на
-    это — test_db_writes.py."""
+    10 минут (Amvera, v5.89.7), отметки «заходил» — в фоне (v5.89.20); в
+    тестах — сразу, как раньше. Свои тесты на это — test_db_writes.py."""
+    import database._conn
     import database.service
     import database.users
+    monkeypatch.setattr(database._conn, "WAIT", True)
     monkeypatch.setattr(database.service, "EVENT_FLUSH_SECONDS", 0)
     monkeypatch.setattr(database.users, "UPSERT_EVERY", 0)
 
@@ -103,6 +105,16 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
+def _no_plus_welcome(monkeypatch):
+    """Приветствие «Капибары+» при первом заходе (plus_welcome) шлёт лишнее
+    сообщение — в чужих тестах оно мешало бы считать ответы; своё —
+    tests/test_grant.py."""
+    import plus_welcome
+    monkeypatch.setattr(plus_welcome, "AUTO", False)
+    plus_welcome._checked.clear()
+
+
+@pytest.fixture(autouse=True)
 def _consent_given(request, monkeypatch):
     """152-ФЗ: без согласия бот и API закрыты (privacy.blocked). Тесты
     остального ходят от имени тех, кто согласие дал; сама блокировка —
@@ -128,9 +140,10 @@ def _fresh_rate_limits():
     import gemini_solver
     gemini_solver._primary_rest_until = 0.0     # «основная модель отдыхает» после 429 — между тестами не тащим
     gemini_solver._missing.clear()              # и пропавшие запасные
-    spare = gemini_solver.AI_SPARE_MODEL
+    spare, main = gemini_solver.AI_SPARE_MODEL, gemini_solver.AI_MAIN
     gemini_solver.AI_SPARE_MODEL = ""           # запасная через OpenRouter — только где тест её включил
+    gemini_solver.AI_MAIN = "gemini"            # Ling основной — тоже (test_ling_main_for_own_group)
     yield
-    gemini_solver.AI_SPARE_MODEL = spare
+    gemini_solver.AI_SPARE_MODEL, gemini_solver.AI_MAIN = spare, main
     ratelimit.reset()
     mirea_schedule_api.reset_ical_cache()

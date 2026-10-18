@@ -463,6 +463,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(privacy.purge,           "cron", hour=4, minute=25)
     import referrals                           # «пригласи друга»: друг пользуется — обоим дни подписки
     scheduler.add_job(referrals.check_all,     "cron", hour=12, minute=17, args=[bot])
+    import group_award                         # группа месяца: 1-го числа — 7 дней «Капибары+» (5.100.7)
+    scheduler.add_job(group_award.award,       "cron", day=1, hour=12, minute=5, args=[bot])
     import health
     scheduler.add_job(health.alert_errors,     "interval", minutes=15, args=[bot])   # всплеск ошибок — старосте
     import stats

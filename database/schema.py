@@ -219,6 +219,34 @@ async def init_db():
                 "SELECT id, ? FROM deadlines WHERE done = 1",
                 (STAROSTA_ID,)
             )
+        try:        # via='sdo' — сдачу подтвердило СДО (sdo_done), а не галочка: в счёт опыта (xp.py)
+            await db.execute("ALTER TABLE deadline_done ADD COLUMN via TEXT")
+        except Exception:
+            pass  # уже есть
+        # Рейтинг (xp.py, 5.100.3): свой ник и «показывать меня в рейтинге»
+        # (по умолчанию нет). reviewed — Никита видел ник (/nicks), locked —
+        # свой ник ставить нельзя (после сброса).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS rating_profiles (
+                user_id   INTEGER PRIMARY KEY,
+                nick      TEXT,
+                show      INTEGER NOT NULL DEFAULT 0,
+                nick_at   TEXT,
+                reviewed  INTEGER NOT NULL DEFAULT 1,
+                locked    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        # «Показывать меня всем» (5.100.5): виден и тем, кто открыл группу из рейтинга
+        try:
+            await db.execute("ALTER TABLE rating_profiles ADD COLUMN show_all INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # колонка уже есть
+        # «Капибара №…» — ник для чужих групп, если свой не задан: случайный
+        # номер, без связи с id и именем (ревью 152-ФЗ 18.10)
+        try:
+            await db.execute("ALTER TABLE rating_profiles ADD COLUMN alias INTEGER")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -291,8 +319,10 @@ async def init_db():
         # своё время следующей проверки; первые проверки — через 50–59 мин
         # случайно, чтобы входы разошлись по часу, потом ровно 55.
         # share — согласие делиться дедлайнами СДО с группой (этап 1 (в)): по
-        # такому входу бот синхронизирует задания всей группы (group_sync.py)
-        for col in ("next_check_at TEXT", "jitter_left INTEGER DEFAULT 3", "share INTEGER DEFAULT 0"):
+        # такому входу бот синхронизирует задания всей группы (group_sync.py);
+        # via — как вошёл (page — страницей СДО в приложении, silent — приложение
+        # само обновило протухший вход, paste — вставкой куки; 5.102.0)
+        for col in ("next_check_at TEXT", "jitter_left INTEGER DEFAULT 3", "share INTEGER DEFAULT 0", "via TEXT"):
             try:
                 await db.execute(f"ALTER TABLE sdo_sessions ADD COLUMN {col}")
             except Exception:
@@ -456,6 +486,19 @@ async def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Реакции на пару (lesson_reactions.py, 5.100): одна на человека,
+        # счёт — группе. lesson — «начало|название», day — дата для чистки.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_reactions (
+                group_id  INTEGER NOT NULL,
+                lesson    TEXT NOT NULL,
+                user_id   INTEGER NOT NULL,
+                kind      TEXT NOT NULL,
+                day       TEXT NOT NULL,
+                PRIMARY KEY (group_id, lesson, user_id)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_lesson_reactions_day ON lesson_reactions(day)")
         # ── Лента "Подслушано" ───────────────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS feed_posts (
@@ -548,6 +591,16 @@ async def init_db():
                 PRIMARY KEY (user_id, kind, version)
             )
         """)
+        # «Удалить мои данные» (Никита 18.10): сразу — выход везде и вход в СДО,
+        # обработка встаёт (privacy.blocked); полностью стирает privacy.purge
+        # в день due — до него можно восстановить по заявке старосте (/undelete).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS erase_requests (
+                user_id      INTEGER PRIMARY KEY,
+                due          TEXT NOT NULL,
+                requested_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
         except Exception:
@@ -614,6 +667,20 @@ async def init_db():
                 paid_at    TEXT
             )
         """)
+        # «Поддержать проект» (billing.donate…): добровольные платежи — не
+        # подписка, дней не дают; как и payments, после «удалить мои данные»
+        # остаются без человека (payer_id NULL) — налоговый учёт.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS donations (
+                id         TEXT PRIMARY KEY,
+                provider   TEXT NOT NULL,
+                payer_id   INTEGER,
+                amount     INTEGER NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT DEFAULT (datetime('now')),
+                paid_at    TEXT
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS bonuses (
                 user_id  INTEGER NOT NULL,
@@ -622,6 +689,44 @@ async def init_db():
                 days     INTEGER NOT NULL,
                 at       TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (user_id, kind, key)
+            )
+        """)
+        # Ручные выдачи Никиты (/grant, plus_grant.py): безлимит (until NULL —
+        # навсегда), журнал всех продлений подписки (ручных, оплат, бонусов —
+        # чтобы «/grant off» снял только ручные дни) и отметка «приветствие
+        # «Капибары+» отправлено» (plus_welcome.py, один раз на человека).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_unlimited (
+                user_id    INTEGER PRIMARY KEY,
+                until      TEXT,
+                granted_by INTEGER,
+                at         TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_grants (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                by_id      INTEGER,
+                kind       TEXT NOT NULL,
+                source     TEXT,
+                days       INTEGER,
+                prev_until TEXT,
+                until      TEXT,
+                revoked    INTEGER DEFAULT 0,
+                at         TEXT DEFAULT (datetime('now')),
+                note       TEXT
+            )
+        """)
+        try:                       # приписка Никиты к выдаче (/grant @ник 3m Спасибо!)
+            await db.execute("ALTER TABLE plus_grants ADD COLUMN note TEXT")
+        except Exception:
+            pass  # колонка уже есть
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_plus_grants_user ON plus_grants(user_id)")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_welcome (
+                user_id INTEGER PRIMARY KEY,
+                at      TEXT DEFAULT (datetime('now'))
             )
         """)
         await db.execute("""
@@ -647,6 +752,31 @@ async def init_db():
                 ach_id   TEXT NOT NULL,
                 at       INTEGER NOT NULL,
                 PRIMARY KEY (user_id, ach_id)
+            )
+        """)
+        # Жалобы на записи людей (ugc.py, правило Apple 1.2): заметка, ДЗ,
+        # файл, общий дедлайн → владельцу в бота «Удалить / Оставить».
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL,
+                kind        TEXT NOT NULL,
+                item_id     INTEGER NOT NULL,
+                author_id   INTEGER,
+                reason      TEXT DEFAULT '',
+                status      TEXT DEFAULT 'new',
+                created_at  TEXT DEFAULT (datetime('now')),
+                snapshot    TEXT,
+                appeal      TEXT DEFAULT ''
+            )
+        """)
+        # «Скрыть автора» — у себя: его записи больше не видны этому человеку
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_blocks (
+                user_id     INTEGER NOT NULL,
+                blocked_id  INTEGER NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, blocked_id)
             )
         """)
         await db.commit()

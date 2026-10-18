@@ -1,6 +1,8 @@
 // «Вход в СДО»: свой вход студента (MoodleSession) — баллы, работы и сдача
 // файлом. Как лист СДО в WebApp (js/more.js): статус, подключить по шагам,
 // делиться заданиями с группой, отключить.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +16,7 @@ import 'files.dart';
 import '../api/links.dart';
 import 'legal.dart';
 import 'sdo_login.dart';
+import 'sdo_relogin.dart';
 
 /// Что даёт свой вход — без него экран объясняет, зачем подключаться.
 const sdoPerks = [
@@ -78,7 +81,9 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
   Future<void> _load() async {
     try {
       final r = await widget.api.get('/sdo/status');
-      if (mounted) setState(() => _st = Map<String, dynamic>.from(r));
+      if (!mounted) return;
+      setState(() => _st = Map<String, dynamic>.from(r));
+      if (r['state'] == 'expired' && r['shared'] != true && _web && !_silent) unawaited(_trySilent());
     } on ApiError catch (e) {
       if (mounted) setState(() => _loadError = e.message);
     } catch (e) {
@@ -104,15 +109,17 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
     }
   }
 
-  Future<void> _connect() async {
+  Future<void> _connect({String via = 'paste'}) async {
     final v = _cookie.text.trim();
     if (v.isEmpty || !_agree) return;
     tick();
     FocusScope.of(context).unfocus();
-    await _act(() => widget.api.post('/sdo/connect', {'cookie': v, 'agree': true}));
+    await _act(() => widget.api.post('/sdo/connect', {'cookie': v, 'agree': true, 'via': via}));
     if (_st?['state'] == 'ok' && _error == null) {
       _cookie.clear();
       HapticFeedback.mediumImpact();
+      // вошёл страницей — потом протухший вход приложение обновит само (sdo_relogin.dart)
+      await (via == 'page' ? SdoRelogin.rememberPageLogin() : SdoRelogin.forget());
     }
   }
 
@@ -122,7 +129,22 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
     final v = await (widget.sdoLogin ?? systemSdoLogin)(context);
     if (v == null || v.isEmpty || !mounted) return;
     _cookie.text = v;
-    await _connect();
+    await _connect(via: 'page');
+  }
+
+  /// Вход устарел, а МИРЭА, может, ещё помнит — пробуем молча, пока карточка
+  /// говорит «Обновляю вход…»; не вышло — обычная кнопка «Войти в СДО».
+  bool _silent = false;
+  Future<void> _trySilent() async {
+    if (!await SdoRelogin.due() || !mounted) return;
+    setState(() => _silent = true);
+    final ok = await SdoRelogin.run(context, widget.api);
+    if (!mounted) return;
+    setState(() => _silent = false);
+    if (ok) {
+      await _load();
+      if (mounted) showToast(context, 'Вход в СДО обновлён', kind: ToastKind.done);
+    }
   }
 
   Future<void> _paste() async {
@@ -140,7 +162,9 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
       cancel: 'Оставить',
       danger: true,
     );
-    if (ok) await _act(() => widget.api.post('/sdo/disconnect'));
+    if (!ok) return;
+    await _act(() => widget.api.post('/sdo/disconnect'));
+    if (_st?['state'] == 'off') await SdoRelogin.forget();
   }
 
   Future<void> _share(bool v) async {
@@ -196,6 +220,11 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
             color: p.ok,
             title: 'Подключено, работает',
             text: shared ? 'Вход старосты из настроек бота' : checkedAgo(st['checked_at'] as String?),
+          ),
+          'expired' when _silent => _StatusCard(
+            color: p.muted,
+            title: 'Обновляю вход…',
+            text: 'Если МИРЭА тебя помнит, пароль не понадобится',
           ),
           'expired' => _StatusCard(
             color: p.danger,
@@ -345,7 +374,7 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
                 foregroundColor: p.onAccent,
                 shape: const StadiumBorder(),
               ),
-              onPressed: _busy || !_agree ? null : (_web && !_manual ? _byPage : _connect),
+              onPressed: _busy || _silent || !_agree ? null : (_web && !_manual ? _byPage : _connect),
               child: Text(
                 _busy
                     ? 'Проверяю…'

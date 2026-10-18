@@ -24,11 +24,26 @@ async def give_consent(user_id: int, kind: str, version: str, via: str):
         await db.commit()
 
 
+async def revoke_consent(user_id: int, kind: str):
+    """Отозвал отдельное согласие (выключил «Показывать меня группе» в рейтинге)."""
+    async with connect() as db:
+        await db.execute("DELETE FROM consents WHERE user_id=? AND kind=?", (user_id, kind))
+        await db.commit()
+
+
 async def has_consent(user_id: int, kind: str, version: str) -> bool:
     async with connect() as db:
         row = await (await db.execute(
             "SELECT 1 FROM consents WHERE user_id=? AND kind=? AND version=?",
             (user_id, kind, version))).fetchone()
+        return row is not None
+
+
+async def has_any_consent(user_id: int, kind: str = "pd") -> bool:
+    """Давал согласие хоть какой-то версии текста."""
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT 1 FROM consents WHERE user_id=? AND kind=?", (user_id, kind))).fetchone()
         return row is not None
 
 
@@ -74,6 +89,9 @@ AUTHOR_COLUMNS = (
     ("votes", "created_by"),
     ("file_summaries", "created_by"),
     ("group_admins", "added_by"),
+    ("plus_grants", "by_id"),             # кто выдал (Никита) — запись того, кому выдали, остаётся
+    ("plus_unlimited", "granted_by"),
+    ("reports", "author_id"),
 )
 
 
@@ -109,6 +127,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         done["deadlines"] = cur.rowcount
         await db.execute("UPDATE deadlines SET created_by=0 WHERE created_by=?", (uid,))
 
+        # убранная по жалобе запись (ugc.py) хранится для спора — с автором уходят она и его объяснение
+        await db.execute("UPDATE reports SET snapshot=NULL, appeal='' WHERE author_id=?", (uid,))
         for table, col in AUTHOR_COLUMNS:
             if col in await _columns(db, table):
                 await db.execute(f"UPDATE {table} SET {col}=NULL WHERE {col}=?", (uid,))
@@ -119,9 +139,11 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         # Оплаты — налоговый учёт, хранятся и дальше, но без человека; кто кого
         # пригласил — стирается, у пригласившего остаётся только счёт в bonuses.
         await db.execute("UPDATE payments SET payer_id=NULL WHERE payer_id=?", (uid,))
+        await db.execute("UPDATE donations SET payer_id=NULL WHERE payer_id=?", (uid,))
         cur = await db.execute("DELETE FROM referrals WHERE friend_id=? OR inviter_id=?", (uid, uid))
         if cur.rowcount:
             done["referrals"] = cur.rowcount
+        await db.execute("DELETE FROM user_blocks WHERE blocked_id=?", (uid,))   # его скрыли — забыть
 
         for table in await user_tables(db):
             cur = await db.execute(f"DELETE FROM {table} WHERE user_id=?", (uid,))
@@ -129,7 +151,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
                 done[table] = cur.rowcount
 
         # Настройки: свои ключи и счётчики ИИ (JSON {id: число} по дням и неделям).
-        await db.execute("DELETE FROM settings WHERE key IN (?, ?)", (f"goals:{uid}", f"member:{uid}"))
+        await db.execute("DELETE FROM settings WHERE key IN (?, ?, ?)",
+                         (f"goals:{uid}", f"member:{uid}", f"login_channel:{uid}"))
         rows = await (await db.execute(
             "SELECT key, value FROM settings WHERE key LIKE 'ai_day:%' OR key LIKE 'ai_sum:%'")).fetchall()
         for key, value in rows:
@@ -145,6 +168,54 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
 
 
 # ── Срок хранения ────────────────────────────────────────────────────────────
+
+# ── Отложенное удаление (7 дней на «удалил по ошибке») ──────────────────────
+
+# Кто попросил удалить данные, в эти 7 дней не попадает никуда: ни в рассылки,
+# ни в /stats, ни туда, где его видят другие (рейтинги, участники группы,
+# «показывать меня всем»). Общий фильтр для выборок по людям:
+#   f"SELECT … FROM users WHERE … AND {NOT_ERASING}"   (колонка user_id)
+# или NOT_ERASING_FOR("u.user_id") для своей колонки. По одному человеку —
+# privacy.blocked(uid).
+def NOT_ERASING_FOR(column: str) -> str:  # noqa: N802 — как константа рядом
+    return f"{column} NOT IN (SELECT user_id FROM erase_requests)"
+
+
+NOT_ERASING = NOT_ERASING_FOR("user_id")
+
+
+async def request_erase(user_id: int, due: str):
+    """Запрос «удалить мои данные»: сразу — согласия, входы на устройствах,
+    пуши и вход в СДО; остальное стирает erase_user в день due."""
+    async with connect() as db:
+        await db.execute("INSERT OR REPLACE INTO erase_requests (user_id, due) VALUES (?, ?)", (user_id, due))
+        for table in ("consents", "sessions", "push_subs", "sdo_sessions"):
+            await db.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+        # восстановили — согласие спросят заново, «был до согласий» больше не в счёт
+        await db.execute("UPDATE users SET legacy=0, consent_asked=NULL WHERE user_id=?", (user_id,))
+        await db.commit()
+
+
+async def erase_due(user_id: int) -> str | None:
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT due FROM erase_requests WHERE user_id=?", (user_id,))).fetchone()
+        return row[0] if row else None
+
+
+async def due_erasures(today: str) -> list[int]:
+    async with connect() as db:
+        rows = await (await db.execute(
+            "SELECT user_id FROM erase_requests WHERE due <= ?", (today,))).fetchall()
+        return [r[0] for r in rows]
+
+
+async def cancel_erase(user_id: int) -> bool:
+    async with connect() as db:
+        cur = await db.execute("DELETE FROM erase_requests WHERE user_id=?", (user_id,))
+        await db.commit()
+        return cur.rowcount > 0
+
 
 async def touch_seen(user_id: int):
     async with connect() as db:

@@ -156,7 +156,7 @@ async def restore_file(message: Message, state: FSMContext):
     doc = message.document
     if doc.file_size and doc.file_size > MAX_RESTORE_BYTES:
         await message.answer("❌ Файл больше 20 МБ — бот не может его скачать (ограничение Telegram). "
-                             "Такую копию можно положить на том Railway вручную.")
+                             "Такую копию можно положить на диск /data хостинга вручную.")
         return
     buf = await message.bot.download(doc)
     try:

@@ -15,11 +15,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
 import '../api/links.dart';
+import '../api/guest.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/brand_logo.dart';
 import '../widgets/capy.dart';
 import '../widgets/common.dart';
+import 'search.dart' show SearchScreen;
 
 /// Окно входа провайдера → адрес возврата (в тестах подменяется).
 typedef WebAuth = Future<String> Function(String url);
@@ -377,6 +379,20 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                             child: Text('Вход по коду доступа', style: s.body(14, color: p.muted)),
                           ),
                         ),
+                      // правило Apple 5.1.1(v): чужое расписание — публичное, смотреть можно без входа
+                      const SizedBox(height: Space.s),
+                      Center(
+                        child: TextButton(
+                          key: const Key('login-guest'),
+                          style: TextButton.styleFrom(foregroundColor: p.muted),
+                          onPressed: () {
+                            tick();
+                            Navigator.of(context)
+                                .push(MaterialPageRoute(builder: (_) => SearchScreen(api: GuestApi())));
+                          },
+                          child: Text('Расписание без входа', style: s.body(15, weight: FontWeight.w600)),
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -28,6 +28,8 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
         items = await search_files(q.strip())
     else:
         items = await get_files(subject or None)
+    import ugc
+    items = ugc.without_hidden(items, await ugc.hidden(user["id"]), "uploaded_by")
     # file_id намеренно не отдаём наружу как "ссылку на скачивание" — Telegram
     # file_id не резолвится в прямой URL без похода через getFile от лица
     # бота, а светить его в браузерном JS не хочется. Вместо этого фронт

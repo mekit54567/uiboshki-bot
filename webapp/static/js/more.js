@@ -83,7 +83,10 @@ async function openPlus() {
   const inv = d.invite || {};
   const founderNote = d.founder ? "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда"
     : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
-  const state = d.paid_until
+  const state = d.unlimited
+    ? statusCard("ok", "У тебя безлимит" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : " навсегда"),
+      "ИИ без дневных лимитов, платить не нужно")
+    : d.paid_until
     ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
     : d.gift
       ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
@@ -95,17 +98,32 @@ async function openPlus() {
   box.innerHTML =
     '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("medal") + '</span><div><h3>Капибара+</h3>' +
       '<p>Подписка на Капибару</p></div></div>' + state +
-    secItem("sparkle", "Что даёт", "ИИ сверх пробы для любой группы (твоей группе он и так бесплатный), иконки и наряды капибары " +
+    secItem("sparkle", "Что даёт", (d.unlimited ? "ИИ без ограничений" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : "")
+      : "ИИ — до 100 вопросов в день для любой группы") + ", иконки и наряды капибары " +
       "«по подписке», значок. Дальше — ответы на билеты, «Пульс группы», «Архив потока».") +
-    prices +
-    (d.pay_url
-      ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
-        '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
-      : '<p class="sheet-hint">Оплата скоро заработает.</p>') +
+    (d.unlimited ? "" : prices +        // безлимиту цены и оплата ни к чему (робот 18.10)
+      (d.pay_url
+        ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
+          '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
+        : '<p class="sheet-hint">Оплата скоро заработает.</p>')) +
     secItem("users", "Позови друга", inviteText(inv)) +
     (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
+    (d.donate_url ? secItem("heart", "Поддержать проект", "Разово, сумма на выбор — 100, 300, 500 ₽ или своя.") +
+      '<button class="ghost" onclick="openLink(\'' + d.donate_url + '\')">' + icon("heart", "inl") + ' Поддержать проект</button>' : "") +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
+}
+
+// «Поддержать проект» (строка под плитками «Ещё»): донат на сайте по личной
+// ссылке (billing.py) — не подписка, ничего не открывает, просто спасибо
+async function openDonate() {
+  haptic();
+  let d;
+  try { d = await api("/api/donate"); }
+  catch (e) { showToast("Не вышло: " + e.message); return; }
+  if (d.hidden) return;
+  if (d.url) openLink(d.url);
+  else showToast("Поддержать можно будет совсем скоро — оплата ещё подключается");
 }
 
 function closeSheet(id) {
@@ -491,9 +509,12 @@ async function openSecurity() {
       "Подпись старше " + (s.auth_max_hours || 24) + " ч не принимается.") +
     secItem("download", "Файлы — по одноразовым ссылкам",
       "Ссылка на скачивание подписана и живёт " + (s.link_minutes || 10) + " минут; файлы из СДО бот берёт твоим входом.") +
-    secItem("sparkle", "ИИ (Gemini от Google)",
+    secItem("sparkle", "Вопросы к ИИ",
       "Уходит только твой вопрос, история этого чата, нужные куски лекций группы, расписание и дедлайны. " +
-      "Имя, Telegram и вход в СДО не уходят. Не пиши туда личное — бесплатный Gemini может учиться на запросах.") +
+      "Имя, Telegram и вход в СДО не уходят. Не пиши туда личное — бесплатный ИИ может учиться на запросах.") +
+    secItem("place", "Сервер — в России",
+      "Бот, приложение и база — на хостинге Amvera в Москве. За границу уходят только сообщения Telegram, " +
+      "уведомления и вопросы к ИИ — в зашифрованном виде.") +
     secItem("pulse", "Статистика — без содержимого",
       "Только «кто, что открыл и когда» — без текстов вопросов, файлов и оценок. Староста видит, кто именно " +
       "заходил и какими разделами пользуется. Через " + (s.events_days || 180) + " дней удаляется сама.") +
@@ -502,7 +523,8 @@ async function openSecurity() {
       " сдач за " + ((lim.submit || {}).minutes || 10) + " минут с одного человека — чтобы никто не сжёг общий лимит и не долбил СДО.") +
     secItem("gear", "Ключи и пароли — только на сервере",
       "Токен бота, ключи ИИ и шифрования — в закрытых настройках сервера, в коде и базе их нет. Копия базы каждую ночь " +
-      "уходит только владельцу бота в Telegram, старые копии он удаляет раз в месяц.") +
+      (s.backup_s3 ? "ложится в хранилище в России, старые копии сменяются новыми сами."
+        : "уходит только владельцу бота в Telegram, старые копии он удаляет раз в месяц.")) +
     '<div id="logins"></div><div id="devices"></div>' +
     '<h3 style="margin-top:16px">Твои данные</h3>' +
     '<p class="sheet-hint">Что храним, сколько и кому передаём — в <a class="legal-link" onclick="openLegal(event, \'privacy\')">' +

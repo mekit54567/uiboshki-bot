@@ -61,6 +61,34 @@ async def cmd_status(message: Message):
     await message.answer(await health.report(), parse_mode="HTML")
 
 
+@router.message(Command("aimain"))
+async def cmd_aimain(message: Message):
+    """Кому Ling — основная модель ИИ (Gemini тогда запасная). Переключает
+    только староста, на всех сразу: /aimain all — все (по умолчанию); на случай
+    отката: plus — староста и «Капибара+», me — только старосты, gemini — все на
+    Gemini. Без аргумента — что сейчас."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import gemini_solver
+    if not gemini_solver.AI_SPARE_MODEL:
+        await message.answer("Ling не подключена: нужен OPENROUTER_API_KEY на хостинге.")
+        return
+    args = (message.text or "").split()[1:]
+    if args and args[0].lower() in gemini_solver.MAIN_MODES:
+        await init_hw_table()
+        await set_setting("ai_main", args[0].lower())
+    mode = await gemini_solver.ai_main()
+    rest = ("" if mode == "all" else
+            " У остальных основная — Gemini, а Ling отвечает, только когда у Gemini кончился лимит.")
+    await message.answer(
+        f"Ling основная: <b>{gemini_solver.MAIN_MODES[mode]}</b>.{rest} Ling не ответила — "
+        "отвечает Gemini.\n\n"
+        "Переключаешь только ты, сразу для всех:\n"
+        "/aimain all — все (по умолчанию)\n"
+        "/aimain plus — ты и у кого «Капибара+»\n/aimain me — только старосты\n"
+        "/aimain gemini — все на Gemini\n\nКто сколько ответил — в /status.", parse_mode="HTML")
+
+
 @router.message(Command("aitest"))
 async def cmd_aitest(message: Message):
     """Выбор модели ИИ для других групп (ai_bench.py) — только староста:
@@ -72,7 +100,7 @@ async def cmd_aitest(message: Message):
     from config import OPENROUTER_API_KEY
     if not OPENROUTER_API_KEY:
         await message.answer("Нужен ключ OpenRouter: openrouter.ai → Credits (пополнить), Keys → Create, "
-                             "и задать OPENROUTER_API_KEY в переменных Railway.")
+                             "и задать OPENROUTER_API_KEY в переменных хостинга.")
         return
     import ai_bench
     from webapp.routes.aitest import link

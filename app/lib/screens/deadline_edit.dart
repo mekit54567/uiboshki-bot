@@ -13,6 +13,9 @@ class DlExtra {
   final String description;
   final bool personal, mineChanged, canEdit;
 
+  /// Общий срок, который завёл человек (староста группы), — можно пожаловаться (5.99).
+  final bool reportable;
+
   /// all — правка у всей группы, me — только у себя.
   final String editScope;
   final List<({String at, String label})> reminders;
@@ -25,6 +28,7 @@ class DlExtra {
       personal = j['personal'] == true,
       mineChanged = j['mine_changed'] == true,
       canEdit = j['can_edit'] == true,
+      reportable = j['reportable'] == true,
       editScope = j['edit_scope'] as String? ?? 'me',
       reminders = [for (final r in (j['reminders'] as List? ?? [])) (at: '${r['at']}', label: '${r['label']}')],
       timeLimit = (j['time_limit'] as num?)?.toInt();
@@ -340,7 +344,7 @@ class _PickTile extends StatelessWidget {
 
 // ── Действия со сроком ──────────────────────────────────────────────────
 
-enum DlAction { submit, task, remind, done, undone, edit, delete, resetMine }
+enum DlAction { submit, task, remind, done, undone, edit, delete, resetMine, report }
 
 /// Лист по нажатию на срок; возвращает выбранное действие.
 Future<DlAction?> showDeadlineActions(BuildContext context, Deadline d, DlExtra x, {required String due}) =>
@@ -403,6 +407,7 @@ class _ActionsSheet extends StatelessWidget {
                 x.editScope == 'me' ? 'Убрать у себя' : 'Удалить',
                 color: p.danger,
               ),
+            if (x.reportable) act(DlAction.report, Icons.flag_outlined, 'Пожаловаться или скрыть', color: p.muted),
           ],
         ),
       ),

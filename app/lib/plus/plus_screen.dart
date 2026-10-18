@@ -15,6 +15,7 @@ import '../screens/files.dart' show BackRow;
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import 'donate.dart';
 import 'plus.dart';
 
 /// Ссылки наружу и «Поделиться» — тесты подменяют.
@@ -74,10 +75,20 @@ String? inviteLimit(Map<String, dynamic> d) {
 
 /// Что даёт подписка — как PERKS на странице оплаты (webapp/routes/billing.py).
 const plusPerks = [
-  (Icons.auto_awesome_outlined, 'ИИ сверх пробы', 'для любой группы МИРЭА; твоей группе он и так бесплатный'),
+  (Icons.auto_awesome_outlined, 'ИИ сверх пробы', 'до 100 вопросов в день для любой группы МИРЭА'),
   (Icons.palette_outlined, 'Иконки и наряды капибары', 'те, что «по подписке», в «Оформлении»'),
   (Icons.workspace_premium_outlined, 'Значок «друг Капибары»', 'в профиле'),
   (Icons.upcoming_outlined, 'Дальше', 'ответы на экзаменационные билеты, «Пульс группы», «Архив потока»'),
+];
+
+/// Что даёт безлимит (/grant … unlimited): ИИ без дневных лимитов — до дня или навсегда.
+List<(IconData, String, String)> unlimitedPerks(String? until) => [
+  (
+    Icons.auto_awesome_outlined,
+    'ИИ без ограничений',
+    until == null ? 'без дневных лимитов, навсегда' : 'без дневных лимитов до ${plusUntil(until)}',
+  ),
+  ...plusPerks.skip(1),
 ];
 
 class PlusScreen extends StatelessWidget {
@@ -128,12 +139,15 @@ class _PlusBody extends StatelessWidget {
     }
     final active = d['active'] == true;
     final gift = d['paid_until'] == null && d['gift'] is String;
+    final unlimited = d['unlimited'] == true;
     final founder = d['founder'] == true;
     final prices = [for (final x in d['prices'] as List? ?? const []) Map<String, dynamic>.from(x as Map)];
     final payUrl = '${d['pay_url'] ?? ''}';
     final offerUrl = '${d['offer_url'] ?? ''}';
     final invite = Map<String, dynamic>.from(d['invite'] as Map? ?? const {});
     final ranks = Map<String, dynamic>.from(invite['ranks'] as Map? ?? const {});
+    final unlimitedUntil = d['unlimited_until'] is String ? d['unlimited_until'] as String : null;
+    final perks = unlimited ? unlimitedPerks(unlimitedUntil) : plusPerks;
     final founderPrice = prices.where((x) => x['founder'] == true).map((x) => x['price']).firstOrNull;
     return ListView(
       padding: const EdgeInsets.only(bottom: Space.xxl),
@@ -158,7 +172,11 @@ class _PlusBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        gift
+                        unlimited
+                            ? (d['unlimited_until'] is String
+                                  ? 'У тебя безлимит до ${plusUntil(d['unlimited_until'] as String?)}'
+                                  : 'У тебя безлимит навсегда')
+                            : gift
                             ? 'Подарок группе до ${plusUntil(d['gift'] as String?)}'
                             : active
                             ? 'Действует до ${plusUntil(d['until'] as String?)}'
@@ -167,14 +185,16 @@ class _PlusBody extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        gift
+                        unlimited
+                            ? 'ИИ без дневных лимитов, платить не нужно'
+                            : gift
                             ? 'Платить не нужно — всё уже включено'
                             : active
                             ? 'Оплата добавит дни к этому сроку'
                             : 'Всё главное работает и без неё — она для тех, кому нужно больше',
                         style: s.body(13, color: p.muted),
                       ),
-                      if (founder) ...[
+                      if (founder && !unlimited) ...[
                         const SizedBox(height: Space.s),
                         Row(
                           children: [
@@ -205,15 +225,16 @@ class _PlusBody extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                for (var i = 0; i < plusPerks.length; i++) ...[
+                for (var i = 0; i < perks.length; i++) ...[
                   if (i > 0) Divider(height: 1, color: p.line),
-                  _Row(icon: plusPerks[i].$1, title: plusPerks[i].$2, sub: plusPerks[i].$3),
+                  _Row(icon: perks[i].$1, title: perks[i].$2, sub: perks[i].$3),
                 ],
               ],
             ),
           ),
         ),
-        if (prices.isNotEmpty) ...[
+        // безлимиту цены и оплата ни к чему (робот 18.10)
+        if (!unlimited && prices.isNotEmpty) ...[
           Section(prices.any((x) => x['founder'] == true) ? 'Цены первых пользователей' : 'Цены'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.l),
@@ -230,66 +251,92 @@ class _PlusBody extends StatelessWidget {
             ),
           ),
         ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
-          child: payUrl.isEmpty
-              ? Tile(
-                  key: const Key('plus:soon'),
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule_rounded, color: p.muted),
-                      const SizedBox(width: Space.m),
-                      Expanded(
-                        child: Text(
-                          'Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.',
-                          style: s.body(14, color: p.muted),
+        if (!unlimited) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
+            child: payUrl.isEmpty
+                ? Tile(
+                    key: const Key('plus:soon'),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, color: p.muted),
+                        const SizedBox(width: Space.m),
+                        Expanded(
+                          child: Text(
+                            'Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.',
+                            style: s.body(14, color: p.muted),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  )
+                : FilledButton.icon(
+                    key: const Key('plus:pay'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: p.accent,
+                      foregroundColor: p.onAccent,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => _open(context, payUrl),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                    label: Text(
+                      'Оплатить на сайте',
+                      style: s.body(16, weight: FontWeight.w600, color: p.onAccent),
+                    ),
                   ),
-                )
-              : FilledButton.icon(
-                  key: const Key('plus:pay'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: p.accent,
-                    foregroundColor: p.onAccent,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: const StadiumBorder(),
-                  ),
-                  onPressed: () => _open(context, payUrl),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                  label: Text(
-                    'Оплатить на сайте',
-                    style: s.body(16, weight: FontWeight.w600, color: p.onAccent),
-                  ),
-                ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.xl, Space.m, Space.xl, 0),
-          child: Text(
-            'Без автосписаний: каждый срок оплачивается отдельно. Июль и август в срок не считаются.',
-            style: s.body(13, color: p.muted),
           ),
-        ),
-        if (offerUrl.isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: Space.m),
-              child: TextButton(
-                key: const Key('plus:offer'),
-                onPressed: () => _open(context, offerUrl),
-                child: Text(
-                  'Оферта',
-                  style: s.body(14, weight: FontWeight.w600, color: p.accent),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.xl, Space.m, Space.xl, 0),
+            child: Text(
+              'Без автосписаний: каждый срок оплачивается отдельно. Июль и август в срок не считаются.',
+              style: s.body(13, color: p.muted),
+            ),
+          ),
+          if (offerUrl.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: Space.m),
+                child: TextButton(
+                  key: const Key('plus:offer'),
+                  onPressed: () => _open(context, offerUrl),
+                  child: Text(
+                    'Оферта',
+                    style: s.body(14, weight: FontWeight.w600, color: p.accent),
+                  ),
                 ),
               ),
             ),
-          ),
+        ],
         const Section('Позови друга'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Space.l),
           child: _InviteCard(api: api, invite: invite),
+        ),
+        const Section('Поддержать проект'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+          child: Tile(
+            key: const Key('plus:donate'),
+            onTap: () => showDonateSheet(context, api),
+            child: Row(
+              children: [
+                Icon(Icons.favorite_border_rounded, color: p.accent),
+                const SizedBox(width: Space.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Сказать спасибо рублём', style: s.body(15, weight: FontWeight.w600)),
+                      Text('Разово, сумма на выбор', style: s.body(13, color: p.muted)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.muted),
+              ],
+            ),
+          ),
         ),
         if (ranks.isNotEmpty) ...[
           const Section('Бонусы за ранги ачивок'),

@@ -9,12 +9,14 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api.dart';
+import '../api/guest.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/capy.dart';
 import '../widgets/capy_refresh.dart';
 import '../widgets/common.dart';
+import 'compare.dart';
 import 'files.dart' show BackRow;
 import 'lesson.dart' show openLesson;
 import 'today.dart' show LessonList;
@@ -477,7 +479,22 @@ class _TargetScreenState extends State<TargetScreen> {
               Row(
                 children: [
                   const Expanded(child: BackRow()),
-                  if (_data != null)
+                  // своя неделя рядом с этой группой (5.100.2)
+                  if (_data != null && widget.type == 1 && _weeks.isNotEmpty && widget.api is! GuestApi) // без входа своей недели нет
+                    TextButton.icon(
+                      key: const Key('search:compare'),
+                      onPressed: () {
+                        tick();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CompareScreen(api: widget.api, title: _title, weeks: _weeks, week: _week),
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.compare_arrows_rounded, color: p.muted, size: 20),
+                      label: Text('Сравнить', style: AppStyle.of(context).body(14, color: p.muted)),
+                    ),
+                  if (_data != null && widget.api is! GuestApi) // без входа закреплять некуда
                     Padding(
                       padding: const EdgeInsets.only(right: Space.s),
                       child: IconButton(
@@ -542,7 +559,7 @@ class _TargetScreenState extends State<TargetScreen> {
           if (week == null)
             const Notice(title: 'Пар нет', text: 'В расписании пусто.')
           else ...[
-            _WeekSwitch(
+            WeekSwitch(
               label: _weekLabel(week),
               number: week['week'] as int?,
               onPrev: _week > 0 ? () => _shift(-1) : null,
@@ -560,7 +577,9 @@ class _TargetScreenState extends State<TargetScreen> {
                   ],
                   at: t,
                   showGroups: widget.type != 1,
-                  onLesson: (l) => openLesson(context, widget.api, l),
+                  onLesson: (l) {
+                    if (widget.api is! GuestApi) openLesson(context, widget.api, l, own: false);
+                  },
                 ),
           ],
         ],
@@ -584,11 +603,12 @@ class _TargetScreenState extends State<TargetScreen> {
   }
 }
 
-class _WeekSwitch extends StatelessWidget {
+/// Неделя назад/вперёд с подписью (расписание группы и «Сравнить неделю»).
+class WeekSwitch extends StatelessWidget {
   final String label;
   final int? number;
   final VoidCallback? onPrev, onNext;
-  const _WeekSwitch({required this.label, required this.number, required this.onPrev, required this.onNext});
+  const WeekSwitch({super.key, required this.label, required this.number, required this.onPrev, required this.onNext});
 
   @override
   Widget build(BuildContext context) {

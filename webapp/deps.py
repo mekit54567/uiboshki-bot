@@ -56,12 +56,13 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
         # full_name — как у бота (aiogram User.full_name = "first last"), иначе каждый
         # заход в WebApp перетирал в users фамилию, записанную ботом.
         full_name = " ".join(p for p in (user.get("first_name", ""), user.get("last_name", "")) if p)
-        await upsert_user(user["id"], user.get("username", ""), full_name)
+        await upsert_user(user["id"], user.get("username", ""), full_name, wait=False)
     import privacy                # 152-ФЗ: без согласия — только согласие, тексты и удаление
     if await privacy.blocked(user["id"]):
         path = request.url.path.replace("/api/v1/", "/api/", 1)
         if path not in CONSENT_FREE:
-            raise HTTPException(status_code=403, detail=CONSENT_NEEDED)
+            due = await privacy.erasing(user["id"])
+            raise HTTPException(status_code=403, detail=privacy.erasing_text(due) if due else CONSENT_NEEDED)
         return user
     from optional_subjects import apply_for
     await apply_for(user["id"])   # пары предметов по выбору, на которые не ходит — скрыть
@@ -72,6 +73,8 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
     import stats                  # «кто, что, когда» для /stats старосты (без содержимого)
     await stats.track(user["id"], stats.kind_for(request.method, request.url.path))
     await stats.track(user["id"], stats.via(bool(x_telegram_init_data), request.headers.get("x-app", "")))
+    import plus_welcome           # подарок своей группе — одно сообщение при первом заходе (в Telegram и пушем)
+    plus_welcome.later(tg_bot() if BOT_TOKEN else None, user["id"])
     return user
 
 

@@ -91,7 +91,7 @@ async def cmd_sdo_files(message: Message):
     from database import get_file_sources, get_sdo_file_subjects
     from schedule_parser import get_group_subjects
     if not sdo_parser.SDO_SESSION_COOKIE:
-        await message.answer("⚠️ Кука СДО не задана (SDO_SESSION_COOKIE в Railway) — см. /syncsdo.")
+        await message.answer("⚠️ Кука СДО не задана (SDO_SESSION_COOKIE в переменных хостинга) — см. /syncsdo.")
         return
     wait = await message.answer("⏳ Смотрю, что лежит в СДО: курсы, файлы, папки… Это может занять минуту.")
     subjects = await get_group_subjects(**sdo_parser.SEMESTER_WINDOW)
@@ -99,7 +99,7 @@ async def cmd_sdo_files(message: Message):
         async with sdo_files.make_client(sdo_parser.SDO_SESSION_COOKIE) as client:
             courses = await sdo_files.scan(client, subjects)
     except sdo_parser.SdoSessionExpired:
-        await wait.edit_text("⚠️ Кука СДО протухла — обнови SDO_SESSION_COOKIE в Railway (подробно — /syncsdo).")
+        await wait.edit_text("⚠️ Кука СДО протухла — обнови SDO_SESSION_COOKIE в переменных хостинга (подробно — /syncsdo).")
         return
     except Exception as e:
         await wait.edit_text(f"❌ СДО не ответил: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")
