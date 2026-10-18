@@ -4,7 +4,9 @@ from datetime import date, timedelta
 import pytest
 
 import institutes
+import legal_texts
 import nick_filter
+import privacy
 import xp
 
 URL = "https://online-edu.mirea.ru/mod/assign/view.php?id={i}"
@@ -202,7 +204,8 @@ async def test_nick_save_review_and_reset(db):
     with pytest.raises(ValueError):
         await xp.save(1, nick="хуйло")
     assert (await xp.save(1, nick="  Тихий   кот ", show=True)) == {"nick": "Тихий кот", "show": True,
-                                                                     "locked": False}
+                                                                     "locked": False, "show_all": False,
+                                                                     "alias": None}
     assert [r["nick"] for r in await xp.unreviewed()] == ["Тихий кот"]
     await xp.mark_reviewed([1])
     assert await xp.unreviewed() == []
@@ -233,6 +236,104 @@ def test_legal_texts_mention_rating():
     import legal_texts
     text = str(legal_texts.__dict__)
     assert "Показывать меня группе" in text and "из баллов СДО и сдач" in text
+    assert "Показывать меня всем" in text
+
+
+@pytest.mark.asyncio
+async def test_history_by_weeks_and_parts(db):
+    """Опыт группы по неделям — из тех же отметок по их датам; части — сумма людей."""
+    from database.groups import home
+    for uid in (1, 2, 3):
+        await _person(db, uid, f"Имя{uid} Ф")
+        await db.save_score_points(uid, _day(-20), {1: 5})
+        await db.save_score_points(uid, _day(-1), {1: 10})
+    data = await xp.for_user(1, home())
+    hist = data["group"]["history"]
+    assert len(hist) == xp.WEEKS
+    assert hist[-1]["xp"] == 30 and hist[-1]["place"] == 1 and hist[-1]["place_inst"] == 1
+    assert hist[0]["xp"] == 0 and hist[0]["place"] is None            # 7 недель назад опыта не было
+    assert 15 in [h["xp"] for h in hist]                               # три недели назад — первые баллы
+    assert [h["xp"] for h in hist] == sorted(h["xp"] for h in hist)
+    assert data["group"]["parts"] == {"brs": 30, "submit": 0, "early": 0, "ach": 0, "file": 0}
+    assert data["group"]["id"] == home() and data["university_top"][0]["id"] == home()
+
+
+@pytest.mark.asyncio
+async def test_group_view_people_by_consent(db):
+    """Своя группа видит «группе» и «всем», чужая — только «всем»."""
+    from database.groups import home, upsert_group
+    await upsert_group(501, "УИБО-01-24")
+    for uid in (1, 2, 3, 4):
+        await _person(db, uid, f"Имя{uid} Ф", 501)
+        await db.save_score_points(uid, _day(-1), {1: uid * 10})
+    await _person(db, 9, "Гость Г")                                    # из своей группы бота
+    await xp.save(2, show=True)
+    await xp.save(3, show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    await xp.save(4, nick="Тихий кот", show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    capy = f"Капибара №{(await xp.profile(3))['alias']}"
+    other = await xp.group_view(9, home(), 501)
+    # чужим — только свой ник или «Капибара №…», не «Имя Ф.» (ревью 152-ФЗ)
+    assert [p["nick"] for p in other["people_list"]] == ["Тихий кот", capy] and other["hidden"] == 2
+    assert other["member"] is False and other["name"] == "УИБО-01-24" and len(other["history"]) == xp.WEEKS
+    mine = await xp.group_view(1, 501, 501)
+    assert [(p["nick"], p["hidden"]) for p in mine["people_list"]] == [
+        ("Тихий кот", False), (capy, False), ("Имя2 Ф.", False), ("Имя1 Ф.", True)]
+    assert mine["hidden"] == 0 and mine["member"] is True
+    assert await xp.group_view(1, 501, 777) is None
+    # не участник своей группы (viewer 0) не видит тех, кто разрешил только группе
+    data = await xp.for_user(1, 501, member=False)
+    assert [p["nick"] for p in data["people"]] == ["Тихий кот", capy, "Имя1 Ф."]
+
+
+@pytest.mark.asyncio
+async def test_show_all_is_own_consent(db, monkeypatch):
+    """«Показывать меня всем» — только с галочкой отдельного согласия (ст. 10.1),
+    его версия — в consents; новая версия текста выключает показ до нового
+    согласия; номер «Капибара №…» случайный и не меняется."""
+    from database.privacy import get_consents
+    from database.groups import home
+    await _person(db, 1, "Анна")
+    with pytest.raises(ValueError, match="отдельное согласие"):
+        await xp.save(1, show_all=True)
+    with pytest.raises(ValueError):
+        await xp.save(1, show_all=True, consent="0")
+    p = await xp.save(1, show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    assert p["show_all"] is True and xp.ALIAS_MIN <= p["alias"] <= xp.ALIAS_MAX
+    got = {c["kind"]: c["version"] for c in await get_consents(1)}
+    assert got.get("rating_all") == legal_texts.RATING_ALL_VERSION and "rating" not in got
+    assert (await xp.for_user(1, home()))["me"]["public_nick"] == f"Капибара №{p['alias']}"
+    ver = legal_texts.RATING_ALL_VERSION
+    monkeypatch.setattr(legal_texts, "RATING_ALL_VERSION", "2")
+    assert (await xp.profile(1))["show_all"] is False                  # текст поменялся — спросить заново
+    monkeypatch.setattr(legal_texts, "RATING_ALL_VERSION", ver)
+    await xp.save(1, show_all=False)
+    assert "rating_all" not in [c["kind"] for c in await get_consents(1)]
+    again = await xp.save(1, show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    assert again["alias"] == p["alias"]
+
+
+def test_rating_all_text():
+    d = legal_texts.doc("rating_all")
+    assert d["version"] == legal_texts.RATING_ALL_VERSION
+    text = d["lead"] + " ".join(str(b) for sec in d["sections"] for b in sec["blocks"])
+    for need in ("всем пользователям", "Капибара №", "10.1", "Показывать меня всем",
+                 # приказ РКН № 18: цель, точный адрес, право на свои запреты (5.100.8)
+                 "Цель — показать", "https://www.uiboshki.ru/app", "3 рабочих дней"):
+        assert need in text
+    # на листе — общая формулировка и что, где и кому; оператор — в полном тексте по ссылке
+    short = d["lead_short"] + " ".join(str(b) for sec in d["sections"] if sec.get("sheet") for b in sec["blocks"])
+    assert [sec["title"] for sec in d["sections"] if sec.get("sheet")] == ["Что показываем", "Где и кому"]
+    assert "все пользователи" in short and privacy.OPERATOR not in short and privacy.OPERATOR not in d["lead_short"]
+    # оператор в полном тексте — как в согласии и политике, без «самозанятый Никита» (5.100.11)
+    assert privacy.OPERATOR in d["lead"] and "самозанят" not in d["lead"]
+
+
+def test_operator_wording():
+    assert privacy.operator() == "Никита, разработчик сервиса «Капибара»"
+    assert privacy.operator("Иванов Никита Иванович", "123456789012", "Москва") == (
+        "Иванов Никита Иванович, разработчик сервиса «Капибара», ИНН 123456789012, г. Москва")
+    for name in ("consent", "privacy", "rating_all"):
+        assert "самозанят" not in str(legal_texts.doc(name))
 
 
 # ── API и бот ────────────────────────────────────────────────────────────────
@@ -253,8 +354,16 @@ async def test_api_rating(db, monkeypatch):
     bad = c.put("/api/rating/me", headers=h, json={"nick": "сука"})
     assert bad.status_code == 400 and "мата" in bad.json()["detail"]
     ok = c.put("/api/rating/me", headers=h, json={"nick": "Алиса", "show": True})
-    assert ok.status_code == 200 and ok.json() == {"nick": "Алиса", "show": True, "locked": False}
+    assert ok.status_code == 200 and ok.json() == {"nick": "Алиса", "show": True, "locked": False, "show_all": False,
+                                                   "alias": None}
     assert c.get("/api/rating", headers=h).json()["people"][0]["nick"] == "Алиса"
+    gid = c.get("/api/rating", headers=h).json()["group"]["id"]
+    assert c.get(f"/api/rating/group/{gid}", headers=h).json()["people_list"][0]["nick"] == "Алиса"
+    assert c.get("/api/rating/group/777", headers=h).status_code == 404
+    assert c.put("/api/rating/me", headers=h, json={"show_all": True}).status_code == 400   # без галочки
+    on = c.put("/api/rating/me", headers=h, json={"show_all": True, "consent": legal_texts.RATING_ALL_VERSION})
+    assert on.json()["show_all"] is True
+    assert c.get("/api/legal/rating_all").json()["version"] == legal_texts.RATING_ALL_VERSION
 
 
 @pytest.mark.asyncio

@@ -39,6 +39,7 @@
  "GET /api/plus",
  "GET /api/push/key",
  "GET /api/rating",
+ "GET /api/rating/group/{group_id}",
  "GET /api/schedule/next",
  "GET /api/schedule/today",
  "GET /api/schedule/tomorrow",
