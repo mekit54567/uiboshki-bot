@@ -45,6 +45,17 @@ function fmtDay(iso) {
   return new Date(iso + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
+// «Позови друга»: сколько друзей ещё дадут дни пригласившему — число с сервера
+// (referrals.REF_MAX), не здесь; выбрал — честно, что бонус закончился
+function inviteText(inv) {
+  const max = inv.ref_max || 0, got = inv.ref_counted || 0;
+  const came = " По твоей ссылке пришло: " + (inv.came || 0) + ".";
+  if (max && got >= max)
+    return "Ты уже позвал " + max + " друзей — бонус за приглашения закончился, друзьям дни по-прежнему дают." + came;
+  return "Когда он попользуется " + inv.friend_days + " дня, вам обоим +" + inv.bonus_days + " дней." +
+    (max ? " Тебе — максимум за " + max + " друзей, засчитано " + got + " из " + max + "." : "") + came;
+}
+
 async function openPlus() {
   haptic();
   const box = document.getElementById("plus-body");
@@ -75,8 +86,7 @@ async function openPlus() {
       ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
         '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
       : '<p class="sheet-hint">Оплата скоро заработает.</p>') +
-    secItem("users", "Позови друга", "Когда он попользуется " + inv.friend_days + " дня, вам обоим +" + inv.bonus_days +
-      " дней. По твоей ссылке пришло: " + inv.came + ", засчитано: " + inv.rewarded + ".") +
+    secItem("users", "Позови друга", inviteText(inv)) +
     (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';

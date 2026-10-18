@@ -33,8 +33,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
              price_line + " Без автосписаний, июль и август не считаются.",
              "Оплата — на сайте uiboshki.ru по кнопке ниже (или «Ещё → Капибара+» в приложении: "
              "здесь, на Android и на uiboshki.ru/app). Подписка работает везде, и на iPhone.", "",
-             f"🎁 Позови друга: когда он попользуется {inv['friend_days']} дня, вам обоим "
-             f"+{inv['bonus_days']} дней. Пришло по твоей ссылке: {inv['came']}, засчитано: {inv['rewarded']}.",
+             f"🎁 Позови друга — /invite. {referrals.invite_line(inv)} Пришло по твоей ссылке: {inv['came']}.",
              "🏅 Закрыл ранг ачивок в приложении — тоже дни подписки (Ещё → Ачивки)."]
     rows = []
     if st["provider"]:
@@ -119,8 +118,7 @@ async def launch_text(uid: int) -> str:
               "Оплата — на сайте uiboshki.ru: /plus здесь или «Ещё → Капибара+» в приложении. "
               "Подписка работает везде, и на iPhone." if st["provider"] else
               "Оплата заработает совсем скоро — на сайте uiboshki.ru, напишу.", "",
-              f"🎁 Позови друга — /invite: когда он попользуется {inv['friend_days']} дня, "
-              f"вам обоим +{inv['bonus_days']} дней."]
+              f"🎁 Позови друга — /invite. {referrals.invite_line(inv)}"]
     return "\n".join(lines)
 
 
@@ -194,9 +192,10 @@ async def send_invite(message: Message, uid: int):
         await message.answer_photo(referrals.share_image(), caption=referrals.share_text(), reply_markup=kb)
     except Exception:
         await message.answer(referrals.share_text(), reply_markup=kb)
+    inv = {"ref_max": referrals.REF_MAX, "ref_counted": await referrals.counted(uid)}
     await message.answer(
-        "👆 Перешли это сообщение другу или нажми кнопку ниже и выбери чат. Ссылка твоя: когда друг "
-        "начнёт пользоваться, вам обоим подарим дни «Капибары+».",
+        "👆 Перешли это сообщение другу или нажми кнопку ниже и выбери чат. Ссылка твоя. "
+        + referrals.invite_line(inv),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="📤 Отправить в чат", switch_inline_query="share")]]))
 

@@ -1213,6 +1213,29 @@ def test_pwa_login_opens_telegram_directly_and_survives_restart():
     assert ".login-web" in CSS
 
 
+@pytest.mark.skipif(not shutil.which("node"), reason="нужен node")
+def test_plus_sheet_invite_limit_from_server():
+    # Никита 18.10: «максимум 3 человека по приглашению дают подписку» — число с сервера (ref_max)
+    import json
+    more = JS["js/more.js"]
+    fn = re.search(r"function inviteText\(.*?\n}\n", more, re.S).group(0)
+
+    def run(inv):
+        res = subprocess.run(["node", "-e", fn + "console.log(JSON.stringify(inviteText(%s)))" % _js_arg(inv)],
+                             capture_output=True, text=True)
+        assert res.returncode == 0, res.stderr
+        return json.loads(res.stdout)
+    base = {"friend_days": 3, "bonus_days": 7, "came": 2}
+    t = run({**base, "ref_max": 3, "ref_counted": 1})
+    assert "вам обоим +7 дней" in t and "максимум за 3 друзей, засчитано 1 из 3" in t
+    t = run({**base, "ref_max": 3, "ref_counted": 3})
+    assert t.startswith("Ты уже позвал 3 друзей — бонус за приглашения закончился, друзьям дни по-прежнему дают")
+    assert "вам обоим" not in t
+    assert "максимум" not in run(base)                                       # старый сервер — без лимита
+    assert "3" not in fn.replace("inv.", "")                                  # тройку фронт у себя не держит
+    assert "secItem(\"users\", \"Позови друга\", inviteText(inv))" in more
+
+
 def test_plus_sheet_price_on_one_line_and_no_double_dot():
     # робот-скриншотер 18.10: «649 ₽» переносился, у рангов «14 дн..»
     assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)
