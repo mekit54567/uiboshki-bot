@@ -109,7 +109,7 @@ const _ratingAllDoc = {
   'title': 'Согласие на показ в рейтинге всем',
   'version': '1',
   'date': '18.10.2026',
-  'lead': 'Ставя галочку, я даю согласие оператору — самозанятый … — на показ ника и опыта.',
+  'lead': 'Ставя галочку, я даю согласие оператору — разработчик сервиса «Капибара» — на показ ника и опыта.',
   'lead_short': 'Отдельное согласие: твой ник и опыт увидят все пользователи «Капибары».',
   'sections': [
     {
@@ -233,7 +233,7 @@ void main() {
     // на листе — коротко; оператор и срок — в полном тексте по ссылке
     expect(find.text('Что показываем'), findsOneWidget);
     expect(find.text('Срок и как отключить'), findsNothing);
-    expect(find.textContaining('самозанят'), findsNothing);
+    expect(find.textContaining('разработчик сервиса'), findsNothing);
     expect(find.byKey(const Key('rating:all:full')), findsOneWidget);
     final on = find.byKey(const Key('rating:all:on'));
     expect(t.widget<FilledButton>(on).onPressed, isNull); // без галочки — неактивна
