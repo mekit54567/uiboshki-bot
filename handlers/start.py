@@ -87,6 +87,9 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     if payload.startswith("login_"):            # вход в приложение без Telegram (webapp/routes/auth.py)
         await ask_login(message, payload[6:])
         return
+    if payload == "ios":                        # ссылка из приложения в App Store — без строк об оплате
+        await welcome(message, user, state, store=True)
+        return
     if payload == "site":                       # кнопка «Открыть бота» на сайте /about — для /stats
         import stats
         await stats.track(user.id, "from_site")
@@ -100,13 +103,49 @@ async def ask_login(message: Message, code: str):
     if not login or login["status"] != "wait":
         await message.answer("Ссылка для входа устарела — нажми «Войти через Telegram» в приложении ещё раз.")
         return
+    import login_channel
+    if await login_channel.needed(message.bot, message.chat.id):     # новый — сначала канал
+        store = login_channel.store_app(login["device"])
+        await message.answer(login_channel.text(store), reply_markup=login_channel.keyboard(f"login:{code}", store))
+        return
+    text, kb = login_prompt(code, login)
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+def login_prompt(code: str, login: dict) -> tuple[str, InlineKeyboardMarkup]:
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✅ Да, это я", callback_data=f"login:ok:{code}"),
         InlineKeyboardButton(text="Нет", callback_data=f"login:no:{code}"),
     ]])
-    await message.answer(f"🔐 Войти в приложение УИБО-бота на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
-                         "Если это не ты нажал «Войти» — жми «Нет». Дальше попрошу нажать число с экрана устройства.",
-                         parse_mode="HTML", reply_markup=kb)
+    return (f"🔐 Войти в приложение УИБО-бота на устройстве <b>{esc(login['device'] or 'браузер')}</b>?\n\n"
+            "Если это не ты нажал «Войти» — жми «Нет». Дальше попрошу нажать число с экрана устройства."), kb
+
+
+@router.callback_query(F.data.startswith("chan:"))
+async def channel_decision(callback: CallbackQuery, state: FSMContext | None = None):
+    """«Я в канале, дальше» / «Позже» (login_channel.py) → «это вы?» или приветствие."""
+    import login_channel
+    _, verdict, step = callback.data.split(":", 2)
+    if verdict == "ok" and await login_channel.subscribed(callback.bot, callback.from_user.id) is False:
+        await callback.answer("Пока не вижу подписки. Подпишись на канал и нажми ещё раз.", show_alert=True)
+        return
+    await callback.answer()
+    if step.startswith("login:"):
+        from database.sessions import get_login
+        code = step[6:]
+        login = await get_login(code)
+        if not login or login["status"] != "wait":
+            await callback.message.edit_text("Ссылка для входа устарела — нажми «Войти через Telegram» "
+                                             "в приложении ещё раз.")
+            return
+        text, kb = login_prompt(code, login)
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await welcome(callback.message, callback.from_user, state, store=step == "start:ios", checked=True)
 
 
 @router.callback_query(F.data.startswith("login:"))
@@ -153,9 +192,18 @@ async def cmd_start(message: Message, state: FSMContext | None = None):
     await welcome(message, message.from_user, state)
 
 
-async def welcome(message: Message, user, state: FSMContext | None = None):
-    """Приветствие /start; после «Даю согласие» (handlers/privacy.py) — то же."""
+async def welcome(message: Message, user, state: FSMContext | None = None, store: bool = False,
+                  checked: bool = False):
+    """Приветствие /start; после «Даю согласие» (handlers/privacy.py) — то же.
+    store — пришёл по ссылке из приложения в App Store (start=ios): без строк
+    об оплате (правило Apple 3.1.1: из приложения — не к другой оплате; цены
+    остаются в /plus и /help). Новому — сначала канал (login_channel.py)."""
     await upsert_user(user.id, user.username or "", user.full_name or "")
+    import login_channel
+    if not checked and await login_channel.needed(message.bot, user.id):
+        await message.answer(login_channel.text(False),
+                             reply_markup=login_channel.keyboard("start:ios" if store else "start", False))
+        return
     # Одно короткое сообщение с одной кнопкой. Сначала оно уходит с
     # ReplyKeyboardRemove (убрать старую большую клавиатуру у тех, у кого она
     # осталась), потом к нему же цепляется кнопка «Открыть приложение».
@@ -165,7 +213,10 @@ async def welcome(message: Message, user, state: FSMContext | None = None):
     if ask:
         from handlers.group_pick import ASK, GroupPick
         await state.set_state(GroupPick.query)
-    text = start_text(user.first_name) + ("\n\n" + ASK if ask else "")
+    text = start_text(user.first_name)
+    if store:
+        text = without_pay(text)
+    text += ("\n\n" + ASK) if ask else ""
     sent = await message.answer(text, parse_mode="HTML", reply_markup=MAIN_KB)
     kb = app_button()
     if kb:
@@ -304,6 +355,14 @@ async def handle_action(callback: CallbackQuery):
         is_sub = user and user.get("subscribed")
         await set_subscription(uid, 0 if is_sub else 1)
         await callback.bot.send_message(uid, "🔕 Отписался от уведомлений." if is_sub else "✅ Подписан на уведомления!")
+
+
+PAY_WORDS = ("/plus", "оплат", "₽", "подписк", "Капибара+")
+
+
+def without_pay(text: str) -> str:
+    """Убрать абзацы об оплате и подписке (для start=ios)."""
+    return "\n\n".join(p for p in text.split("\n\n") if not any(w in p for w in PAY_WORDS))
 
 
 def start_text(first_name: str) -> str:

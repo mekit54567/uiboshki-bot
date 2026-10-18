@@ -125,7 +125,7 @@ class ConsentMiddleware(BaseMiddleware):
     Стоит на message, callback_query и inline_query (bot.py)."""
 
     FREE_COMMANDS = ("deleteme", "privacy")
-    FREE_CALLBACKS = ("consent:", "erase:", "login:")
+    FREE_CALLBACKS = ("consent:", "erase:", "login:", "chan:ok:login:", "chan:later:login:")
 
     async def __call__(self, handler, event, data):
         user = data.get("event_from_user")
@@ -163,7 +163,8 @@ class ConsentMiddleware(BaseMiddleware):
         if name in self.FREE_COMMANDS or (name == "start" and " login_" in text):
             return await handler(event, data)
         from handlers.privacy import ask_consent
-        await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name)
+        await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name,
+                          store=name == "start" and text.split()[1:] == ["ios"])
         return None
 
     async def _remind(self, event, data, user_id: int):

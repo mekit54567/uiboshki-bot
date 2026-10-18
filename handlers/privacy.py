@@ -45,14 +45,17 @@ def consent_text(new: bool = False, first_name: str = "") -> str:
 
 CONSENT_KB = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="✅ Даю согласие", callback_data="consent:pd")]])
+# пришёл по ссылке из приложения в App Store (/start ios) — приветствие потом без строк об оплате
+CONSENT_KB_IOS = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="✅ Даю согласие", callback_data="consent:pd:ios")]])
 
 
-async def ask_consent(bot, chat_id: int, new: bool = False, first_name: str = ""):
-    await bot.send_message(chat_id, consent_text(new, first_name), parse_mode="HTML", reply_markup=CONSENT_KB,
-                           disable_web_page_preview=True)
+async def ask_consent(bot, chat_id: int, new: bool = False, first_name: str = "", store: bool = False):
+    await bot.send_message(chat_id, consent_text(new, first_name), parse_mode="HTML",
+                           reply_markup=CONSENT_KB_IOS if store else CONSENT_KB, disable_web_page_preview=True)
 
 
-@router.callback_query(F.data == "consent:pd")
+@router.callback_query(F.data.in_({"consent:pd", "consent:pd:ios"}))
 async def consent_given(callback: CallbackQuery, state: FSMContext | None = None):
     import privacy
     user = callback.from_user
@@ -69,7 +72,7 @@ async def consent_given(callback: CallbackQuery, state: FSMContext | None = None
     await callback.answer("Готово")
     if first:
         from handlers.start import welcome
-        await welcome(callback.message, user, state)
+        await welcome(callback.message, user, state, store=callback.data.endswith(":ios"))
 
 
 @router.message(Command("privacy"))

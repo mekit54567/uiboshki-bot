@@ -34,6 +34,9 @@ def channel_id_from(explicit: str, url: str) -> str:
 
 
 CHANNEL_ID = channel_id_from(os.getenv("CHANNEL_ID", ""), CHANNEL_URL)
+# Открытый канал, на который подписывается новый человек при первом входе через
+# Telegram (login_channel.py): «@имя» или t.me/<имя>. Пусто — без проверки.
+LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.

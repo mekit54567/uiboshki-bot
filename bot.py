@@ -184,6 +184,8 @@ async def main():
     dp.error.register(notify_starosta_on_error)
 
     await init_db()
+    import login_channel
+    await login_channel.start()             # отметка «с какого момента канал для новых»
     register_handlers(dp)
 
     scheduler = start_scheduler(bot)

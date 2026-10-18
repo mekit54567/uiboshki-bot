@@ -122,7 +122,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
                 done[table] = cur.rowcount
 
         # Настройки: свои ключи и счётчики ИИ (JSON {id: число} по дням и неделям).
-        await db.execute("DELETE FROM settings WHERE key IN (?, ?)", (f"goals:{uid}", f"member:{uid}"))
+        await db.execute("DELETE FROM settings WHERE key IN (?, ?, ?)",
+                         (f"goals:{uid}", f"member:{uid}", f"login_channel:{uid}"))
         rows = await (await db.execute(
             "SELECT key, value FROM settings WHERE key LIKE 'ai_day:%' OR key LIKE 'ai_sum:%'")).fetchall()
         for key, value in rows:
