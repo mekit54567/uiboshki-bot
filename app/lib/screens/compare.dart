@@ -402,11 +402,16 @@ class _Cell extends StatelessWidget {
                 fitWordSize(l.title, s.body(13, weight: FontWeight.w600), width - 1, scaler: scaler),
                 weight: FontWeight.w600,
               );
-              return Text(
-                wordLines(l.title, style, width - 1, scaler: scaler),
-                maxLines: 2,
-                softWrap: false,
-                style: style,
+              // каждая строка — своим Text с ellipsis: если замер разошёлся с
+              // отрисовкой, Flutter сам ставит целое «…», а не срезает его до
+              // «..» (робот 18.10: «Объектно-ориентиров..»)
+              final measured = DefaultTextStyle.of(context).style.merge(style);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final line in wordLines(l.title, measured, width - 1, scaler: scaler).split('\n'))
+                    Text(line, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: style),
+                ],
               );
             },
           ),

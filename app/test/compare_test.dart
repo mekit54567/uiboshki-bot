@@ -85,6 +85,13 @@ void main() {
     expect(find.text('УИБО-03-24'), findsOneWidget); // своя — из /me
     expect(find.text('УИБО-01-24'), findsWidgets);
     expect(find.textContaining('вместе'), findsOneWidget); // общая лекция в А-17
+    // строки названия — каждая своим Text с «…» от Flutter: замер до загрузки
+    // шрифта в вебе не срежет многоточие до «..» (5.100.9)
+    final title = t.widgetList<Text>(find.byType(Text)).where((w) => (w.data ?? '').startsWith('Моделирование'));
+    expect(title, isNotEmpty);
+    for (final w in title) {
+      expect((w.maxLines, w.overflow, w.data!.contains('\n')), (1, TextOverflow.ellipsis, false));
+    }
     await t.scrollUntilVisible(find.text('Обе свободны с 19:30'), 200);
     expect(find.text('Обе свободны с 19:30'), findsOneWidget);
     expect(find.text('Пар нет у обеих'), findsWidgets); // вторник
