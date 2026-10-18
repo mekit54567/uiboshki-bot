@@ -84,6 +84,7 @@ AUTHOR_COLUMNS = (
     ("group_admins", "added_by"),
     ("plus_grants", "by_id"),             # кто выдал (Никита) — запись того, кому выдали, остаётся
     ("plus_unlimited", "granted_by"),
+    ("reports", "author_id"),
 )
 
 
@@ -119,6 +120,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         done["deadlines"] = cur.rowcount
         await db.execute("UPDATE deadlines SET created_by=0 WHERE created_by=?", (uid,))
 
+        # убранная по жалобе запись (ugc.py) хранится для спора — с автором уходят она и его объяснение
+        await db.execute("UPDATE reports SET snapshot=NULL, appeal='' WHERE author_id=?", (uid,))
         for table, col in AUTHOR_COLUMNS:
             if col in await _columns(db, table):
                 await db.execute(f"UPDATE {table} SET {col}=NULL WHERE {col}=?", (uid,))
@@ -133,6 +136,7 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         cur = await db.execute("DELETE FROM referrals WHERE friend_id=? OR inviter_id=?", (uid, uid))
         if cur.rowcount:
             done["referrals"] = cur.rowcount
+        await db.execute("DELETE FROM user_blocks WHERE blocked_id=?", (uid,))   # его скрыли — забыть
 
         for table in await user_tables(db):
             cur = await db.execute(f"DELETE FROM {table} WHERE user_id=?", (uid,))

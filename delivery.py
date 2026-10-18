@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 TITLES = {"morning": "Доброе утро", "lesson": "Скоро пара", "deadlines": "Дедлайны",
           "new_tasks": "Новое в СДО", "weekly": "Неделя", "grades": "Новые баллы", "evening": "Завтра",
-          "quiz": "Тест СДО", "plus": "Капибара+"}
+          "quiz": "Тест СДО", "plus": "Капибара+", "ugc": "Записи группы"}
 
 
 def plain(html: str, limit: int = 180) -> str:

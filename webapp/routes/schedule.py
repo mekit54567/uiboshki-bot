@@ -164,7 +164,9 @@ async def api_today(user: dict = CurrentUser):
         soon.append({"id": d["id"], "subject": d["subject"], "due_date": d["due_date"],
                      "due_time": d.get("due_time") or "", "days": days})
     from database.groups import viewer_group
-    notes = await get_lesson_notes(today.isoformat(), await viewer_group(user["id"]))
+    import ugc
+    notes = ugc.without_hidden(await get_lesson_notes(today.isoformat(), await viewer_group(user["id"])),
+                               await ugc.hidden(user["id"]), "created_by")
     return {
         **_day_label(today), "now": now.isoformat(), "hour": now.hour,
         "lessons": lessons, "cancelled": cancelled, "tomorrow_first": tomorrow_first, "schedule_ok": schedule_ok,
@@ -452,7 +454,9 @@ async def api_notes(date: str = "", user: dict = CurrentUser):
     from utils import today_msk
     from database.groups import viewer_group
     date_str = date or today_msk().isoformat()
-    items = await get_lesson_notes(date_str, await viewer_group(user["id"]))
+    import ugc
+    items = ugc.without_hidden(await get_lesson_notes(date_str, await viewer_group(user["id"])),
+                               await ugc.hidden(user["id"]), "created_by")
     for n in items:   # своё (или староста) — можно убрать из приложения
         n["mine"] = n.get("created_by") == user["id"]
     return {"date": date_str, "items": items}
@@ -493,6 +497,9 @@ async def api_note_add(body: NoteBody, user: dict = CurrentUser):
         raise HTTPException(status_code=403, detail="заметки — для своей группы")
     if not ratelimit.allow("note", user["id"]):
         raise HTTPException(429, "Много заметок подряд — подожди пару минут")
+    import ugc
+    if why := await ugc.note_spam(user["id"], day.isoformat(), text, gid):
+        raise HTTPException(429, why)
     nid = await add_lesson_note(day.isoformat(), subject, text, user["id"], gid)
     return {"ok": True, "id": nid}
 

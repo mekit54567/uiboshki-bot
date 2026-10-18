@@ -19,7 +19,10 @@ async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
     from sdo_submit import can_submit
     from database import get_user_deadline_reminders
     from deadline_reminders import label as dl_label
-    items = await get_active_deadlines(user["id"], include_done=include_done)
+    import ugc
+    hidden = await ugc.hidden(user["id"])
+    items = [d for d in await get_active_deadlines(user["id"], include_done=include_done)
+             if not (hidden and is_shared_deadline(d) and d.get("created_by") in hidden)]
     editor = await is_editor(user["id"])
     reminders = await get_user_deadline_reminders(user["id"])
     for d in items:
@@ -31,6 +34,9 @@ async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
         d["edit_scope"] = "all" if (d["personal"] and d["mine"]) or (not d["personal"] and editor) else "me"
         d["mine_changed"] = bool(d.get("mine_changed"))
         d["can_submit"] = can_submit(d)
+        # общий срок, который завёл человек (не СДО и не сам) — «Пожаловаться» (ugc.py)
+        d["reportable"] = (not d["personal"] and not d["mine"] and bool(d.get("created_by"))
+                           and not (d.get("external_id") or "").startswith("sdo:"))
         d["reminders"] = [{"at": at, "label": dl_label(at)} for at in reminders.get(d["id"], [])]
     import quiz_time    # у тестов — ограничение по времени из СДО (минуты или None)
     await quiz_time.attach(items)
@@ -131,11 +137,13 @@ async def api_homework(user: dict = CurrentUser):
     диплинком в бота (t.me/<бот>?start=hw_<id>) — file_id наружу не отдаём."""
     from group_context import list_homework
     from database.groups import viewer_group
-    items = await list_homework(60, await viewer_group(user["id"]))
+    import ugc
+    items = ugc.without_hidden(await list_homework(60, await viewer_group(user["id"])),
+                               await ugc.hidden(user["id"]), "created_by")
     return {"items": [
         {"id": h["id"], "subject": h["subject"], "content": h.get("content") or "",
          "lesson_date": h.get("lesson_date") or "", "created_at": (h.get("created_at") or "")[:10],
-         "has_file": bool(h.get("file_id"))}
+         "has_file": bool(h.get("file_id")), "mine": h.get("created_by") == user["id"]}
         for h in items
     ]}
 

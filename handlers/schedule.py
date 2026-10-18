@@ -71,6 +71,15 @@ async def _gid(message: Message) -> int | None:
     return await get_user_group(message.from_user.id)
 
 
+async def _note_spam(message: Message, date_str: str, text: str) -> str | None:
+    """Заметку видит вся группа — антиспам как в приложении (ugc.note_spam)."""
+    import ratelimit
+    import ugc
+    if not ratelimit.allow("note", message.from_user.id):
+        return "Много заметок подряд — подожди пару минут"
+    return await ugc.note_spam(message.from_user.id, date_str, text, await _gid(message))
+
+
 @router.message(Command("schedule"))
 @router.message(F.text == "📅 Сегодня")
 async def cmd_today(message: Message):
@@ -293,6 +302,9 @@ async def cmd_note(message: Message, state: FSMContext):
         if len(note_text) > NOTE_MAX:
             await message.answer(f"✂️ Заметка длинновата — до {NOTE_MAX} символов, а тут {len(note_text)}.")
             return
+        if why := await _note_spam(message, date_str, note_text):
+            await message.answer(f"✋ {why}.")
+            return
         await add_lesson_note(date_str, subject, note_text, message.from_user.id, await _gid(message))
         await message.answer("✅ Заметка добавлена!", reply_markup=MAIN_KB)
         return
@@ -322,7 +334,8 @@ async def note_choose_day(callback: CallbackQuery, state: FSMContext):
     await state.set_state(NoteAdd.waiting_text)
     await callback.bot.send_message(
         callback.from_user.id,
-        "✏️ Пришли текст заметки. Можно с предметом через двоеточие:\n"
+        "✏️ Пришли текст заметки — её увидит <b>вся группа</b> под расписанием этого дня, "
+        "это не личная запись. Можно с предметом через двоеточие:\n"
         "<code>Матан: контрольная в 401</code>\n\n"
         "/cancel — отмена",
         parse_mode="HTML",
@@ -352,6 +365,10 @@ async def note_save_text(message: Message, state: FSMContext):
 
     if len(note_text) > NOTE_MAX:   # состояние не сбрасываем — пусть пришлёт короче
         await message.answer(f"✂️ Длинновато — до {NOTE_MAX} символов, а тут {len(note_text)}. Пришли короче.")
+        return
+    if why := await _note_spam(message, date_str, note_text):
+        await state.clear()
+        await message.answer(f"✋ {why}.", reply_markup=MAIN_KB)
         return
     await add_lesson_note(date_str, subject, note_text, message.from_user.id, await _gid(message))
     await state.clear()

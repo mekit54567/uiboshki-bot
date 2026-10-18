@@ -18,7 +18,8 @@ router = APIRouter()
 
 PAGES = {"consent": "Согласие на обработку персональных данных",
          "privacy": "Политика обработки персональных данных",
-         "offer": "Оферта: подписка «Капибара+» и поддержка проекта"}
+         "offer": "Оферта: подписка «Капибара+» и поддержка проекта",
+         "rules": "Правила Капибары"}
 
 _SHELL = """<!doctype html>
 <html lang="ru">
@@ -106,6 +107,12 @@ async def privacy_page(embed: int = 0):
 @router.get("/offer", response_class=HTMLResponse)
 async def offer_page(embed: int = 0):
     return HTMLResponse(render("offer", bool(embed)))
+
+
+@router.get("/rules", response_class=HTMLResponse)
+async def rules_page(embed: int = 0):
+    """Правила для записей людей (legal_texts.RULES, правило Apple 1.2)."""
+    return HTMLResponse(render("rules", bool(embed)))
 
 
 @router.get("/api/legal/{name}")

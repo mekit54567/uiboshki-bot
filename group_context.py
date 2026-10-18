@@ -37,7 +37,7 @@ async def list_homework(limit: int = 30, group_id: int | None = None) -> list[di
             db.row_factory = aiosqlite.Row
             from database.groups import g_or_home, scope_sql
             cur = await db.execute(
-                "SELECT id, subject, content, lesson_date, created_at, file_id, file_type FROM homework "
+                "SELECT id, subject, content, lesson_date, created_at, file_id, file_type, created_by FROM homework "
                 f"WHERE {scope_sql()} "
                 "ORDER BY COALESCE(lesson_date, substr(created_at, 1, 10)) DESC, id DESC LIMIT ?",
                 (g_or_home(group_id), limit),

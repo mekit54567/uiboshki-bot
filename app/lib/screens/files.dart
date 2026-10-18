@@ -16,6 +16,7 @@ import '../theme/tokens.dart';
 import '../widgets/capy.dart';
 import '../widgets/capy_refresh.dart';
 import '../widgets/common.dart';
+import '../widgets/report.dart' show openReportMenu;
 import '../widgets/tg_html.dart';
 import 'lesson.dart' show sameSubject;
 
@@ -27,6 +28,9 @@ class FileItem {
   final String head, topic;
   final bool hasText, hasSummary;
 
+  /// Загрузил сам (или староста) — без «Пожаловаться» (сервер: can_edit).
+  final bool canEdit;
+
   FileItem.fromJson(Map<String, dynamic> j)
     : id = j['id'] as int,
       title = j['title'] ?? '',
@@ -36,7 +40,8 @@ class FileItem {
       fileName = j['file_name'] ?? '',
       category = j['category'] ?? 'other',
       hasText = j['has_text'] == true,
-      hasSummary = j['has_summary'] == true;
+      hasSummary = j['has_summary'] == true,
+      canEdit = j['can_edit'] == true;
 }
 
 /// Подписи типов — без эмодзи (в интерфейсе их не используем).
@@ -1066,6 +1071,14 @@ class _FileSheetState extends State<_FileSheet> {
                 icon: const Icon(Icons.send_rounded, size: 16),
                 label: const Text('Прислать в Telegram'),
               ),
+              if (!widget.f.canEdit)
+                TextButton.icon(
+                  key: const Key('file:report'),
+                  style: TextButton.styleFrom(foregroundColor: p.muted),
+                  onPressed: () => openReportMenu(context, widget.api, kind: 'file', id: widget.f.id),
+                  icon: const Icon(Icons.flag_outlined, size: 16),
+                  label: const Text('Пожаловаться или скрыть'),
+                ),
               if (_note != null) ...[const SizedBox(height: Space.m), Text(_note!, style: s.body(14, color: p.muted))],
               if (widget.f.hasText) ...[
                 const SizedBox(height: Space.xl),

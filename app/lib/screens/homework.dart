@@ -8,20 +8,26 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/capy.dart';
 import '../widgets/common.dart';
+import '../widgets/report.dart';
 import 'deadline_edit.dart' show snack;
 import 'files.dart' show BackRow;
+import 'legal.dart' show LegalLink, openLegal;
 
 class Homework {
   final int id;
   final String subject, content, lessonDate;
   final bool hasFile;
 
+  /// Своё — без «Пожаловаться» (сервер: mine).
+  final bool mine;
+
   Homework.fromJson(Map<String, dynamic> j)
     : id = j['id'] as int,
       subject = j['subject'] as String? ?? '',
       content = j['content'] as String? ?? '',
       lessonDate = j['lesson_date'] as String? ?? '',
-      hasFile = j['has_file'] == true;
+      hasFile = j['has_file'] == true,
+      mine = j['mine'] == true;
 }
 
 /// «пт, 9 окт» — везде на доске ДЗ и в заметках один формат (владелец, 2.14).
@@ -53,9 +59,18 @@ class _Page<T> extends StatelessWidget {
   );
 }
 
-class HomeworkScreen extends StatelessWidget {
+class HomeworkScreen extends StatefulWidget {
   final Api api;
   const HomeworkScreen({super.key, required this.api});
+
+  @override
+  State<HomeworkScreen> createState() => _HomeworkScreenState();
+}
+
+class _HomeworkScreenState extends State<HomeworkScreen> {
+  int _epoch = 0; // скрыл автора — список заново
+
+  Api get api => widget.api;
 
   Future<void> _send(BuildContext context, Homework h) async {
     tick();
@@ -72,6 +87,7 @@ class HomeworkScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _Page<List<Homework>>(
+    key: ValueKey(_epoch),
     load: () async => [for (final h in (await api.get('/homework'))['items'] as List) Homework.fromJson(h)],
     builder: (context, items) {
       final t = now();
@@ -87,7 +103,14 @@ class HomeworkScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
         child: Opacity(
           opacity: past ? 0.55 : 1,
-          child: _HomeworkCard(h: h, past: past, onSend: () => _send(context, h)),
+          child: _HomeworkCard(
+            h: h,
+            past: past,
+            onSend: () => _send(context, h),
+            report: h.mine
+                ? null
+                : ReportButton(api: api, kind: 'hw', id: h.id, onChanged: () => setState(() => _epoch++)),
+          ),
         ),
       );
       return ListView(
@@ -115,7 +138,10 @@ class _HomeworkCard extends StatelessWidget {
 
   /// Пара уже была — дата без «горящего» цвета.
   final bool past;
-  const _HomeworkCard({required this.h, required this.onSend, this.past = false});
+
+  /// «⋯» — пожаловаться или скрыть автора (чужое ДЗ).
+  final Widget? report;
+  const _HomeworkCard({required this.h, required this.onSend, this.past = false, this.report});
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +196,7 @@ class _HomeworkCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (report != null) Align(alignment: Alignment.topRight, child: report),
           ],
         ),
       ),
@@ -278,7 +305,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
                     child: Tile(
-                      padding: EdgeInsets.fromLTRB(Space.l, Space.l, n.mine ? Space.xs : Space.l, Space.l),
+                      padding: EdgeInsets.fromLTRB(Space.l, Space.l, n.id > 0 ? Space.xs : Space.l, Space.l),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -299,7 +326,9 @@ class _NotesScreenState extends State<NotesScreen> {
                               visualDensity: VisualDensity.compact,
                               onPressed: () => _delete(n),
                               icon: Icon(Icons.delete_outline_rounded, size: 20, color: s.p.muted),
-                            ),
+                            )
+                          else if (n.id > 0)
+                            ReportButton(api: api, kind: 'note', id: n.id, onChanged: () => setState(() => _epoch++)),
                         ],
                       ),
                     ),
@@ -441,7 +470,45 @@ class _NoteSheetState extends State<NoteSheet> {
           children: [
             Text('Новая заметка', style: s.title(24)),
             const SizedBox(height: Space.s),
-            Text('Увидит вся группа — под расписанием этого дня.', style: s.body(13, color: p.muted)),
+            // Никита 18.10: чтобы понимали, что уйдёт всей группе, а не в личные
+            Container(
+              key: const Key('note:public'),
+              padding: const EdgeInsets.all(Space.m),
+              decoration: BoxDecoration(
+                color: p.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(Radii.chip),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.groups_rounded, size: 22, color: p.accent),
+                  const SizedBox(width: Space.m),
+                  Expanded(
+                    child: Text(
+                      'Это не личная заметка: её увидит вся группа под расписанием этого дня.',
+                      style: s.body(14, weight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Space.s),
+            // правило Apple 1.2: согласие с правилами — у кнопки, которой публикуют
+            GestureDetector(
+              key: const Key('note:rules'),
+              onTap: () => openLegal(context, widget.api, 'rules'),
+              child: Text.rich(
+                TextSpan(
+                  text: 'Добавляя, соглашаешься с ',
+                  style: s.body(13, color: p.muted),
+                  children: [
+                    TextSpan(
+                      text: 'Правилами Капибары',
+                      style: TextStyle(color: p.link),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: Space.l),
             Text('Когда', style: s.eyebrow()),
             const SizedBox(height: Space.s),
@@ -499,7 +566,7 @@ class _NoteSheetState extends State<NoteSheet> {
                   shape: const StadiumBorder(),
                 ),
                 onPressed: _busy ? null : _save,
-                child: const Text('Сохранить'),
+                child: const Text('Показать всей группе'),
               ),
             ),
           ],

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api.dart';
+import '../api/guest.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -477,7 +478,7 @@ class _TargetScreenState extends State<TargetScreen> {
               Row(
                 children: [
                   const Expanded(child: BackRow()),
-                  if (_data != null)
+                  if (_data != null && widget.api is! GuestApi) // без входа закреплять некуда
                     Padding(
                       padding: const EdgeInsets.only(right: Space.s),
                       child: IconButton(
@@ -560,7 +561,9 @@ class _TargetScreenState extends State<TargetScreen> {
                   ],
                   at: t,
                   showGroups: widget.type != 1,
-                  onLesson: (l) => openLesson(context, widget.api, l),
+                  onLesson: (l) {
+                    if (widget.api is! GuestApi) openLesson(context, widget.api, l);
+                  },
                 ),
           ],
         ],
