@@ -162,6 +162,18 @@
       window.addEventListener("orientationchange", css);
     })();
   </script>
+  <script id="uib-dpr">
+    // iPhone (Никита 19.10, «PWA в Safari лагает»): Flutter в браузере сам
+    // рисует каждый пиксель каждого кадра, а у iPhone экран 3x — 3 млн точек.
+    // В 2x точек на 56% меньше, прокрутка в 2–2,5 раза легче, текст на глаз
+    // почти тот же. Flutter берёт плотность из window.devicePixelRatio.
+    (function () {
+      if (!/iPhone|iPod|iPad/.test(navigator.userAgent)) return;
+      var real = window.devicePixelRatio;
+      if (!(real > 2)) return;
+      Object.defineProperty(window, "devicePixelRatio", { configurable: true, get: function () { return 2; } });
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
