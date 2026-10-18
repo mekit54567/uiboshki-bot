@@ -38,6 +38,12 @@ class ChatMsg {
   /// Вопрос без ответа (ошибка) — в историю не идёт, иначе ИИ отвечал на него позже.
   bool failed;
 
+  /// Кнопка «Подумать ещё» под ответом (подписка): {label, left, daily}.
+  final Map<String, dynamic>? think;
+
+  /// Вопрос ушёл с включённым «Подумать» (think_first); не хранится.
+  bool deep = false;
+
   ChatMsg(
     this.role,
     this.content, {
@@ -49,6 +55,7 @@ class ChatMsg {
     this.att,
     this.fileText = '',
     this.failed = false,
+    this.think,
   });
 
   Map<String, dynamic> toJson() => {
@@ -60,6 +67,7 @@ class ChatMsg {
     if (att != null) 'att': {'name': att!.name, 'image': att!.image},
     if (fileText.isNotEmpty) 'file_text': fileText,
     if (failed) 'failed': true,
+    if (think != null) 'think': think,
   };
 
   factory ChatMsg.fromJson(Map<String, dynamic> j) {
@@ -73,6 +81,7 @@ class ChatMsg {
       att: a is Map ? (name: '${a['name'] ?? 'файл'}', image: a['image'] == true) : null,
       fileText: j['file_text'] ?? '',
       failed: j['failed'] == true,
+      think: j['think'] is Map ? Map<String, dynamic>.from(j['think']) : null,
     );
   }
 }
@@ -201,6 +210,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// лимита (староста) или сервер не сказал — число не показываем.
   int? _left;
 
+  /// «Подумать» до вопроса (подписка, think.py; Никита 18.10: «чтоб можно
+  /// было выбрать перед ответом сразу»): {label, left, daily} с сервера; null —
+  /// переключателя нет (не подписчик, выключено, iPhone). [_thinkOn] —
+  /// включён на следующий вопрос; вопрос ушёл — выключается сам, чтобы
+  /// дневной лимит не уходил случайно.
+  Map<String, dynamic>? _thinkOffer;
+  bool _thinkOn = false;
+
+  int get _thinkLeft => (_thinkOffer?['left'] as num?)?.toInt() ?? 0;
+  bool get _thinkCan => _thinkOffer != null && _thinkLeft > 0 && _att == null;
+
   @override
   void initState() {
     super.initState();
@@ -217,6 +237,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ];
             final q = j['quota'];
             _left = q is Map && q['left'] is num ? (q['left'] as num).toInt() : null;
+            _thinkOffer = j['think'] is Map ? Map<String, dynamic>.from(j['think']) : null;
           });
         })
         .catchError((_) {});
@@ -441,12 +462,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         text.isNotEmpty ? text : (att!.image ? 'Реши задание на фото.' : 'Разбери этот файл.'),
         att: att == null ? null : (name: att.name, image: att.image),
       );
+      entry.deep = _thinkOn && _thinkCan; // «Подумать» — на один вопрос
       _log.add(entry);
       _dirty = true;
     } else {
-      entry = _log.lastWhere((m) => m.role == 'user');
+      entry = _log.lastWhere((m) => m.role == 'user'); // предмет выбрали — «Подумать» остаётся при вопросе
     }
+    final deep = entry.deep;
     setState(() {
+      if (again == null) _thinkOn = false;
       entry.failed = false;
       _input.clear();
       _att = null;
@@ -454,16 +478,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _waiting = true;
     });
     _toEnd();
-    final history = [
-      for (final m in _log)
-        if (!m.error && !m.failed && m.content.isNotEmpty && m.choose.isEmpty)
-          {'role': m.role, 'content': m.fileText.isEmpty ? m.content : '${m.content}\n\n${m.fileText}'},
-    ];
-    final body = <String, dynamic>{'history': history, 'subject': _subject};
+    final body = <String, dynamic>{'history': _history(_log), 'subject': _subject};
     if (att != null) body['attachment'] = {'name': att.name, 'mime': att.mime, 'data': base64Encode(att.bytes)};
+    if (deep) body['think_first'] = true;
     ChatMsg answer;
     try {
       final r = await widget.api.post('/chat', body);
+      _takeThink(r);
       if (r['file_text'] is String) entry.fileText = r['file_text'];
       final choose = [for (final c in (r['choose'] as List? ?? [])) '$c'];
       answer = ChatMsg(
@@ -473,16 +494,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         sources: [for (final s in (r['sources'] as List? ?? [])) Map<String, dynamic>.from(s)],
         files: [for (final f in (r['files'] as List? ?? [])) Map<String, dynamic>.from(f)],
         choose: choose,
+        think: r['think'] is Map ? Map<String, dynamic>.from(r['think']) : null,
       );
       if (choose.isNotEmpty) _chooseAtt = att; // выберет предмет — вложение уйдёт ещё раз
-      if (_left != null && _left! > 0 && choose.isEmpty && answer.files.isEmpty) _left = _left! - 1;
+      if (choose.isEmpty) entry.deep = false;
+      // «Подумать» — свой лимит, обычный дневной счёт не трогает
+      if (!deep && _left != null && _left! > 0 && choose.isEmpty && answer.files.isEmpty) _left = _left! - 1;
     } on ApiError catch (e) {
       entry.failed = true;
+      entry.deep = false;
       answer = ChatMsg('assistant', e.message, error: true);
     } catch (e) {
       entry.failed = true;
+      entry.deep = false;
       answer = ChatMsg('assistant', errorText(e), error: true);
     }
+    await _deliver(log, id, answer);
+  }
+
+  /// Сервер прислал, сколько «Подумать» осталось, — переключатель и чип под ответом.
+  void _takeThink(Map<String, dynamic> r) {
+    if (r['think'] is Map) _thinkOffer = Map<String, dynamic>.from(r['think']);
+  }
+
+  void _toggleThink() {
+    if (!_thinkCan || _waiting) return;
+    tick();
+    setState(() => _thinkOn = !_thinkOn);
+  }
+
+  /// История для сервера: без ошибок и вопросов без ответа; два ответа
+  /// подряд («Подумать ещё») — только последний, роли чередуются.
+  List<Map<String, String>> _history(List<ChatMsg> log) {
+    final ok = [
+      for (final m in log)
+        if (!m.error && !m.failed && m.content.isNotEmpty && m.choose.isEmpty) m,
+    ];
+    return [
+      for (var i = 0; i < ok.length; i++)
+        if (!(ok[i].role == 'assistant' && i + 1 < ok.length && ok[i + 1].role == 'assistant'))
+          {
+            'role': ok[i].role,
+            'content': ok[i].fileText.isEmpty ? ok[i].content : '${ok[i].content}\n\n${ok[i].fileText}',
+          },
+    ];
+  }
+
+  /// «Подумать ещё»: тот же вопрос заново решает модель второго уровня
+  /// (подписка, свой дневной лимит); новый ответ — под прежним.
+  Future<void> _think() async {
+    if (_waiting || _log.length < 2 || _log.last.role != 'assistant') return;
+    tick();
+    final log = _log;
+    final id = _id;
+    setState(() => _waiting = true);
+    _toEnd();
+    final body = {'history': _history(_log.sublist(0, _log.length - 1)), 'subject': _subject, 'think': true};
+    ChatMsg answer;
+    try {
+      final r = await widget.api.post('/chat', body);
+      _takeThink(r);
+      answer = ChatMsg(
+        'assistant',
+        r['content'] ?? '',
+        html: r['html'] ?? '',
+        sources: [for (final s in (r['sources'] as List? ?? [])) Map<String, dynamic>.from(s)],
+        think: r['think'] is Map ? Map<String, dynamic>.from(r['think']) : null,
+      );
+    } on ApiError catch (e) {
+      answer = ChatMsg('assistant', e.message, error: true);
+    } catch (e) {
+      answer = ChatMsg('assistant', errorText(e), error: true);
+    }
+    await _deliver(log, id, answer);
+  }
+
+  Future<void> _deliver(List<ChatMsg> log, String? id, ChatMsg answer) async {
     if (!mounted) return;
     if (!identical(log, _log)) {
       // пока ждали, ушли в другой чат — ответ в свой (если его не удалили)
@@ -504,6 +591,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   ChatAttachment? _chooseAtt;
+
+  Widget _thinkChip(AppStyle s, Map<String, dynamic> t) {
+    final p = s.p;
+    final left = (t['left'] as num?)?.toInt() ?? 0;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.s),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: ActionChip(
+          onPressed: left > 0 ? _think : null,
+          backgroundColor: p.card,
+          side: BorderSide(color: left > 0 ? p.accent : p.line),
+          shape: const StadiumBorder(),
+          avatar: Icon(Icons.psychology_outlined, size: 18, color: p.accent),
+          labelPadding: const EdgeInsets.only(left: 6), // как у «Подумать» над полем: поровну слева и справа
+          label: Text('${t['label'] ?? 'Подумать ещё'} · $left', style: s.body(13, weight: FontWeight.w600)),
+        ),
+      ),
+    );
+  }
 
   void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scroll.hasClients) {
@@ -649,6 +756,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               _send(again: lastQ.content, againAtt: _chooseAtt);
                             },
                           ),
+                        if (!_waiting && _log.isNotEmpty && _log.last.think != null) _thinkChip(s, _log.last.think!),
                         if (_waiting)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.xl, 0),
@@ -659,6 +767,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+              if (_thinkOffer != null)
+                _ThinkToggle(
+                  left: _thinkLeft,
+                  on: _thinkOn && _thinkCan,
+                  attached: _att != null,
+                  onTap: _thinkCan && !_waiting ? _toggleThink : null,
+                ),
               if (_att != null || _attNote != null)
                 _AttachPreview(
                   att: _att,
@@ -815,6 +930,72 @@ class _ChatsSheetState extends State<_ChatsSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// «Подумать · 7» над полем ввода (подписка): включён — следующий вопрос сразу
+/// решает модель второго уровня. Кончилось на сегодня или прикреплён файл —
+/// серый и не нажимается.
+class _ThinkToggle extends StatelessWidget {
+  final int left;
+  final bool on, attached;
+  final VoidCallback? onTap;
+  const _ThinkToggle({required this.left, required this.on, required this.attached, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final can = onTap != null || (left > 0 && !attached);
+    final note = on
+        ? 'следующий вопрос Капибара решит, подумав подольше'
+        : left <= 0
+        ? 'на сегодня всё — завтра снова'
+        : attached
+        ? 'к фото и файлам — нет'
+        : '';
+    final fg = on ? p.onAccent : (can ? p.accent : p.muted);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0),
+      child: Row(
+        children: [
+          Semantics(
+            button: true,
+            toggled: on,
+            enabled: onTap != null,
+            child: ChoiceChip(
+              key: const Key('think-toggle'),
+              selected: on,
+              onSelected: onTap == null ? null : (_) => onTap!(),
+              showCheckmark: false,
+              backgroundColor: p.card,
+              selectedColor: p.accent,
+              disabledColor: p.card,
+              side: BorderSide(color: on || can ? p.accent : p.line),
+              shape: const StadiumBorder(),
+              avatar: Icon(Icons.psychology_outlined, size: 18, color: fg),
+              // справа у чипа было вдвое больше места, чем слева (робот 18.10): у подписи — отступ только от значка
+              labelPadding: const EdgeInsets.only(left: 6),
+              label: Text(
+                'Подумать · ${left < 0 ? 0 : left}',
+                style: s.body(13, weight: FontWeight.w600, color: fg),
+              ),
+            ),
+          ),
+          if (note.isNotEmpty) ...[
+            const SizedBox(width: Space.s),
+            Expanded(
+              child: Text(
+                note,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: s.body(12, color: p.muted),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -4,7 +4,7 @@
 import logging
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from webapp.deps import CurrentUser
@@ -56,6 +56,12 @@ class ChatBody(BaseModel):
     history: list[ChatMessage]
     subject: str = ""
     attachment: ChatAttachment | None = None
+    # «Подумать ещё» (think.py): история кончается вопросом, ответ на него
+    # заново решает модель второго уровня; дневной лимит — свой
+    think: bool = False
+    # «Подумать» включили до вопроса (переключатель у поля ввода): вопрос
+    # сразу решает та же модель, первого обычного ответа не было
+    think_first: bool = False
 
 
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -67,18 +73,22 @@ FILE_MEMORY_LIMIT = 10_000
 
 
 @router.get("/api/subjects")
-async def api_subjects(user: dict = CurrentUser):
+async def api_subjects(user: dict = CurrentUser, x_app: str = Header(default="")):
     """Предметы для чата: с загруженными лекциями (чат будет опираться на
     них) — сверху, дальше остальные предметы группы из расписания. quota —
-    сколько вопросов осталось сегодня (null — без лимита, например староста)."""
+    сколько вопросов осталось сегодня (null — без лимита, например староста).
+    think — переключатель «Подумать» у поля ввода ({label, left, daily};
+    null — не подписчик, выключено, iPhone)."""
     import ai_quota
+    import think
     from database import get_subjects_with_lecture_text
     from schedule_parser import get_group_subjects
     with_lectures = await get_subjects_with_lecture_text()
     rest = [s for s in await get_group_subjects() if s not in with_lectures]
     return {"subjects": [{"name": s, "lectures": True} for s in with_lectures]
                         + [{"name": s, "lectures": False} for s in rest],
-            "quota": await ai_quota.left(user["id"])}
+            "quota": await ai_quota.left(user["id"]),
+            "think": await think.offer(user["id"], x_app)}
 
 
 async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
@@ -136,7 +146,7 @@ async def _chat_file_request(text: str) -> dict | None:
 
 
 @router.post("/api/chat")
-async def api_chat(body: ChatBody, user: dict = CurrentUser):
+async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header(default="")):
     """Чат WebApp: история (последние 20), по желанию предмет (если по нему
     есть лекции — ответ опирается на них) и одно вложение — фото (решает
     Gemini по картинке) или документ PDF/DOCX/PPTX/TXT (его текст уходит в
@@ -150,9 +160,16 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
     from utils import md_to_tg_html_chunks
 
     import ai_quota
-    why = await ai_quota.gate(user["id"])
-    if why:
-        raise HTTPException(status_code=429, detail=ai_quota.text(why))
+    import think
+    deep = body.think or body.think_first
+    again = deep and not body.think_first        # «Подумать ещё» под ответом
+    if deep:
+        if body.attachment or not await think.offer(user["id"], x_app):
+            raise HTTPException(status_code=403, detail=think.PLUS_TEXT)
+    else:
+        why = await ai_quota.gate(user["id"])
+        if why:
+            raise HTTPException(status_code=429, detail=ai_quota.text(why))
     # Роли — только user/assistant, и первым — вопрос: срез [-20:] мог
     # начаться с ответа ИИ, а deepseek-reasoner такое не принимает.
     history = [{"role": m.role, "content": m.content} for m in body.history[-20:]
@@ -171,7 +188,11 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
     # заглушку вложения («Разбери этот файл.») не ищем вовсе
     query = lecture_picker.search_query(history)
     last = history[-1]["content"] if history[-1]["role"] == "user" else ""
-    if not body.attachment and history[-1]["role"] == "user":
+    if deep and history[-1]["role"] != "user":
+        raise HTTPException(status_code=400, detail="нет вопроса")
+    # «скинь практику 3» и «по какому предмету?» — без ИИ, попытку
+    # «Подумать» не тратят; у «Подумать ещё» вопрос уже был отвечен
+    if not body.attachment and not again and history[-1]["role"] == "user":
         found = await _chat_file_request(history[-1]["content"])
         if found:
             return found
@@ -196,7 +217,7 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
         lectures = lecture_picker.pick(await get_subject_lecture_context(subject), query)
     elif not subject and query.strip():
         all_lectures = await get_all_lecture_context()
-        if not body.attachment and lecture_picker.wants_course(last):
+        if not body.attachment and not again and lecture_picker.wants_course(last):
             # «объясни 3 лекцию» без предмета: вопрос явно про лекции, а предмет
             # не угадывается — не отвечаем наугад, а даём выбрать (фронт
             # переключит предмет и задаст тот же вопрос)
@@ -211,7 +232,14 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
     context = await build_group_context(user["id"])
 
     try:
-        if body.attachment:
+        if deep:
+            try:
+                result = {"content": await think.solve(user["id"], history, subject, lectures, context,
+                                                       first=body.think_first),
+                          "reasoning": ""}
+            except think.ThinkError as e:
+                raise HTTPException(status_code=502, detail=str(e))
+        elif body.attachment:
             try:
                 raw = base64.b64decode(body.attachment.data, validate=False)
             except Exception:
@@ -253,4 +281,9 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser):
     # ответ без лекций (запасной путь _chat_with_fallback) — источников нет
     if lectures and not result.pop("no_lectures", False):
         result["sources"] = sources if sources is not None else await _lecture_sources(lectures, subject)
+    # кнопка «Подумать ещё» под ответом (подписчикам, не на iPhone); к фото и
+    # файлу — нет: модель второго уровня читает только текст
+    offer = None if body.attachment else await think.offer(user["id"], x_app)
+    if offer:
+        result["think"] = offer
     return result

@@ -738,8 +738,84 @@ function askSubject() {}
 function clearAttachment() {}
 function renderChat() {}
 function scrollChatToEnd() {}
+function syncNavHeight() {}
+let thinkOffer = null, thinkArmed = false;
 """
-CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "requestAnswer", "sendChat"]
+CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "historyOf",
+            "requestAnswer", "sendChat", "thinkAgain", "setThinkOffer", "renderThinkToggle", "toggleThink"]
+
+
+@node
+def test_chat_think_toggle_before_question_is_one_shot():
+    # Никита 18.10: «Подумать» — выбрать до ответа. Включил — вопрос уходит
+    # с think_first, переключатель сам выключается; кончилось — серый;
+    # с вложением — нельзя; не подписчик — переключателя нет
+    first, second, html_on, html_off, html_zero, html_att, html_none, armed_zero = _front(
+        "js/chat.js", CHAT_FNS, CHAT_STUBS, """
+      const box = document.getElementById("think-toggle");
+      setThinkOffer({ label: "Подумать ещё", left: 2, daily: 10 });
+      toggleThink();
+      const htmlOn = box.innerHTML;
+      const input = document.getElementById("chat-input");
+      input.value = "что такое NPV?"; const p = sendChat();
+      const htmlOff = box.innerHTML;
+      calls[0].res({ content: "глубоко", html: "глубоко", think: { label: "Подумать ещё", left: 0, daily: 10 } }); await p;
+      const htmlZero = box.innerHTML;
+      toggleThink();
+      const armedZero = thinkArmed;
+      input.value = "а пример?"; const p2 = sendChat();
+      calls[1].res({ content: "пример", html: "пример" }); await p2;
+      setThinkOffer({ label: "Подумать ещё", left: 3, daily: 10 });
+      pendingAttachment = { name: "a.jpg" }; renderThinkToggle(); toggleThink();
+      const htmlAtt = box.innerHTML + "|" + thinkArmed;
+      pendingAttachment = null;
+      setThinkOffer(null);
+      console.log(JSON.stringify([calls[0].body, calls[1].body, htmlOn, htmlOff, htmlZero, htmlAtt, box.innerHTML,
+                                  armedZero]));
+    """)
+    assert first["think_first"] is True and [m["content"] for m in first["history"]] == ["что такое NPV?"]
+    assert "think_first" not in second                       # одноразовый: следующий — обычный
+    assert 'class="think-toggle on"' in html_on and 'aria-pressed="true"' in html_on and "Подумать · 2" in html_on
+    assert 'class="think-toggle"' in html_off and "disabled" not in html_off
+    assert "Подумать · 0" in html_zero and "disabled" in html_zero and not armed_zero
+    assert "disabled" in html_att and html_att.endswith("|false")
+    assert html_none == ""
+
+
+@node
+def test_chat_think_first_survives_subject_choice():
+    # «объясни 3 лекцию» с «Подумать»: сервер спросил предмет — повтор уходит тоже «подумав»
+    first, again = _front("js/chat.js", CHAT_FNS + ["askAgain"], CHAT_STUBS.replace("function askSubject() {}", """
+      function askSubject(entry, att) { setTimeout(() => askAgain(entry, att), 0); }
+    """), """
+      setThinkOffer({ label: "Подумать ещё", left: 2, daily: 10 });
+      toggleThink();
+      document.getElementById("chat-input").value = "объясни 3 лекцию"; const p = sendChat();
+      calls[0].res({ content: "По какому предмету?", choose: ["Экономика"] }); await p; await tick();
+      calls[1].res({ content: "ответ", html: "ответ" }); await tick();
+      console.log(JSON.stringify([calls[0].body.think_first, calls[1].body.think_first]));
+    """)
+    assert first is True and again is True
+
+
+@node
+def test_chat_think_again_resends_question_without_old_answer():
+    # «Подумать ещё»: тот же вопрос без прошлого ответа, новый ответ — под ним;
+    # дальше в истории из двух ответов подряд уходит только последний
+    think_body, shown, next_hist = _front("js/chat.js", CHAT_FNS, CHAT_STUBS, """
+      const q = { role: "user", content: "что такое NPV?" };
+      chatLog.push(q); saveChatLog();
+      const p = requestAnswer(q, null);
+      calls[0].res({ content: "коротко", html: "коротко", think: { label: "Подумать ещё", left: 3 } }); await p;
+      const p2 = thinkAgain();
+      calls[1].res({ content: "глубже", html: "глубже", think: { label: "Подумать ещё", left: 2 } }); await p2;
+      const e = { role: "user", content: "а пример?" };
+      chatLog.push(e); requestAnswer(e, null);
+      console.log(JSON.stringify([calls[1].body, shownMsgs, calls[2].body.history.map(m => m.content)]));
+    """)
+    assert think_body["think"] is True and [m["content"] for m in think_body["history"]] == ["что такое NPV?"]
+    assert shown == ["assistant:коротко", "assistant:глубже"]
+    assert next_hist == ["что такое NPV?", "глубже", "а пример?"]
 
 
 @node
@@ -1264,3 +1340,9 @@ def test_plus_tag_whole_and_invite_own_icon():
     assert re.search(r'shareBot\(\)"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/>',
                      HTML)
     assert "  invite: '" in JS["js/icons.js"]
+
+
+def test_think_note_wraps_not_cut():
+    # робот 18.10: «следующий вопрос решит DeepS…» обрезалось — подсказка переносится, а не режется
+    rule = re.search(r"\.think-note \{([^}]*)\}", CSS).group(1)
+    assert "nowrap" not in rule and "ellipsis" not in rule

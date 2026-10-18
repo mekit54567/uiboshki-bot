@@ -26,6 +26,7 @@ tier (и implicit, и explicit caching — платная фича) — поэт
 """
 
 import base64
+import contextvars
 import logging
 import time
 from collections import Counter
@@ -105,6 +106,10 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
     generation_config: dict = {"temperature": temperature}
     if max_output_tokens:
         generation_config["maxOutputTokens"] = max_output_tokens
+    forced = forced_model.get()
+    if forced:                  # «Подумать ещё» (think.py): только эта модель, без запасных
+        return await _openrouter_once(contents, system_instruction, generation_config, timeout,
+                                      mark_truncated, model=forced)
     ling_tried = False
     if fallback and AI_SPARE_MODEL and await ling_first():
         # Ling основная (ai_main, по умолчанию у всех): Gemini — запасная, если Ling не ответила
@@ -118,6 +123,7 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
             ling_tried = True
     if not GEMINI_API_KEY:
         raise GeminiError("GEMINI_API_KEY не настроен на сервере")
+
     payload: dict = {"contents": contents, "generationConfig": generation_config}
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
@@ -292,6 +298,12 @@ async def _generate_once(model: str, payload: dict, timeout: float, mark_truncat
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# «Подумать ещё» (think.py): на время запроса весь ИИ идёт одной моделью
+# OpenRouter (forced_model), без запасных Gemini; ai_usage — куда сложить
+# токены и цену ответа (для лимита трат и /status).
+forced_model: contextvars.ContextVar[str | None] = contextvars.ContextVar("forced_model", default=None)
+ai_usage: contextvars.ContextVar[dict | None] = contextvars.ContextVar("ai_usage", default=None)
+
 
 def _to_messages(contents: list[dict], system_instruction: str | None) -> list[dict]:
     """contents Gemini -> messages OpenAI (OpenRouter): текст и картинки inlineData."""
@@ -314,25 +326,39 @@ def _to_messages(contents: list[dict], system_instruction: str | None) -> list[d
 
 
 async def _openrouter_once(contents: list[dict], system_instruction: str | None, generation_config: dict,
-                           timeout: float, mark_truncated: bool) -> str:
-    """Тот же запрос запасной модели через OpenRouter (AI_SPARE_MODEL)."""
-    payload = {"model": AI_SPARE_MODEL, "messages": _to_messages(contents, system_instruction),
+                           timeout: float, mark_truncated: bool, model: str | None = None) -> str:
+    """Тот же запрос через OpenRouter: запасная модель (AI_SPARE_MODEL) или
+    заданная (model — «Подумать ещё»: ошибки не временные, чтобы решалка не
+    звала вместо неё другой ИИ; только провайдеры, которые не учатся на
+    запросах, — 152-ФЗ)."""
+    payload = {"model": model or AI_SPARE_MODEL, "messages": _to_messages(contents, system_instruction),
                "temperature": generation_config.get("temperature", 0.3)}
     if generation_config.get("maxOutputTokens"):
         payload["max_tokens"] = generation_config["maxOutputTokens"]
+    if model:
+        payload["provider"] = {"data_collection": "deny"}
+        payload["usage"] = {"include": True}
     try:
         async with net.client(timeout=timeout) as client:
             resp = await client.post(OPENROUTER_URL, json=payload,
                                      headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"})
     except httpx.HTTPError as e:
-        raise GeminiError(f"Не достучался до запасной модели ({type(e).__name__})", transient=True)
+        raise GeminiError(f"Не достучался до модели ({type(e).__name__})", transient=not model)
     if resp.status_code != 200:
         logger.warning(f"OpenRouter HTTP {resp.status_code}: {resp.text[:500]}")
-        raise GeminiError(f"Запасная модель ответила ошибкой HTTP {resp.status_code}", status=resp.status_code)
-    choice = (resp.json().get("choices") or [{}])[0]
+        raise GeminiError(f"Модель ответила ошибкой HTTP {resp.status_code}", status=resp.status_code)
+    data = resp.json()
+    holder = ai_usage.get()
+    if model and holder is not None:
+        u = data.get("usage") or {}
+        holder["in"] = holder.get("in", 0) + int(u.get("prompt_tokens") or 0)
+        holder["out"] = holder.get("out", 0) + int(u.get("completion_tokens") or 0)
+        if u.get("cost") is not None:
+            holder["cost"] = holder.get("cost", 0.0) + float(u["cost"])
+    choice = (data.get("choices") or [{}])[0]
     text = (choice.get("message") or {}).get("content") or ""
     if not text.strip():
-        raise GeminiError("Запасная модель вернула пустой ответ")
+        raise GeminiError("Модель вернула пустой ответ")
     if choice.get("finish_reason") == "length" and mark_truncated:
         text = text.rstrip() + TRUNCATED_NOTE
     return text
