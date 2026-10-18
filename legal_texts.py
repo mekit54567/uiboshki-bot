@@ -5,7 +5,8 @@
 данными, а не HTML: /api/legal/<имя> отдаёт их JSON, каждый рисует сам в
 своём дизайне. Блок — абзац (строка) или список (list строк); в JSON — {"p": …}
 или {"ul": […]}.
-Подстановки {OPERATOR}, {CONTACT} и т.п. — из privacy.py.
+Подстановки {OPERATOR}, {CONTACT} и т.п. — из privacy.py; исполнитель в оферте — {CONTRACTOR}
+(privacy.contractor(), со статусом НПД).
 
 Поменял согласие по смыслу — подними privacy.VERSION и DATE: у всех
 спросят согласие заново."""
@@ -177,7 +178,7 @@ def payment_names() -> str:
 def doc(name: str) -> dict:
     """Текст с подстановками — для страницы и для /api/legal/<имя>."""
     import privacy
-    values = {"OPERATOR": privacy.OPERATOR, "CONTACT": privacy.CONTACT,
+    values = {"OPERATOR": privacy.OPERATOR, "CONTRACTOR": privacy.contractor(), "CONTACT": privacy.CONTACT,
               "INACTIVE_DAYS": str(privacy.INACTIVE_DAYS), "SOLVER_DAYS": str(privacy.SOLVER_DAYS),
               "ANSWER_DAYS": str(privacy.ANSWER_DAYS), "PAYMENT": payment_names()}
 
