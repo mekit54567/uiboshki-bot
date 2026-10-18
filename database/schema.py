@@ -606,6 +606,20 @@ async def init_db():
                 paid_at    TEXT
             )
         """)
+        # «Поддержать проект» (billing.donate…): добровольные платежи — не
+        # подписка, дней не дают; как и payments, после «удалить мои данные»
+        # остаются без человека (payer_id NULL) — налоговый учёт.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS donations (
+                id         TEXT PRIMARY KEY,
+                provider   TEXT NOT NULL,
+                payer_id   INTEGER,
+                amount     INTEGER NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT DEFAULT (datetime('now')),
+                paid_at    TEXT
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS bonuses (
                 user_id  INTEGER NOT NULL,

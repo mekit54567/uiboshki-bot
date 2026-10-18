@@ -153,16 +153,22 @@ async def test_api_consent_and_delete(db, monkeypatch):
 
 
 def test_legal_texts_and_pages(monkeypatch):
+    import legal_texts
     import privacy
     c, _ = _client(monkeypatch)
+    # у согласия версия — privacy.VERSION (по ней спрашивают заново); у политики может быть своя,
+    # не ниже: 2.1 — «Поддержка проекта» (донат — исполнение договора, согласие не меняется)
+    assert legal_texts.PRIVACY["version"] >= privacy.VERSION and "поддержк" in str(legal_texts.PRIVACY)
     for name, title in (("consent", "Согласие на обработку персональных данных"),
                         ("privacy", "Политика обработки персональных данных")):
         d = c.get("/api/legal/" + name).json()
-        assert d["title"] == title and d["version"] == privacy.VERSION and d["sections"]
+        src = legal_texts.DOCS[name]
+        version, date = src.get("version", privacy.VERSION), src.get("date", privacy.DATE)
+        assert d["title"] == title and d["version"] == version and d["date"] == date and d["sections"]
         assert all(set(b) in ({"p"}, {"ul"}) for s in d["sections"] for b in s["blocks"])   # JSON без HTML
         assert "{" not in json.dumps(d, ensure_ascii=False).replace('{"', "").replace("{}", "")  # всё подставлено
         page = c.get("/" + name)
-        assert page.status_code == 200 and title in page.text and privacy.DATE in page.text
+        assert page.status_code == 200 and title in page.text and date in page.text
     assert c.get("/api/legal/ads").status_code == 404
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert "Railway" in text and "США" in text            # правда о том, где сервер

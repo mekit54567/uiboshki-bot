@@ -300,6 +300,8 @@ async def report() -> str:
         from utils import today_msk
         subs, unl = await manual_active(today_msk().isoformat())
         lines.append(f"Ручные выдачи (/grant): подписок {subs} · безлимитов {unl}")
+        import billing
+        lines.append(await billing.donate_status_line())
         rest, spare = gemini_solver.rest_status()
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "

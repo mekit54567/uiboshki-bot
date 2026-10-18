@@ -1,6 +1,7 @@
 """«Капибара+» в боте: /plus — статус и кнопка «Оплатить на сайте» (счёт в
 Telegram не выставляем: цифровое внутри бота — только Stars), /invite —
-готовое сообщение для друга с личной ссылкой, /grant — ручные выдачи
+готовое сообщение для друга с личной ссылкой, /donate — «Поддержать
+проект» (донат на сайте, не подписка), /grant — ручные выдачи
 Никиты (plus_grant.py). В инлайне «@бот share» —
 то же сообщение в любой чат (handlers/inline.py)."""
 
@@ -49,6 +50,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     elif not st["unlimited"]:
         lines.append("\nОплата скоро заработает.")
     rows.append([InlineKeyboardButton(text="🎁 Позвать друга", callback_data="plus:invite")])
+    rows.append([InlineKeyboardButton(text="💛 Поддержать проект", callback_data="plus:donate")])
     if config.is_starosta(uid):
         lines.append("\n" + await admin_text())
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
@@ -101,6 +103,42 @@ async def cmd_plus(message: Message):
         return
     text, kb = await plus_text(message.from_user.id)
     await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+# ── «Поддержать проект»: донат на сайте, не подписка ───────────────────────
+
+def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
+    import billing
+    amounts = " · ".join(f"{a} ₽" for a in billing.DONATE_AMOUNTS)
+    lines = ["💛 <b>Поддержать проект</b>", "",
+             "Если Капибара помогает тебе учиться — можно сказать спасибо рублём: деньги идут на сервер, "
+             "ИИ и время на новые функции.", "",
+             "<b>Это не подписка и ничего не открывает — просто спасибо.</b> Всё бесплатное остаётся "
+             "бесплатным, «Капибара+» — отдельно (/plus).", ""]
+    if not billing.provider():
+        lines.append("Поддержать можно будет совсем скоро — оплата ещё подключается.")
+        return "\n".join(lines), None
+    lines.append(f"Сумма — на выбор: {amounts} или своя (от {billing.DONATE_MIN} ₽). Разово, без автосписаний; "
+                 "оплата — на сайте uiboshki.ru по кнопке ниже, ссылка твоя и живёт сутки.")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💛 Поддержать на сайте", url=billing.donate_link(uid))]])
+    return "\n".join(lines), kb
+
+
+async def send_donate(message: Message, uid: int):
+    text, kb = donate_text(uid)
+    await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+
+
+@router.message(Command("donate"))
+async def cmd_donate(message: Message):
+    await send_donate(message, message.from_user.id)
+
+
+@router.callback_query(F.data == "plus:donate")
+async def donate_button(callback: CallbackQuery):
+    await callback.answer()
+    await send_donate(callback.message, callback.from_user.id)
 
 
 @router.message(Command("grant"))

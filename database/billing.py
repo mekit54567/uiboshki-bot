@@ -1,6 +1,6 @@
 """Подписка «Капибара+»: оплаты, срок подписки, бонусы, приглашения (billing.py,
-referrals.py). Оплаты не стираются «удалить мои данные» — только payer_id
-(налоговый учёт); приглашение стирается вместе с любым из двоих
+referrals.py), донаты «Поддержать проект». Оплаты и донаты не стираются
+«удалить мои данные» — только payer_id (налоговый учёт); приглашение стирается вместе с любым из двоих
 (database/privacy.erase_user)."""
 
 import secrets
@@ -58,6 +58,63 @@ async def user_payments(user_id: int, limit: int = 20) -> list[dict]:
             "SELECT id, plan, amount, days, status, created_at, paid_at FROM payments "
             "WHERE payer_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit))).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── «Поддержать проект» (донаты: своя таблица, дней подписки не дают) ─────────
+
+async def add_donation(pid: str, provider: str, payer_id: int, amount: int):
+    async with connect() as db:
+        await db.execute("INSERT INTO donations (id, provider, payer_id, amount) VALUES (?, ?, ?, ?)",
+                         (pid, provider, payer_id, amount))
+        await db.commit()
+
+
+async def get_donation(pid: str) -> dict | None:
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM donations WHERE id = ?", (pid,))).fetchone()
+        return dict(row) if row else None
+
+
+async def set_donation_id(old: str, new: str):
+    async with connect() as db:
+        await db.execute("UPDATE donations SET id = ? WHERE id = ?", (new, old))
+        await db.commit()
+
+
+async def mark_donation_paid(pid: str) -> bool:
+    """pending → succeeded. True — только в первый раз (повтор уведомления кассы)."""
+    async with connect() as db:
+        cur = await db.execute(
+            "UPDATE donations SET status = 'succeeded', paid_at = datetime('now') "
+            "WHERE id = ? AND status = 'pending'", (pid,))
+        await db.commit()
+        return cur.rowcount == 1
+
+
+async def mark_donation(pid: str, status: str):
+    async with connect() as db:
+        await db.execute("UPDATE donations SET status = ? WHERE id = ? AND status = 'pending'", (status, pid))
+        await db.commit()
+
+
+async def user_donations(user_id: int, limit: int = 20) -> list[dict]:
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        rows = await (await db.execute(
+            "SELECT id, amount, status, created_at, paid_at FROM donations "
+            "WHERE payer_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?", (user_id, limit))).fetchall()
+        return [dict(r) for r in rows]
+
+
+async def donation_totals(days: int | None = None) -> tuple[int, int]:
+    """(сколько оплаченных донатов, сумма ₽) — всего или за последние days дней."""
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM donations WHERE status = 'succeeded'"
+            + (" AND paid_at >= datetime('now', ?)" if days else ""),
+            (f"-{int(days)} days",) if days else ())).fetchone()
+        return row[0], row[1]
 
 
 # ── Срок подписки ────────────────────────────────────────────────────────────
