@@ -1232,3 +1232,10 @@ def test_pwa_login_opens_telegram_directly_and_survives_restart():
     poll = core.split("async function pollLogin")[1].split("\n}\n")[0]
     assert poll.count("savePending(null)") == 2          # вошёл или код сгорел — забыть
     assert ".login-web" in CSS
+
+
+def test_plus_sheet_price_on_one_line_and_no_double_dot():
+    # робот-скриншотер 18.10: «649 ₽» переносился, у рангов «14 дн..»
+    assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)
+    more = JS["js/more.js"]
+    assert '" дн."' in more and 'ranks + ".")' not in more
