@@ -6,6 +6,7 @@ import pytest
 import institutes
 import legal_texts
 import nick_filter
+import privacy
 import xp
 
 URL = "https://online-edu.mirea.ru/mod/assign/view.php?id={i}"
@@ -322,7 +323,17 @@ def test_rating_all_text():
     # на листе — общая формулировка и что, где и кому; оператор — в полном тексте по ссылке
     short = d["lead_short"] + " ".join(str(b) for sec in d["sections"] if sec.get("short") for b in sec["blocks"])
     assert [sec["title"] for sec in d["sections"] if sec.get("short")] == ["Что показываем", "Где и кому"]
-    assert "все пользователи" in short and "самозанят" not in short and "самозанят" not in d["lead_short"]
+    assert "все пользователи" in short and privacy.OPERATOR not in short and privacy.OPERATOR not in d["lead_short"]
+    # оператор в полном тексте — как в согласии и политике, без «самозанятый Никита» (5.100.11)
+    assert privacy.OPERATOR in d["lead"] and "самозанят" not in d["lead"]
+
+
+def test_operator_wording():
+    assert privacy.operator() == "разработчик сервиса «Капибара»"
+    assert privacy.operator("Иванов Никита Иванович", "123456789012", "Москва") == (
+        "Иванов Никита Иванович, разработчик сервиса «Капибара», ИНН 123456789012, г. Москва")
+    for name in ("consent", "privacy", "rating_all"):
+        assert "самозанят" not in str(legal_texts.doc(name))
 
 
 # ── API и бот ────────────────────────────────────────────────────────────────

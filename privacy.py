@@ -33,9 +33,18 @@ FIO = os.getenv("PD_FIO", "").strip()
 INN = os.getenv("PD_INN", "").strip()
 EMAIL = os.getenv("PD_EMAIL", "").strip()
 CITY = os.getenv("PD_CITY", "").strip()
-OPERATOR = ", ".join(x for x in (
-    f"самозанятый {FIO or 'Никита'}, разработчик сервиса «Капибара»",
-    f"ИНН {INN}" if INN else "", f"г. {CITY}" if CITY else "") if x)
+
+
+def operator(fio: str = "", inn: str = "", city: str = "") -> str:
+    """Оператор в текстах: ФИО (пока нет — без имени), «разработчик сервиса», ИНН и
+    город. Без «самозанятый» и без одного имени (Никита 18.10: «самозанятый Никита
+    не очень звучит»); статус плательщика НПД 152-ФЗ в согласии не требует."""
+    return ", ".join(x for x in (
+        f"{fio}, разработчик сервиса «Капибара»" if fio else "разработчик сервиса «Капибара»",
+        f"ИНН {inn}" if inn else "", f"г. {city}" if city else "") if x)
+
+
+OPERATOR = operator(FIO, INN, CITY)
 CONTACT = "Telegram @Partykq" + (f" или почта {EMAIL}" if EMAIL else "")
 CONTACT_URL = "https://t.me/Partykq"
 
