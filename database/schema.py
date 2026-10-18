@@ -219,6 +219,23 @@ async def init_db():
                 "SELECT id, ? FROM deadlines WHERE done = 1",
                 (STAROSTA_ID,)
             )
+        try:        # via='sdo' — сдачу подтвердило СДО (sdo_done), а не галочка: в счёт опыта (xp.py)
+            await db.execute("ALTER TABLE deadline_done ADD COLUMN via TEXT")
+        except Exception:
+            pass  # уже есть
+        # Рейтинг (xp.py, 5.100.3): свой ник и «показывать меня в рейтинге»
+        # (по умолчанию нет). reviewed — Никита видел ник (/nicks), locked —
+        # свой ник ставить нельзя (после сброса).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS rating_profiles (
+                user_id   INTEGER PRIMARY KEY,
+                nick      TEXT,
+                show      INTEGER NOT NULL DEFAULT 0,
+                nick_at   TEXT,
+                reviewed  INTEGER NOT NULL DEFAULT 1,
+                locked    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
