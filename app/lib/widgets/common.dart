@@ -40,17 +40,23 @@ class Backdrop extends StatelessWidget {
   static bool cheap = kIsWeb;
 
   static List<RadialGradient> glows(Palette p, Color? tint) => [
-        RadialGradient(
-          center: const Alignment(-0.6, -1.1),
-          radius: 1.2,
-          colors: [(tint ?? p.glow1).withValues(alpha: p.dark ? 0.85 : 0.6), p.bg.withValues(alpha: 0)],
-        ),
-        RadialGradient(
-          center: const Alignment(-1, 1.2),
-          radius: 1.1,
-          colors: [p.glow2.withValues(alpha: p.dark ? 0.8 : 0.5), p.bg.withValues(alpha: 0)],
-        ),
-      ];
+    RadialGradient(
+      center: const Alignment(-0.6, -1.1),
+      radius: 1.2,
+      colors: [
+        (tint ?? p.glow1).withValues(alpha: p.dark ? 0.85 : 0.6),
+        p.bg.withValues(alpha: 0),
+      ],
+    ),
+    RadialGradient(
+      center: const Alignment(-1, 1.2),
+      radius: 1.1,
+      colors: [
+        p.glow2.withValues(alpha: p.dark ? 0.8 : 0.5),
+        p.bg.withValues(alpha: 0),
+      ],
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -63,9 +69,14 @@ class Backdrop extends StatelessWidget {
       child: Stack(
         children: [
           if (cheap)
-            Positioned.fill(child: _GlowImage(bg: p.bg, glows: g))
+            Positioned.fill(
+              child: _GlowImage(bg: p.bg, glows: g),
+            )
           else
-            for (final gradient in g) Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: gradient))),
+            for (final gradient in g)
+              Positioned.fill(
+                child: DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
+              ),
           if (paper != Paper.smooth)
             Positioned.fill(
               child: IgnorePointer(child: CustomPaint(painter: PaperPainter(paper, p.text))),
@@ -115,20 +126,22 @@ class _GlowImageState extends State<_GlowImage> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, box) {
-      final size = box.biggest;
-      if (!size.isFinite) return ColoredBox(color: widget.bg);
-      // размер — с шагом 32 px: клавиатура и поворот не перерисовывают на каждый пиксель
-      final key = (widget.bg, Object.hashAll(widget.glows), (size.width / 32).ceil(), (size.height / 32).ceil());
-      final img = _cache[key];
-      if (img == null) {
-        _make(size, widget.bg, widget.glows, key).then((_) {
-          if (mounted) setState(() {});
-        });
-        return ColoredBox(color: widget.bg);
-      }
-      return RawImage(image: img, fit: BoxFit.fill, filterQuality: FilterQuality.low);
-    });
+    return LayoutBuilder(
+      builder: (context, box) {
+        final size = box.biggest;
+        if (!size.isFinite) return ColoredBox(color: widget.bg);
+        // размер — с шагом 32 px: клавиатура и поворот не перерисовывают на каждый пиксель
+        final key = (widget.bg, Object.hashAll(widget.glows), (size.width / 32).ceil(), (size.height / 32).ceil());
+        final img = _cache[key];
+        if (img == null) {
+          _make(size, widget.bg, widget.glows, key).then((_) {
+            if (mounted) setState(() {});
+          });
+          return ColoredBox(color: widget.bg);
+        }
+        return RawImage(image: img, fit: BoxFit.fill, filterQuality: FilterQuality.low);
+      },
+    );
   }
 }
 
@@ -504,12 +517,6 @@ class _LoaderState<T> extends State<Loader<T>> {
   T? _data;
   Object? _error;
 
-  /// Сеть уже ответила (или не смогла) хоть раз.
-  bool _netDone = false;
-
-  /// Показан запас и ждём сеть — ключ в [Api.refreshing] (строка «Обновляю»).
-  Object? _wait;
-
   @override
   void initState() {
     super.initState();
@@ -517,28 +524,10 @@ class _LoaderState<T> extends State<Loader<T>> {
     _reload();
   }
 
-  @override
-  void dispose() {
-    // не посреди сборки дерева: строку наверху перерисуем после кадра
-    final k = _wait;
-    if (k != null) scheduleMicrotask(() => Api.refreshDone(k));
-    super.dispose();
-  }
-
   /// Пока идёт сеть — прошлые данные из запаса телефона, без крутилки.
   Future<void> _fromCache() async {
-    final c = await Api.fromCacheAt(widget.load);
-    if (c != null && mounted && _data == null) {
-      setState(() => _data = c.value);
-      final at = c.at;
-      if (!_netDone && at != null) _wait = Api.refreshStart(at);
-    }
-  }
-
-  void _fresh() {
-    _netDone = true;
-    Api.refreshDone(_wait);
-    _wait = null;
+    final c = await Api.fromCache(widget.load);
+    if (c != null && mounted && _data == null) setState(() => _data = c);
   }
 
   Future<void> _reload() async {
@@ -556,8 +545,6 @@ class _LoaderState<T> extends State<Loader<T>> {
         return;
       }
       if (mounted) setState(() => _error = e);
-    } finally {
-      if (mounted) _fresh();
     }
   }
 

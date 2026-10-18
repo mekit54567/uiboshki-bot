@@ -104,117 +104,62 @@ class Api {
   }
 
   /// Без сети — ответы GET из последней удачной загрузки (как sw.js у PWA).
-  /// Время той загрузки — здесь; null — данные свежие.
+  /// Время той загрузки — здесь; null — данные свежие. Плашки по нему больше
+  /// нет (5.101, Никита 18.10: «живёт своей жизнью»): у каждого пути своё время
+  /// запаса, и плашка показывала то 12:50, то 12 октября — смотря какой запрос
+  /// не дождался последним. Ошибку видно там, где не прошло действие.
   final offlineSince = ValueNotifier<DateTime?>(null);
-
-  /// Почему из запаса: сервер не ответил вовремя (true) или сети нет вовсе
-  /// (false). Плашка нового дизайна пишет «Сервер не отвечает» / «Нет сети».
-  final offlineSlow = ValueNotifier<bool>(false);
   static const _cachePrefix = 'uib_cache:';
   static const timeout = Duration(seconds: 8);
 
-  /// Когда сервер в последний раз ответил (любым кодом) — см. [get].
-  DateTime? _lastOk;
+  /// Сколько ещё ждать ответ, который не уложился в [timeout]: экран уже
+  /// показал запас, а свежий ответ ляжет в запас к следующему открытию. Иначе
+  /// медленный путь (журнал СДО) так и оставался с данными недельной давности.
+  static const lateTimeout = Duration(seconds: 60);
 
-  /// Проверка «сервер вообще отвечает» (/meta — лёгкий, без базы и СДО);
-  /// несколько повисших запросов разом ждут одну проверку.
-  Future<bool>? _ping;
-  static const pingTimeout = Duration(seconds: 4);
-
-  Future<bool> _alive() => _ping ??= () async {
-    try {
-      await _client.get(_uri('/meta'), headers: _headers).timeout(pingTimeout);
-      _lastOk = DateTime.now();
-      return true;
-    } catch (_) {
-      return false;
-    } finally {
-      _ping = null;
-    }
-  }();
-
-  /// Внутри [fromCache] get берёт только запомненное и в сеть не ходит;
-  /// значение зоны — [_CacheRead], куда get пишет время запомненного.
+  /// Внутри [fromCache] get берёт только запомненное и в сеть не ходит.
   static const _cacheOnly = #uibCacheOnly;
 
   /// Идёт загрузка «из запаса» ([fromCache]): экран может отказаться от старого ответа.
-  static bool get cacheOnly => Zone.current[_cacheOnly] is _CacheRead;
+  static bool get cacheOnly => Zone.current[_cacheOnly] == true;
 
   /// Загрузка экрана из запаса телефона, без сети: экран показывает прошлые
   /// данные сразу, свежие догружаются следом (владелец, 09.10: «долго грузит»).
   /// null — чего-то в запасе нет.
-  static Future<T?> fromCache<T>(Future<T> Function() load) => fromCacheAt(load).then((r) => r?.value);
-
-  /// То же и время запомненного (самого старого из ответов, что пошли в
-  /// экран) — для строки «Обновляю · данные от 09:41».
-  static Future<({T value, DateTime? at})?> fromCacheAt<T>(Future<T> Function() load) {
-    final read = _CacheRead();
-    return runZoned(
-      () => load().then<({T value, DateTime? at})?>((v) => (value: v, at: read.at)).catchError((_) => null),
-      zoneValues: {_cacheOnly: read},
-    );
-  }
-
-  /// Экраны, что показывают запас и ждут свежий ответ: самое старое время
-  /// их данных; null — никто не ждёт. Ключ — у каждого экрана свой.
-  static final refreshing = ValueNotifier<DateTime?>(null);
-  static final _waiting = <Object, DateTime>{};
-
-  /// Экран показал запас от [at] и ждёт сеть; вернуть ключ в [refreshDone].
-  static Object refreshStart(DateTime at) {
-    final key = Object();
-    _waiting[key] = at;
-    _updateRefreshing();
-    return key;
-  }
-
-  static void refreshDone(Object? key) {
-    if (key == null || _waiting.remove(key) == null) return;
-    _updateRefreshing();
-  }
-
-  static void _updateRefreshing() {
-    refreshing.value = _waiting.isEmpty ? null : _waiting.values.reduce((a, b) => a.isBefore(b) ? a : b);
-  }
+  static Future<T?> fromCache<T>(Future<T> Function() load) =>
+      runZoned(() => load().then<T?>((v) => v).catchError((_) => null), zoneValues: {_cacheOnly: true});
 
   Future<dynamic> get(String path) async {
-    final read = Zone.current[_cacheOnly];
-    if (read is _CacheRead) {
+    if (cacheOnly) {
       final cached = await _cached(path);
       if (cached == null) throw StateError('нет в запасе');
-      read.saw(cached.at);
       return cached.body;
     }
-    final started = DateTime.now();
+    final req = _client.get(_uri(path), headers: _headers);
     final http.Response r;
     try {
-      r = await _client.get(_uri(path), headers: _headers).timeout(timeout);
+      r = await req.timeout(timeout);
     } catch (e) {
       final cached = await _cached(path).catchError((_) => null);
       if (cached == null) rethrow;
-      // Пока этот путь висел, сервер ответил на другие (16.10: висели только
-      // запросы к СДО) — это не «Сервер не отвечает»: запас отдаём молча,
-      // плашку не ставим.
-      final ok = _lastOk;
-      if (e is TimeoutException && ok != null && !ok.isBefore(started)) {
-        return cached.body;
-      }
-      // Сам сервер жив, тупит один раздел (СДО, ИИ) — тоже не «Сервер не
-      // отвечает» (Никита 17.10: плашка пугала, хотя бот отвечал).
-      if (e is TimeoutException && await _alive()) {
-        return cached.body;
-      }
-      offlineSlow.value = e is TimeoutException;
+      if (e is TimeoutException) unawaited(_late(path, req));
       offlineSince.value = cached.at;
       return cached.body;
     }
-    _lastOk = DateTime.now();
     final body = _decode(r);
     offlineSince.value = null;
     onOk?.call('GET', path, null, body);
     // Запас — в фоне: показ данных не ждёт памяти телефона и не падает из-за неё.
     if (!path.startsWith('/auth/')) unawaited(_remember(path, r).catchError((_) {}));
     return body;
+  }
+
+  /// Опоздавший ответ — только в запас, экран его не ждёт.
+  Future<void> _late(String path, Future<http.Response> req) async {
+    try {
+      final r = await req.timeout(lateTimeout);
+      if (r.statusCode < 400 && !path.startsWith('/auth/')) await _remember(path, r);
+    } catch (_) {}
   }
 
   Future<void> _remember(String path, http.Response r) async {
@@ -317,13 +262,5 @@ class Api {
     } catch (_) {}
     await saveToken(null);
     await clearCache();
-  }
-}
-
-/// Что прочла загрузка из запаса: самое старое время ответов.
-class _CacheRead {
-  DateTime? at;
-  void saw(DateTime t) {
-    if (at == null || t.isBefore(at!)) at = t;
   }
 }

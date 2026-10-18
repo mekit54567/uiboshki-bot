@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 MAX_BYTES = 20 * 1024 * 1024
 MAX_FILES = 3            # за раз из WebApp (владелец: «до трёх файлов»)
 UPLOAD_TIMEOUT = 120     # с на загрузку одного файла: PDF в пару МБ СДО принимает долго (3.3)
+# СДО МИРЭА не открылось до сдачи (Никита 18.10: ошибку — там, где не прошло действие)
+DOWN = "Сейчас СДО МИРЭА недоступно — попробуй чуть позже"
 UNAVAILABLE = "СДО не ответило вовремя — файл, возможно, не дошёл; проверь в СДО и попробуй ещё раз"
 CMID_RE = re.compile(r"/mod/(assign|quiz)/view\.php\?(?:[^#\s\"']*&)?id=(\d+)")
 
@@ -225,7 +227,7 @@ async def submission_rules(cookie: str, cmid: int) -> dict:
             except SubmitError as e:
                 return {"closed": str(e)}
         except httpx.HTTPError:
-            raise SubmitError("СДО не отвечает — попробуй позже")
+            raise SdoUnavailable(DOWN)
     return {k: page[k] for k in ("accepted", "labels", "maxfiles", "maxbytes")}
 
 
@@ -397,7 +399,7 @@ async def remove_submission(cookie: str, cmid: int) -> dict:
                 raise SdoSessionExpired("вход устарел")
             view = await get_checked(client, url)
         except httpx.HTTPError:
-            raise SubmitError("СДО не отвечает — попробуй позже")
+            raise SdoUnavailable(DOWN)
     page = parse_assign_page(view.text)
     if page["submitted"] or "action=removesubmissionconfirm" in view.text:
         raise SubmitError("СДО не удалил ответ: " + (_notice(BeautifulSoup(resp.text, "html.parser"))

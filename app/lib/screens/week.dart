@@ -95,9 +95,6 @@ class _WeekScreenState extends State<WeekScreen> {
   Object? _error;
   int _seq = 0;
 
-  /// Показан запас и ждём сеть — строка «Обновляю» наверху (как у Loader).
-  Object? _wait;
-
   /// Номера уже виденных недель — подпись в шапке меняется сразу при листании.
   final _numbers = <int, int?>{};
 
@@ -106,14 +103,6 @@ class _WeekScreenState extends State<WeekScreen> {
     super.initState();
     _readView();
     _fetch();
-  }
-
-  @override
-  void dispose() {
-    // не посреди сборки дерева: строку наверху перерисуем после кадра
-    final k = _wait;
-    if (k != null) scheduleMicrotask(() => Api.refreshDone(k));
-    super.dispose();
   }
 
   Future<void> _readView() async {
@@ -188,16 +177,8 @@ class _WeekScreenState extends State<WeekScreen> {
 
   Future<void> _fetch() async {
     final my = ++_seq, shift = _shift; // ответ на старую неделю не перетирает новую
-    final cached = await Api.fromCacheAt(() => _load(shift));
-    Object? wait;
-    if (cached != null && _dataShift != shift && my == _seq && mounted) {
-      _show(my, shift, cached.value);
-      final at = cached.at;
-      if (at != null) {
-        Api.refreshDone(_wait);
-        _wait = wait = Api.refreshStart(at);
-      }
-    }
+    final cached = await Api.fromCache(() => _load(shift));
+    if (cached != null && _dataShift != shift && my == _seq && mounted) _show(my, shift, cached);
     try {
       _show(my, shift, await _load(shift));
     } catch (e) {
@@ -206,11 +187,6 @@ class _WeekScreenState extends State<WeekScreen> {
         return;
       }
       if (my == _seq && mounted && _dataShift != shift) setState(() => _error = e);
-    } finally {
-      if (wait != null && identical(wait, _wait)) {
-        Api.refreshDone(wait);
-        _wait = null;
-      }
     }
   }
 

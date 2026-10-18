@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/api/models.dart';
 import 'package:uiboshki/main.dart';
-import 'package:uiboshki/screens/shell.dart';
 import 'package:uiboshki/widgets/common.dart';
 
 import 'fake_api.dart';
@@ -26,14 +25,9 @@ void main() {
     expect(api.offlineSince.value, isNull);
   });
 
-  test('подпись плашки', () {
-    final today = DateTime(2026, 10, 8, 12);
-    expect(OfflineBanner.label(DateTime(2026, 10, 8, 9, 5), today), 'Без сети · данные от 09:05');
-    expect(OfflineBanner.label(DateTime(2026, 10, 7, 22, 10), today), 'Без сети · данные от вчера 22:10');
-    expect(OfflineBanner.label(DateTime(2026, 10, 1, 8, 0), today), 'Без сети · данные от 1 октября 08:00');
-  });
-
-  testWidgets('приложение без сети показывает сохранённое и плашку', (t) async {
+  // 5.101 (Никита 18.10): плашки «Без сети · данные от …» больше нет —
+  // приложение молча показывает сохранённое, как приложения iPhone.
+  testWidgets('приложение без сети показывает сохранённое, без плашки', (t) async {
     phone(t);
     var off = false;
     final today = Map<String, dynamic>.from(demoFixtures()['GET /api/today'])..['date'] = iso(now());
@@ -42,7 +36,8 @@ void main() {
     off = true;
     await t.pumpWidget(UiboApp(api: api));
     await settle(t);
-    expect(find.textContaining('Без сети · данные от'), findsOneWidget);
+    expect(find.textContaining('данные от'), findsNothing);
+    expect(find.textContaining('Без сети'), findsNothing);
     expect(find.text('сегодня · 5 пар'), findsOneWidget); // пары из сохранённого ответа
   });
 
