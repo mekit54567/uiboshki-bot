@@ -329,7 +329,7 @@ def test_rating_all_text():
 
 
 def test_operator_wording():
-    assert privacy.operator() == "разработчик сервиса «Капибара»"
+    assert privacy.operator() == "Никита, разработчик сервиса «Капибара»"
     assert privacy.operator("Иванов Никита Иванович", "123456789012", "Москва") == (
         "Иванов Никита Иванович, разработчик сервиса «Капибара», ИНН 123456789012, г. Москва")
     for name in ("consent", "privacy", "rating_all"):
