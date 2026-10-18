@@ -106,8 +106,9 @@ button{{font:inherit;display:flex;justify-content:space-between;align-items:cent
   padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}}
 button:hover{{border-color:var(--accent)}}
 button b{{font-size:20px;white-space:nowrap}}
-button s{{color:var(--secondary);font-size:14px;margin-right:6px}}
-.tag{{display:inline-block;font-size:12px;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;margin-left:6px}}
+button s{{color:var(--secondary);font-size:14px;margin-right:6px;white-space:nowrap}}
+button .pr{{flex:none;white-space:nowrap}}
+.tag{{display:inline-block;white-space:nowrap;font-size:12px;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;margin-left:6px}}
 .small{{color:var(--secondary);font-size:13px}}
 a{{color:var(--link)}}
 </style>
@@ -144,10 +145,10 @@ def _no_key() -> HTMLResponse:
 def _plans_form(key: str, st: dict) -> str:
     rows = []
     for p in st["prices"]:
-        old = f"<s>{p['full']} ₽</s>" if p["price"] < p["full"] else ""
+        old = f"<s>{p['full']}&nbsp;₽</s>" if p["price"] < p["full"] else ""    # число и «₽» не разрываются
         tag = '<span class="tag">Early Supporter</span>' if p["founder"] else ""
         rows.append(f'<button name="plan" value="{p["plan"]}"><span>{escape(p["title"])} · {p["days"]} дней{tag}'
-                    f'</span><span>{old}<b>{p["price"]} ₽</b></span></button>')
+                    f'</span><span class="pr">{old}<b>{p["price"]}&nbsp;₽</b></span></button>')
     return (f'<form method="post" action="/plus/pay"><input type="hidden" name="k" value="{escape(key)}">'
             + "".join(rows) + "</form>")
 

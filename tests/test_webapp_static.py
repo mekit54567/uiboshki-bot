@@ -1331,3 +1331,12 @@ def test_plus_sheet_price_on_one_line_and_no_double_dot():
     assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)
     more = JS["js/more.js"]
     assert '" дн."' in more and 'ranks + ".")' not in more
+
+
+def test_plus_tag_whole_and_invite_own_icon():
+    # робот 18.10: «Early Supporter» ломался пополам на две строки; у «Позвать» был значок «Моей группы»
+    assert re.search(r"\.plus-price i \{[^}]*display: inline-block;[^}]*white-space: nowrap", CSS)
+    assert "&nbsp;₽</s>" in JS["js/more.js"]
+    assert re.search(r'shareBot\(\)"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/>',
+                     HTML)
+    assert "  invite: '" in JS["js/icons.js"]

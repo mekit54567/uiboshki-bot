@@ -89,7 +89,7 @@ async function openPlus() {
       ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
       : statusCard("off", "Подписки нет", founderNote || "Всё бесплатное — расписание, сроки, баллы, файлы — остаётся бесплатным");
   const prices = (d.prices || []).map(p => '<div class="plus-price"><span>' + escapeHtml(p.title) + ' · ' + p.days + ' дней' +
-    (p.founder ? ' <i>Early Supporter</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + ' ₽</s> ' : '') + p.price + ' ₽</b></div>').join("");
+    (p.founder ? ' <i>Early Supporter</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + '&nbsp;₽</s> ' : '') + p.price + '&nbsp;₽</b></div>').join("");
   const ranks = Object.entries(inv.ranks || {}).map(([k, r]) =>
     RANK_NAMES[k] + " — " + r.days + " дн." + (r.claimed ? " (получен)" : "")).join(" · ");
   box.innerHTML =

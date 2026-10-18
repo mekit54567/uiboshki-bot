@@ -2,6 +2,7 @@
 срок без лета, цена первых (метка Early Supporter), оплата один раз на платёж, подпись ссылки
 и уведомлений касс, бонусы за ранг и друга, iOS без подписки, удаление данных."""
 import hashlib
+import re
 from datetime import date
 
 import aiosqlite
@@ -128,7 +129,9 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
     assert c.get("/plus").status_code == 403
     key = billing.make_key(ME)
     page = c.get(f"/plus?k={key}").text
-    assert "149 ₽" in page and "/offer" in page
+    assert "149&nbsp;₽" in page and "/offer" in page
+    # робот 18.10: «~~249~~ / ₽ 149 ₽» — число и «₽» не разрываются, старая цена зачёркнута целиком
+    assert re.search(r"<s>\d+&nbsp;₽</s>", page) and " ₽</s>" not in page and 'class="pr"' in page
     r = c.post("/plus/pay", data={"k": key, "plan": "semester"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith(billing.ROBOKASSA_URL)
     inv = (await _payments(db))[0]
