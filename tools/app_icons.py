@@ -18,7 +18,10 @@
 
 Иконки-картинки (5.84, Никита 13.10: 47 из 288 вариантов ChatGPT, каждая
 светлая и тёмная) — список в design/app_icons.json. Картинки (--art):
-iOS Icon<Имя>.appiconset (все размеры, тёмная — для тёмной темы iOS 18),
+iOS Icon<Имя>.appiconset — светлая, Icon<Имя>Dark.appiconset — тёмная (5.91.6:
+тёмная по выбору человека, как на Android, — на iPhone appearance dark у
+альтернативной иконки не включалась: Никита 18.10 «выбираешь тёмную, а она
+не тёмная»),
 Android mipmap-xxxhdpi/ic_launcher_<имя>[_dark].png, образцы для
 «Оформления» (assets/appicons/). Каждый запуск: alias .Icon<Имя>[Dark] между
 метками ART в манифесте, ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES и
@@ -201,7 +204,7 @@ def slim(img: Image.Image) -> Image.Image:
 
 def import_art(src: Path):
     """Картинки ChatGPT (<src>-light.png, <src>-dark.png, любой квадрат) →
-    iOS (все размеры, тёмная — appearance dark), Android и образцы.
+    iOS (все размеры; светлая и тёмная — два набора), Android и образцы.
     Сами большие картинки в репозиторий не кладём: 94 по 1024 — десятки МБ;
     исходники — в папке проекта art/icons/redraw/out."""
     PREVIEWS.mkdir(parents=True, exist_ok=True)
@@ -209,12 +212,11 @@ def import_art(src: Path):
     pixels = sorted({round(float(pt.split("x")[0]) * scale) for pt, _, scale in IOS})
     for ic in art_list():
         n = ic["name"]
-        folder = XCASSETS / f"{cap(n)}.appiconset"
-        folder.mkdir(parents=True, exist_ok=True)
-        for old in folder.glob("*.png"):
-            old.unlink()
-        images = []
         for kind, suf in (("light", ""), ("dark", "_dark")):
+            folder = XCASSETS / f"{cap(n)}{'Dark' if suf else ''}.appiconset"
+            folder.mkdir(parents=True, exist_ok=True)
+            for old in folder.glob("*.png"):
+                old.unlink()
             f = src / f"{ic['src']}-{kind}.png"
             big = Image.open(f).convert("RGB")
             w, h = big.size
@@ -223,21 +225,39 @@ def import_art(src: Path):
                 big = big.crop(((w - m) // 2, (h - m) // 2, (w + m) // 2, (h + m) // 2))
             for px in pixels:
                 slim(big.resize((px, px), Image.LANCZOS)).save(folder / f"{kind}-{px}.png", optimize=True)
-            for pt, idiom, scale in IOS:
-                px = round(float(pt.split("x")[0]) * scale)
-                entry = {"filename": f"{kind}-{px}.png", "idiom": idiom, "scale": f"{scale}x", "size": pt}
-                if kind == "dark":
-                    entry = {"appearances": [{"appearance": "luminosity", "value": "dark"}], **entry}
-                images.append(entry)
+            _ios_contents(folder, kind)
             small = slim(big.resize((ANDROID_PX, ANDROID_PX), Image.LANCZOS))
             small.save(RES / "mipmap-xxxhdpi" / f"ic_launcher_{n}{suf}.png", optimize=True)
             if PREVIEW_PX != ANDROID_PX:
                 small = slim(big.resize((PREVIEW_PX, PREVIEW_PX), Image.LANCZOS))
             small.save(PREVIEWS / f"{n}{suf}.png", optimize=True)
-        folder.joinpath("Contents.json").write_text(
-            json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n",
-            encoding="utf-8",
-        )
+
+
+def _ios_contents(folder: Path, kind: str):
+    images = []
+    for pt, idiom, scale in IOS:
+        px = round(float(pt.split("x")[0]) * scale)
+        images.append({"filename": f"{kind}-{px}.png", "idiom": idiom, "scale": f"{scale}x", "size": pt})
+    folder.joinpath("Contents.json").write_text(
+        json.dumps({"images": images, "info": {"author": "xcode", "version": 1}}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def split_ios_dark():
+    """Наборы до 5.91.6 (светлая и тёмная в одном, appearance dark) → два
+    набора: тёмные картинки переезжают в Icon<Имя>Dark. Повторно — ничего."""
+    for ic in art_list():
+        light = XCASSETS / f"{cap(ic['name'])}.appiconset"
+        dark = XCASSETS / f"{cap(ic['name'])}Dark.appiconset"
+        moved = sorted(light.glob("dark-*.png"))
+        if not moved:
+            continue
+        dark.mkdir(exist_ok=True)
+        for f in moved:
+            f.rename(dark / f.name)
+        _ios_contents(light, "light")
+        _ios_contents(dark, "dark")
 
 
 def alias_xml(name: str, icon: str) -> str:
@@ -273,7 +293,7 @@ def build_art():
     MANIFEST.write_text(text[:a] + head + "".join(aliases) + "        " + text[b:], encoding="utf-8")
 
     # Xcode: какие наборы — альтернативные иконки
-    names = " ".join([cap(v) for v in VARIANTS] + [cap(ic["name"]) for ic in icons])
+    names = " ".join([cap(v) for v in VARIANTS] + [x for ic in icons for x in (cap(ic["name"]), cap(ic["name"]) + "Dark")])
     pbx = PBXPROJ.read_text(encoding="utf-8")
     pbx = re.sub(r"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = \"[^\"]*\";",
                  f'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "{names}";', pbx)
@@ -297,12 +317,21 @@ def build_art():
             extra += f", season: '{ic['season']}'"
         lines.append(f"  AppIcon._art('{ic['name']}', '{ic['label']}', '{ic['group']}'{extra}),")
     lines += ["];", ""]
+    # как открыть (5.91): нет записи — бесплатно
+    unlock = json.loads(ART_JSON.read_text(encoding="utf-8")).get("unlock", {})
+    if unlock:
+        lines.append("const iconUnlock = <String, String>{")
+        lines += [f"  '{k}': '{v}'," for k, v in unlock.items()]
+        lines += ["};", ""]
+    else:
+        lines += ["const iconUnlock = <String, String>{};", ""]
     ART_DART.write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":
     if "--art" in sys.argv:
         import_art(Path(sys.argv[sys.argv.index("--art") + 1]))
+    split_ios_dark()
     if "--only-art" not in sys.argv:
         build(preview="--preview" in sys.argv)
     build_art()
