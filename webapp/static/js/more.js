@@ -948,7 +948,7 @@ function showOnboard(i) {
   box.innerHTML =
     '<button class="ob-skip" onclick="finishOnboard()">Пропустить</button>' +
     '<div class="ob-card" key="' + i + '">' +
-      '<div class="ob-logo">' + icon("capy", "capy") + '<span>УИБО-бот</span></div>' +
+      '<div class="ob-logo">' + icon("capy", "capy") + '<span>Капибара</span></div>' +
       '<div class="ob-ic sq ' + s.cls + '">' + icon(s.ic) + '</div>' +
       '<h2>' + s.title + '</h2><p>' + s.text + '</p>' +
       '<button class="ghost ob-act" onclick="finishOnboard(' + i + ')">' + s.act + '</button>' +

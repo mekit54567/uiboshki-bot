@@ -207,6 +207,14 @@ JSON приложения VPN (секрет хостинга, в репозит�
 `CHANNEL_URL`, `CONTACT_URL` (необязательно: плитки «Канал бота» и «Написать нам»
 в меню «Ещё» WebApp; пока пусто — «Скоро», задать на этапе 3), `CHANNEL_ID`
 (куда бот публикует посты, `/channel`; не задан — @имя из `CHANNEL_URL`).
+`REVIEW_CODE` (необязательно, от 12 знаков): демо-вход для проверяющих App Store и
+RuStore — «Вход по коду доступа» в приложении, ответы из `site/demo.json` со
+сдвигом на текущую неделю (`review_demo.py`, токен `rv.…`); не задан — кнопки нет.
+Вход через Apple в iPhone-приложении (`apple_signin.py`, `POST /api/auth/apple`) —
+ключи `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (.p8), `APPLE_CLIENT_ID`
+(по умолчанию `ru.uiboshki.app`); нет ключей — кнопки нет. Удаление аккаунта и
+отвязка отзывают вход у Apple (`apple_tokens`). Право `com.apple.developer.applesignin`
+в `Runner.entitlements` — только вместе с подписью для App Store (AltStore с ним не ставит).
 Посты канала — `channel/posts/NN-имя/` (post.html в разметке Telegram и
 картинки), публикует бот-админ по кнопке старосты (`channel_posts.py`,
 `handlers/channel.py`). Пост — всегда одно сообщение: картинки собираются в

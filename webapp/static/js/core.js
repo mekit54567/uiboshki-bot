@@ -391,7 +391,7 @@ function showLogin() {
   const box = document.getElementById("login");
   box.classList.add("open");
   box.innerHTML = '<div class="login-card"><svg class="login-capy" aria-hidden="true"><use href="#i-capy"/></svg>' +
-    '<h2>УИБО-бот</h2><p>Расписание, дедлайны, баллы СДО и лекции твоей группы.</p>' +
+    '<h2>Капибара</h2><p>Расписание, дедлайны, баллы СДО и лекции твоей группы.</p>' +
     '<button class="primary" id="login-btn" onclick="startLogin()">Войти через Telegram</button>' +
     '<p class="hint" id="login-hint">Бот спросит «Это ты?» — нажми «Да». Один раз на этом устройстве.</p>' +
     '<div id="login-more"></div></div>';

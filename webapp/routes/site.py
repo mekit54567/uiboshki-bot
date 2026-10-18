@@ -70,7 +70,9 @@ async def about_page(request: Request):
     from webapp import deps
     from webapp.server import _digest
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-    html = (_site_dir() / "index.html").read_text(encoding="utf-8").replace("__BASE__", base)
+    import config
+    html = ((_site_dir() / "index.html").read_text(encoding="utf-8")
+            .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME))
     # стили и скрипт сайта — по ссылке с хэшем: после обновления браузер не
     # склеит новую страницу со старым site.js (и кэширует их надолго)
     for rel in ("site/site.css", "site/site.js"):

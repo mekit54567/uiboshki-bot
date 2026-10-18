@@ -8,6 +8,7 @@ import '../api/api.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/common.dart';
 import 'files.dart' show BackRow;
 import 'legal.dart';
@@ -213,6 +214,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             linked.contains(available[i]['id'])
                                 ? _ActionRow(
                                     icon: Icons.link_rounded,
+                                    brand: available[i]['id'] as String,
                                     title: available[i]['name'] as String,
                                     sub: 'привязан',
                                     action: 'Отвязать',
@@ -221,6 +223,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                   )
                                 : _ActionRow(
                                     icon: Icons.add_link_rounded,
+                                    brand: available[i]['id'] as String,
                                     title: available[i]['name'] as String,
                                     sub: 'не привязан',
                                     action: 'Привязать',
@@ -380,6 +383,9 @@ class _Summary extends StatelessWidget {
 
 class _ActionRow extends StatelessWidget {
   final IconData icon;
+
+  /// vk / yandex — фирменный знак вместо значка (brand_logo.dart)
+  final String? brand;
   final String title, sub, action;
   final bool danger;
   final VoidCallback onTap;
@@ -390,6 +396,7 @@ class _ActionRow extends StatelessWidget {
     required this.action,
     required this.onTap,
     this.danger = false,
+    this.brand,
   });
 
   @override
@@ -400,7 +407,7 @@ class _ActionRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.s, Space.s),
       child: Row(
         children: [
-          Icon(icon, color: p.muted, size: 20),
+          brand != null && BrandLogo.has(brand!) ? BrandLogo(brand!) : Icon(icon, color: p.muted, size: 20),
           const SizedBox(width: Space.m),
           Expanded(
             child: Column(

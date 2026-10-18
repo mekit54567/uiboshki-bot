@@ -10,11 +10,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
+import '../api/links.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/capy.dart';
 import '../widgets/common.dart';
 
@@ -23,6 +26,18 @@ typedef WebAuth = Future<String> Function(String url);
 
 Future<String> systemWebAuth(String url) =>
     FlutterWebAuth2.authenticate(url: url, callbackUrlScheme: 'ru.uiboshki.app');
+
+/// Вход через Apple (окно системы) → токен, код и имя (в тестах подменяется).
+typedef AppleAuth = Future<({String idToken, String code, String name})> Function(String nonce);
+
+Future<({String idToken, String code, String name})> systemAppleAuth(String nonce) async {
+  final c = await SignInWithApple.getAppleIDCredential(scopes: [AppleIDAuthorizationScopes.fullName], nonce: nonce);
+  return (
+    idToken: c.identityToken ?? '',
+    code: c.authorizationCode,
+    name: [c.givenName, c.familyName].whereType<String>().join(' '),
+  );
+}
 
 /// Ссылка в бота. PWA (веб-сборка) на телефоне: t.me в новом окне iPhone
 /// открывал поверх приложения встроенным браузером — тот уводил в Telegram и
@@ -44,7 +59,18 @@ class LoginScreen extends StatefulWidget {
   final Api api;
   final VoidCallback onDone;
   final WebAuth webAuth;
-  const LoginScreen({super.key, required this.api, required this.onDone, this.webAuth = systemWebAuth});
+  final AppleAuth appleAuth;
+
+  /// Кнопка «Войти через Apple» — только в приложении на iPhone (тесты включают сами).
+  final bool? appleDevice;
+  const LoginScreen({
+    super.key,
+    required this.api,
+    required this.onDone,
+    this.webAuth = systemWebAuth,
+    this.appleAuth = systemAppleAuth,
+    this.appleDevice,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -56,6 +82,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   int? _pick;
   bool _busy = false;
   List<({String id, String name})> _providers = [];
+  bool _codeLogin = false; // вход по коду для проверяющих App Store / RuStore (review_demo.py)
+  bool _apple = false; // вход через Apple (App Store 4.8), сервер говорит, есть ли ключи
 
   // Начатый вход в вебе помним 10 минут (как код на сервере): iPhone часто
   // перезапускает PWA, пока человек в Telegram, — без этого число и ожидание
@@ -105,9 +133,15 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _restorePending();
     widget.api
-        .providers()
-        .then((p) {
-          if (mounted) setState(() => _providers = p);
+        .loginOptions()
+        .then((o) {
+          if (mounted) {
+            setState(() {
+              _providers = o.items;
+              _codeLogin = o.code;
+              _apple = o.apple && (widget.appleDevice ?? (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS));
+            });
+          }
         })
         .catchError((_) {});
   }
@@ -136,6 +170,40 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
       }
     } catch (_) {
       if (mounted) setState(() => _note = 'Вход отменён.');
+    }
+  }
+
+  Future<void> _byApple() async {
+    tick();
+    final rnd = math.Random.secure();
+    final nonce = List.generate(32, (_) => rnd.nextInt(16).toRadixString(16)).join();
+    try {
+      final c = await widget.appleAuth(nonce);
+      await widget.api.appleLogin(idToken: c.idToken, code: c.code, nonce: nonce, name: c.name);
+      widget.onDone();
+    } on SignInWithAppleAuthorizationException catch (e) {
+      final text = e.code == AuthorizationErrorCode.canceled ? 'Вход отменён.' : 'Apple не пустил — попробуй ещё раз.';
+      if (mounted) setState(() => _note = text);
+    } catch (e) {
+      if (mounted) setState(() => _note = errorText(e));
+    }
+  }
+
+  Future<void> _byCode() async {
+    tick();
+    final code = await inputSheet(
+      context,
+      title: 'Вход по коду доступа',
+      text: 'Код выдаём проверяющим App Store и RuStore. Внутри — пример данных, не настоящий студент.',
+      hint: 'Код',
+      action: 'Войти',
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    try {
+      await widget.api.reviewLogin(code);
+      widget.onDone();
+    } catch (e) {
+      if (mounted) setState(() => _note = errorText(e));
     }
   }
 
@@ -243,7 +311,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       SizedBox(
                         width: double.infinity,
                         height: 54,
-                        child: FilledButton(
+                        child: FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: p.accent,
                             foregroundColor: p.onAccent,
@@ -251,15 +319,36 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                             textStyle: s.body(16, weight: FontWeight.w700),
                           ),
                           onPressed: _busy && _link == null ? null : (_busy ? () => openBot(_link!) : _start),
-                          child: Text(_busy ? 'Открыть бота ещё раз' : 'Войти через Telegram'),
+                          icon: const BrandLogo('telegram', size: 24),
+                          label: Text(_busy ? 'Открыть бота ещё раз' : 'Войти через Telegram'),
                         ),
                       ),
+                      // Apple просит свою кнопку не мельче остальных (HIG): та же высота, чёрная/белая
+                      if (_apple) ...[
+                        const SizedBox(height: Space.s),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: FilledButton.icon(
+                            key: const Key('login-apple'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: p.text,
+                              foregroundColor: p.bg,
+                              shape: const StadiumBorder(),
+                              textStyle: s.body(15, weight: FontWeight.w600),
+                            ),
+                            onPressed: _byApple,
+                            icon: const Icon(Icons.apple, size: 22),
+                            label: const Text('Войти через Apple'),
+                          ),
+                        ),
+                      ],
                       for (final pr in _providers) ...[
                         const SizedBox(height: Space.s),
                         SizedBox(
                           width: double.infinity,
                           height: 50,
-                          child: OutlinedButton(
+                          child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: p.text,
                               side: BorderSide(color: p.line),
@@ -267,10 +356,27 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                               textStyle: s.body(15, weight: FontWeight.w600),
                             ),
                             onPressed: () => _oauth(pr.id),
-                            child: Text('Войти через ${pr.name}'),
+                            icon: BrandLogo.has(pr.id) ? BrandLogo(pr.id) : null,
+                            label: Text('Войти через ${pr.name}'),
                           ),
                         ),
                       ],
+                      const SizedBox(height: Space.m),
+                      Center(
+                        child: Text(
+                          unofficialNote,
+                          textAlign: TextAlign.center,
+                          style: s.body(12, color: p.muted),
+                        ),
+                      ),
+                      if (_codeLogin)
+                        Center(
+                          child: TextButton(
+                            key: const Key('login-code'),
+                            onPressed: _byCode,
+                            child: Text('Вход по коду доступа', style: s.body(14, color: p.muted)),
+                          ),
+                        ),
                     ],
                   ),
                 ),

@@ -2,6 +2,9 @@
 // запрос на запуск: адреса задаёт сервер (CHANNEL_URL, CONTACT_URL), а не сборка.
 import 'api.dart';
 
+/// Приписка для магазинов (App Store 5.2.1): приложение не от института.
+const unofficialNote = 'Неофициальное приложение для студентов РТУ МИРЭА. Его сделали студенты, а не университет.';
+
 Map<String, String>? _cache;
 
 Future<Map<String, String>> appLinks(Api api) async {
