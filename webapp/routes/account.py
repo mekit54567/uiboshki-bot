@@ -17,6 +17,7 @@ async def api_me(user: dict = CurrentUser):
     import plans
     return {"id": user["id"], "first_name": user.get("first_name", ""), "username": user.get("username", ""),
             "group": await groups.of_user(user["id"]), "plan": await plans.plan_of(user["id"]),
+            "plus": await plans.has_plus(user["id"]),     # «Капибара+» (иконки «по подписке» и т. п.)
             **await consent_state(user["id"])}
 
 

@@ -240,7 +240,9 @@
 
 <div class="more-backdrop" id="more-menu" onclick="if (event.target === this) toggleMore(false)">
   <div class="more-pop">
-    <!-- 12 плиток по 4 в ряд, неполный ряд — по центру (дизайн-ревью, п. 18) -->
+    <!-- 12 плиток по 4 в ряд, неполный ряд — по центру (дизайн-ревью, п. 18). «Канал бота» и
+         «Написать нам» — одна плитка «Канал и связь» (лист со ссылками, как в приложении):
+         место отдали «Капибаре+», без нового ряда (Никита 18.10: «слишком перегружено») -->
     <div class="more-grid">
       <button onclick="toggleMore(false); switchTab('files')"><span class="sq t-files"><svg class="ico" aria-hidden="true"><use href="#i-folder"/></svg></span><span class="lbl">Файлы</span></button>
       <button onclick="toggleMore(false); openDeadlinesSeg('dl')"><span class="sq t-dl"><svg class="ico" aria-hidden="true"><use href="#i-deadlines"/></svg></span><span class="lbl">Дедлайны</span></button>
@@ -250,10 +252,10 @@
       <button onclick="toggleMore(false); openSecurity()"><span class="sq t-sec"><svg class="ico" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="lbl">Безопасность</span></button>
       <button onclick="toggleMore(false); openPlatforms()"><span class="sq t-phone"><svg class="ico" aria-hidden="true"><use href="#i-phone"/></svg></span><span class="lbl">Установить</span></button>
       <button onclick="toggleMore(false); showWhatsNew()"><span class="sq t-news"><svg class="ico" aria-hidden="true"><use href="#i-sparkle"/></svg></span><span class="lbl">Что нового</span></button>
-      <button onclick="toggleMore(false); openConfigLink(CHANNEL_URL)"><span class="sq t-channel"><svg class="ico" aria-hidden="true"><use href="#i-send"/></svg></span><span class="lbl">Канал бота</span></button>
-      <button onclick="toggleMore(false); openConfigLink(CONTACT_URL)"><span class="sq t-contact"><svg class="ico" aria-hidden="true"><use href="#i-message"/></svg></span><span class="lbl">Написать нам</span></button>
+      <button onclick="toggleMore(false); openLinks()"><span class="sq t-channel"><svg class="ico" aria-hidden="true"><use href="#i-send"/></svg></span><span class="lbl">Канал и связь</span></button>
       <button onclick="toggleMore(false); openGroup()"><span class="sq t-group"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg></span><span class="lbl">Моя группа</span></button>
-      <button onclick="toggleMore(false); shareBot()"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-users"/></svg></span><span class="lbl">Позвать</span></button>
+      <button onclick="toggleMore(false); shareBot()"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/></svg></span><span class="lbl">Позвать</span></button>
+      <button onclick="toggleMore(false); openPlus()"><span class="sq t-plus"><svg class="ico" aria-hidden="true"><use href="#i-medal"/></svg></span><span class="lbl">Капибара+</span></button>
     </div>
   </div>
 </div>
@@ -293,6 +295,20 @@
   <div class="sheet">
     <div class="sheet-grip"></div>
     <div id="notify-body"></div>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="links-sheet" onclick="if (event.target === this) closeSheet('links-sheet')">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div id="links-body"></div>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="plus-sheet" onclick="if (event.target === this) closeSheet('plus-sheet')">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div id="plus-body"></div>
   </div>
 </div>
 

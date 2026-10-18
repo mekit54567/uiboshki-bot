@@ -24,14 +24,88 @@ function openConfigLink(url) {
   else openLink(url);
 }
 
-// «Позвать»: переслать в Telegram ссылку на сайт бота (/about — живое демо и
-// поиск расписания, без установки) — после анонса бота зовут одногруппников
-function shareBot() {
-  const site = location.origin + "/about";
-  const text = "Бот нашей группы: расписание, дедлайны и баллы СДО, лекции и ИИ по ним";
-  const url = "https://t.me/share/url?url=" + encodeURIComponent(site) + "&text=" + encodeURIComponent(text);
+// «Канал и связь»: канал бота и «Написать нам» — одна плитка, лист с двумя
+// строками (как «Новости и связь» в приложении); ссылки не задана — «Скоро»
+function openLinks() {
+  haptic();
+  const row = (ic, title, text, call) => '<button class="sec-item link-item" onclick="closeSheet(\'links-sheet\'); ' +
+    call + '"><span class="sec-ic">' + icon(ic) + '</span><div><b>' + title + '</b><p>' + text + '</p></div>' +
+    icon("chevron", "link-chev") + '</button>';
+  document.getElementById("links-body").innerHTML =
+    '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("send") + '</span><div><h3>Канал и связь</h3>' +
+      '<p>Новости бота и как с нами связаться</p></div></div>' +
+    row("send", "Канал бота", "Новости, как всё устроено и что нового", "openConfigLink(CHANNEL_URL)") +
+    row("message", "Написать нам", "Идея, ошибка или вопрос — ответим", "openConfigLink(CONTACT_URL)") +
+    '<button class="ghost" onclick="closeSheet(\'links-sheet\')">Закрыть</button>';
+  document.getElementById("links-sheet").classList.add("open");
+}
+
+// «Позвать»: готовое сообщение с личной ссылкой (referrals.py) — Telegram сам
+// предложит выбрать чат; друг начнёт пользоваться — обоим дни «Капибары+»
+async function shareBot() {
+  let url;
+  try { url = (await api("/api/invite")).tg_share; }
+  catch (e) {
+    const text = "Капибара — расписание любой группы МИРЭА, дедлайны и баллы СДО в одном месте";
+    url = "https://t.me/share/url?url=" + encodeURIComponent(location.origin + "/about") + "&text=" + encodeURIComponent(text);
+  }
   if (tg && tg.openTelegramLink) tg.openTelegramLink(url);
   else openLink(url);
+}
+
+// «Капибара+»: статус, цены, оплата — на сайте по личной ссылке (billing.py),
+// дни за друзей и ранги ачивок
+const RANK_NAMES = { dawn: "Рассвет", noon: "Полдень", dusk: "Сумерки", midnight: "Полночь" };
+
+function fmtDay(iso) {
+  return new Date(iso + "T12:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
+// «Позови друга»: сколько друзей ещё дадут дни пригласившему — число с сервера
+// (referrals.REF_MAX), не здесь; выбрал — честно, что бонус закончился
+function inviteText(inv) {
+  const max = inv.ref_max || 0, got = inv.ref_counted || 0;
+  const came = " По твоей ссылке пришло: " + (inv.came || 0) + ".";
+  if (max && got >= max)
+    return "Ты уже позвал " + max + " друзей — бонус за приглашения закончился, друзьям дни по-прежнему дают." + came;
+  return "Когда он попользуется " + inv.friend_days + " дня, вам обоим +" + inv.bonus_days + " дней." +
+    (max ? " Тебе — максимум за " + max + " друзей, засчитано " + got + " из " + max + "." : "") + came;
+}
+
+async function openPlus() {
+  haptic();
+  const box = document.getElementById("plus-body");
+  document.getElementById("plus-sheet").classList.add("open");
+  box.innerHTML = '<div class="skel" style="height:240px"></div>';
+  let d;
+  try { d = await api("/api/plus"); }
+  catch (e) { box.innerHTML = '<p class="sheet-hint">' + escapeHtml(e.message) + '</p>'; return; }
+  const inv = d.invite || {};
+  const founderNote = d.founder ? "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда"
+    : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
+  const state = d.paid_until
+    ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
+    : d.gift
+      ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
+      : statusCard("off", "Подписки нет", founderNote || "Всё бесплатное — расписание, сроки, баллы, файлы — остаётся бесплатным");
+  const prices = (d.prices || []).map(p => '<div class="plus-price"><span>' + escapeHtml(p.title) + ' · ' + p.days + ' дней' +
+    (p.founder ? ' <i>Early Supporter</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + '&nbsp;₽</s> ' : '') + p.price + '&nbsp;₽</b></div>').join("");
+  const ranks = Object.entries(inv.ranks || {}).map(([k, r]) =>
+    RANK_NAMES[k] + " — " + r.days + " дн." + (r.claimed ? " (получен)" : "")).join(" · ");
+  box.innerHTML =
+    '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("medal") + '</span><div><h3>Капибара+</h3>' +
+      '<p>Подписка на Капибару</p></div></div>' + state +
+    secItem("sparkle", "Что даёт", "ИИ сверх пробы для любой группы (твоей группе он и так бесплатный), иконки и наряды капибары " +
+      "«по подписке», значок. Дальше — ответы на билеты, «Пульс группы», «Архив потока».") +
+    prices +
+    (d.pay_url
+      ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
+        '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
+      : '<p class="sheet-hint">Оплата скоро заработает.</p>') +
+    secItem("users", "Позови друга", inviteText(inv)) +
+    (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
+    '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
+    '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
 }
 
 function closeSheet(id) {

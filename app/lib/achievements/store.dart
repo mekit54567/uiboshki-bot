@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../plus/plus.dart';
 import '../api/api.dart';
 import 'catalog.dart';
 
@@ -77,6 +78,7 @@ class AchStore {
     got.value = {...got.value, id: when};
     await _save();
     onUnlock?.call(a);
+    PlusBonus.onUnlock(a.rank); // закрыл ранг — дни «Капибары+» (plus/plus.dart)
     unawaited(_send({id: when}));
     return true;
   }

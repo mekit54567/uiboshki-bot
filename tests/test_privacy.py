@@ -90,7 +90,7 @@ async def test_consent_versions(db, monkeypatch):
     assert await privacy.needs(ME) and await privacy.needs(ME, "sdo")
     await privacy.give(ME, "pd", "bot")
     assert not await privacy.needs(ME) and await privacy.needs(ME, "sdo")
-    monkeypatch.setattr(privacy, "VERSION", "99")         # новый текст — спросить заново
+    monkeypatch.setattr(privacy, "VERSION", privacy.VERSION + "+")          # новый текст — спросить заново
     assert await privacy.needs(ME)
     with pytest.raises(ValueError):
         await privacy.give(ME, "ads", "bot")
@@ -451,7 +451,7 @@ async def test_old_users_never_blocked(db, monkeypatch):
     assert not await privacy.blocked(STAROSTA_ID)         # староста — оператор
     assert not hasattr(privacy, "GRACE_UNTIL")
     assert await privacy.ask_once(ME) and not await privacy.ask_once(ME)   # спросить — один раз
-    monkeypatch.setattr(privacy, "VERSION", "99")
+    monkeypatch.setattr(privacy, "VERSION", privacy.VERSION + "+")
     assert await privacy.ask_once(ME)                     # новый текст — ещё раз
 
 

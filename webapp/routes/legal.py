@@ -17,7 +17,8 @@ from webapp.deps import CurrentUser
 router = APIRouter()
 
 PAGES = {"consent": "Согласие на обработку персональных данных",
-         "privacy": "Политика обработки персональных данных"}
+         "privacy": "Политика обработки персональных данных",
+         "offer": "Оферта: подписка «Капибара+»"}
 
 _SHELL = """<!doctype html>
 <html lang="ru">
@@ -54,7 +55,7 @@ footer{{max-width:760px;margin:0 auto;padding:0 20px 32px;color:var(--secondary)
 </style>
 </head>
 <body class="{cls}">
-<header><a href="/about">Капибара</a><span><a href="/consent">Согласие</a> · <a href="/privacy">Политика</a></span></header>
+<header><a href="/about">Капибара</a><span><a href="/consent">Согласие</a> · <a href="/privacy">Политика</a> · <a href="/offer">Оферта</a></span></header>
 <main>
 <h1>{title}</h1>
 <p class="meta">Версия {version} от {date}</p>
@@ -100,6 +101,11 @@ async def consent_page(embed: int = 0):
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page(embed: int = 0):
     return HTMLResponse(render("privacy", bool(embed)))
+
+
+@router.get("/offer", response_class=HTMLResponse)
+async def offer_page(embed: int = 0):
+    return HTMLResponse(render("offer", bool(embed)))
 
 
 @router.get("/api/legal/{name}")

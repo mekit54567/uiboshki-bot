@@ -23,7 +23,7 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "2"
+VERSION = "2"                  # 16.10: Amvera и «Капибара+» (касса, чек, приглашения)
 DATE = "16.10.2026"
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
@@ -44,6 +44,18 @@ CITY = os.getenv("PD_CITY", "").strip()
 OPERATOR = ", ".join(x for x in (
     f"самозанятый {FIO or 'Никита'}, разработчик сервиса «Капибара»",
     f"ИНН {INN}" if INN else "", f"г. {CITY}" if CITY else "") if x)
+# Исполнитель в оферте — со статусом плательщика НПД: он нужен по смыслу
+# договора (чек — из «Мой налог»). Тексты про персональные данные берут
+# оператора выше, а не эту строку.
+
+
+def contractor() -> str:
+    return ", ".join(x for x in (
+        FIO or "Никита, разработчик сервиса «Капибара»",
+        "плательщик налога на профессиональный доход",
+        f"ИНН {INN}" if INN else "") if x)
+
+
 CONTACT = "Telegram @Partykq" + (f" или почта {EMAIL}" if EMAIL else "")
 CONTACT_URL = "https://t.me/Partykq"
 

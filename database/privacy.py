@@ -3,6 +3,7 @@
 erase_user убирает человека отовсюду: все строки таблиц с колонкой user_id
 (список берётся из схемы — новая таблица попадёт сама, тест следит), его
 настройки (goals:, member:, счётчики ИИ), входы, устройства и куку СДО.
+Оплаты остаются без его id (налоговый учёт), приглашения стираются.
 Общее для группы (дедлайны старосты и СДО, файлы, ДЗ, заметки, конспекты,
 голосования, посты «Подслушано») остаётся, но без его id."""
 
@@ -123,6 +124,12 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         await db.execute("UPDATE feed_posts SET author_id=0 WHERE author_id IN (?, ?)",
                          (uid, feed_author_hash(uid)))
         await db.execute("DELETE FROM oauth_states WHERE link_user=?", (uid,))
+        # Оплаты — налоговый учёт, хранятся и дальше, но без человека; кто кого
+        # пригласил — стирается, у пригласившего остаётся только счёт в bonuses.
+        await db.execute("UPDATE payments SET payer_id=NULL WHERE payer_id=?", (uid,))
+        cur = await db.execute("DELETE FROM referrals WHERE friend_id=? OR inviter_id=?", (uid, uid))
+        if cur.rowcount:
+            done["referrals"] = cur.rowcount
 
         for table in await user_tables(db):
             cur = await db.execute(f"DELETE FROM {table} WHERE user_id=?", (uid,))
