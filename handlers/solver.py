@@ -94,6 +94,9 @@ async def _lectures_for(data: dict, query: str = "") -> str:
 _CHUNK_HEAD = re.compile(r"^=== \[(\d+)\] (.+) ===$", re.M)
 
 
+BOT_TITLE = 40      # название лекции в строке источников (робот 18.10: 28 резало «Лекция 5. Дисконтир…»)
+
+
 def with_sources(answer: str, lectures: str) -> str:
     """Под ответом по кускам поиска — откуда они («[2] Лекция 5 · слайд 12»):
     в приложении это чипы, в боте — строка. Только номера, на которые ИИ сослался."""
@@ -104,7 +107,8 @@ def with_sources(answer: str, lectures: str) -> str:
     for n, head in _CHUNK_HEAD.findall(lectures):
         title = head.split(": ", 1)[-1]
         name, _, where = title.rpartition(" · ")
-        heads[n] = f"{short_title(name or where)} · {where}" if name else short_title(title)
+        heads[n] = (f"{short_title(name, BOT_TITLE)} · {where}" if name   # в строке места больше, чем в чипе
+                    else short_title(title, BOT_TITLE))
     cited = [n for n in dict.fromkeys(re.findall(r"\[(\d+)\]", answer)) if n in heads]
     if not cited:
         return answer

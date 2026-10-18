@@ -56,3 +56,13 @@ def test_sources_line_only_for_cited_chunks():
     assert out.endswith("📚 [1] Лекция 5. Оценка бизнеса · слайд 12")
     assert solver.with_sources("Без ссылок.", ctx) == "Без ссылок."
     assert solver.with_sources("Ответ [1].", "=== Лекция 5 ===\nтекст") == "Ответ [1]."      # целые лекции — без строки
+
+
+def test_sources_line_title_up_to_40_by_word():
+    # робот 18.10: название резалось до 28 знаков посреди слова
+    long = "Лекция 5. Оценка стоимости бизнеса доходным подходом"
+    ctx, _ = semantic_search.build_context([{**HIT, "title": long}])
+    out = solver.with_sources("Ответ [1].", ctx)
+    assert out.endswith("📚 [1] Лекция 5. Оценка стоимости бизнеса… · слайд 12")
+    assert semantic_search.short_title("Лекция 5. Оценка бизнеса") == "Лекция 5. Оценка бизнеса"
+    assert semantic_search.short_title("Аааааааааааааааааааааааааааааааааа", 10) == "Ааааааааа…"   # без пробела — как было

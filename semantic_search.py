@@ -210,8 +210,15 @@ def place(h: dict) -> str:
 
 
 def short_title(title: str, limit: int = 28) -> str:
+    """Название под ответом: длинное — по границе слова, с «…»."""
     t = (title or "").strip()
-    return t if len(t) <= limit else t[:limit - 1].rstrip() + "…"
+    if len(t) <= limit:
+        return t
+    cut = t[:limit - 1]
+    space = cut.rfind(" ")
+    if space >= limit // 2:                  # слово не рвём, если не теряем больше половины
+        cut = cut[:space]
+    return cut.rstrip(" ,.:;—-") + "…"
 
 
 def build_context(hits: list[dict], limit: int = CONTEXT_CHARS) -> tuple[str, list[dict]]:
