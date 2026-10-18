@@ -115,7 +115,7 @@ async def test_ach_xp_by_rank(db, monkeypatch):
     await _person(db, 1, "Анна")
     await _person(db, 7, "Никита")
     async with connect() as c:
-        await c.execute("CREATE TABLE achievements (user_id INTEGER, ach_id TEXT, at INTEGER)")
+        await c.execute("CREATE TABLE IF NOT EXISTS achievements (user_id INTEGER, ach_id TEXT, at INTEGER)")
         for uid in (1, 7):
             for a in ("lesson", "submit", "month", "fri13", "new_one"):
                 await c.execute("INSERT INTO achievements VALUES (?, ?, 0)", (uid, a))
