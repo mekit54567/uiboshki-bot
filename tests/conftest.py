@@ -103,6 +103,16 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
+def _no_plus_welcome(monkeypatch):
+    """Приветствие «Капибары+» при первом заходе (plus_welcome) шлёт лишнее
+    сообщение — в чужих тестах оно мешало бы считать ответы; своё —
+    tests/test_grant.py."""
+    import plus_welcome
+    monkeypatch.setattr(plus_welcome, "AUTO", False)
+    plus_welcome._checked.clear()
+
+
+@pytest.fixture(autouse=True)
 def _consent_given(request, monkeypatch):
     """152-ФЗ: без согласия бот и API закрыты (privacy.blocked). Тесты
     остального ходят от имени тех, кто согласие дал; сама блокировка —

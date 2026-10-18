@@ -39,6 +39,7 @@ async def test_only_chat_members_choose_home_group(chat):
     from database.groups import viewer_group
     db = chat
     bot = FakeBot({601})
+    await db.set_setting("plus:gift", "off")                            # тариф без подарка «Капибары+»
     for uid in (601, 602):
         await db.upsert_user(uid, "", f"u{uid}")
     assert (await groups.choose(601, HOME, bot))["id"] == HOME

@@ -28,6 +28,7 @@ router = Router()
 MAX_TEXT = 4000          # лимит текста сообщения Telegram — 4096
 TARGET_TIMEOUT = 6.0
 DAY_WORDS = {"сегодня": "today", "завтра": "tomorrow", "неделя": "week", "неделю": "week"}
+SHARE_WORDS = {"share", "позвать", "пригласить", "поделиться"}    # «Поделиться» из бота и Mini App
 
 
 def _cut(text: str) -> str:
@@ -129,12 +130,30 @@ async def _target_results(query: str) -> list:
     return [r for r in await asyncio.gather(*(one(t) for t in found)) if r]
 
 
+async def _share_results(user_id: int) -> list:
+    """Готовое сообщение про Капибару с личной ссылкой (referrals.py)."""
+    import referrals
+    from handlers.plus import share_kb
+    kb = await share_kb(user_id)
+    if _card_base():
+        url = referrals.share_image()
+        return [InlineQueryResultPhoto(id="share", photo_url=url, thumbnail_url=url,
+                                       title=f"Позвать в {referrals.NAME}", description=referrals.share_text(),
+                                       caption=referrals.share_text(), reply_markup=kb)]
+    return [InlineQueryResultArticle(id="share", title=f"Позвать в {referrals.NAME}",
+                                     description=referrals.share_text()[:120],
+                                     input_message_content=InputTextMessageContent(
+                                         message_text=referrals.share_text()), reply_markup=kb)]
+
+
 @router.inline_query()
 async def inline_schedule(query: InlineQuery):
     q = (query.query or "").strip()
     only = DAY_WORDS.get(q.lower())
     try:
-        if not q or only:
+        if q.lower() in SHARE_WORDS:
+            results = await _share_results(query.from_user.id)
+        elif not q or only:
             results = await _own_results(only, query.from_user.id)
         elif len(q) >= 3:
             results = await _target_results(q)

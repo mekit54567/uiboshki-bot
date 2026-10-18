@@ -110,7 +110,20 @@ void main() {
   testWidgets('«Позвать» — своя плашка, не системная', (t) async {
     phone(t);
     final copied = watchClipboard(t);
-    await t.pumpWidget(UiboApp(api: fakeApi()));
+    await t.pumpWidget(
+      UiboApp(
+        api: fakeApi(
+          overrides: {
+            'GET /api/invite': {
+              'link': 'https://t.me/UiboshkiBot?start=ref_demo1',
+              'share_text': 'Капибара — расписание и дедлайны',
+              'share_image': '',
+              'tg_share': 'https://t.me/share/url?url=x',
+            },
+          },
+        ),
+      ),
+    );
     await settle(t);
     await t.tap(find.bySemanticsLabel('Ещё'));
     await settle(t);
@@ -119,10 +132,13 @@ void main() {
     await settle(t);
     await t.tap(find.text('Позвать'));
     await settle(t);
-    expect(copied.single, contains('/about'));
+    await t.tap(find.byKey(const Key('invite:copy')));
+    await settle(t);
+    // не голая ссылка — готовое сообщение
+    expect(copied.single, 'Капибара — расписание и дедлайны\nhttps://t.me/UiboshkiBot?start=ref_demo1');
     expect(find.byType(SnackBar), findsNothing);
     expect(find.byType(AppToast), findsOneWidget);
-    expect(find.text('Ссылка скопирована — отправь одногруппникам'), findsOneWidget);
+    expect(find.text('Скопировано — вставь в чат другу'), findsOneWidget);
     // над меню-капсулой, а не поверх неё
     final toast = t.getRect(find.byKey(const ValueKey('toast')));
     final bar = t.getRect(find.bySemanticsLabel('Сегодня'));

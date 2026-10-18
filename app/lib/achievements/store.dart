@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../plus/plus.dart';
 import 'catalog.dart';
 
 String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -72,6 +73,7 @@ class AchStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode({for (final e in got.value.entries) e.key: e.value.millisecondsSinceEpoch}));
     onUnlock?.call(a);
+    PlusBonus.onUnlock(a.rank); // закрыл ранг — дни «Капибары+» (plus/plus.dart)
     return true;
   }
 

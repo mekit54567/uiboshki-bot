@@ -3,7 +3,8 @@ from aiogram import Router, F, Bot
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
+                           ReplyKeyboardMarkup)
 
 from ai_solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from gemini_solver import solve_with_lecture_context
@@ -174,8 +175,12 @@ async def send_answer(message: Message, state: FSMContext, answer: str):
     data = await state.get_data()
     msg_ids = data.get("msg_ids", [])
 
-    for msg in await answer_model_text(message, answer):
-        msg_ids.append(msg.message_id)
+    sent = await answer_model_text(message, answer)
+    msg_ids += [m.message_id for m in sent]
+
+    history = data.get("history", [])
+    if history and history[-1]["role"] == "assistant":
+        await offer_think(message.from_user.id, state, sent, history[:-1], data)
 
     # Подсказка — один раз за диалог, а не после каждого ответа
     if not data.get("hinted"):
@@ -410,10 +415,95 @@ async def handle_plain_text(message: Message, state: FSMContext):
             return
         await wait.delete()
         await add_solver_history(message.from_user.id, text, answer)
-        await answer_model_text(message, answer)
+        sent = await answer_model_text(message, answer)
+        await offer_think(message.from_user.id, state, sent, [{"role": "user", "content": f"Задание:\n{text}"}], {})
     except Exception as e:
         logger.error(f"решалка (свободный текст): {e!r}")
         await wait.edit_text("❌ ИИ сейчас не ответил — попробуй ещё раз через минуту")
+
+
+# ── «Подумать ещё» (think.py, «Капибара+») ────────────────────────────────
+# Под ответом подписчика — кнопка: тот же вопрос заново решает модель
+# второго уровня со своим дневным лимитом. Вопрос (история до ответа) — в
+# данных FSM; к фото кнопки нет: модель читает только текст.
+THINK_CB = "think:go"
+GONE_TEXT = "Этот вопрос уже не найти — задай его ещё раз"
+
+
+def think_kb(left: int | None) -> InlineKeyboardMarkup:
+    """left=None — безлимит, без счётчика."""
+    import think
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=f"🧠 {think.LABEL}" + ("" if left is None else f" · {left}"), callback_data=THINK_CB)]])
+
+
+async def offer_think(uid: int, state: FSMContext, sent: list[Message], question: list, data: dict):
+    import think
+    if not sent or not question or question[-1]["role"] != "user" \
+            or question[-1]["content"].startswith("Задание на фото"):
+        return
+    offer = await think.offer(uid)
+    if not offer or offer["left"] == 0:         # на сегодня кончилось — кнопки нет (нажать всё равно нельзя)
+        return
+    await state.update_data(think_q=question, think_d={"subject": data.get("subject", ""),
+                                                        "has_lectures": data.get("has_lectures", False)})
+    try:
+        await sent[-1].edit_reply_markup(reply_markup=think_kb(offer["left"]))
+    except Exception as e:
+        logger.warning(f"«Подумать ещё»: кнопку не поставил: {e!r}")
+
+
+@router.callback_query(F.data == THINK_CB)
+async def think_again(callback: CallbackQuery, state: FSMContext):
+    import lecture_picker
+    import think
+    data = await state.get_data()
+    question, d = data.get("think_q"), data.get("think_d") or {}
+    if not question:
+        await callback.answer(GONE_TEXT, show_alert=True)
+        return
+    await callback.answer()
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    wait = await callback.message.answer("🧠 Думаю ещё раз…")
+    uid = callback.from_user.id
+    try:
+        lectures = await _lectures_for(d, lecture_picker.search_query(question))
+        answer = await think.solve(uid, question, d.get("subject", ""), lectures)
+    except think.ThinkError as e:
+        await wait.edit_text("⏳ " + str(e))
+        if "не списана" in str(e):          # не ответила — кнопка снова под ответом
+            try:
+                offer = await think.offer(uid)
+                if offer and offer["left"] != 0:
+                    await callback.message.edit_reply_markup(reply_markup=think_kb(offer["left"]))
+            except Exception:
+                pass
+        return
+    await wait.delete()
+    sent = await answer_model_text(callback.message, answer)
+    history = data.get("history") or []
+    if await state.get_state() == SolverState.in_dialog.state and history and history[-1]["role"] == "assistant":
+        history[-1] = {"role": "assistant", "content": answer}     # уточнять дальше — от нового ответа
+        await state.update_data(history=history,
+                                msg_ids=data.get("msg_ids", []) + [m.message_id for m in sent])
+    await offer_think(uid, state, sent, question, d)
+
+
+@router.message(Command("aithink"), PRIVATE)
+async def cmd_aithink(message: Message):
+    """/aithink on|off — выключатель «Подумать ещё» для отката (у старосты)."""
+    import think
+    from config import is_starosta
+    from database import set_setting
+    if not is_starosta(message.from_user.id):
+        return
+    arg = (message.text or "").split(maxsplit=1)[1:]
+    if arg and arg[0].strip().lower() in ("on", "off"):
+        await set_setting("ai_think", arg[0].strip().lower())
+    await message.answer(await think.status_line() + "\n\n/aithink on · /aithink off")
 
 
 # /start обещает «пришли фото задачи — отвечу», а фото без /solve раньше
