@@ -139,7 +139,11 @@ void main() {
 
     await _pick(t, 'т101', 'Т-101', 'Отсюда');
     expect(find.text('Выбери, куда идёшь'), findsOneWidget);
+    // приблизили пальцами — маршрут показывает этаж целиком и по центру (5.100.10)
+    final view = t.widget<InteractiveViewer>(find.byType(InteractiveViewer)).transformationController!;
+    view.value = Matrix4.diagonal3Values(2.5, 2.5, 1)..setTranslationRaw(-300, -40, 0);
     await _pick(t, 'т305', 'Т-305', 'Сюда');
+    expect(view.value, Matrix4.identity());
     expect(asked.where((k) => k.startsWith('GET /api/map/route')), hasLength(1));
     expect(find.text('Т-101  →  Т-305'), findsOneWidget);
     expect(find.text('41 м · ~1 мин · по лестнице на 3 этаж'), findsOneWidget);

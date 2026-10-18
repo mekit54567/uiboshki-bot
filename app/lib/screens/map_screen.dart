@@ -131,10 +131,6 @@ class _MapScreenState extends State<MapScreen> {
   List _found = const [];
   int _ask = 0;
 
-  /// Показать крупно: найденную аудиторию или маршрут на этаже — номер
-  /// просьбы; план применяет её, когда знает свой размер.
-  int _zoom = 0, _zoomed = 0;
-
   /// Короткие имена корпусов («В-78») — в листе аудитории, если корпусов несколько.
   Map<String, String> _shorts = const {};
 
@@ -184,7 +180,7 @@ class _MapScreenState extends State<MapScreen> {
       _focus = r;
       _q.clear();
       _found = const [];
-      _zoom++;
+      _whole();
     });
     _roomSheet(r);
   }
@@ -230,12 +226,17 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _route = MapRoute.fromJson(j as Map);
         _floor = _route!.fromFloor;
-        _zoom++;
+        _whole();
       });
     } catch (_) {
       if (mounted) showToast(context, 'Маршрут не построился', kind: ToastKind.error);
     }
   }
+
+  /// Этаж целиком и по центру окна (робот 18.10: после приближения корпус
+  /// уезжал вниз, а план срезался сбоку) — после поиска, маршрута, смены
+  /// этажа или корпуса. Ближе — пальцами.
+  void _whole() => _view.value = Matrix4.identity();
 
   void _clear() {
     tick();
@@ -243,20 +244,6 @@ class _MapScreenState extends State<MapScreen> {
       _from = _to = _focus = null;
       _route = null;
     });
-  }
-
-  /// Что показать крупно на этаже: маршрут (с дверями концов) или аудиторию.
-  Rect? _target(MapFloor f) {
-    final pts = <Offset>[...?_route?.legs[f.n]?.expand((l) => l)];
-    final focus = _route == null ? _focus : null;
-    for (final r in f.rooms) {
-      if (r.id == focus?.id || (_route != null && (r.id == _from?.id || r.id == _to?.id))) pts.addAll(r.shape);
-    }
-    if (pts.isEmpty) return null;
-    // не ближе, чем почти половина этажа: видно, где это в корпусе
-    final r = _bounds(pts);
-    final w = math.max(r.width, f.size.width * 0.45), h = math.max(r.height, f.size.height * 0.45);
-    return Rect.fromCenter(center: r.center, width: w, height: h);
   }
 
   void _tap(MapFloor f, Offset at) {
@@ -423,7 +410,7 @@ class _MapScreenState extends State<MapScreen> {
                           _floor = null;
                           _from = _to = _focus = null;
                           _route = null;
-                          _view.value = Matrix4.identity();
+                          _whole();
                         }),
                         Key('map:campus:${c['id']}'),
                       ),
@@ -443,12 +430,7 @@ class _MapScreenState extends State<MapScreen> {
                       n == floor,
                       () => setState(() {
                         _floor = n;
-                        // с маршрутом — сразу к его куску на этом этаже
-                        if (_route?.legs.containsKey(n) ?? false) {
-                          _zoom++;
-                        } else {
-                          _view.value = Matrix4.identity();
-                        }
+                        _whole();
                       }),
                       Key('map:floor:$n'),
                       dot: _route?.legs.containsKey(n) ?? false,
@@ -483,13 +465,6 @@ class _MapScreenState extends State<MapScreen> {
                       builder: (context, box) {
                         final size = Size(box.maxWidth, box.maxHeight);
                         final fit = _Fit(f.size, size);
-                        if (_zoomed != _zoom) {
-                          _zoomed = _zoom;
-                          final target = _target(f);
-                          WidgetsBinding.instance.addPostFrameCallback(
-                            (_) => _view.value = target == null ? Matrix4.identity() : fit.zoomTo(target, size),
-                          );
-                        }
                         return InteractiveViewer(
                           transformationController: _view,
                           minScale: 1,
@@ -638,22 +613,6 @@ class _Fit {
   }
 
   Offset toPlan(Offset local) => (local - shift) / scale;
-
-  /// Увеличение, при котором [plan] (в единицах плана) — по центру окна с
-  /// запасом; не больше ×3 и не меньше всего этажа.
-  Matrix4 zoomTo(Rect plan, Size box) {
-    final r = Rect.fromLTRB(
-      shift.dx + plan.left * scale,
-      shift.dy + plan.top * scale,
-      shift.dx + plan.right * scale,
-      shift.dy + plan.bottom * scale,
-    ).inflate(28);
-    final k = math.min(box.width / r.width, box.height / r.height).clamp(1.0, 3.0);
-    // сдвиг, но так, чтобы край плана не уезжал внутрь окна
-    final tx = (box.width / 2 - r.center.dx * k).clamp(box.width * (1 - k), 0.0);
-    final ty = (box.height / 2 - r.center.dy * k).clamp(box.height * (1 - k), 0.0);
-    return Matrix4.diagonal3Values(k, k, 1)..setTranslationRaw(tx, ty, 0);
-  }
 }
 
 class _FloorPainter extends CustomPainter {
