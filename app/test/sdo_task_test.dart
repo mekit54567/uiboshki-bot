@@ -68,7 +68,7 @@ void main() {
     expect(asked, isNot(contains('POST /api/sdo/connect'))); // без галочки согласия — не отправляем
     await tapVisible(t, find.descendant(of: find.byType(ConsentCheck), matching: find.byType(AnimatedContainer)));
     await tapVisible(t, find.text('Проверить и сохранить'));
-    expect(bodies['POST /api/sdo/connect'], {'cookie': 'abc123', 'agree': true});
+    expect(bodies['POST /api/sdo/connect'], {'cookie': 'abc123', 'agree': true, 'via': 'paste'});
     expect(find.text('Подключено, работает'), findsOneWidget);
     expect(find.textContaining('для всей УИБО-01-24'), findsOneWidget);
 
@@ -107,7 +107,7 @@ void main() {
     await tapVisible(t, find.descendant(of: find.byType(ConsentCheck), matching: find.byType(AnimatedContainer)));
     await tapVisible(t, find.text('Войти в СДО'));
     expect(opened, 1);
-    expect(bodies['POST /api/sdo/connect'], {'cookie': 'sess-1', 'agree': true});
+    expect(bodies['POST /api/sdo/connect'], {'cookie': 'sess-1', 'agree': true, 'via': 'page'});
     expect(find.text('Подключено, работает'), findsOneWidget);
   });
 

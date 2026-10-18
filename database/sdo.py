@@ -66,10 +66,15 @@ async def get_last_scores(user_id: int) -> dict[int, float]:
         return {cid: sc for cid, sc in rows}
 
 
-async def save_sdo_session(user_id: int, cookie_enc: str, next_check_at: str | None = None):
+async def save_sdo_session(user_id: int, cookie_enc: str, next_check_at: str | None = None, via: str | None = None):
+    """Новый вход поверх старого: «делиться с группой» остаётся, как было
+    (раньше INSERT OR REPLACE сбрасывал его при каждом переподключении)."""
     async with connect() as db:
-        await db.execute("INSERT OR REPLACE INTO sdo_sessions (user_id, cookie_enc, status, checked_at, next_check_at, jitter_left) "
-                         "VALUES (?, ?, 'ok', datetime('now'), ?, 3)", (user_id, cookie_enc, next_check_at))
+        await db.execute("INSERT INTO sdo_sessions (user_id, cookie_enc, status, checked_at, next_check_at, jitter_left, via) "
+                         "VALUES (?, ?, 'ok', datetime('now'), ?, 3, ?) "
+                         "ON CONFLICT(user_id) DO UPDATE SET cookie_enc=excluded.cookie_enc, status='ok', "
+                         "checked_at=excluded.checked_at, next_check_at=excluded.next_check_at, jitter_left=3, "
+                         "via=excluded.via", (user_id, cookie_enc, next_check_at, via))
         await db.commit()
 
 

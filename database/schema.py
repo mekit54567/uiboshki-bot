@@ -291,8 +291,10 @@ async def init_db():
         # своё время следующей проверки; первые проверки — через 50–59 мин
         # случайно, чтобы входы разошлись по часу, потом ровно 55.
         # share — согласие делиться дедлайнами СДО с группой (этап 1 (в)): по
-        # такому входу бот синхронизирует задания всей группы (group_sync.py)
-        for col in ("next_check_at TEXT", "jitter_left INTEGER DEFAULT 3", "share INTEGER DEFAULT 0"):
+        # такому входу бот синхронизирует задания всей группы (group_sync.py);
+        # via — как вошёл (page — страницей СДО в приложении, silent — приложение
+        # само обновило протухший вход, paste — вставкой куки; 5.102.0)
+        for col in ("next_check_at TEXT", "jitter_left INTEGER DEFAULT 3", "share INTEGER DEFAULT 0", "via TEXT"):
             try:
                 await db.execute(f"ALTER TABLE sdo_sessions ADD COLUMN {col}")
             except Exception:

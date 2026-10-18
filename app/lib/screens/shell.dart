@@ -23,6 +23,7 @@ import 'deadlines.dart';
 import 'group_pick.dart';
 import 'legal.dart';
 import 'more.dart';
+import 'sdo_relogin.dart';
 import 'study.dart';
 import 'today.dart';
 import 'tour.dart';
@@ -161,6 +162,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       await _ensureGroup();
       unawaited(PlusBonus.sendRef(widget.api)); // после согласия: до него API закрыт
       await _maybeTour();
+      if (mounted) await _sdoRefresh();
     });
   }
 
@@ -177,7 +179,16 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _visit();
+    if (state == AppLifecycleState.resumed) {
+      _visit();
+      _sdoRefresh();
+    }
+  }
+
+  /// Вход в СДО устарел, а единый вход МИРЭА ещё помнит человека — обновить
+  /// молча, «Учёба» строится заново уже с баллами (sdo_relogin.dart, 5.102.0).
+  Future<void> _sdoRefresh() async {
+    if (await SdoRelogin.refreshIfExpired(context, widget.api) && mounted) setState(() => _sdo++);
   }
 
   /// Заход: дни для ачивок; виджет на экране телефона — «На столе».

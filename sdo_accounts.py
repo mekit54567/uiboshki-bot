@@ -186,6 +186,22 @@ def first_check_at(now: datetime | None = None) -> str:
     return _utc((now or _now()) + timedelta(minutes=random.randint(*JITTER_RANGE)))
 
 
+# Как человек вошёл (sdo_sessions.via): page — страницей СДО в приложении на
+# телефоне, silent — приложение само обновило протухший вход той же страницей
+# в фоне (единый вход МИРЭА ещё помнил человека), paste — вставкой куки.
+VIA = ("page", "silent", "paste")
+
+
+def expired_text(via: str | None) -> str:
+    """Вход вошедшего страницей приложение обновит само при следующем открытии,
+    если единый вход МИРЭА его ещё помнит, — так и пишем, без «войди заново»."""
+    if via in ("page", "silent"):
+        return ("🎓 Вход в СДО устарел. Открой Капибару на телефоне — если МИРЭА тебя ещё "
+                "помнит, вход обновится сам. Если нет — войди заново: СДО → Вход.")
+    return ("🎓 Вход в СДО устарел — баллы и сдача работ в приложении пока не работают.\n"
+            "Подключи заново: приложение → СДО → Вход.")
+
+
 async def _check_one(row: dict, bot=None, now: datetime | None = None):
     from database import set_sdo_next_check, set_sdo_status, update_sdo_cookie
     uid, enc = row["user_id"], row["cookie_enc"]
@@ -217,9 +233,7 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
         try:
             from delivery import deliver
             from keyboards import app_button
-            await deliver(bot, uid,
-                          "🎓 Вход в СДО устарел — баллы и сдача работ в приложении пока не работают.\n"
-                          "Подключи заново: приложение → СДО → Вход.",
+            await deliver(bot, uid, expired_text(row.get("via")),
                           kind="sdo", tab="sdo", reply_markup=app_button("🎓 Подключить СДО", "sdo"))
         except Exception as e:
             logger.info(f"СДО: не смог сказать {uid}, что вход устарел: {e!r}")
