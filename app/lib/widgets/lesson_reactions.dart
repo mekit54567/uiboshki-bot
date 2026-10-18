@@ -1,4 +1,4 @@
-// Реакции на пару (5.100, Никита 18.10): четыре позы капибары, счёт видит
+// Реакции на пару (5.100, Никита 18.10): пять поз капибары, счёт видит
 // своя группа, кто как отметил — никто. Отметить — когда пара началась и
 // две недели после; до начала блока нет. Нажал свою ещё раз — снял.
 import 'package:flutter/material.dart';
@@ -16,6 +16,7 @@ const lessonReactions = [
   ('calm', CapyPose.morning, 'Норм'),
   ('hard', CapyPose.sad, 'Сложно'),
   ('sleep', CapyPose.night, 'Скучно'),
+  ('angry', CapyPose.angry, 'Злой препод'), // 5.100.6
 ];
 
 class LessonReactions extends StatefulWidget {
@@ -178,9 +179,14 @@ class _Choice extends StatelessWidget {
               children: [
                 CapyImage(pose: pose, size: 44, color: ink),
                 const SizedBox(height: Space.xs),
-                Text(
-                  label,
-                  style: s.body(12, weight: on ? FontWeight.w700 : FontWeight.w500, color: ink),
+                // пять в ряд: длинная подпись («Злой препод») — мельче, не в две строки
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: s.body(12, weight: on ? FontWeight.w700 : FontWeight.w500, color: ink),
+                  ),
                 ),
                 Text(
                   count > 0 ? '$count' : ' ',

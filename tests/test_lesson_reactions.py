@@ -46,7 +46,7 @@ async def test_group_sees_counts_not_who(client):
     s = _start()
     body = {"start": s, "title": "Анализ данных", "kind": "joy"}
     r = c.post("/api/lesson/reactions", json=body, headers=h(ME)).json()
-    assert r["counts"] == {"joy": 1, "calm": 0, "hard": 0, "sleep": 0} and r["mine"] == "joy"
+    assert r["counts"] == {"joy": 1, "calm": 0, "hard": 0, "sleep": 0, "angry": 0} and r["mine"] == "joy"
     c.post("/api/lesson/reactions", json={**body, "kind": "hard"}, headers=h(MATE))
     # одна пара у всех: время в UTC и название другим регистром — та же
     utc = datetime.fromisoformat(s).astimezone(timezone.utc)
@@ -61,6 +61,9 @@ async def test_group_sees_counts_not_who(client):
 async def test_change_and_remove_own(client):
     c, h = client
     s = _start()
+    # пятая — «Злой препод» (5.100.6)
+    r = c.post("/api/lesson/reactions", json={"start": s, "title": "Матан", "kind": "angry"}, headers=h(ME)).json()
+    assert r["counts"]["angry"] == 1 and r["mine"] == "angry"
     for kind in ("joy", "sleep"):
         r = c.post("/api/lesson/reactions", json={"start": s, "title": "Матан", "kind": kind}, headers=h(ME)).json()
     assert r["counts"]["joy"] == 0 and r["counts"]["sleep"] == 1 and r["mine"] == "sleep"

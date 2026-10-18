@@ -57,6 +57,9 @@ void main() {
     expect(find.text('Как пара'), findsOneWidget);
     expect(find.text('Видит только твоя группа, без имён'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+    // пятая — злая капибара (5.100.6), подпись в одну строку
+    expect(find.byKey(const ValueKey('reaction-angry')), findsOneWidget);
+    expect(find.text('Злой препод'), findsOneWidget);
 
     await t.ensureVisible(find.text('Сложно'));
     await t.tap(find.text('Сложно'));
