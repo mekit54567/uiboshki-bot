@@ -1,6 +1,7 @@
 // Ачивки на телефоне: что открыто и когда, дни с заходами, баллы для «Плюс
-// балл», сроки для «Заранее». Пока всё в памяти телефона (SharedPreferences);
-// рейтинг группы и «в чат группы» — когда ачивки переедут на сервер.
+// балл», сроки для «Заранее» (SharedPreferences). Открытые ачивки с 5.91 ещё
+// и на сервере (/api/achievements): не пропадают при смене телефона, за них
+// открываются иконки. Рейтинг группы и «в чат группы» — потом.
 // Большая часть ачивок ловится по ответам API ([AchStore.onApi]), как
 // события статистики на сервере (stats.EVENT_PATHS), — экраны не трогаем.
 import 'dart:async';
@@ -10,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../plus/plus.dart';
+import '../api/api.dart';
 import 'catalog.dart';
 
 String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -30,6 +32,9 @@ class AchStore {
   static void Function(int tab)? openTab;
 
   static Future<void>? _loading;
+
+  /// Сервер для ачивок; задаёт оболочка. Нет — живём только на телефоне.
+  static Api? api;
 
   /// Сроки из последнего списка «Сдать»: id → «2026-10-15».
   static final _dues = <int, String>{};
@@ -58,6 +63,7 @@ class AchStore {
     got.value = {};
     onUnlock = null;
     openTab = null;
+    api = null;
   }
 
   static bool has(String id) => got.value.containsKey(id);
@@ -70,11 +76,52 @@ class AchStore {
     if (has(id)) return false;
     final when = at ?? DateTime.now();
     got.value = {...got.value, id: when};
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode({for (final e in got.value.entries) e.key: e.value.millisecondsSinceEpoch}));
+    await _save();
     onUnlock?.call(a);
     PlusBonus.onUnlock(a.rank); // закрыл ранг — дни «Капибары+» (plus/plus.dart)
+    unawaited(_send({id: when}));
     return true;
+  }
+
+  static Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, jsonEncode({for (final e in got.value.entries) e.key: e.value.millisecondsSinceEpoch}));
+  }
+
+  /// Отправить открытые на сервер; в ответ — всё, что там есть (с другого
+  /// телефона): недостающее берём молча, без плашки.
+  static Future<void> _send(Map<String, DateTime> items) async {
+    final a = api;
+    if (a == null) return;
+    try {
+      final r = await a.post('/achievements', {
+        'items': {for (final e in items.entries) e.key: e.value.millisecondsSinceEpoch},
+      });
+      final there = r is Map ? r['items'] : null;
+      if (there is! Map) return;
+      final m = {...got.value};
+      var changed = false;
+      there.forEach((k, v) {
+        if (achievementById('$k') == null || v is! int) return;
+        final t = DateTime.fromMillisecondsSinceEpoch(v), was = m['$k'];
+        if (was == null || t.isBefore(was)) {
+          m['$k'] = t;
+          changed = true;
+        }
+      });
+      if (changed) {
+        got.value = m;
+        await _save();
+      }
+    } catch (_) {
+      // нет сети — отправим всё при следующем заходе ([sync])
+    }
+  }
+
+  /// Заход в приложение: свои — на сервер, с сервера — чего нет на телефоне.
+  static Future<void> sync() async {
+    await load();
+    await _send(got.value);
   }
 
   /// Заход в приложение: дни для «Неделя в кармане», «Месяц с Капибарой»,

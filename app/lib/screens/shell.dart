@@ -9,8 +9,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
+import '../api/links.dart';
 import '../api/models.dart';
 import '../plus/plus.dart';
+import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
@@ -152,6 +154,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     AchStore.onUnlock = showUnlockBanner;
     AchStore.openTab = _open;
     PlusBonus.api = widget.api;
+    AchStore.api = widget.api;
     WidgetsBinding.instance.addObserver(this);
     _visit();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -168,6 +171,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     AchStore.onUnlock = null;
     AchStore.openTab = null;
     PlusBonus.api = null;
+    AchStore.api = null;
     super.dispose();
   }
 
@@ -181,6 +185,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     try {
       await AchStore.load();
       await AchStore.visit(now());
+      await AchStore.sync();
       await PlusBonus.checkAll(); // ранги, закрытые раньше, — бонус ещё не забран
       final sink = HomeWidgets.sink;
       if (sink != null && await sink.installed() > 0) await AchStore.unlock('widget');
@@ -197,6 +202,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     if (me == null || !mounted) return;
     achName = '${me['first_name'] ?? ''}'.trim();
+    appLinks(widget.api).then((l) => setAchBot(l['bot']), onError: (_) {});
+    // подписочные иконки — только с подпиской (5.91): plus из /api/me
+    // (у своей группы plan остаётся «own» и с подпиской), до него — plan
+    AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;

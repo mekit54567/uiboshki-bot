@@ -203,6 +203,11 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
     r = c.post("/api/plus/rank", headers=h, json={"rank": "noon"})
     assert r.status_code == 400 and "7 разных дней" in r.json()["detail"]
     await _events(db.DATABASE_PATH, ME, 7)
+    import time
+
+    import achievements                                                       # ачивки на сервере (#202)
+    now_ms = int(time.time() * 1000)
+    await achievements.add(ME, {a: now_ms for a in achievements.RANKS["noon"]}, now_ms)
     r = c.post("/api/plus/rank", headers=h, json={"rank": "noon"})
     assert r.json()["days"] == 5
     assert c.post("/api/plus/rank", headers=h, json={"rank": "noon"}).status_code == 400   # второй раз нет
