@@ -735,7 +735,7 @@ function syncNavHeight() {}
 let thinkOffer = null, thinkArmed = false;
 """
 CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "historyOf",
-            "requestAnswer", "sendChat", "thinkAgain", "setThinkOffer", "renderThinkToggle", "toggleThink"]
+            "requestAnswer", "sendChat", "thinkAgain", "setThinkOffer", "thinkHasLeft", "renderThinkToggle", "toggleThink"]
 
 
 @node
@@ -1318,3 +1318,9 @@ def test_donate_row_not_a_tile():
     assert 'api("/api/donate")' in donate and "d.hidden" in donate and "openLink(d.url)" in donate
     assert "d.donate_url ?" in more and "Это не подписка и ничего не открывает — просто спасибо." in more
     assert ".more-donate {" in (STATIC / "app.css").read_text(encoding="utf-8")
+
+
+def test_think_toggle_unlimited_without_counter():
+    # безлимит (/grant … unlimited): у «Подумать» над полем ввода left=null — без счётчика, нажимается
+    chat = JS["js/chat.js"]
+    assert "thinkOffer.left == null ||" in chat and '(thinkOffer.left == null ? "" :' in chat

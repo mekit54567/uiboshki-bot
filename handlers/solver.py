@@ -510,9 +510,9 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
 # обычный дневной счёт ai_quota не трогается; к фото — нет.
 THINK_ARM_CB = "think:arm"
 ARM_TEXT = ("🧠 Нужен разбор поглубже? Включи «Подумать» — задачу сразу решит DeepSeek "
-            "(«Капибара+», {left} на сегодня).\nВне решалки — /think и вопрос.")
+            "(«Капибара+», {left}).\nВне решалки — /think и вопрос.")
 ARM_GONE = "Задача уже решена — включи «Подумать» в новой: /solve"
-THINK_ASK = ("🧠 Пиши вопрос — его сразу решит DeepSeek, подумав ({left} на сегодня).\n"
+THINK_ASK = ("🧠 Пиши вопрос — его сразу решит DeepSeek, подумав ({left}).\n"
              "Передумал — /cancel")
 PHOTO_NO_THINK = "К фото «Подумать» не работает — пришли задачу текстом или /cancel"
 
@@ -521,8 +521,14 @@ class ThinkState(StatesGroup):
     waiting = State()       # /think без текста: следующий вопрос — «подумав»
 
 
-def arm_kb(left: int, on: bool) -> InlineKeyboardMarkup:
-    text = f"✅ Подумать включено · {left}" if on else f"🧠 Подумать · {left}"
+def _left_text(left: int | None) -> str:
+    return "без лимита" if left is None else f"{left} на сегодня"
+
+
+def arm_kb(left: int | None, on: bool) -> InlineKeyboardMarkup:
+    """left=None — безлимит, без счётчика."""
+    n = "" if left is None else f" · {left}"
+    text = f"✅ Подумать включено{n}" if on else f"🧠 Подумать{n}"
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=THINK_ARM_CB)]])
 
 
@@ -531,9 +537,10 @@ async def offer_arm(message: Message) -> Message | None:
     сегодня не кончилось (кончилось — не предлагаем вовсе)."""
     import think
     offer = await think.offer(message.from_user.id)
-    if not offer or offer["left"] <= 0:
+    if not offer or offer["left"] == 0:
         return None
-    return await message.answer(ARM_TEXT.format(left=offer["left"]), reply_markup=arm_kb(offer["left"], False))
+    return await message.answer(ARM_TEXT.format(left=_left_text(offer["left"])),
+                                reply_markup=arm_kb(offer["left"], False))
 
 
 async def drop_arm(message: Message, state: FSMContext, data: dict):
@@ -573,7 +580,7 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
     await state.update_data(think_next=on)
     await callback.answer("Задачу решит DeepSeek, подумав" if on else "Решу как обычно")
     try:
-        await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left(uid), on))
+        await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left_or_none(uid), on))
     except Exception:
         pass
 
@@ -633,7 +640,7 @@ async def cmd_think(message: Message, state: FSMContext):
         await _think_free(message, state, text)
         return
     await state.set_state(ThinkState.waiting)
-    await message.answer(THINK_ASK.format(left=await think.left(message.from_user.id)))
+    await message.answer(THINK_ASK.format(left=_left_text(await think.left_or_none(message.from_user.id))))
 
 
 @router.message(ThinkState.waiting, F.text, PRIVATE)

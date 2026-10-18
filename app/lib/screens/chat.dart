@@ -218,8 +218,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _thinkOffer;
   bool _thinkOn = false;
 
-  int get _thinkLeft => (_thinkOffer?['left'] as num?)?.toInt() ?? 0;
-  bool get _thinkCan => _thinkOffer != null && _thinkLeft > 0 && _att == null;
+  /// null — безлимит (/grant … unlimited), счётчика нет.
+  int? get _thinkLeft => (_thinkOffer?['left'] as num?)?.toInt();
+  bool get _thinkCan => _thinkOffer != null && (_thinkLeft == null || _thinkLeft! > 0) && _att == null;
 
   @override
   void initState() {
@@ -941,7 +942,7 @@ class _ChatsSheetState extends State<_ChatsSheet> {
 /// решает модель второго уровня. Кончилось на сегодня или прикреплён файл —
 /// серый и не нажимается.
 class _ThinkToggle extends StatelessWidget {
-  final int left;
+  final int? left; // null — безлимит
   final bool on, attached;
   final VoidCallback? onTap;
   const _ThinkToggle({required this.left, required this.on, required this.attached, required this.onTap});
@@ -950,10 +951,11 @@ class _ThinkToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final can = onTap != null || (left > 0 && !attached);
+    final out = left != null && left! <= 0;
+    final can = onTap != null || (!out && !attached);
     final note = on
         ? 'следующий вопрос решит DeepSeek, подумав'
-        : left <= 0
+        : out
         ? 'на сегодня всё — завтра снова'
         : attached
         ? 'к фото и файлам — нет'
@@ -979,7 +981,7 @@ class _ThinkToggle extends StatelessWidget {
               shape: const StadiumBorder(),
               avatar: Icon(Icons.psychology_outlined, size: 18, color: fg),
               label: Text(
-                'Подумать · ${left < 0 ? 0 : left}',
+                'Подумать${left == null ? '' : ' · ${left! < 0 ? 0 : left}'}',
                 style: s.body(13, weight: FontWeight.w600, color: fg),
               ),
             ),

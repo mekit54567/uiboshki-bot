@@ -302,24 +302,28 @@ function setThinkOffer(o) {
   renderThinkToggle();
 }
 
+function thinkHasLeft() {               // left null — безлимит (/grant … unlimited)
+  return !!thinkOffer && (thinkOffer.left == null || thinkOffer.left > 0);
+}
+
 function renderThinkToggle() {
   const box = document.getElementById("think-toggle");
   if (!thinkOffer) {
     thinkArmed = false;
     box.innerHTML = "";
   } else {
-    const can = thinkOffer.left > 0 && !pendingAttachment;
+    const can = thinkHasLeft() && !pendingAttachment;
     if (!can) thinkArmed = false;
     box.innerHTML = '<button class="think-toggle' + (thinkArmed ? " on" : "") + '" onclick="toggleThink()" aria-pressed="' +
-      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать · " + thinkOffer.left + "</button>" +
+      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать" + (thinkOffer.left == null ? "" : " · " + thinkOffer.left) + "</button>" +
       '<span class="think-note">' + (thinkArmed ? "следующий вопрос решит DeepSeek, подумав"
-        : thinkOffer.left > 0 ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
+        : thinkHasLeft() ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
   }
   syncNavHeight();
 }
 
 function toggleThink() {
-  if (!thinkOffer || !(thinkOffer.left > 0) || pendingAttachment) return;
+  if (!thinkHasLeft() || pendingAttachment) return;
   thinkArmed = !thinkArmed;
   haptic();
   renderThinkToggle();

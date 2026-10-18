@@ -91,6 +91,31 @@ void main() {
     expect((bodies['POST /api/chat'] as Map).containsKey('think_first'), isFalse);
   });
 
+  testWidgets('безлимит — «Подумать» без счётчика и включается', (t) async {
+    phone(t);
+    final bodies = <String, Object?>{};
+    final o = withThink(0);
+    o['GET /api/subjects'] = {
+      ...demoFixtures()['GET /api/subjects'] as Map,
+      'think': {'label': 'Подумать ещё', 'left': null, 'daily': 10},
+    };
+    await t.pumpWidget(
+      host(
+        ChatScreen(
+          api: fakeApi(bodies: bodies, overrides: o),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.text('Подумать'), findsOneWidget);
+    expect(find.textContaining('завтра снова'), findsNothing);
+    await t.tap(find.byKey(const Key('think-toggle')));
+    await t.pump();
+    expect(toggle(t).selected, isTrue);
+    await ask(t, 'Что такое NPV?');
+    expect((bodies['POST /api/chat'] as Map)['think_first'], isTrue);
+  });
+
   testWidgets('не подписчик (или iPhone, или выключено) — переключателя нет', (t) async {
     phone(t);
     await t.pumpWidget(host(ChatScreen(api: fakeApi())));

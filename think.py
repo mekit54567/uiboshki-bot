@@ -117,9 +117,14 @@ async def why_not(uid: int) -> str | None:
         return OFF_TEXT
     if not await plans.has_plus(uid):
         return PLUS_TEXT
-    if await left(uid) <= 0:
+    if not await _unlimited(uid) and await left(uid) <= 0:
         return LIMIT_TEXT.format(n=DAILY)
     return None
+
+
+async def left_or_none(uid: int) -> int | None:
+    """Сколько «Подумать» осталось сегодня; None — безлимит (/grant … unlimited)."""
+    return None if await _unlimited(uid) else await left(uid)
 
 
 def _cost(usage: dict) -> float:
