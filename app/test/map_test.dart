@@ -136,6 +136,12 @@ void main() {
       expect(find.byKey(Key('map:floor:$n')), findsOneWidget);
     }
     expect(find.text('Нажми на аудиторию, чтобы построить маршрут'), findsOneWidget);
+    // низкий корпус: рамка по высоте этажа, без пустоты сверху и снизу (5.100.12)
+    final frame = t.getSize(find.byKey(const Key('map:plan')));
+    expect(frame.height, lessThan(frame.width));
+    final below =
+        t.getTopLeft(find.byKey(const Key('map:source'))).dy - t.getBottomLeft(find.byKey(const Key('map:plan'))).dy;
+    expect(below, lessThan(200)); // подсказка маршрута и подпись — сразу под планом
 
     await _pick(t, 'т101', 'Т-101', 'Отсюда');
     expect(find.text('Выбери, куда идёшь'), findsOneWidget);

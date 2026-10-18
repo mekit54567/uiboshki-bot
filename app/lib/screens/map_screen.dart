@@ -64,7 +64,16 @@ class MapFloor {
   );
 
   MapRoom? roomAt(Offset q) => rooms.where((r) => r.contains(q)).firstOrNull;
+
+  /// Где на листе сам корпус: контур и аудитории, без полей листа.
+  Rect get content {
+    final pts = [...outline, for (final r in rooms) ...r.shape];
+    return pts.isEmpty ? Offset.zero & size : _bounds(pts);
+  }
 }
+
+/// Корпус на всех этажах сразу — один масштаб и одна рамка на все этажи.
+Rect campusContent(List<MapFloor> floors) => floors.map((f) => f.content).reduce((a, b) => a.expandToInclude(b));
 
 /// Маршрут с сервера: куски по этажам и переходы между ними.
 class MapRoute {
@@ -440,7 +449,9 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           const SizedBox(height: Space.m),
-          Expanded(
+          // Flexible: рамка плана не выше самого этажа — низкий корпус не
+          // оставляет в ней пустоты, маршрут и подпись идут сразу под ним
+          Flexible(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: Space.l),
               child: FutureBuilder<List<MapFloor>>(
@@ -458,38 +469,45 @@ class _MapScreenState extends State<MapScreen> {
                   if (!snap.hasData) return const Center(child: CapyLoading());
                   final f = snap.data!.where((f) => f.n == floor).firstOrNull;
                   if (f == null) return const SizedBox.shrink();
-                  return Tile(
-                    key: const Key('map:plan'),
-                    padding: EdgeInsets.zero,
-                    child: LayoutBuilder(
-                      builder: (context, box) {
-                        final size = Size(box.maxWidth, box.maxHeight);
-                        final fit = _Fit(f.size, size);
-                        return InteractiveViewer(
-                          transformationController: _view,
-                          minScale: 1,
-                          maxScale: 6,
-                          child: GestureDetector(
-                            onTapUp: (d) => _tap(f, fit.toPlan(d.localPosition)),
-                            child: CustomPaint(
-                              size: size,
-                              painter: _FloorPainter(
-                                floor: f,
-                                fit: fit,
-                                p: p,
-                                font: s.body(12).fontFamily,
-                                marked: {
-                                  for (final r in [_from, _to, _focus])
-                                    if (r != null) r.id,
-                                },
-                                route: _route?.legs[f.n] ?? const [],
-                                start: _route != null && _route!.fromFloor == f.n,
-                                end: _route != null && _route!.toFloor == f.n,
+                  final content = campusContent(snap.data!);
+                  return LayoutBuilder(
+                    builder: (context, outer) => SizedBox(
+                      width: outer.maxWidth,
+                      height: _Fit.frameHeight(content.size, outer.maxWidth, outer.maxHeight),
+                      child: Tile(
+                        key: const Key('map:plan'),
+                        padding: EdgeInsets.zero,
+                        child: LayoutBuilder(
+                          builder: (context, box) {
+                            final size = Size(box.maxWidth, box.maxHeight);
+                            final fit = _Fit(content, size);
+                            return InteractiveViewer(
+                              transformationController: _view,
+                              minScale: 1,
+                              maxScale: 6,
+                              child: GestureDetector(
+                                onTapUp: (d) => _tap(f, fit.toPlan(d.localPosition)),
+                                child: CustomPaint(
+                                  size: size,
+                                  painter: _FloorPainter(
+                                    floor: f,
+                                    fit: fit,
+                                    p: p,
+                                    font: s.body(12).fontFamily,
+                                    marked: {
+                                      for (final r in [_from, _to, _focus])
+                                        if (r != null) r.id,
+                                    },
+                                    route: _route?.legs[f.n] ?? const [],
+                                    start: _route != null && _route!.fromFloor == f.n,
+                                    end: _route != null && _route!.toFloor == f.n,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   );
                 },
@@ -600,16 +618,28 @@ class _RouteBar extends StatelessWidget {
   }
 }
 
-/// План в окне: масштаб и сдвиг, чтобы этаж целиком влез по центру.
+/// План в окне: масштаб и сдвиг, чтобы корпус (без полей листа) целиком влез
+/// по центру.
 class _Fit {
   final double scale;
   final Offset shift;
   _Fit._(this.scale, this.shift);
 
-  factory _Fit(Size plan, Size box) {
-    const pad = 12.0;
+  static const pad = 12.0;
+
+  /// Высота рамки: этаж по ширине рамки целиком, но не выше места на экране
+  /// и не ниже 160 (робот 18.10: низкий корпус занимал треть рамки, подписи мелкие).
+  static double frameHeight(Size plan, double width, double room) {
+    final need = (width - pad * 2) * plan.height / plan.width + pad * 2;
+    return need.clamp(math.min(160.0, room), room);
+  }
+
+  factory _Fit(Rect plan, Size box) {
     final k = math.min((box.width - pad * 2) / plan.width, (box.height - pad * 2) / plan.height);
-    return _Fit._(k, Offset((box.width - plan.width * k) / 2, (box.height - plan.height * k) / 2));
+    return _Fit._(
+      k,
+      Offset((box.width - plan.width * k) / 2 - plan.left * k, (box.height - plan.height * k) / 2 - plan.top * k),
+    );
   }
 
   Offset toPlan(Offset local) => (local - shift) / scale;
@@ -710,11 +740,32 @@ class _FloorPainter extends CustomPainter {
 
   void _label(Canvas canvas, MapRoom r, bool on) {
     final b = r.bounds;
-    final text = switch (r.kind) {
-      'stairs' => 'Лестница',
-      'lift' => 'Лифт',
-      _ => r.name,
+    // лестница и лифт — значком, тем же, что в строке маршрута: слово
+    // «Лестница» в узкой клетке выходило мелким (робот 18.10)
+    final glyph = switch (r.kind) {
+      'stairs' => Icons.stairs_outlined,
+      'lift' => Icons.elevator_outlined,
+      _ => null,
     };
+    if (glyph != null) {
+      final size = math.min(math.min(b.width, b.height) * 0.6, 24 / fit.scale);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(glyph.codePoint),
+          style: TextStyle(
+            fontFamily: glyph.fontFamily,
+            package: glyph.fontPackage,
+            fontSize: size,
+            color: on ? p.text : p.text.withValues(alpha: 0.7),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, b.center - Offset(tp.width / 2, tp.height / 2));
+      tp.dispose();
+      return;
+    }
+    final text = r.name;
     // шрифт — по комнате, но не крупнее 15 точек на экране
     final size = math.min(math.min(b.width / (text.length * 0.62 + 1), b.height * 0.32), 15 / fit.scale);
     if (size * fit.scale < 6) return; // мельче не прочесть — подпись видна при увеличении
