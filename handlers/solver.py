@@ -509,10 +509,10 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
 # Вне решалки — /think вопрос (или /think, потом вопрос). Лимит — think.py,
 # обычный дневной счёт ai_quota не трогается; к фото — нет.
 THINK_ARM_CB = "think:arm"
-ARM_TEXT = ("🧠 Нужен разбор поглубже? Включи «Подумать» — задачу сразу решит DeepSeek "
-            "(«Капибара+», {left}).\nВне решалки — /think и вопрос.")
+ARM_TEXT = ("🧠 Нужен разбор поглубже? Включи «Подумать» — Капибара решит задачу, "
+            "подумав подольше («Капибара+», {left}).\nВне решалки — /think и вопрос.")
 ARM_GONE = "Задача уже решена — включи «Подумать» в новой: /solve"
-THINK_ASK = ("🧠 Пиши вопрос — его сразу решит DeepSeek, подумав ({left}).\n"
+THINK_ASK = ("🧠 Пиши вопрос — Капибара решит его, подумав подольше ({left}).\n"
              "Передумал — /cancel")
 PHOTO_NO_THINK = "К фото «Подумать» не работает — пришли задачу текстом или /cancel"
 
@@ -578,7 +578,7 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
             pass
         return
     await state.update_data(think_next=on)
-    await callback.answer("Задачу решит DeepSeek, подумав" if on else "Решу как обычно")
+    await callback.answer("Капибара решит задачу, подумав подольше" if on else "Решу как обычно")
     try:
         await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left_or_none(uid), on))
     except Exception:

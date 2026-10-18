@@ -316,7 +316,7 @@ function renderThinkToggle() {
     if (!can) thinkArmed = false;
     box.innerHTML = '<button class="think-toggle' + (thinkArmed ? " on" : "") + '" onclick="toggleThink()" aria-pressed="' +
       thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать" + (thinkOffer.left == null ? "" : " · " + thinkOffer.left) + "</button>" +
-      '<span class="think-note">' + (thinkArmed ? "следующий вопрос решит DeepSeek, подумав"
+      '<span class="think-note">' + (thinkArmed ? "следующий вопрос Капибара решит, подумав подольше"
         : thinkHasLeft() ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
   }
   syncNavHeight();

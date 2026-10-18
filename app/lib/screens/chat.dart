@@ -606,6 +606,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           side: BorderSide(color: left != 0 ? p.accent : p.line),
           shape: const StadiumBorder(),
           avatar: Icon(Icons.psychology_outlined, size: 18, color: p.accent),
+          labelPadding: const EdgeInsets.only(left: 6), // как у «Подумать» над полем: поровну слева и справа
           label: Text(
             '${t['label'] ?? 'Подумать ещё'}${left == null ? '' : ' · $left'}',
             style: s.body(13, weight: FontWeight.w600),
@@ -954,7 +955,7 @@ class _ThinkToggle extends StatelessWidget {
     final out = left != null && left! <= 0;
     final can = onTap != null || (!out && !attached);
     final note = on
-        ? 'следующий вопрос решит DeepSeek, подумав'
+        ? 'следующий вопрос Капибара решит, подумав подольше'
         : out
         ? 'на сегодня всё — завтра снова'
         : attached

@@ -382,7 +382,7 @@ STAROSTA_HELP = (
     "/embedtest — своя модель векторов против Gemini (для переезда)\n"
     "/plusnews — рассылка о «Капибаре+» (превью, потом кнопка) · <code>/plus stage full</code> — "
     "новым полная цена · <code>/plus gift 31.12.2026</code> / <code>off</code> — подарок группе\n"
-    "/aithink on|off — кнопка «Подумать ещё» у подписчиков (DeepSeek)\n"
+    "/aithink on|off — кнопка «Подумать ещё» у подписчиков\n"
     "<code>/grant @ник 3m</code> — продлить «Капибару+» вручную · <code>/grant @ник unlimited</code> — "
     "безлимит · /grant — что у человека и все варианты (только владелец)\n"
     "/delpost ID — удалить пост из ленты · /delnote — удалить заметку к паре\n"
