@@ -497,6 +497,9 @@ async def api_note_add(body: NoteBody, user: dict = CurrentUser):
         raise HTTPException(status_code=403, detail="заметки — для своей группы")
     if not ratelimit.allow("note", user["id"]):
         raise HTTPException(429, "Много заметок подряд — подожди пару минут")
+    import ugc
+    if why := await ugc.note_spam(user["id"], day.isoformat(), text, gid):
+        raise HTTPException(429, why)
     nid = await add_lesson_note(day.isoformat(), subject, text, user["id"], gid)
     return {"ok": True, "id": nid}
 

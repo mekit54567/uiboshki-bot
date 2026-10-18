@@ -470,7 +470,28 @@ class _NoteSheetState extends State<NoteSheet> {
           children: [
             Text('Новая заметка', style: s.title(24)),
             const SizedBox(height: Space.s),
-            Text('Увидит вся группа — под расписанием этого дня.', style: s.body(13, color: p.muted)),
+            // Никита 18.10: чтобы понимали, что уйдёт всей группе, а не в личные
+            Container(
+              key: const Key('note:public'),
+              padding: const EdgeInsets.all(Space.m),
+              decoration: BoxDecoration(
+                color: p.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(Radii.chip),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.groups_rounded, size: 22, color: p.accent),
+                  const SizedBox(width: Space.m),
+                  Expanded(
+                    child: Text(
+                      'Это не личная заметка: её увидит вся группа под расписанием этого дня.',
+                      style: s.body(14, weight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: Space.s),
             // правило Apple 1.2: согласие с правилами — у кнопки, которой публикуют
             GestureDetector(
               key: const Key('note:rules'),
@@ -545,7 +566,7 @@ class _NoteSheetState extends State<NoteSheet> {
                   shape: const StadiumBorder(),
                 ),
                 onPressed: _busy ? null : _save,
-                child: const Text('Сохранить'),
+                child: const Text('Показать всей группе'),
               ),
             ),
           ],

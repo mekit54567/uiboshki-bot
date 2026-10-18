@@ -52,10 +52,12 @@ void main() {
       await t.tap(find.byKey(const Key('notes:add')));
       await settle(t);
       expect(find.text('Новая заметка'), findsOneWidget);
+      expect(find.textContaining('Это не личная заметка'), findsOneWidget); // уйдёт всей группе — сказано прямо
       await t.tap(find.text('Анализ данных')); // пара завтрашнего дня
       await settle(t);
       await t.enterText(find.byKey(const Key('note:text')), 'контрольная в 401');
-      await t.tap(find.text('Сохранить'));
+      await t.ensureVisible(find.text('Показать всей группе'));
+      await t.tap(find.text('Показать всей группе'));
       await settle(t);
       expect(bodies['POST /api/notes'], {'date': tomorrow, 'subject': 'Анализ данных', 'text': 'контрольная в 401'});
       expect(find.text('Новая заметка'), findsNothing);
@@ -70,7 +72,8 @@ void main() {
       await settle(t);
       await t.tap(find.byKey(const Key('notes:add')));
       await settle(t);
-      await t.tap(find.text('Сохранить'));
+      await t.ensureVisible(find.text('Показать всей группе'));
+      await t.tap(find.text('Показать всей группе'));
       await settle(t);
       expect(find.text('Напиши, что запомнить'), findsOneWidget);
       expect(asked, isNot(contains('POST /api/notes')));

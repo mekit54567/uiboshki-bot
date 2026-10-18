@@ -149,3 +149,78 @@ async def test_guest_schedule_without_login(db, monkeypatch):
     r = c.get("/api/v1/guest/search?q=уибо")
     assert r.status_code == 200 and r.json()["items"][0]["title"] == "УИБО-03-24"
     assert c.get("/api/v1/guest/target/9/1").status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_removed_author_can_dispute_and_owner_restores(env, db):
+    # Никита 18.10: «добавить возможность оспорить» — автор жмёт «Оспорить»,
+    # владельцу заявка «Вернуть» / «Оставить скрытым», автору ответ
+    c, h, bot = env
+    await db.upsert_user(AUTHOR, "author", "Автор Авторов")
+    fid = await db.add_file("Лекция 3", "Анализ", "tg-file-1", "l3.pdf", AUTHOR)
+    from database._conn import connect
+    async with connect() as d:
+        await d.execute("INSERT INTO file_text (file_id, content, char_count) VALUES (?, 'текст лекции', 12)", (fid,))
+        await d.commit()
+    assert c.post("/api/report", json={"kind": "file", "id": fid, "reason": "спам"}, headers=h).json() == {"ok": True}
+    await _press(bot, "rep:del:1")
+    from database import get_file_by_id, get_file_text
+    assert await get_file_by_id(fid) is None
+    to_author = [t for chat, t in bot.session.sent_texts if chat == AUTHOR]
+    assert to_author and "убрали по жалобе" in to_author[-1] and "Лекция 3" in to_author[-1]
+
+    await _press(bot, "dis:1", uid=ME)                                   # не автор — не оспорить
+    import ugc
+    assert (await ugc.get_report(1))["status"] == "removed"
+    await _press(bot, "dis:1", uid=AUTHOR)
+    assert (await ugc.get_report(1))["status"] == "disputed"
+    chat, text = [x for x in bot.session.sent_texts if x[0] == OWNER and "Оспаривают" in x[1]][-1]
+    assert "Лекция 3" in text
+
+    await _press(bot, "rep:back:1")
+    row = await get_file_by_id(fid)
+    assert row and row["file_id"] == "tg-file-1" and await get_file_text(fid) == "текст лекции"
+    assert (await ugc.get_report(1))["status"] == "restored"
+    assert "вернули" in [t for chat, t in bot.session.sent_texts if chat == AUTHOR][-1]
+    assert (await ugc.get_report(1))["snapshot"] is None                   # копия больше не нужна
+
+
+@pytest.mark.asyncio
+async def test_dispute_upheld_keeps_hidden(env, db):
+    c, h, bot = env
+    nid = await db.add_lesson_note(DAY, "", "реклама", AUTHOR)
+    c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
+    await _press(bot, "rep:del:1")
+    await _press(bot, "dis:1", uid=AUTHOR)
+    await _press(bot, "rep:hold:1")
+    from database import get_lesson_note
+    assert await get_lesson_note(nid) is None
+    assert "остаётся скрытой" in [t for chat, t in bot.session.sent_texts if chat == AUTHOR][-1]
+    await _press(bot, "dis:1", uid=AUTHOR)                                # второй раз — уже пересмотрели
+    import ugc
+    assert (await ugc.get_report(1))["status"] == "upheld"
+
+
+@pytest.mark.asyncio
+async def test_note_spam_limits(env, db, monkeypatch):
+    # Никита 18.10: «чтоб не спамили» — повтор того же текста и не больше 10 за сутки
+    import ratelimit
+    import ugc
+    c, h, _ = env
+    monkeypatch.setitem(ratelimit.LIMITS, "note", (100, 600))
+    from utils import today_msk
+    body = {"date": today_msk().isoformat(), "text": "контрольная"}
+    assert c.post("/api/notes", json=body, headers=h).status_code == 200
+    r = c.post("/api/notes", json={**body, "text": "  Контрольная "}, headers=h)
+    assert r.status_code == 429 and "уже есть" in r.json()["detail"]
+    for i in range(ugc.NOTE_DAY - 1):
+        assert c.post("/api/notes", json={**body, "text": f"заметка {i}"}, headers=h).status_code == 200
+    r = c.post("/api/notes", json={**body, "text": "ещё одна"}, headers=h)
+    assert r.status_code == 429 and "вся группа" in r.json()["detail"]
+
+
+def test_rules_say_forbidden_and_dispute(db):
+    import legal_texts
+    d = legal_texts.doc("rules")
+    assert d["sections"][0]["title"] == "Запрещено" and "Нельзя" not in str(d)
+    assert "Оспорить" in str(d)

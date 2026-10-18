@@ -13,6 +13,11 @@
 
 Правила (legal_texts.RULES): за оскорбления, угрозы, спам и чужие данные
 запись удаляем, автора можем отключить.
+
+Спор (Никита 18.10: «добавить возможность оспорить»): удалённая по жалобе
+запись сохраняется копией в `reports.snapshot` на DISPUTE_DAYS дней, автору
+приходит сообщение с кнопкой «Оспорить» → владельцу заявка «Вернуть» /
+«Оставить скрытым» → автору ответ. «Вернуть» кладёт запись обратно с тем же id.
 """
 
 import logging
@@ -28,6 +33,7 @@ KINDS = {
 }
 LABELS = {"note": "Заметка к паре", "hw": "ДЗ", "file": "Файл", "deadline": "Общий дедлайн"}
 REASON_MAX = 300
+DISPUTE_DAYS = 30
 
 
 class ReportError(Exception):
@@ -68,7 +74,7 @@ async def _visible_to(user_id: int, kind: str, row: dict) -> bool:
     """Жаловаться и скрывать можно только то, что человеку и правда видно."""
     from database.groups import row_group, viewer_group
     if kind == "file":
-        from database import file_visible
+        from database.files import file_visible
         return await file_visible(row["id"], await viewer_group(user_id))
     return row_group(row.get("group_id")) == await viewer_group(user_id)
 
@@ -140,7 +146,9 @@ async def get_report(rid: int) -> dict | None:
 
 
 async def decide(rid: int, remove: bool) -> str:
-    """«Удалить» — запись пропадает у всех, жалобы на неё закрыты; «Оставить» — только закрыть."""
+    """«Удалить» — запись пропадает у всех (копия — в жалобе, для спора), жалобы
+    на неё закрыты; «Оставить» — только закрыть."""
+    import json
     from database import delete_deadline, delete_file, delete_hw, delete_lesson_note
     from database._conn import connect
     rep = await get_report(rid)
@@ -149,17 +157,175 @@ async def decide(rid: int, remove: bool) -> str:
     if rep["status"] != "new":
         return rep["status"]
     status = "removed" if remove else "kept"
+    snap = None
     if remove and await item(rep["kind"], rep["item_id"]):
+        snap = json.dumps(await _snapshot(rep["kind"], rep["item_id"]), ensure_ascii=False)
         await {"note": delete_lesson_note, "hw": delete_hw, "file": delete_file,
                "deadline": delete_deadline}[rep["kind"]](rep["item_id"])
     async with connect() as db:
         if remove:
-            await db.execute("UPDATE reports SET status='removed' WHERE kind=? AND item_id=? AND status='new'",
-                             (rep["kind"], rep["item_id"]))
+            await db.execute("UPDATE reports SET status='closed' WHERE kind=? AND item_id=? AND status='new' AND id<>?",
+                             (rep["kind"], rep["item_id"], rid))
+            await db.execute("UPDATE reports SET status='removed', snapshot=? WHERE id=?", (snap, rid))
         else:
             await db.execute("UPDATE reports SET status='kept' WHERE id=?", (rid,))
+        # копии старше срока спора — не храним (152-ФЗ: не дольше нужного)
+        await db.execute("UPDATE reports SET snapshot=NULL WHERE snapshot IS NOT NULL "
+                         "AND created_at < datetime('now', ?)", (f"-{DISPUTE_DAYS} days",))
         await db.commit()
     return status
+
+
+# ── Спор: копия удалённого, «Оспорить», «Вернуть» / «Оставить скрытым» ──────
+
+_EXTRA = {"file": ("file_text", "file_summaries")}     # что delete_file убирает вместе с файлом
+
+
+async def _snapshot(kind: str, item_id: int) -> dict:
+    import aiosqlite
+    from database._conn import connect
+    table = KINDS[kind][0]
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute(f"SELECT * FROM {table} WHERE id=?", (item_id,))).fetchone()
+        snap = {"row": dict(row) if row else None}
+        for t in _EXTRA.get(kind, ()):
+            snap[t] = [dict(r) for r in await (await db.execute(
+                f"SELECT * FROM {t} WHERE file_id=?", (item_id,))).fetchall()]
+    return snap
+
+
+async def _restore(kind: str, snap: dict) -> bool:
+    from database._conn import connect
+    row = snap.get("row")
+    if not row:
+        return False
+
+    async def put(db, table: str, r: dict):
+        cols = ", ".join(r)
+        await db.execute(f"INSERT OR IGNORE INTO {table} ({cols}) VALUES ({', '.join('?' * len(r))})",
+                         list(r.values()))
+
+    async with connect() as db:
+        await put(db, KINDS[kind][0], row)
+        for t in _EXTRA.get(kind, ()):
+            for r in snap.get(t) or []:
+                await put(db, t, r)
+        if kind == "file" and row.get("source"):            # delete_file запомнил его как «не выгружать»
+            await db.execute("DELETE FROM files_skipped WHERE source=?", (row["source"],))
+        await db.commit()
+    return True
+
+
+def _snap_preview(rep: dict) -> str:
+    import json
+    try:
+        row = (json.loads(rep.get("snapshot") or "{}") or {}).get("row")
+    except ValueError:
+        row = None
+    return preview(rep["kind"], row) if row else ""
+
+
+async def tell_author(bot, rid: int):
+    """Автору — что его запись убрали и почему, с кнопкой «Оспорить»."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from delivery import deliver
+    from utils import esc
+    rep = await get_report(rid)
+    if not rep or rep["status"] != "removed" or not rep["author_id"] or bot is None:
+        return
+    text = (f"🗑 Твою запись убрали по жалобе · {LABELS[rep['kind']].lower()}\n\n"
+            f"<blockquote>{esc(_snap_preview(rep))}</blockquote>\n"
+            + (f"Причина: {esc(rep['reason'])}\n" if rep["reason"] else "")
+            + f"Правила — /rules. Считаешь, что зря, — нажми «Оспорить» ({DISPUTE_DAYS} дней).")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Оспорить", callback_data=f"dis:{rid}")]])
+    try:
+        await deliver(bot, rep["author_id"], text, kind="ugc", reply_markup=kb)
+    except Exception as e:
+        logger.info(f"жалоба {rid}: автору не сказать: {e!r}")
+
+
+async def dispute(bot, rid: int, user_id: int) -> str:
+    """«Оспорить» от автора → владельцу заявка «Вернуть» / «Оставить скрытым»."""
+    import config
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from database._conn import connect
+    from utils import esc
+    rep = await get_report(rid)
+    if not rep or rep["author_id"] != user_id:
+        return "missing"
+    if rep["status"] != "removed":
+        return rep["status"]
+    if not rep.get("snapshot"):
+        return "expired"
+    async with connect() as db:
+        await db.execute("UPDATE reports SET status='disputed' WHERE id=? AND status='removed'", (rid,))
+        await db.commit()
+    if config.STAROSTA_ID and bot is not None:
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="↩️ Вернуть", callback_data=f"rep:back:{rid}"),
+            InlineKeyboardButton(text="Оставить скрытым", callback_data=f"rep:hold:{rid}"),
+        ]])
+        text = (f"⚖️ <b>Оспаривают удаление</b> · {LABELS[rep['kind']]}\n\n"
+                f"<blockquote>{esc(_snap_preview(rep))}</blockquote>\n"
+                + (f"Жалоба была: {esc(rep['reason'])}" if rep["reason"] else "Жалоба без причины"))
+        try:
+            await bot.send_message(config.STAROSTA_ID, text, parse_mode="HTML", reply_markup=kb)
+        except Exception as e:
+            logger.warning(f"спор {rid}: не отправился владельцу: {e!r}")
+    return "disputed"
+
+
+async def settle(bot, rid: int, restore: bool) -> str:
+    """Решение владельца по спору; автору — ответ."""
+    import json
+    from database._conn import connect
+    from delivery import deliver
+    rep = await get_report(rid)
+    if not rep:
+        return "missing"
+    if rep["status"] != "disputed":
+        return rep["status"]
+    status = "upheld"
+    if restore and await _restore(rep["kind"], json.loads(rep.get("snapshot") or "{}")):
+        status = "restored"
+    async with connect() as db:
+        await db.execute("UPDATE reports SET status=?, snapshot=CASE WHEN ?='restored' THEN NULL ELSE snapshot END "
+                         "WHERE id=?", (status, status, rid))
+        await db.commit()
+    text = ("↩️ Посмотрели ещё раз: твою запись вернули, группа снова её видит." if status == "restored" else
+            "Посмотрели ещё раз: запись остаётся скрытой, она нарушает правила (/rules).")
+    if rep["author_id"] and bot is not None:
+        try:
+            await deliver(bot, rep["author_id"], text, kind="ugc")
+        except Exception as e:
+            logger.info(f"спор {rid}: автору не сказать: {e!r}")
+    return status
+
+
+# ── Заметки к парам: антиспам ──────────────────────────────────────────────
+# Заметку видит вся группа (Никита 18.10: «чтоб не спамили и понимали, что уйдёт
+# всей группе»): не больше NOTE_DAY за сутки от человека и без повторов того же
+# текста на тот же день. Старостам — без суточного лимита.
+NOTE_DAY = 10
+
+
+async def note_spam(user_id: int, date: str, text: str, group_id: int | None = None) -> str | None:
+    """Почему заметку не принять (текст для человека) или None — можно."""
+    from database import is_editor
+    from database._conn import connect
+    async with connect() as db:
+        # lower() в SQLite не знает кириллицы — сравниваем в Python
+        mine = await (await db.execute("SELECT text FROM lesson_notes WHERE created_by=? AND date=?",
+                                       (user_id, date))).fetchall()
+        if any((t or "").strip().casefold() == text.strip().casefold() for (t,) in mine):
+            return "Такая заметка на этот день уже есть — группа её видит"
+        n = (await (await db.execute(
+            "SELECT COUNT(*) FROM lesson_notes WHERE created_by=? AND created_at > datetime('now', '-1 day')",
+            (user_id,))).fetchone())[0]
+    if n >= NOTE_DAY and not await is_editor(user_id, group_id):
+        return f"За сутки — не больше {NOTE_DAY} заметок: их видит вся группа. Попробуй завтра"
+    return None
 
 
 # ── «Скрыть автора» ─────────────────────────────────────────────────────────
