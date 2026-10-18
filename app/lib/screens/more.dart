@@ -15,6 +15,7 @@ import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
 import 'look_screen.dart';
+import 'map_screen.dart';
 import 'notify.dart';
 import 'sdo_connect.dart';
 import 'security.dart';
@@ -117,6 +118,18 @@ class MoreScreen extends StatelessWidget {
                       title: 'Календарь',
                       onTap: () => _calendarSheet(context),
                     ),
+                    // карта корпусов (5.100.4) — когда сервер её включил (/api/meta → features.map)
+                    if (featureOn('map'))
+                      _TileItem(
+                        key: const Key('more:map'),
+                        icon: Icons.map_outlined,
+                        title: 'Карта',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MapScreen(api: api, onUnauthorized: onUnauthorized),
+                          ),
+                        ),
+                      ),
                     _TileItem(
                       key: const Key('more:group'),
                       icon: Icons.swap_horiz_rounded,

@@ -32,6 +32,7 @@ def _min(platform: str) -> str:
 
 @router.get("/api/meta")
 async def api_meta():
+    import campus_map
     import config
     import oauth
     return {
@@ -42,7 +43,9 @@ async def api_meta():
         # design2 — новый дизайн приложения (5.79, «Оформление»): DESIGN2=0 —
         # откат одной переменной, приложение вернётся к прежнему виду без выпуска
         "features": {"groups": True, "sessions": True, "offline": True,
-                     "design2": config.design2_on()},
+                     "design2": config.design2_on(),
+                     # карта корпусов (5.100.4): MAP=0 — плитки «Карта» нет; без данных — тоже
+                     "map": campus_map.enabled()},
         # ссылки для меню «Ещё» и экрана «Вход в СДО» своего приложения (как APP_CONFIG у WebApp)
         "links": await _links(),
     }
