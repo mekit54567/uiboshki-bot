@@ -147,6 +147,9 @@ void main() {
     phone(t);
     await t.pumpWidget(_more(fakeApi(overrides: {'GET /api/plus': _plus, 'GET /api/invite': _invite})));
     await settle(t);
+    // строка рейтинга (#216) сдвигает плитку ниже экрана — сначала докрутить
+    await t.scrollUntilVisible(find.byKey(const Key('more:plus')), 300, scrollable: find.byType(Scrollable).first);
+    await settle(t);
     await t.tap(find.byKey(const Key('more:plus')));
     await settle(t);
     expect(find.byType(PlusScreen), findsOneWidget);
