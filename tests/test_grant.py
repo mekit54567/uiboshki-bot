@@ -228,3 +228,39 @@ async def test_plus_for_unlimited_has_no_prices_or_pay(db, bot, monkeypatch):  #
     assert not any("Оплатить" in b.text for row in kb.inline_keyboard for b in row)
     await plus_grant.command(bot, STAROSTA_ID, ["@vasya", "unlimited", "20.12.2099"])
     assert "безлимит</b> «Капибары+» до 20 декабря 2099" in (await plus_text(ME))[0]
+
+
+@pytest.mark.asyncio
+async def test_grant_with_note(db, bot, dp, monkeypatch):  # noqa: F811
+    """Никита 18.10: после срока или даты — личная приписка, уходит человеку
+    вместе с сообщением о выдаче (курсивом, экранирована) и лежит в журнале."""
+    from database.billing import grant_log
+    _today(monkeypatch, date(2026, 10, 16))
+    await db.upsert_user(ME, "vasya", "Вася")
+    out = await plus_grant.command(bot, STAROSTA_ID, "@vasya 3m Спасибо, что помог с <расписанием>!")
+    assert "до 13.01.2027" in out and "Ему написал с припиской" in out
+    assert "<i>Приписка от Никиты: Спасибо, что помог с &lt;расписанием&gt;!</i>" in out   # Никите — как увидит он
+    note = _to(bot, ME)[-1]
+    assert "Тебе продлили «Капибару+»: активна до 13.01.2027" in note
+    lines = note.split("\n")
+    assert lines[2] == "<i>Приписка от Никиты: Спасибо, что помог с &lt;расписанием&gt;!</i>"   # отдельной строкой
+    assert (await grant_log(ME, 1))[0]["note"] == "Спасибо, что помог с <расписанием>!"
+
+    await plus_grant.command(bot, STAROSTA_ID, "@vasya 3 мес С первым курсом")       # срок из двух слов
+    assert "Приписка от Никиты: С первым курсом" in _to(bot, ME)[-1]
+    out = await plus_grant.command(bot, STAROSTA_ID, "@vasya unlimited 31.12.2026 Ты лучший\nправда")
+    assert "безлимит до 31.12.2026" in out
+    assert "<i>Приписка от Никиты: Ты лучший\nправда</i>" in _to(bot, ME)[-1]    # перенос строки — как написан
+    out = await plus_grant.command(bot, STAROSTA_ID, "@vasya безлимит Навсегда твой")   # без даты — тоже приписка
+    assert "безлимит навсегда" in out and "Приписка от Никиты: Навсегда твой" in _to(bot, ME)[-1]
+    assert "«Навсегда твой»" in await plus_grant.command(bot, STAROSTA_ID, "@vasya")     # видно в журнале
+    assert "не в прошлом" in await plus_grant.command(bot, STAROSTA_ID, "@vasya unlimited 01.01.2020 привет")
+    assert "длинная" in await plus_grant.command(bot, STAROSTA_ID, "@vasya 1m " + "а" * 700)
+    assert "Не понял срок" in await plus_grant.command(bot, STAROSTA_ID, "@vasya Спасибо 3m")
+
+    plain = await plus_grant.command(bot, STAROSTA_ID, ["@vasya", "45d"])            # без приписки — как было
+    assert "Ему написал." in plain and "Приписка" not in _to(bot, ME)[-1]
+    assert "с припиской" in plus_grant.HELP
+
+    await send(dp, bot, "/grant @vasya 1m Держи\nи учись", uid=STAROSTA_ID)          # команда в боте — с переносом
+    assert "<i>Приписка от Никиты: Держи\nи учись</i>" in _to(bot, ME)[-1]

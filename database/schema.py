@@ -639,9 +639,14 @@ async def init_db():
                 prev_until TEXT,
                 until      TEXT,
                 revoked    INTEGER DEFAULT 0,
-                at         TEXT DEFAULT (datetime('now'))
+                at         TEXT DEFAULT (datetime('now')),
+                note       TEXT
             )
         """)
+        try:                       # приписка Никиты к выдаче (/grant @ник 3m Спасибо!)
+            await db.execute("ALTER TABLE plus_grants ADD COLUMN note TEXT")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("CREATE INDEX IF NOT EXISTS idx_plus_grants_user ON plus_grants(user_id)")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS plus_welcome (

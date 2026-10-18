@@ -24,8 +24,18 @@ def _day(iso: str) -> str:
     return date.fromisoformat(iso).strftime("%d.%m.%Y")
 
 
-def text(until: str | None, *, granted: bool = False, unlimited: bool = False) -> str:
-    """until — последний день (None — навсегда, только у безлимита)."""
+NOTE_FROM = "Никиты"           # /grant — только владелец (config.is_starosta)
+
+
+def note_line(note: str) -> str:
+    """Личная приписка к выдаче (/grant … текст) — отдельной строкой курсивом."""
+    from utils import esc
+    return f"<i>Приписка от {NOTE_FROM}: {esc(note.strip())}</i>"
+
+
+def text(until: str | None, *, granted: bool = False, unlimited: bool = False, note: str | None = None) -> str:
+    """until — последний день (None — навсегда, только у безлимита); note —
+    приписка Никиты из /grant (экранируется), идёт сразу под заголовком."""
     import config
     term = f"до {_day(until)}" if until else "навсегда"
     if unlimited:
@@ -37,7 +47,8 @@ def text(until: str | None, *, granted: bool = False, unlimited: bool = False) -
                 f"✨ У тебя активна «Капибара+» {term} — бесплатно.")
         limits = [f"🤖 {config.AI_SUB_DAILY} вопросов к ИИ в день — чат, решалка, фото, конспекты",
                   f"💭 Кнопка «Подумать ещё» — {AI_THINK_DAILY} в день"]
-    return "\n".join([head, "", "<b>Что входит:</b>", *limits,
+    extra = ["", note_line(note)] if note and note.strip() else []
+    return "\n".join([head, *extra, "", "<b>Что входит:</b>", *limits,
                       "🎨 Иконки и наряды капибары «по подписке», значок «друг Капибары»",
                       "📅 Расписание, дедлайны, баллы СДО и файлы — как и были, без лимитов",
                       "", "Подробнее — /plus"])

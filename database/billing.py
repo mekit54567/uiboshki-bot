@@ -92,12 +92,14 @@ async def set_founder(user_id: int, founder: bool):
 # ── Ручные выдачи (/grant, plus_grant.py) ────────────────────────────────────
 
 async def log_grant(user_id: int, kind: str, source: str | None, days: int | None,
-                    prev_until: str | None, until: str | None, by_id: int | None = None) -> int:
-    """Запись журнала: kind — sub (продление срока), unlimited, off."""
+                    prev_until: str | None, until: str | None, by_id: int | None = None,
+                    note: str | None = None) -> int:
+    """Запись журнала: kind — sub (продление срока), unlimited, off; note —
+    приписка Никиты из /grant."""
     async with connect() as db:
         cur = await db.execute(
-            "INSERT INTO plus_grants (user_id, by_id, kind, source, days, prev_until, until) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)", (user_id, by_id, kind, source, days, prev_until, until))
+            "INSERT INTO plus_grants (user_id, by_id, kind, source, days, prev_until, until, note) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (user_id, by_id, kind, source, days, prev_until, until, note))
         await db.commit()
         return cur.lastrowid
 

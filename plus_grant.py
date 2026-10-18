@@ -8,6 +8,10 @@
                                      до дня: всё из «Капибары+» и ИИ без лимитов;
   /grant @ник off [sub|unlimited]  — снять ручное: безлимит и/или ручные дни.
 
+Всё, что после срока или даты, — личная приписка Никиты: уходит человеку
+вместе с сообщением о выдаче (plus_welcome.text, отдельной строкой курсивом)
+и пишется в журнал (plus_grants.note): «/grant @ник 3m Спасибо за помощь!».
+
 Месяц — 30 дней, год — 300: июль и август в срок не считаются (billing.add_days),
 так 1y ≈ календарный год. Каждое продление (и оплаты с бонусами — в
 billing.grant) пишется в журнал plus_grants, поэтому «off» снимает только
@@ -21,6 +25,8 @@ from datetime import date, datetime, timedelta
 UNIT_DAYS = {"d": 1, "д": 1, "m": 30, "м": 30, "y": 300, "г": 300, "л": 300}
 _TERM = re.compile(r"^(\d{1,4})\s*(d|days?|д|дн|дней|дня|день|m|months?|мес|м|y|years?|г|год|года|лет)$")
 UNLIMITED_WORDS = ("unlimited", "безлимит", "unlim", "∞")
+_DATE_LIKE = re.compile(r"^\d{1,2}\.\d{1,2}\.\d{2,4}$")
+NOTE_MAX = 600                       # приписка — не письмо: длиннее — пусть пишет сам
 
 
 class GrantError(Exception):
@@ -84,15 +90,15 @@ def who_text(u: dict) -> str:
     return " ".join(parts + [f"(<code>{u['user_id']}</code>)"])
 
 
-async def extend(uid: int, days: int, by: int) -> str:
+async def extend(uid: int, days: int, by: int, note: str | None = None) -> str:
     """Продлить подписку на days дней вручную → последний день."""
     import billing
     import locks
     async with locks.lock("plus_grant", uid):
-        return await billing.grant(uid, days, "manual", by=by)
+        return await billing.grant(uid, days, "manual", by=by, note=note)
 
 
-async def unlimited(uid: int, until: str | None, by: int):
+async def unlimited(uid: int, until: str | None, by: int, note: str | None = None):
     """Безлимит навсегда (until=None) или до дня включительно."""
     import locks
     from database.billing import get_unlimited, log_grant, put_unlimited
@@ -100,7 +106,7 @@ async def unlimited(uid: int, until: str | None, by: int):
         prev = await get_unlimited(uid)
         await put_unlimited(uid, until, by)
         await log_grant(uid, "unlimited", "manual", None, prev and (prev["until"] or "forever"),
-                        until or "forever", by)
+                        until or "forever", by, note=note)
 
 
 async def off(uid: int, what: str, by: int) -> dict:
@@ -158,6 +164,7 @@ async def describe(u: dict) -> str:
 
 
 def _log_line(e: dict) -> str:
+    from utils import esc
     day = (e["at"] or "")[:10]
     when = fmt(day) if day else ""
     src = {"manual": "вручную", "pay": "оплата"}.get(e["source"] or "", e["source"] or "")
@@ -170,6 +177,10 @@ def _log_line(e: dict) -> str:
     else:
         t = ("снят безлимит" if e["source"] == "unlimited" else
              f"сняты ручные дни → подписка до {fmt(e['until'])}")
+    note = (e.get("note") or "").strip()
+    if note:
+        short = note if len(note) <= 60 else note[:59].rstrip() + "…"
+        t += f" · <i>«{esc(short)}»</i>"
     return f"{when} — {t}"
 
 
@@ -179,22 +190,33 @@ HELP = ("<b>/grant</b> — выдать «Капибару+» вручную (т
         "(месяц 30 дней, год 300: лето не считается; дни — после текущего срока)\n"
         "<code>/grant @ник unlimited</code> — безлимит навсегда, "
         "<code>/grant @ник безлимит 31.12.2027</code> — до дня\n"
+        "<code>/grant @ник 3m Спасибо, что помог с расписанием!</code> — с припиской: всё после срока "
+        "или даты уйдёт ему вместе с сообщением о выдаче (курсивом, «Приписка от Никиты: …»)\n"
         "<code>/grant @ник off</code> — снять ручное (безлимит и ручные дни; купленное остаётся), "
         "<code>off sub</code> / <code>off unlimited</code> — что-то одно\n"
         "Кто: <code>@ник</code>, Telegram id или id аккаунта приложения.")
 
 
-async def command(bot, by: int, args: list[str]) -> str:
-    """Разбор /grant → ответ Никите (HTML). Человеку пишет сам."""
+def _tail(raw: str, n: int) -> str:
+    """Текст после первых n слов — как написан (с переносами строк)."""
+    parts = raw.strip().split(None, n)
+    return parts[n].strip() if len(parts) > n else ""
+
+
+async def command(bot, by: int, args: list[str] | str) -> str:
+    """Разбор /grant → ответ Никите (HTML). Человеку пишет сам. args — слова
+    или весь текст после «/grant» (так приписка сохранит переносы строк)."""
     import billing
     import plus_welcome
-    if not args:
+    raw = args if isinstance(args, str) else " ".join(args)
+    words = raw.split()
+    if not words:
         return HELP
     try:
-        u = await find_user(args[0])
+        u = await find_user(words[0])
     except GrantError as e:
         return str(e)
-    uid, rest = u["user_id"], [a.lower() for a in args[1:]]
+    uid, rest = u["user_id"], [a.lower() for a in words[1:]]
     if not rest:
         return await describe(u)
     if rest[0] == "off":
@@ -211,22 +233,38 @@ async def command(bot, by: int, args: list[str]) -> str:
         head = ("Готово: " + ", ".join(done) + ".") if done else "Снимать нечего: ручных выдач нет."
         return head + "\n\n" + await describe(u)
     if rest[0] in UNLIMITED_WORDS:
-        until = None
-        if len(rest) > 1:
-            until = parse_day(rest[1])
+        until, used = None, 2
+        if len(rest) > 1 and (_DATE_LIKE.match(rest[1]) or parse_day(rest[1])):
+            until, used = parse_day(rest[1]), 3
             if not until or until < _today():
                 return "Дата — так: <code>/grant @ник unlimited 31.12.2027</code> (и не в прошлом)."
-        await unlimited(uid, until, by)
-        await billing.notify(bot, uid, plus_welcome.text(until, unlimited=True))
+        note = _tail(raw, used)
+        if len(note) > NOTE_MAX:
+            return f"Приписка длинная ({len(note)} знаков) — до {NOTE_MAX}."
+        await unlimited(uid, until, by, note or None)
+        await billing.notify(bot, uid, plus_welcome.text(until, unlimited=True, note=note))
         await plus_welcome.mark(uid)
-        return f"Готово: безлимит {'до ' + fmt(until) if until else 'навсегда'}. Ему написал.\n\n" + await describe(u)
-    days = parse_term(" ".join(rest))
+        return (f"Готово: безлимит {'до ' + fmt(until) if until else 'навсегда'}. "
+                f"{_wrote(note)}\n\n" + await describe(u))
+    if len(rest) > 1 and parse_term(f"{rest[0]} {rest[1]}"):       # «3 мес»
+        days, used = parse_term(f"{rest[0]} {rest[1]}"), 3
+    else:
+        days, used = parse_term(rest[0]), 2
     if not days:
         return "Не понял срок. " + HELP
-    until = await extend(uid, days, by)
-    await billing.notify(bot, uid, plus_welcome.text(until, granted=True))
+    note = _tail(raw, used)
+    if len(note) > NOTE_MAX:
+        return f"Приписка длинная ({len(note)} знаков) — до {NOTE_MAX}."
+    until = await extend(uid, days, by, note or None)
+    await billing.notify(bot, uid, plus_welcome.text(until, granted=True, note=note))
     await plus_welcome.mark(uid)
-    return f"Готово: +{days} дн., «Капибара+» до {fmt(until)}. Ему написал.\n\n" + await describe(u)
+    return f"Готово: +{days} дн., «Капибара+» до {fmt(until)}. {_wrote(note)}\n\n" + await describe(u)
+
+
+def _wrote(note: str) -> str:
+    """Что ушло человеку — Никите видно, как выглядит приписка."""
+    import plus_welcome
+    return ("Ему написал с припиской:\n" + plus_welcome.note_line(note)) if note else "Ему написал."
 
 
 def _today() -> str:

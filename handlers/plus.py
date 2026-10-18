@@ -112,8 +112,9 @@ async def cmd_grant(message: Message):
     if not config.is_starosta(message.from_user.id):
         await message.answer("Эта команда только для владельца бота.")
         return
-    args = (message.text or "").split()[1:]
-    await message.answer(await plus_grant.command(message.bot, message.from_user.id, args), parse_mode="HTML")
+    parts = (message.text or "").split(None, 1)          # приписка — с переносами строк, как написана
+    raw = parts[1] if len(parts) > 1 else ""
+    await message.answer(await plus_grant.command(message.bot, message.from_user.id, raw), parse_mode="HTML")
 
 
 # ── Рассылка о запуске «Капибары+» (только по кнопке старосты) ─────────────

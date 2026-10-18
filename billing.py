@@ -195,7 +195,8 @@ async def extend_from(uid: int, last: str | None, days: int) -> str:
     return add_days(start, days).isoformat()
 
 
-async def grant(uid: int, days: int, source: str, founder: bool | None = None, by: int | None = None) -> str:
+async def grant(uid: int, days: int, source: str, founder: bool | None = None, by: int | None = None,
+                note: str | None = None) -> str:
     """Продлить подписку на days дней (без лета) — после оплаченного срока и
     после подарка группе, если он ещё идёт. → новый последний день. Каждое
     продление — в журнал plus_grants (source manual — вручную, /grant)."""
@@ -204,7 +205,7 @@ async def grant(uid: int, days: int, source: str, founder: bool | None = None, b
     prev = sub["until"] if sub else None
     until = await extend_from(uid, prev, days)
     await put_sub(uid, until, source, founder)
-    await log_grant(uid, "sub", source, days, prev, until, by)
+    await log_grant(uid, "sub", source, days, prev, until, by, note=note)
     return until
 
 
