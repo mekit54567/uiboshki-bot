@@ -15,6 +15,7 @@ import '../theme/tokens.dart';
 import '../widgets/capy.dart';
 import '../widgets/capy_refresh.dart';
 import '../widgets/common.dart';
+import 'compare.dart';
 import 'files.dart' show BackRow;
 import 'lesson.dart' show openLesson;
 import 'today.dart' show LessonList;
@@ -477,6 +478,21 @@ class _TargetScreenState extends State<TargetScreen> {
               Row(
                 children: [
                   const Expanded(child: BackRow()),
+                  // своя неделя рядом с этой группой (5.100.2)
+                  if (_data != null && widget.type == 1 && _weeks.isNotEmpty)
+                    TextButton.icon(
+                      key: const Key('search:compare'),
+                      onPressed: () {
+                        tick();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CompareScreen(api: widget.api, title: _title, weeks: _weeks, week: _week),
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.compare_arrows_rounded, color: p.muted, size: 20),
+                      label: Text('Сравнить', style: AppStyle.of(context).body(14, color: p.muted)),
+                    ),
                   if (_data != null)
                     Padding(
                       padding: const EdgeInsets.only(right: Space.s),
@@ -542,7 +558,7 @@ class _TargetScreenState extends State<TargetScreen> {
           if (week == null)
             const Notice(title: 'Пар нет', text: 'В расписании пусто.')
           else ...[
-            _WeekSwitch(
+            WeekSwitch(
               label: _weekLabel(week),
               number: week['week'] as int?,
               onPrev: _week > 0 ? () => _shift(-1) : null,
@@ -584,11 +600,12 @@ class _TargetScreenState extends State<TargetScreen> {
   }
 }
 
-class _WeekSwitch extends StatelessWidget {
+/// Неделя назад/вперёд с подписью (расписание группы и «Сравнить неделю»).
+class WeekSwitch extends StatelessWidget {
   final String label;
   final int? number;
   final VoidCallback? onPrev, onNext;
-  const _WeekSwitch({required this.label, required this.number, required this.onPrev, required this.onNext});
+  const WeekSwitch({super.key, required this.label, required this.number, required this.onPrev, required this.onNext});
 
   @override
   Widget build(BuildContext context) {
