@@ -520,6 +520,15 @@
     background: var(--bg-card); color: var(--text); border: 1px solid var(--border);
     padding: 0 12px; font-size: 18px; min-height: 42px;
   }
+  /* «Подумать» до вопроса (подписка): переключатель над полем ввода */
+  #think-toggle:empty { display: none; }
+  #think-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0; }
+  .think-toggle { flex: none; display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card);
+                  border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 5px 12px;
+                  font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .think-toggle.on { background: var(--accent); color: #fff; }
+  .think-toggle:disabled { border-color: var(--border); color: var(--hint); opacity: .7; }
+  .think-note { font-size: 12px; color: var(--hint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #attach-preview:empty { display: none; }
   #attach-preview { margin-bottom: 8px; }
   .attach-chip {
