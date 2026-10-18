@@ -300,6 +300,12 @@ async def report() -> str:
         total, top = await ai_quota.summary()
         limit = f" · лимит {config.AI_DAILY_LIMIT} на человека" if config.AI_DAILY_LIMIT else " · дневного лимита нет"
         lines.append(f"Вопросов сегодня: {total}, у самого активного — {top}{limit}")
+        from database.billing import manual_active
+        from utils import today_msk
+        subs, unl = await manual_active(today_msk().isoformat())
+        lines.append(f"Ручные выдачи (/grant): подписок {subs} · безлимитов {unl}")
+        import billing
+        lines.append(await billing.donate_status_line())
         if config.OPENROUTER_API_KEY and gemini_solver.AI_SPARE_MODEL:
             mode = await gemini_solver.ai_main()
             n = gemini_solver.answered

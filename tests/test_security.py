@@ -69,8 +69,8 @@ def test_ratelimit_forgets_stale_keys(monkeypatch):
 @pytest.mark.asyncio
 async def test_ai_daily_limit_switch(db, monkeypatch):
     """AI_DAILY_LIMIT: 0 — без дневного лимита (но счёт идёт — для /stats);
-    задан — после N вопросов за календарный день МСК «day»; старосте не
-    действует; счёт в базе — деплой его не обнуляет; новый день — заново."""
+    задан — после N вопросов за календарный день МСК «day»; Никите
+    (config.is_starosta) не действует; счёт в базе — деплой его не обнуляет; новый день — заново."""
     import ai_quota
     import config
     import database.homework
@@ -81,6 +81,7 @@ async def test_ai_daily_limit_switch(db, monkeypatch):
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)      # минутный — не о том
     await db.upsert_user(555, "u", "U")
     await db.set_user_group(555, config.HOME_GROUP_ID)                     # своя группа — тариф own
+    await db.set_setting("plus:gift", "off")                               # (без подарка «Капибары+»)
     for _ in range(5):
         assert await ai_quota.gate(555) is None                            # по умолчанию выключен
     assert (await ai_quota.today())[555] == 5

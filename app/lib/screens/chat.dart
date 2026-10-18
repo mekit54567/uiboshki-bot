@@ -218,8 +218,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Map<String, dynamic>? _thinkOffer;
   bool _thinkOn = false;
 
-  int get _thinkLeft => (_thinkOffer?['left'] as num?)?.toInt() ?? 0;
-  bool get _thinkCan => _thinkOffer != null && _thinkLeft > 0 && _att == null;
+  /// null — безлимит (/grant … unlimited), счётчика нет.
+  int? get _thinkLeft => (_thinkOffer?['left'] as num?)?.toInt();
+  bool get _thinkCan => _thinkOffer != null && (_thinkLeft == null || _thinkLeft! > 0) && _att == null;
 
   @override
   void initState() {
@@ -594,19 +595,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _thinkChip(AppStyle s, Map<String, dynamic> t) {
     final p = s.p;
-    final left = (t['left'] as num?)?.toInt() ?? 0;
+    final left = (t['left'] as num?)?.toInt(); // null — безлимит
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.s),
       child: Align(
         alignment: Alignment.centerLeft,
         child: ActionChip(
-          onPressed: left > 0 ? _think : null,
+          onPressed: left != 0 ? _think : null,
           backgroundColor: p.card,
-          side: BorderSide(color: left > 0 ? p.accent : p.line),
+          side: BorderSide(color: left != 0 ? p.accent : p.line),
           shape: const StadiumBorder(),
           avatar: Icon(Icons.psychology_outlined, size: 18, color: p.accent),
           labelPadding: const EdgeInsets.only(left: 6), // как у «Подумать» над полем: поровну слева и справа
-          label: Text('${t['label'] ?? 'Подумать ещё'} · $left', style: s.body(13, weight: FontWeight.w600)),
+          label: Text(
+            '${t['label'] ?? 'Подумать ещё'}${left == null ? '' : ' · $left'}',
+            style: s.body(13, weight: FontWeight.w600),
+          ),
         ),
       ),
     );
@@ -939,7 +943,7 @@ class _ChatsSheetState extends State<_ChatsSheet> {
 /// решает модель второго уровня. Кончилось на сегодня или прикреплён файл —
 /// серый и не нажимается.
 class _ThinkToggle extends StatelessWidget {
-  final int left;
+  final int? left; // null — безлимит
   final bool on, attached;
   final VoidCallback? onTap;
   const _ThinkToggle({required this.left, required this.on, required this.attached, required this.onTap});
@@ -948,10 +952,11 @@ class _ThinkToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final can = onTap != null || (left > 0 && !attached);
+    final out = left != null && left! <= 0;
+    final can = onTap != null || (!out && !attached);
     final note = on
         ? 'следующий вопрос Капибара решит, подумав подольше'
-        : left <= 0
+        : out
         ? 'на сегодня всё — завтра снова'
         : attached
         ? 'к фото и файлам — нет'
@@ -979,7 +984,7 @@ class _ThinkToggle extends StatelessWidget {
               // справа у чипа было вдвое больше места, чем слева (робот 18.10): у подписи — отступ только от значка
               labelPadding: const EdgeInsets.only(left: 6),
               label: Text(
-                'Подумать · ${left < 0 ? 0 : left}',
+                'Подумать${left == null ? '' : ' · ${left! < 0 ? 0 : left}'}',
                 style: s.body(13, weight: FontWeight.w600, color: fg),
               ),
             ),

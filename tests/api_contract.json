@@ -16,6 +16,7 @@
  "GET /api/consent",
  "GET /api/day",
  "GET /api/deadlines",
+ "GET /api/donate",
  "GET /api/files",
  "GET /api/files/{file_id}/page/{page}",
  "GET /api/groups/search",

@@ -101,7 +101,8 @@ class GroupContextMiddleware(BaseMiddleware):
 
 
 class StatsMiddleware(BaseMiddleware):
-    """Сообщение боту в личку — событие «чат с ботом» для /stats (stats.py)."""
+    """Сообщение боту в личку — событие «чат с ботом» для /stats (stats.py);
+    после ответа — приветствие «Капибары+», если ещё не было (plus_welcome)."""
     async def __call__(self, handler, event, data):
         user = getattr(event, "from_user", None)
         chat = getattr(event, "chat", None)
@@ -109,6 +110,10 @@ class StatsMiddleware(BaseMiddleware):
                 and not is_anonymous(getattr(event, "text", None), data.get("raw_state")):
             import stats
             await stats.track(user.id, "bot")
+            result = await handler(event, data)
+            import plus_welcome                 # подарок своей группе — одно сообщение при первом заходе
+            plus_welcome.later(data.get("bot"), user.id)
+            return result
         return await handler(event, data)
 
 

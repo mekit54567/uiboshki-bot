@@ -82,6 +82,8 @@ AUTHOR_COLUMNS = (
     ("votes", "created_by"),
     ("file_summaries", "created_by"),
     ("group_admins", "added_by"),
+    ("plus_grants", "by_id"),             # кто выдал (Никита) — запись того, кому выдали, остаётся
+    ("plus_unlimited", "granted_by"),
 )
 
 
@@ -127,6 +129,7 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         # Оплаты — налоговый учёт, хранятся и дальше, но без человека; кто кого
         # пригласил — стирается, у пригласившего остаётся только счёт в bonuses.
         await db.execute("UPDATE payments SET payer_id=NULL WHERE payer_id=?", (uid,))
+        await db.execute("UPDATE donations SET payer_id=NULL WHERE payer_id=?", (uid,))
         cur = await db.execute("DELETE FROM referrals WHERE friend_id=? OR inviter_id=?", (uid, uid))
         if cur.rowcount:
             done["referrals"] = cur.rowcount

@@ -441,10 +441,11 @@ THINK_CB = "think:go"
 GONE_TEXT = "Этот вопрос уже не найти — задай его ещё раз"
 
 
-def think_kb(left: int) -> InlineKeyboardMarkup:
+def think_kb(left: int | None) -> InlineKeyboardMarkup:
+    """left=None — безлимит, без счётчика."""
     import think
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text=f"🧠 {think.LABEL} · {left}", callback_data=THINK_CB)]])
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text=f"🧠 {think.LABEL}" + ("" if left is None else f" · {left}"), callback_data=THINK_CB)]])
 
 
 async def offer_think(uid: int, state: FSMContext, sent: list[Message], question: list, data: dict):
@@ -486,9 +487,9 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
         await wait.edit_text("⏳ " + str(e))
         if "не списана" in str(e):          # не ответила — кнопка снова под ответом
             try:
-                left = await think.left(uid)
-                if left:
-                    await callback.message.edit_reply_markup(reply_markup=think_kb(left))
+                offer = await think.offer(uid)
+                if offer and offer["left"] != 0:
+                    await callback.message.edit_reply_markup(reply_markup=think_kb(offer["left"]))
             except Exception:
                 pass
         return
@@ -509,9 +510,9 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
 # обычный дневной счёт ai_quota не трогается; к фото — нет.
 THINK_ARM_CB = "think:arm"
 ARM_TEXT = ("🧠 Нужен разбор поглубже? Включи «Подумать» — Капибара решит задачу, "
-            "подумав подольше («Капибара+», {left} на сегодня).\nВне решалки — /think и вопрос.")
+            "подумав подольше («Капибара+», {left}).\nВне решалки — /think и вопрос.")
 ARM_GONE = "Задача уже решена — включи «Подумать» в новой: /solve"
-THINK_ASK = ("🧠 Пиши вопрос — Капибара решит его, подумав подольше ({left} на сегодня).\n"
+THINK_ASK = ("🧠 Пиши вопрос — Капибара решит его, подумав подольше ({left}).\n"
              "Передумал — /cancel")
 PHOTO_NO_THINK = "К фото «Подумать» не работает — пришли задачу текстом или /cancel"
 
@@ -520,8 +521,14 @@ class ThinkState(StatesGroup):
     waiting = State()       # /think без текста: следующий вопрос — «подумав»
 
 
-def arm_kb(left: int, on: bool) -> InlineKeyboardMarkup:
-    text = f"✅ Подумать включено · {left}" if on else f"🧠 Подумать · {left}"
+def _left_text(left: int | None) -> str:
+    return "без лимита" if left is None else f"{left} на сегодня"
+
+
+def arm_kb(left: int | None, on: bool) -> InlineKeyboardMarkup:
+    """left=None — безлимит, без счётчика."""
+    n = "" if left is None else f" · {left}"
+    text = f"✅ Подумать включено{n}" if on else f"🧠 Подумать{n}"
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=THINK_ARM_CB)]])
 
 
@@ -530,9 +537,10 @@ async def offer_arm(message: Message) -> Message | None:
     сегодня не кончилось (кончилось — не предлагаем вовсе)."""
     import think
     offer = await think.offer(message.from_user.id)
-    if not offer or offer["left"] <= 0:
+    if not offer or offer["left"] == 0:
         return None
-    return await message.answer(ARM_TEXT.format(left=offer["left"]), reply_markup=arm_kb(offer["left"], False))
+    return await message.answer(ARM_TEXT.format(left=_left_text(offer["left"])),
+                                reply_markup=arm_kb(offer["left"], False))
 
 
 async def drop_arm(message: Message, state: FSMContext, data: dict):
@@ -572,7 +580,7 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
     await state.update_data(think_next=on)
     await callback.answer("Капибара решит задачу, подумав подольше" if on else "Решу как обычно")
     try:
-        await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left(uid), on))
+        await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left_or_none(uid), on))
     except Exception:
         pass
 
@@ -632,7 +640,7 @@ async def cmd_think(message: Message, state: FSMContext):
         await _think_free(message, state, text)
         return
     await state.set_state(ThinkState.waiting)
-    await message.answer(THINK_ASK.format(left=await think.left(message.from_user.id)))
+    await message.answer(THINK_ASK.format(left=_left_text(await think.left_or_none(message.from_user.id))))
 
 
 @router.message(ThinkState.waiting, F.text, PRIVATE)

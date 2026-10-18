@@ -71,7 +71,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     /start без параметра идёт в обычный cmd_start ниже."""
     user = message.from_user
     payload = command.args or ""
-    existed = (payload.startswith("ref_") or payload == "plus") and await get_user(user.id) is not None
+    existed = (payload.startswith("ref_") or payload in ("plus", "donate")) and await get_user(user.id) is not None
     await upsert_user(user.id, user.username or "", user.full_name or "")
     if payload.startswith(("file_", "hw_")):
         is_file = payload.startswith("file_")
@@ -95,6 +95,10 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         from handlers.plus import plus_text
         text, kb = await plus_text(user.id)
         await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+        return
+    if payload == "donate" and existed:         # с сайта /donate без ссылки — «Поддержать проект»
+        from handlers.plus import send_donate
+        await send_donate(message, user.id)
         return
     if payload == "site":                       # кнопка «Открыть бота» на сайте /about — для /stats
         import stats
@@ -356,7 +360,8 @@ HELP_TEXT = (
     "✨ <b>Капибара+</b>\n"
     "/plus — подписка: что даёт, сколько стоит, дни в подарок за друзей и ранги ачивок. "
     "Оплата — на сайте uiboshki.ru (кнопка в /plus или «Ещё → Капибара+» в приложении), "
-    "работает везде, и на iPhone\n\n"
+    "работает везде, и на iPhone\n"
+    "/donate — поддержать проект рублём\n\n"
     "🔒 <b>Твои данные</b>\n"
     "/privacy — согласие и политика обработки персональных данных · /deleteme — удалить всё о себе"
 )
@@ -378,6 +383,8 @@ STAROSTA_HELP = (
     "/plusnews — рассылка о «Капибаре+» (превью, потом кнопка) · <code>/plus stage full</code> — "
     "новым полная цена · <code>/plus gift 31.12.2026</code> / <code>off</code> — подарок группе\n"
     "/aithink on|off — кнопка «Подумать ещё» у подписчиков\n"
+    "<code>/grant @ник 3m</code> — продлить «Капибару+» вручную · <code>/grant @ник unlimited</code> — "
+    "безлимит · /grant — что у человека и все варианты (только владелец)\n"
     "/delpost ID — удалить пост из ленты · /delnote — удалить заметку к паре\n"
     "/clearsem — сбросить всё под новый семестр"
 )

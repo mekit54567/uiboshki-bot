@@ -93,13 +93,20 @@ async def left(uid: int) -> int:
     return max(0, DAILY - await used(uid))
 
 
+async def _unlimited(uid: int) -> bool:
+    """Безлимит от Никиты (/grant … unlimited) — и здесь без дневного лимита
+    (общий потолок трат за день остаётся)."""
+    import plans
+    return await plans.plan_of(uid) == plans.UNL
+
+
 async def offer(uid: int, app: str = "") -> dict | None:
     """Кнопка под ответом: {"label", "left", "daily"} или None — не показывать
-    (не подписчик, выключено, iPhone)."""
+    (не подписчик, выключено, iPhone). left=None — без лимита (безлимит)."""
     import plans
     if (app or "").lower() == "ios" or not await enabled() or not await plans.has_plus(uid):
         return None
-    return {"label": LABEL, "left": await left(uid), "daily": DAILY}
+    return {"label": LABEL, "left": None if await _unlimited(uid) else await left(uid), "daily": DAILY}
 
 
 async def why_not(uid: int) -> str | None:
@@ -110,9 +117,14 @@ async def why_not(uid: int) -> str | None:
         return OFF_TEXT
     if not await plans.has_plus(uid):
         return PLUS_TEXT
-    if await left(uid) <= 0:
+    if not await _unlimited(uid) and await left(uid) <= 0:
         return LIMIT_TEXT.format(n=DAILY)
     return None
+
+
+async def left_or_none(uid: int) -> int | None:
+    """Сколько «Подумать» осталось сегодня; None — безлимит (/grant … unlimited)."""
+    return None if await _unlimited(uid) else await left(uid)
 
 
 def _cost(usage: dict) -> float:
@@ -121,12 +133,12 @@ def _cost(usage: dict) -> float:
     return (usage.get("in", 0) * PRICE_IN + usage.get("out", 0) * PRICE_OUT) / 1e6
 
 
-async def _reserve(uid: int):
+async def _reserve(uid: int, unlimited: bool = False):
     import locks
     async with locks.lock("ai_think"):
         data = await _load()
         n = int(data["n"].get(str(uid), 0))
-        if n >= DAILY:
+        if n >= DAILY and not unlimited:
             raise ThinkError(LIMIT_TEXT.format(n=DAILY))
         if DAY_USD > 0 and float(data.get("cost", 0)) >= DAY_USD:
             raise ThinkError(BUDGET_TEXT)
@@ -165,7 +177,7 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
         raise ThinkError(PLUS_TEXT)
     if not ratelimit.allow("ai", uid):
         raise ThinkError(MINUTE_TEXT)
-    await _reserve(uid)
+    await _reserve(uid, await _unlimited(uid))
     usage: dict = {}
     t_model = gemini_solver.forced_model.set(MODEL)
     t_usage = gemini_solver.ai_usage.set(usage)

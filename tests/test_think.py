@@ -148,6 +148,17 @@ async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on
 
 
 @pytest.mark.asyncio
+async def test_unlimited_grant_has_no_think_limit(db, monkeypatch, on):
+    import plus_grant
+    await db.upsert_user(OTHER, "", "u")
+    await plus_grant.unlimited(OTHER, None, 1)                # /grant … unlimited
+    assert (await think.offer(OTHER))["left"] is None         # кнопка без счётчика
+    _openrouter(monkeypatch)
+    for _ in range(think.DAILY + 1):
+        await think.solve(OTHER, [{"role": "user", "content": "?"}])
+
+
+@pytest.mark.asyncio
 async def test_bot_no_button_when_none_left(db, dp, bot, monkeypatch, on):  # noqa: F811
     # робот 18.10: «Подумать ещё · 0» оставалась под ответом и нажималась
     import handlers.solver as solver
@@ -360,6 +371,21 @@ async def test_bot_think_command(db, dp, bot, monkeypatch, on):  # noqa: F811
     await send(dp, bot, "а чем IRR отличается от NPV")
     assert asked[-1] == ("Задание:\nа чем IRR отличается от NPV", True)
     assert await ctx(dp, bot).get_state() is None
+
+
+@pytest.mark.asyncio
+async def test_think_first_for_unlimited_without_counter(db, dp, bot, monkeypatch, on):  # noqa: F811
+    # безлимит (/grant … unlimited): «Подумать» до вопроса — без счётчика и после DAILY
+    import plus_grant
+    from tests.test_review_bot import UID
+    from utils import today_msk
+    from database import set_setting
+    await db.upsert_user(UID, "", "u")
+    await plus_grant.unlimited(UID, None, 1)
+    await set_setting(f"ai_think:{today_msk().isoformat()}", json.dumps({"n": {str(UID): think.DAILY}}))
+    assert await think.why_not(UID) is None and await think.left_or_none(UID) is None
+    await send(dp, bot, "/think")
+    assert "без лимита" in bot.session.texts()[-1]
 
 
 def test_model_not_named_to_user():

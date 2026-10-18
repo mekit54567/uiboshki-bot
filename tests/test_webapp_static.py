@@ -742,7 +742,7 @@ function syncNavHeight() {}
 let thinkOffer = null, thinkArmed = false;
 """
 CHAT_FNS = ["rememberChat", "chatTitle", "saveChatLog", "chatLogOf", "newChat", "switchChat", "historyOf",
-            "requestAnswer", "sendChat", "thinkAgain", "setThinkOffer", "renderThinkToggle", "toggleThink"]
+            "requestAnswer", "sendChat", "thinkAgain", "setThinkOffer", "thinkHasLeft", "renderThinkToggle", "toggleThink"]
 
 
 @node
@@ -1332,6 +1332,36 @@ def test_plus_sheet_price_on_one_line_and_no_double_dot():
     more = JS["js/more.js"]
     assert '" дн."' in more and 'ranks + ".")' not in more
 
+
+def test_plus_sheet_unlimited_without_prices():
+    # робот 18.10: у безлимита в листе «Капибара+» были цены и «Оплатить на сайте»
+    more = JS["js/more.js"]
+    assert '"У тебя безлимит"' in more and '(d.unlimited ? "" : prices +' in more
+    assert '"ИИ без ограничений"' in more                      # не «до 100 вопросов» под «Безлимитом»
+
+
+def test_donate_row_not_a_tile():
+    # Никита 18.10: «Поддержать проект» для всех — но без нового ряда плиток (перегруз):
+    # строкой под сеткой «Ещё» и кнопкой в листе «Капибара+»
+    menu = _more_menu()
+    grid = menu[:menu.index("</div>")]
+    assert "openDonate" not in grid and "Поддержать" not in grid             # не плитка
+    row = re.search(r'<button class="more-donate"[^>]*onclick="toggleMore\(false\); openDonate\(\)">(.*?)</button>',
+                    menu)
+    assert row and "Поддержать проект" in row.group(1) and "не подписка" not in row.group(1)
+    assert 'href="#i-heart"' in row.group(1) and "heart: '" in JS["js/icons.js"]
+    more = JS["js/more.js"]
+    donate = more.split("async function openDonate()", 1)[1].split("\n}\n", 1)[0]
+    assert 'api("/api/donate")' in donate and "d.hidden" in donate and "openLink(d.url)" in donate
+    # «Это не подписка…» — только на самом листе доната (Никита 18.10: «не надо писать везде»)
+    assert "d.donate_url ?" in more and "ничего не открывает — просто спасибо" not in more
+    assert ".more-donate {" in (STATIC / "app.css").read_text(encoding="utf-8")
+
+
+def test_think_toggle_unlimited_without_counter():
+    # безлимит (/grant … unlimited): у «Подумать» над полем ввода left=null — без счётчика, нажимается
+    chat = JS["js/chat.js"]
+    assert "thinkOffer.left == null ||" in chat and '(thinkOffer.left == null ? "" :' in chat
 
 def test_plus_tag_whole_and_invite_own_icon():
     # робот 18.10: «Early Supporter» ломался пополам на две строки; у «Позвать» был значок «Моей группы»

@@ -302,24 +302,28 @@ function setThinkOffer(o) {
   renderThinkToggle();
 }
 
+function thinkHasLeft() {               // left null — безлимит (/grant … unlimited)
+  return !!thinkOffer && (thinkOffer.left == null || thinkOffer.left > 0);
+}
+
 function renderThinkToggle() {
   const box = document.getElementById("think-toggle");
   if (!thinkOffer) {
     thinkArmed = false;
     box.innerHTML = "";
   } else {
-    const can = thinkOffer.left > 0 && !pendingAttachment;
+    const can = thinkHasLeft() && !pendingAttachment;
     if (!can) thinkArmed = false;
     box.innerHTML = '<button class="think-toggle' + (thinkArmed ? " on" : "") + '" onclick="toggleThink()" aria-pressed="' +
-      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать · " + thinkOffer.left + "</button>" +
+      thinkArmed + '"' + (can ? "" : " disabled") + ">" + icon("sparkle", "inl") + "Подумать" + (thinkOffer.left == null ? "" : " · " + thinkOffer.left) + "</button>" +
       '<span class="think-note">' + (thinkArmed ? "следующий вопрос Капибара решит, подумав подольше"
-        : thinkOffer.left > 0 ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
+        : thinkHasLeft() ? (pendingAttachment ? "к фото и файлам — нет" : "") : "на сегодня всё — завтра снова") + "</span>";
   }
   syncNavHeight();
 }
 
 function toggleThink() {
-  if (!thinkOffer || !(thinkOffer.left > 0) || pendingAttachment) return;
+  if (!thinkHasLeft() || pendingAttachment) return;
   thinkArmed = !thinkArmed;
   haptic();
   renderThinkToggle();
@@ -515,8 +519,9 @@ function addQuickReplies() {
   if (last.think) {
     const b = document.createElement("button");
     b.className = "think";
-    b.textContent = last.think.label + " · " + last.think.left;
-    b.disabled = !last.think.left;
+    const left = last.think.left;              // null — безлимит
+    b.textContent = last.think.label + (left == null ? "" : " · " + left);
+    b.disabled = left === 0;
     b.onclick = thinkAgain;
     row.prepend(b);
   }

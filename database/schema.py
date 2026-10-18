@@ -624,6 +624,20 @@ async def init_db():
                 paid_at    TEXT
             )
         """)
+        # «Поддержать проект» (billing.donate…): добровольные платежи — не
+        # подписка, дней не дают; как и payments, после «удалить мои данные»
+        # остаются без человека (payer_id NULL) — налоговый учёт.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS donations (
+                id         TEXT PRIMARY KEY,
+                provider   TEXT NOT NULL,
+                payer_id   INTEGER,
+                amount     INTEGER NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT DEFAULT (datetime('now')),
+                paid_at    TEXT
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS bonuses (
                 user_id  INTEGER NOT NULL,
@@ -632,6 +646,44 @@ async def init_db():
                 days     INTEGER NOT NULL,
                 at       TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (user_id, kind, key)
+            )
+        """)
+        # Ручные выдачи Никиты (/grant, plus_grant.py): безлимит (until NULL —
+        # навсегда), журнал всех продлений подписки (ручных, оплат, бонусов —
+        # чтобы «/grant off» снял только ручные дни) и отметка «приветствие
+        # «Капибары+» отправлено» (plus_welcome.py, один раз на человека).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_unlimited (
+                user_id    INTEGER PRIMARY KEY,
+                until      TEXT,
+                granted_by INTEGER,
+                at         TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_grants (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                by_id      INTEGER,
+                kind       TEXT NOT NULL,
+                source     TEXT,
+                days       INTEGER,
+                prev_until TEXT,
+                until      TEXT,
+                revoked    INTEGER DEFAULT 0,
+                at         TEXT DEFAULT (datetime('now')),
+                note       TEXT
+            )
+        """)
+        try:                       # приписка Никиты к выдаче (/grant @ник 3m Спасибо!)
+            await db.execute("ALTER TABLE plus_grants ADD COLUMN note TEXT")
+        except Exception:
+            pass  # колонка уже есть
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_plus_grants_user ON plus_grants(user_id)")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS plus_welcome (
+                user_id INTEGER PRIMARY KEY,
+                at      TEXT DEFAULT (datetime('now'))
             )
         """)
         await db.execute("""

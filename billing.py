@@ -14,8 +14,16 @@ ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не от�
 Цена первых (Никита 17.10): пока не сказано иначе, все платят «early»-цену
 (месяц 149 ₽), и кто оплатил по ней — метка Early Supporter, платит так навсегда.
 Новым — полная цена с `/plus stage full` (settings plus:stage). Своей группе
-— подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift). Июль и август в
-срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь."""
+— подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift): с ним она в
+лимитах подписки (plans.py). Ручные продления и безлимит — `/grant`
+(plus_grant.py); все продления пишутся в журнал plus_grants. Июль и август в
+срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь.
+
+«Поддержать проект» (Никита 18.10) — донат той же кассой на сайте (/donate по
+такой же личной ссылке): сумма на выбор, своя таблица donations, дней
+подписки не даёт и ничего не открывает — просто спасибо. Уведомления касс
+отличают его от подписки по таблице, где лежит платёж (settle). На iPhone —
+скрыт, как и подписка (донат не через Apple — против правил App Store)."""
 
 import hashlib
 import hmac
@@ -44,6 +52,11 @@ ROBOKASSA_LOGIN = os.getenv("ROBOKASSA_LOGIN", "").strip()
 ROBOKASSA_PASS1 = os.getenv("ROBOKASSA_PASS1", "").strip()
 ROBOKASSA_PASS2 = os.getenv("ROBOKASSA_PASS2", "").strip()
 ROBOKASSA_TEST = os.getenv("ROBOKASSA_TEST", "") == "1"
+
+DONATE_AMOUNTS = (100, 300, 500)      # «Поддержать проект»: кнопки сумм, и своя — от MIN до MAX
+DONATE_MIN = 50
+DONATE_MAX = 15000
+DONATE_TITLE = "Добровольная поддержка проекта «Капибара»"   # позиция в кассе и в чеке «Мой налог»
 
 LINK_TTL = 24 * 3600                  # личная ссылка на /plus живёт сутки
 YOOKASSA_API = "https://api.yookassa.ru/v3"
@@ -101,6 +114,11 @@ def pay_link(uid: int) -> str:
     return f"{site()}/plus?k={make_key(uid)}"
 
 
+def donate_link(uid: int) -> str:
+    """Личная ссылка на «Поддержать проект» — тот же ключ, что у /plus."""
+    return f"{site()}/donate?k={make_key(uid)}"
+
+
 # ── Срок ─────────────────────────────────────────────────────────────────────
 
 def add_days(start: date, days: int) -> date:
@@ -138,17 +156,31 @@ async def gift_for(uid: int) -> str | None:
     return until if await plans._own(uid) else None
 
 
+async def unlimited_for(uid: int) -> dict | None:
+    """Безлимит, выданный Никитой (/grant), действует → {"until": день или
+    None — навсегда}; иначе None."""
+    from database.billing import get_unlimited
+    from utils import today_msk
+    un = await get_unlimited(uid)
+    if not un or (un["until"] and un["until"] < today_msk().isoformat()):
+        return None
+    return {"until": un["until"]}
+
+
 async def status(uid: int) -> dict:
-    """Подписка человека: active, until (оплата или подарок — что дольше),
-    paid_until, gift, founder, цены для него."""
+    """Подписка человека: active, until (оплата, подарок или безлимит до даты —
+    что дольше; безлимит навсегда — until может быть None), paid_until, gift,
+    unlimited (bool) и unlimited_until, founder, цены для него."""
     from database.billing import get_sub
     from utils import today_msk
     today = today_msk().isoformat()
     sub = await get_sub(uid)
     paid_until = sub["until"] if sub and sub["until"] >= today else None
     gift = await gift_for(uid)
-    until = max(filter(None, (paid_until, gift)), default=None)
-    return {"active": bool(until), "until": until, "paid_until": paid_until, "gift": gift,
+    unl = await unlimited_for(uid)
+    until = max(filter(None, (paid_until, gift, unl and unl["until"])), default=None)
+    return {"active": bool(until) or bool(unl), "until": until, "paid_until": paid_until, "gift": gift,
+            "unlimited": bool(unl), "unlimited_until": unl and unl["until"],
             "founder": bool(sub and sub["founder"]), "early": await early(),
             "prices": await prices(uid), "provider": provider()}
 
@@ -168,19 +200,28 @@ async def prices(uid: int) -> list[dict]:
             for key, p in PLANS.items()]
 
 
-async def grant(uid: int, days: int, source: str, founder: bool | None = None) -> str:
-    """Продлить подписку на days дней (без лета) — после оплаченного срока и
-    после подарка группе, если он ещё идёт. → новый последний день."""
-    from database.billing import get_sub, put_sub
+async def extend_from(uid: int, last: str | None, days: int) -> str:
+    """Последний день, если прибавить days дней (без лета) к сроку last —
+    после него и после подарка группе, если они ещё идут, иначе с сегодня."""
     from utils import today_msk
-    today = today_msk()
+    start = today_msk()
+    for end in (last, await gift_for(uid)):
+        if end and end >= start.isoformat():
+            start = date.fromisoformat(end) + timedelta(days=1)
+    return add_days(start, days).isoformat()
+
+
+async def grant(uid: int, days: int, source: str, founder: bool | None = None, by: int | None = None,
+                note: str | None = None) -> str:
+    """Продлить подписку на days дней (без лета) — после оплаченного срока и
+    после подарка группе, если он ещё идёт. → новый последний день. Каждое
+    продление — в журнал plus_grants (source manual — вручную, /grant)."""
+    from database.billing import get_sub, log_grant, put_sub
     sub = await get_sub(uid)
-    start = today
-    for last in (sub["until"] if sub else None, await gift_for(uid)):
-        if last and last >= start.isoformat():
-            start = date.fromisoformat(last) + timedelta(days=1)
-    until = add_days(start, days).isoformat()
+    prev = sub["until"] if sub else None
+    until = await extend_from(uid, prev, days)
     await put_sub(uid, until, source, founder)
+    await log_grant(uid, "sub", source, days, prev, until, by, note=note)
     return until
 
 
@@ -213,13 +254,49 @@ async def create(uid: int, plan: str, return_url: str) -> str:
     return robokassa_url(inv, price, title)
 
 
-async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: str, return_url: str) -> str:
-    from database.billing import add_payment, mark_payment, set_payment_id
+def donate_amount(value) -> int:
+    """Сумма доната из формы: целые рубли от DONATE_MIN до DONATE_MAX."""
+    try:
+        amount = int(str(value).strip().replace(" ", "").replace("₽", ""))
+    except (TypeError, ValueError):
+        raise PayError(f"сумма — целым числом рублей, от {DONATE_MIN} ₽")
+    if amount < DONATE_MIN or amount > DONATE_MAX:
+        raise PayError(f"сумма — от {DONATE_MIN} до {DONATE_MAX} ₽")
+    return amount
+
+
+async def create_donation(uid: int, amount, return_url: str) -> str:
+    """Донат «Поддержать проект»: платёж в кассе → адрес её страницы. Та же
+    касса и те же условия, что у подписки (без реквизитов — закрыто)."""
+    from database.billing import add_donation
+    kind = provider()
+    if not kind:
+        raise PayError("оплата ещё не подключена")
+    amount = donate_amount(amount)
+    if kind == "yookassa":
+        try:
+            return await _yookassa_create(uid, "donation", amount, 0, DONATE_TITLE, return_url, donation=True)
+        except PayError:
+            if "robokassa" not in _kassas():
+                raise
+            logger.warning("ЮKassa не ответила — донат через Robokassa")
+    inv = await _new_inv_id()
+    await add_donation(str(inv), "robokassa", uid, amount)
+    return robokassa_url(inv, amount, DONATE_TITLE)
+
+
+async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: str, return_url: str,
+                           donation: bool = False) -> str:
+    from database import billing as store
     local = f"local-{uuid.uuid4()}"
-    await add_payment(local, "yookassa", uid, plan, price, days)
+    if donation:
+        await store.add_donation(local, "yookassa", uid, price)
+    else:
+        await store.add_payment(local, "yookassa", uid, plan, price, days)
     body = {"amount": {"value": f"{price}.00", "currency": "RUB"}, "capture": True,
             "confirmation": {"type": "redirect", "return_url": return_url},
-            "description": title, "metadata": {"plan": plan}}    # без id человека (152-ФЗ): связь — в payments
+            "description": title,        # без id человека (152-ФЗ): связь — в payments/donations
+            "metadata": {"kind": "donation"} if donation else {"plan": plan}}
     try:
         async with _yk_client() as c:
             r = await c.post(f"{YOOKASSA_API}/payments", json=body, headers={"Idempotence-Key": local})
@@ -227,17 +304,19 @@ async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: st
         data = r.json()
     except Exception as e:
         logger.warning(f"ЮKassa: платёж не создан: {e}")
-        await mark_payment(local, "canceled")
+        await (store.mark_donation if donation else store.mark_payment)(local, "canceled")
         raise PayError("касса не отвечает — попробуй через минуту")
-    await set_payment_id(local, data["id"])
+    await (store.set_donation_id if donation else store.set_payment_id)(local, data["id"])
     return data["confirmation"]["confirmation_url"]
 
 
 async def _new_inv_id() -> int:
-    from database.billing import get_payment
+    """Номер счёта Robokassa — один на подписки и донаты (уведомление
+    находит платёж по номеру)."""
+    from database.billing import get_donation, get_payment
     while True:
         inv = secrets.randbelow(2_000_000_000) + 1
-        if not await get_payment(str(inv)):
+        if not await get_payment(str(inv)) and not await get_donation(str(inv)):
             return inv
 
 
@@ -284,8 +363,61 @@ async def yookassa_check(pid: str) -> str | None:
 
 
 async def _payment(pid: str) -> dict | None:
-    from database.billing import get_payment
-    return await get_payment(pid)
+    """Платёж подписки или донат — у обоих есть amount и payer_id."""
+    from database.billing import get_donation, get_payment
+    return await get_payment(pid) or await get_donation(pid)
+
+
+async def is_ours(pid: str) -> bool:
+    return await _payment(pid) is not None
+
+
+async def settle(pid: str, bot=None) -> bool:
+    """Касса подтвердила оплату: донат — спасибо, без дней подписки; платёж
+    подписки — продлить (paid). Различаем по таблице, а не по телу
+    уведомления: ему не верим. True — засчитали сейчас (не повтор)."""
+    from database.billing import get_donation
+    if await get_donation(pid):
+        return await donation_paid(pid, bot)
+    return await paid(pid, bot)
+
+
+async def cancel(pid: str):
+    from database.billing import mark_donation, mark_payment
+    await mark_payment(pid, "canceled")
+    await mark_donation(pid, "canceled")
+
+
+def donate_thanks(amount: int) -> str:
+    return (f"💛 Спасибо за поддержку! {amount} ₽ дошли до Капибары — на сервер, ИИ и новые функции.\n\n"
+            "Это не подписка: ничего не включилось и ничего не спишется — просто твоё спасибо. "
+            "Мне правда приятно. — Никита")
+
+
+async def donation_paid(pid: str, bot=None) -> bool:
+    """Донат оплачен: отметить (один раз), поблагодарить человека, коротко
+    сказать Никите. Подписку не трогает."""
+    from database.billing import donation_totals, get_donation, mark_donation_paid
+    pay = await get_donation(pid)
+    if not pay or not await mark_donation_paid(pid):
+        return False
+    uid, amount = pay["payer_id"], pay["amount"]
+    logger.info(f"поддержка проекта: {pid} — {amount} ₽")
+    if bot is not None:
+        if uid:
+            await notify(bot, uid, donate_thanks(amount))
+        if config.STAROSTA_ID and uid != config.STAROSTA_ID:
+            n, total = await donation_totals()
+            await notify(bot, config.STAROSTA_ID,
+                         f"💛 Поддержка проекта: {amount} ₽ от {await _who(uid)}. Всего: {n} · {total} ₽.")
+    return True
+
+
+async def _who(uid: int | None) -> str:
+    import plus_grant
+    from database import get_user
+    u = await get_user(uid) if uid else None
+    return plus_grant.who_text(u) if u else "кого-то без аккаунта"
 
 
 async def paid(pid: str, bot=None) -> bool:
@@ -306,6 +438,16 @@ async def paid(pid: str, bot=None) -> bool:
     if bot is not None:
         await notify(bot, uid, f"Оплата прошла, спасибо! «Капибара+» до {fmt_day(until)}.")
     return True
+
+
+async def donate_status_line() -> str:
+    """Строка для /status: сколько донатов и на какую сумму."""
+    from database.billing import donation_totals
+    n, total = await donation_totals()
+    if not n:
+        return "Поддержка проекта (/donate): донатов пока нет"
+    m, month = await donation_totals(30)
+    return f"Поддержка проекта (/donate): {n} · {total} ₽, за 30 дней — {m} · {month} ₽"
 
 
 async def notify(bot, uid: int, text: str):

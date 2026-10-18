@@ -83,7 +83,10 @@ async function openPlus() {
   const inv = d.invite || {};
   const founderNote = d.founder ? "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда"
     : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
-  const state = d.paid_until
+  const state = d.unlimited
+    ? statusCard("ok", "У тебя безлимит" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : " навсегда"),
+      "ИИ без дневных лимитов, платить не нужно")
+    : d.paid_until
     ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
     : d.gift
       ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
@@ -95,17 +98,32 @@ async function openPlus() {
   box.innerHTML =
     '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("medal") + '</span><div><h3>Капибара+</h3>' +
       '<p>Подписка на Капибару</p></div></div>' + state +
-    secItem("sparkle", "Что даёт", "ИИ сверх пробы для любой группы (твоей группе он и так бесплатный), иконки и наряды капибары " +
+    secItem("sparkle", "Что даёт", (d.unlimited ? "ИИ без ограничений" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : "")
+      : "ИИ — до 100 вопросов в день для любой группы") + ", иконки и наряды капибары " +
       "«по подписке», значок. Дальше — ответы на билеты, «Пульс группы», «Архив потока».") +
-    prices +
-    (d.pay_url
-      ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
-        '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
-      : '<p class="sheet-hint">Оплата скоро заработает.</p>') +
+    (d.unlimited ? "" : prices +        // безлимиту цены и оплата ни к чему (робот 18.10)
+      (d.pay_url
+        ? '<button class="primary" style="margin-top:10px" onclick="openLink(\'' + d.pay_url + '\')">Оплатить на сайте</button>' +
+          '<p class="sheet-hint">Без автосписаний, июль и август не считаются. Условия — в <a class="legal-link" onclick="openLegal(event, \'offer\')">оферте</a>.</p>'
+        : '<p class="sheet-hint">Оплата скоро заработает.</p>')) +
     secItem("users", "Позови друга", inviteText(inv)) +
     (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
+    (d.donate_url ? secItem("heart", "Поддержать проект", "Разово, сумма на выбор — 100, 300, 500 ₽ или своя.") +
+      '<button class="ghost" onclick="openLink(\'' + d.donate_url + '\')">' + icon("heart", "inl") + ' Поддержать проект</button>' : "") +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
+}
+
+// «Поддержать проект» (строка под плитками «Ещё»): донат на сайте по личной
+// ссылке (billing.py) — не подписка, ничего не открывает, просто спасибо
+async function openDonate() {
+  haptic();
+  let d;
+  try { d = await api("/api/donate"); }
+  catch (e) { showToast("Не вышло: " + e.message); return; }
+  if (d.hidden) return;
+  if (d.url) openLink(d.url);
+  else showToast("Поддержать можно будет совсем скоро — оплата ещё подключается");
 }
 
 function closeSheet(id) {
