@@ -24,22 +24,25 @@ def test_names_unique_and_groups_known():
 
 
 def test_ios_sets_light_and_dark():
+    """Светлая и тёмная — два набора, тёмная по выбору (5.91.6: appearance dark
+    у альтернативной иконки iPhone не включался — Никита 18.10)."""
     pbx = (APP / "ios" / "Runner.xcodeproj" / "project.pbxproj").read_text(encoding="utf-8")
     lines = re.findall(r'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "([^"]*)";', pbx)
     assert lines and len(set(lines)) == 1
     alt = set(lines[0].split())
+    xcassets = APP / "ios" / "Runner" / "Assets.xcassets"
     for ic in ICONS["icons"]:
-        folder = APP / "ios" / "Runner" / "Assets.xcassets" / f"{cap(ic['name'])}.appiconset"
-        assert cap(ic["name"]) in alt
-        imgs = json.loads((folder / "Contents.json").read_text())["images"]
-        light = [i for i in imgs if not i.get("appearances")]
-        dark = [i for i in imgs if i.get("appearances")]
-        # каждый размер — в светлой и тёмной, файлы на месте
-        assert len(light) == len(dark) > 0
-        assert {(i["size"], i["idiom"], i["scale"]) for i in light} == {(i["size"], i["idiom"], i["scale"]) for i in dark}
-        assert all(i["filename"].startswith("dark-") for i in dark)
-        for i in imgs:
-            assert (folder / i["filename"]).exists(), i["filename"]
+        sets = {}
+        for kind, name in (("light", cap(ic["name"])), ("dark", cap(ic["name"]) + "Dark")):
+            assert name in alt
+            folder = xcassets / f"{name}.appiconset"
+            imgs = json.loads((folder / "Contents.json").read_text())["images"]
+            assert imgs and not any(i.get("appearances") for i in imgs)
+            assert all(i["filename"].startswith(kind + "-") for i in imgs)
+            for i in imgs:
+                assert (folder / i["filename"]).exists(), i["filename"]
+            sets[kind] = {(i["size"], i["idiom"], i["scale"]) for i in imgs}
+        assert sets["light"] == sets["dark"]
 
 
 def test_android_aliases_and_pictures():
@@ -62,3 +65,18 @@ def test_dart_list_matches():
     for ic in ICONS["icons"]:
         for suf in ("", "_dark"):
             assert (APP / "assets" / "appicons" / f"{ic['name']}{suf}.png").exists()
+
+
+def test_unlock_rules_valid():
+    """unlock (5.91): известные иконки (и нарисованные кодом) и понятные правила."""
+    import achievements
+    drawn = {"classic", "depth", "indigo", "terracotta", "page", "sunset", "library"}
+    names = drawn | {i["name"] for i in ICONS["icons"]}
+    for name, rule in ICONS.get("unlock", {}).items():
+        assert name in names, name
+        assert name != "classic", "обычная иконка всегда открыта"
+        kind, _, arg = rule.partition(":")
+        assert rule in ("sub", "all", "none") or (kind == "ach" and arg in achievements.IDS) \
+            or (kind == "rank" and arg in achievements.RANKS), rule
+    dart = (APP / "lib" / "theme" / "app_icons_art.dart").read_text(encoding="utf-8")
+    assert dict(re.findall(r"'(\w+)': '([\w:]+)',", dart)) == ICONS.get("unlock", {})

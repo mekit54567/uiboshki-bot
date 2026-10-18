@@ -135,6 +135,14 @@ async def init_db():
                 PRIMARY KEY (provider, subject)
             )
         """)
+        # Вход через Apple (apple_signin.py): refresh-токен Apple — только
+        # шифровкой, чтобы отозвать его при удалении аккаунта (требование Apple).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS apple_tokens (
+                user_id    INTEGER PRIMARY KEY,
+                token      TEXT NOT NULL
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS oauth_states (
                 state      TEXT PRIMARY KEY,
@@ -592,6 +600,17 @@ async def init_db():
                 at          TEXT NOT NULL,
                 sent_at     TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (user_id, deadline_id, kind, at)
+            )
+        """)
+        # Ачивки приложения (achievements.py, 5.91): что открыто и когда — на
+        # сервере, чтобы не пропадали при смене телефона и за них можно было
+        # давать иконки и дни подписки. at — мс от 1970 (как в приложении).
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS achievements (
+                user_id  INTEGER NOT NULL,
+                ach_id   TEXT NOT NULL,
+                at       INTEGER NOT NULL,
+                PRIMARY KEY (user_id, ach_id)
             )
         """)
         await db.commit()

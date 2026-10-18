@@ -34,7 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 import health as bot_health
 from webapp import deps
-from webapp.routes import account, aitest, auth, channel, chat, deadlines, files, legal, meta, push, schedule, sdo, site
+from webapp.routes import account, achievements, aitest, auth, channel, chat, deadlines, files, legal, meta, push, schedule, sdo, site
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 # httpx на INFO пишет полный адрес каждого запроса — с sesskey СДО в query.
@@ -113,6 +113,9 @@ class ApiV1:
         await self.app(scope, receive, send)
 
 
+from review_demo import ReviewDemo  # noqa: E402 — демо-вход проверяющих магазинов: ответы из записи стенда
+
+app.add_middleware(ReviewDemo)      # внутри ApiV1: пути уже без /v1
 app.add_middleware(ApiV1)
 
 
@@ -166,7 +169,7 @@ async def health():
 # ── Обработчики по темам (webapp/routes/*) ──────────────────────────────────
 # Пути у них не пересекаются, так что порядок не важен; важно только, что
 # статика ниже — последней.
-for _module in (schedule, account, deadlines, files, chat, sdo, channel, site, legal, aitest, auth, meta, push):
+for _module in (schedule, account, achievements, deadlines, files, chat, sdo, channel, site, legal, aitest, auth, meta, push):
     app.include_router(_module.router)
 
 

@@ -60,6 +60,21 @@ class PollBody(BaseModel):
     code: str
 
 
+@router.post("/api/auth/review")
+async def auth_review(body: PollBody, request: Request):
+    """Демо-вход проверяющих App Store / RuStore по коду REVIEW_CODE
+    (review_demo.py): данные — запись стенда, не чьи-то настоящие."""
+    import ratelimit
+    import review_demo
+    if not review_demo.enabled():
+        raise HTTPException(404, "Вход по коду выключен")
+    if not ratelimit.allow("auth_review", _client_ip(request)):
+        raise HTTPException(429, "Слишком много попыток — подожди 10 минут")
+    if not review_demo.check_code(body.code[:64]):
+        raise HTTPException(403, "Неверный код")
+    return {"status": "ok", "token": await review_demo.login(_device(request))}
+
+
 @router.post("/api/auth/poll")
 async def auth_poll(body: PollBody, request: Request):
     from database.sessions import get_login, redeem_login
@@ -148,9 +163,14 @@ def _page(title: str, text: str, extra: str = "", status: int = 200):
 
 @router.get("/api/auth/providers")
 async def auth_providers():
-    """Каким ещё входом можно войти (есть ключи на хостинге)."""
+    """Каким ещё входом можно войти (есть ключи на хостинге); code — вход по
+    коду для проверяющих магазинов (review_demo.py); apple — вход через Apple
+    (только в iPhone-приложении, apple_signin.py)."""
     import oauth
-    return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()]}
+    import review_demo
+    import apple_signin
+    return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()],
+            "code": review_demo.enabled(), "apple": apple_signin.enabled()}
 
 
 class OAuthStart(BaseModel):
@@ -240,11 +260,52 @@ async def auth_oauth_confirm(provider: str, request: Request):
     return _page("Готово", f"{oauth.NAMES[provider]} привязан — теперь им можно входить. Вернись в приложение.")
 
 
+class AppleBody(BaseModel):
+    id_token: str
+    code: str = ""
+    nonce: str = ""
+    name: str = ""
+
+
+@router.post("/api/auth/apple")
+async def auth_apple(body: AppleBody, request: Request):
+    """Вход через Apple из iPhone-приложения (apple_signin.py): токен Apple →
+    свой аккаунт (привязан раньше) или новый без Telegram → токен сессии."""
+    import logging
+
+    import apple_signin
+    import ratelimit
+    from database.identities import find_user, link, new_local_user
+    from database.sessions import create_session
+    if not apple_signin.enabled():
+        raise HTTPException(404, "Такого входа нет")
+    if not ratelimit.allow("auth_start", _client_ip(request)):
+        raise HTTPException(429, "Слишком много попыток — подожди минуту")
+    try:
+        claims = await apple_signin.verify(body.id_token[:8000], body.nonce[:200])
+    except apple_signin.AppleError as e:
+        raise HTTPException(401, f"Apple не подтвердил вход: {e}")
+    except Exception as e:  # noqa: BLE001 — сеть до Apple
+        logging.getLogger(__name__).warning(f"вход Apple: {e}")
+        raise HTTPException(502, "Apple не ответил — попробуй через минуту")
+    name = " ".join(body.name.split())[:80]
+    owner = await find_user("apple", claims["sub"])
+    if not owner:
+        owner = await new_local_user(name or apple_signin.NAME)
+        await link("apple", claims["sub"], owner, name)
+    try:
+        await apple_signin.save_token(owner, await apple_signin.exchange(body.code[:2000]))
+    except Exception as e:  # noqa: BLE001 — без refresh-токена вход всё равно состоялся
+        logging.getLogger(__name__).warning(f"Apple /auth/token: {e}")
+    return {"status": "ok", "token": await create_session(owner, f"{_device(request)} · Apple")}
+
+
 @router.get("/api/auth/identities")
 async def auth_identities(user: dict = CurrentUser):
     import oauth
     from database.identities import is_local, list_for
-    return {"items": [dict(i, title=oauth.NAMES.get(i["provider"], i["provider"])) for i in await list_for(user["id"])],
+    titles = {**oauth.NAMES, "apple": "Apple"}
+    return {"items": [dict(i, title=titles.get(i["provider"], i["provider"])) for i in await list_for(user["id"])],
             "available": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()],
             "telegram": not is_local(user["id"])}
 
@@ -257,4 +318,7 @@ async def auth_unlink(provider: str, user: dict = CurrentUser):
         raise HTTPException(400, "Это твой единственный вход — сначала привяжи другой")
     if not await unlink(user["id"], provider):
         raise HTTPException(404, "Не привязан")
+    if provider == "apple":
+        import apple_signin
+        await apple_signin.revoke_for(user["id"])      # Apple требует отзывать вход
     return {"ok": True}

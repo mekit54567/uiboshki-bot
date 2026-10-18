@@ -32,6 +32,10 @@ GROUP_PROGRAM = os.getenv("GROUP_PROGRAM", "Бизнес-информатика"
 # ссылки t.me/… (или любые). Пока пусто — плитка видна, по нажатию «Скоро».
 CHANNEL_URL = os.getenv("CHANNEL_URL", "").strip()
 CONTACT_URL = os.getenv("CONTACT_URL", "").strip()
+# Код демо-входа для проверяющих App Store / RuStore (review_demo.py): секрет
+# хостинга, не короче 12 знаков; не задан — входа по коду нет.
+_review = os.getenv("REVIEW_CODE", "").strip()
+REVIEW_CODE = _review if len(_review) >= 12 else ""
 # Куда бот публикует посты канала (/channel у старосты): «@uiboshki_dev» или
 # id «-100…». Не задан — берём @имя из CHANNEL_URL вида t.me/<имя>.
 def channel_id_from(explicit: str, url: str) -> str:
