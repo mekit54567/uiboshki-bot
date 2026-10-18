@@ -1278,3 +1278,5 @@
   margin: 8px 0 0; border-radius: 14px; background: var(--card, rgba(127,127,127,.08)); }
 .plus-price i { font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #5a5ee0; color: #fff; margin-left: 4px; }
 .plus-price s { opacity: .55; font-weight: 400; margin-right: 4px; }
+.plus-price span { min-width: 0; }
+.plus-price b { flex: none; white-space: nowrap; }     /* «649 ₽» не переносится на вторую строку */
