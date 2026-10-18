@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/screens/legal.dart';
 import 'package:uiboshki/screens/sdo_connect.dart';
+import 'package:uiboshki/screens/sdo_login.dart';
 import 'package:uiboshki/screens/study.dart';
 import 'package:uiboshki/screens/task.dart';
 import 'package:uiboshki/theme/app_theme.dart';
@@ -54,7 +55,7 @@ void main() {
         'POST /api/sdo/disconnect': {'state': 'off'},
       },
     );
-    await t.pumpWidget(host(SdoConnectScreen(api: api)));
+    await t.pumpWidget(host(SdoConnectScreen(api: api, webLogin: false)));
     await settle(t);
     expect(asked, contains('GET /api/sdo/status'));
     expect(find.text('Не подключено'), findsOneWidget);
@@ -80,6 +81,55 @@ void main() {
     await settle(t);
     expect(asked, contains('POST /api/sdo/disconnect'));
     expect(find.text('Не подключено'), findsOneWidget);
+  });
+
+  testWidgets('вход страницей СДО: сессия из страницы входа уходит на сервер', (t) async {
+    phone(t);
+    final bodies = <String, Object?>{};
+    var opened = 0;
+    final api = fakeApi(
+      bodies: bodies,
+      overrides: {
+        'GET /api/sdo/status': {'state': 'off'},
+        'POST /api/sdo/connect': {'state': 'ok', 'checked_at': null},
+      },
+    );
+    Future<String?> page(BuildContext _) async {
+      opened++;
+      return 'sess-1';
+    }
+
+    await t.pumpWidget(host(SdoConnectScreen(api: api, webLogin: true, sdoLogin: page)));
+    await settle(t);
+    expect(find.byType(TextField), findsNothing); // вставка куки — только по кнопке «вручную»
+    await tapVisible(t, find.text('Войти в СДО'));
+    expect(opened, 0); // без галочки согласия страница не открывается
+    await tapVisible(t, find.descendant(of: find.byType(ConsentCheck), matching: find.byType(AnimatedContainer)));
+    await tapVisible(t, find.text('Войти в СДО'));
+    expect(opened, 1);
+    expect(bodies['POST /api/sdo/connect'], {'cookie': 'sess-1', 'agree': true});
+    expect(find.text('Подключено, работает'), findsOneWidget);
+  });
+
+  testWidgets('вход страницей СДО: можно вставить MoodleSession вручную', (t) async {
+    phone(t);
+    final api = fakeApi(
+      overrides: {
+        'GET /api/sdo/status': {'state': 'off'},
+      },
+    );
+    await t.pumpWidget(host(SdoConnectScreen(api: api, webLogin: true, sdoLogin: (_) async => null)));
+    await settle(t);
+    await tapVisible(t, find.byKey(const Key('sdo-manual')));
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Проверить и сохранить'), findsOneWidget);
+  });
+
+  test('вошёл в СДО — страница СДО, но не вход', () {
+    expect(sdoLoggedIn(Uri.parse('https://online-edu.mirea.ru/my/')), isTrue);
+    expect(sdoLoggedIn(Uri.parse('https://online-edu.mirea.ru/login/index.php')), isFalse);
+    expect(sdoLoggedIn(Uri.parse('https://sso.mirea.ru/login')), isFalse);
+    expect(sdoLoggedIn(null), isFalse);
   });
 
   testWidgets('учёба без входа в СДО: карточка «Подключить СДО» ведёт на вход', (t) async {

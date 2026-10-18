@@ -74,7 +74,7 @@ self.addEventListener("fetch", e => {
 self.addEventListener("push", e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(d.title || "УИБО-бот", {
+  e.waitUntil(self.registration.showNotification(d.title || "Капибара", {
     body: d.body || "", tag: d.tag || "uib", icon: "/pwa/icon-192.png", badge: "/pwa/icon-192.png",
     data: { url: d.url || "/app" },
   }));

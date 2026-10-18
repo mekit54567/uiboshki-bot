@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/api/models.dart';
 import 'package:uiboshki/main.dart';
 import 'package:uiboshki/screens/login.dart';
@@ -37,10 +38,112 @@ void main() {
     );
     await settle(t);
     expect(find.text('Войти через Яндекс ID'), findsOneWidget);
+    // официальные знаки на кнопках (Никита 18.10), а не значки Material
+    for (final id in ['telegram', 'vk', 'yandex']) {
+      expect(find.byKey(Key('logo:$id')), findsOneWidget, reason: id);
+    }
     await t.tap(find.text('Войти через VK ID'));
     await settle(t);
     expect(opened, startsWith('https://id.vk.com/authorize'));
     expect(api.token, 'tok-123');
+  });
+
+  testWidgets('вход по коду для проверяющих: кнопка только когда сервер её даёт', (t) async {
+    phone(t);
+    Future<void> open(Api api) async {
+      await t.pumpWidget(
+        AppStyle(
+          p: Palette.depth,
+          font: FontChoice.book,
+          child: MaterialApp(
+            home: LoginScreen(key: UniqueKey(), api: api, onDone: () {}),
+          ),
+        ),
+      );
+      await settle(t);
+    }
+
+    await open(fakeApi(token: null));
+    expect(find.byKey(const Key('login-code')), findsNothing);
+
+    final bodies = <String, Object?>{};
+    final api = fakeApi(
+      token: null,
+      bodies: bodies,
+      overrides: {
+        'GET /api/auth/providers': {'items': [], 'code': true},
+      },
+    );
+    await open(api);
+    await t.tap(find.byKey(const Key('login-code')));
+    await settle(t);
+    await t.enterText(find.byType(TextField), ' kapibara-review ');
+    await t.tap(find.text('Войти'));
+    await settle(t);
+    expect(bodies['POST /api/auth/review'], {'code': 'kapibara-review'});
+    expect(api.token, 'rv.demo');
+  });
+
+  testWidgets('вход через Apple: токен системы → сессия, отмена — без ошибки', (t) async {
+    phone(t);
+    final bodies = <String, Object?>{};
+    final api = fakeApi(
+      token: null,
+      bodies: bodies,
+      overrides: {
+        'GET /api/auth/providers': {'items': [], 'apple': true},
+      },
+    );
+    String? sentNonce;
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: LoginScreen(
+            api: api,
+            onDone: () {},
+            appleDevice: true,
+            appleAuth: (nonce) async {
+              sentNonce = nonce;
+              return (idToken: 'jwt', code: 'c-1', name: 'Аня Петрова');
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.byKey(const Key('login-apple')));
+    await settle(t);
+    final body = bodies['POST /api/auth/apple'] as Map;
+    expect(body['id_token'], 'jwt');
+    expect(body['nonce'], sentNonce);
+    expect(sentNonce!.length, 32);
+    expect(api.token, 'apple-tok');
+  });
+
+  testWidgets('кнопки Apple нет без ключей на сервере и не на iPhone', (t) async {
+    phone(t);
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: LoginScreen(
+            api: fakeApi(
+              token: null,
+              overrides: {
+                'GET /api/auth/providers': {'items': [], 'apple': true},
+              },
+            ),
+            onDone: () {},
+            appleDevice: false,
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.byKey(const Key('login-apple')), findsNothing);
   });
 
   test('вход через бота отдаёт число для проверки в Telegram (как у Google)', () async {
