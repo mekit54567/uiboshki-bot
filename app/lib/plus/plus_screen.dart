@@ -15,6 +15,7 @@ import '../screens/files.dart' show BackRow;
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import 'donate.dart';
 import 'plus.dart';
 
 /// Ссылки наружу и «Поделиться» — тесты подменяют.
@@ -294,6 +295,30 @@ class _PlusBody extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Space.l),
           child: _InviteCard(api: api, invite: invite),
+        ),
+        const Section('Поддержать проект'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+          child: Tile(
+            key: const Key('plus:donate'),
+            onTap: () => showDonateSheet(context, api),
+            child: Row(
+              children: [
+                Icon(Icons.favorite_border_rounded, color: p.accent),
+                const SizedBox(width: Space.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Сказать спасибо рублём', style: s.body(15, weight: FontWeight.w600)),
+                      Text(donateNote, style: s.body(13, color: p.muted)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: p.muted),
+              ],
+            ),
+          ),
         ),
         if (ranks.isNotEmpty) ...[
           const Section('Бонусы за ранги ачивок'),

@@ -9,6 +9,7 @@ import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
 import '../api/models.dart';
+import '../plus/donate.dart';
 import '../plus/plus_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
@@ -172,6 +173,26 @@ class MoreScreen extends StatelessWidget {
                     title: 'Позвать',
                     sub: 'готовое сообщение со ссылкой — другу или в чат группы',
                     onTap: () => showInviteSheet(context, api),
+                  ),
+                  // «Поддержать проект» — строкой, не плиткой (Никита 18.10: без перегруза); на iPhone — нет
+                  FutureBuilder<bool>(
+                    future: donateShown(api),
+                    builder: (context, snap) => snap.data != true
+                        ? const SizedBox.shrink()
+                        : Column(
+                            children: [
+                              Divider(height: 1, color: p.line),
+                              KeyedSubtree(
+                                key: const Key('more:donate'),
+                                child: _MenuRow(
+                                  icon: Icons.favorite_border_rounded,
+                                  title: 'Поддержать проект',
+                                  sub: 'не подписка и ничего не открывает — просто спасибо',
+                                  onTap: () => showDonateSheet(context, api),
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                   if (me['group'] != null && me['group']['own'] != true) ...[
                     Divider(height: 1, color: p.line),
