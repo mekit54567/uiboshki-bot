@@ -143,7 +143,7 @@ void main() {
     expect(find.byKey(const Key('more:plus')), findsNothing);
   });
 
-  testWidgets('экран подписки: срок, «Основатель», цены, оплата на сайте, друзья и ранги', (t) async {
+  testWidgets('экран подписки: срок, Early Supporter, цены, оплата на сайте, друзья и ранги', (t) async {
     phone(t);
     await t.pumpWidget(_more(fakeApi(overrides: {'GET /api/plus': _plus, 'GET /api/invite': _invite})));
     await settle(t);
@@ -151,7 +151,8 @@ void main() {
     await settle(t);
     expect(find.byType(PlusScreen), findsOneWidget);
     expect(find.text('Действует до 14 ноября'), findsOneWidget);
-    expect(find.text('Основатель'), findsWidgets);
+    expect(find.text('Early Supporter'), findsWidgets);
+    expect(find.textContaining('Основател'), findsNothing);
     expect(find.text('месяц для тебя — 149 ₽, навсегда'), findsOneWidget);
     expect(find.text('ИИ сверх пробы'), findsOneWidget);
     await _see(t, 'plus:price:half');
@@ -178,6 +179,59 @@ void main() {
     expect(find.text('Рассвет · +3 дня'), findsOneWidget);
     expect(find.text('получено'), findsOneWidget);
     expect(find.text('Полночь · +14 дней'), findsOneWidget);
+  });
+
+  // Никита 18.10: «максимум 3 человека по приглашению дают подписку — указать»;
+  // число — с сервера (ref_max), выбрал — честно, что бонус закончился
+  testWidgets('лимит приглашений: «максимум за 3 друзей», выбран — бонус закончился', (t) async {
+    phone(t);
+    final inv = Map<String, dynamic>.from(_plus['invite']! as Map);
+    var api = fakeApi(
+      overrides: {
+        'GET /api/plus': {
+          ..._plus,
+          'invite': {...inv, 'ref_max': 3, 'ref_counted': 1},
+        },
+      },
+    );
+    await t.pumpWidget(_host(PlusScreen(api: api)));
+    await settle(t);
+    await _see(t, 'plus:invite');
+    expect(find.text('+7 дней обоим, когда друг попользуется Капибарой 3 дня'), findsOneWidget);
+    expect(find.text('Тебе — максимум за 3 друзей, засчитано 1 из 3'), findsOneWidget);
+    expect(find.text('Пришло по ссылке: 3'), findsOneWidget);
+
+    api = fakeApi(
+      overrides: {
+        'GET /api/plus': {
+          ..._plus,
+          'invite': {...inv, 'ref_max': 3, 'ref_counted': 3},
+        },
+      },
+    );
+    await t.pumpWidget(_host(PlusScreen(key: UniqueKey(), api: api)));
+    await settle(t);
+    await _see(t, 'plus:invite');
+    expect(find.text('+7 дней другу, когда друг попользуется Капибарой 3 дня'), findsOneWidget);
+    expect(
+      find.text('Ты уже позвал 3 друзей — бонус за приглашения закончился, друзьям дни по-прежнему дают'),
+      findsOneWidget,
+    );
+  });
+
+  test('inviteLimit: старый сервер без ref_max — строки нет', () {
+    expect(inviteLimit({'bonus_days': 7}), isNull);
+    expect(inviteDone({'ref_max': 3, 'ref_counted': 2}), isFalse);
+    expect(inviteDone({'ref_max': 3, 'ref_counted': 3}), isTrue);
+  });
+
+  testWidgets('лист «Позвать друга»: лимит выбран — дни только другу', (t) async {
+    phone(t);
+    await t.pumpWidget(_host(Scaffold(body: InviteSheet(data: {..._invite, 'ref_max': 3, 'ref_counted': 3}))));
+    await settle(t);
+    expect(find.text('+7 дней Капибары+ другу, когда друг попользуется 3 дня'), findsOneWidget);
+    expect(find.byKey(const Key('invite:limit')), findsOneWidget);
+    expect(find.textContaining('бонус за приглашения закончился'), findsOneWidget);
   });
 
   testWidgets('подарок своей группе — «Подарок группе до …», платить не нужно', (t) async {

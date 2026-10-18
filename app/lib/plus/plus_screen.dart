@@ -54,6 +54,24 @@ String plusUntil(String? iso) {
 
 String _days(int n) => '$n ${plural(n, 'день', 'дня', 'дней')}';
 
+/// Пригласивший уже получил дни за всех друзей, за кого дают (ref_max).
+bool inviteDone(Map<String, dynamic> d) =>
+    d['ref_max'] is int &&
+    (d['ref_max'] as int) > 0 &&
+    (d['ref_counted'] is int ? d['ref_counted'] as int : 0) >= (d['ref_max'] as int);
+
+/// Лимит приглашений (referrals.REF_MAX — число с сервера, не своё): сколько
+/// друзей ещё дадут дни пригласившему, или честно, что бонус закончился.
+/// null — старый сервер без лимита в ответе.
+String? inviteLimit(Map<String, dynamic> d) {
+  final max = d['ref_max'] is int ? d['ref_max'] as int : 0;
+  final got = d['ref_counted'] is int ? d['ref_counted'] as int : 0;
+  if (max <= 0) return null;
+  final friends = plural(max, 'друга', 'друзей', 'друзей');
+  if (got >= max) return 'Ты уже позвал $max $friends — бонус за приглашения закончился, друзьям дни по-прежнему дают';
+  return 'Тебе — максимум за $max $friends, засчитано $got из $max';
+}
+
 /// Что даёт подписка — как PERKS на странице оплаты (webapp/routes/billing.py).
 const plusPerks = [
   (Icons.auto_awesome_outlined, 'ИИ сверх пробы', 'для любой группы МИРЭА; твоей группе он и так бесплатный'),
@@ -160,7 +178,7 @@ class _PlusBody extends StatelessWidget {
                         const SizedBox(height: Space.s),
                         Row(
                           children: [
-                            const _Tag('Основатель'),
+                            const _Tag('Early Supporter'),
                             if (founderPrice != null) ...[
                               const SizedBox(width: Space.s),
                               Expanded(
@@ -377,7 +395,7 @@ class _PriceRow extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (days > 0) Text(_days(days), style: s.body(13, color: p.muted)),
-                    if (price['founder'] == true) const _Tag('Основатель'),
+                    if (price['founder'] == true) const _Tag('Early Supporter'),
                   ],
                 ),
               ],
@@ -452,6 +470,7 @@ class _InviteCard extends StatelessWidget {
     final rewarded = invite['rewarded'] is int ? invite['rewarded'] as int : 0;
     final bonus = invite['bonus_days'] is int ? invite['bonus_days'] as int : 0;
     final need = invite['friend_days'] is int ? invite['friend_days'] as int : 0;
+    final limit = inviteLimit(invite);
     return Tile(
       key: const Key('plus:invite'),
       child: Column(
@@ -459,12 +478,25 @@ class _InviteCard extends StatelessWidget {
         children: [
           if (bonus > 0)
             Text(
-              '+${_days(bonus)} обоим, когда друг попользуется Капибарой $need ${plural(need, 'день', 'дня', 'дней')}',
+              '+${_days(bonus)} ${inviteDone(invite) ? 'другу' : 'обоим'}, когда друг попользуется Капибарой '
+              '$need ${plural(need, 'день', 'дня', 'дней')}',
               style: s.body(15, weight: FontWeight.w600),
             ),
+          if (limit != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              limit,
+              key: const Key('plus:invite:limit'),
+              style: s.body(13, color: p.text),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
-            came == 0 ? 'По твоей ссылке пока никто не пришёл' : 'Пришло по ссылке: $came · засчитано: $rewarded',
+            came == 0
+                ? 'По твоей ссылке пока никто не пришёл'
+                : limit != null
+                ? 'Пришло по ссылке: $came'
+                : 'Пришло по ссылке: $came · засчитано: $rewarded',
             style: s.body(13, color: p.muted),
           ),
           const SizedBox(height: Space.m),
@@ -565,6 +597,7 @@ class InviteSheet extends StatelessWidget {
     final p = s.p;
     final bonus = data['bonus_days'] is int ? data['bonus_days'] as int : 0;
     final need = data['friend_days'] is int ? data['friend_days'] as int : 0;
+    final limit = inviteLimit(data);
     final shareKey = GlobalKey();
     Rect? origin() {
       final box = shareKey.currentContext?.findRenderObject();
@@ -596,10 +629,17 @@ class InviteSheet extends StatelessWidget {
             if (bonus > 0 && PlusBonus.allowed) ...[
               const SizedBox(height: Space.s),
               Text(
-                '+${_days(bonus)} Капибары+ вам обоим, когда друг попользуется $need ${plural(need, 'день', 'дня', 'дней')}',
+                '+${_days(bonus)} Капибары+ ${inviteDone(data) ? 'другу' : 'вам обоим'}, когда друг попользуется '
+                '$need ${plural(need, 'день', 'дня', 'дней')}',
                 key: const Key('invite:bonus'),
                 style: s.body(13, color: p.muted),
               ),
+              if (limit != null)
+                Text(
+                  limit,
+                  key: const Key('invite:limit'),
+                  style: s.body(13, color: p.muted),
+                ),
             ],
             const SizedBox(height: Space.xl),
             FilledButton.icon(

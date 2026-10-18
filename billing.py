@@ -12,7 +12,7 @@ ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не от�
 каждый срок оплачивается отдельно, срок складывается.
 
 Цена первых (Никита 17.10): пока не сказано иначе, все платят «early»-цену
-(месяц 149 ₽), и кто оплатил по ней — «Основатель», платит так навсегда.
+(месяц 149 ₽), и кто оплатил по ней — метка Early Supporter, платит так навсегда.
 Новым — полная цена с `/plus stage full` (settings plus:stage). Своей группе
 — подарок до GIFT_UNTIL (`/plus gift`, settings plus:gift). Июль и август в
 срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь."""
@@ -31,7 +31,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
-PLANS = {                             # price — полная, early — цена первых («Основатель»)
+PLANS = {                             # price — полная, early — цена первых (метка Early Supporter)
     "month": {"days": 30, "price": 249, "early": 149, "title": "Месяц"},
     "semester": {"days": 150, "price": 790, "early": 649, "title": "Семестр"},
 }
@@ -155,7 +155,7 @@ async def status(uid: int) -> dict:
 
 async def founder_price_for(uid: int) -> bool:
     """Платит ли он по цене первых: она ещё действует для новых или он уже
-    «Основатель» (оплатил по ней — навсегда, перерывы не важны)."""
+    Early Supporter (оплатил по ней — навсегда, перерывы не важны)."""
     from database.billing import get_sub
     sub = await get_sub(uid)
     return bool(sub and sub["founder"]) or await early()
@@ -298,7 +298,7 @@ async def paid(pid: str, bot=None) -> bool:
     uid = pay["payer_id"]
     founder = None
     plan = PLANS.get(pay["plan"])
-    if plan and pay["amount"] < plan["price"]:          # оплачено по цене первых — «Основатель» навсегда
+    if plan and pay["amount"] < plan["price"]:          # оплачено по цене первых — Early Supporter навсегда
         await add_bonus(uid, "founder", "slot", 0)
         founder = True
     until = await grant(uid, pay["days"], "pay", founder)

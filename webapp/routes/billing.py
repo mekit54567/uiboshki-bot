@@ -48,7 +48,7 @@ async def api_invite(user: dict = CurrentUser, x_app: str = Header(default="")):
     out = {"link": d["link"], "share_text": d["share_text"], "share_image": d["share_image"],
            "tg_share": referrals.tg_share_url(d["link"])}
     if x_app != "ios":
-        out.update({k: d[k] for k in ("came", "rewarded", "bonus_days", "friend_days")})
+        out.update({k: d[k] for k in ("came", "rewarded", "bonus_days", "friend_days", "ref_max", "ref_counted")})
     return out
 
 
@@ -145,7 +145,7 @@ def _plans_form(key: str, st: dict) -> str:
     rows = []
     for p in st["prices"]:
         old = f"<s>{p['full']} ₽</s>" if p["price"] < p["full"] else ""
-        tag = '<span class="tag">Основатель</span>' if p["founder"] else ""
+        tag = '<span class="tag">Early Supporter</span>' if p["founder"] else ""
         rows.append(f'<button name="plan" value="{p["plan"]}"><span>{escape(p["title"])} · {p["days"]} дней{tag}'
                     f'</span><span>{old}<b>{p["price"]} ₽</b></span></button>')
     return (f'<form method="post" action="/plus/pay"><input type="hidden" name="k" value="{escape(key)}">'
@@ -167,10 +167,14 @@ async def plus_page(k: str = ""):
     else:
         state = "Подписки сейчас нет."
     if st["founder"]:
-        state += " Ты «Основатель»: цена первых пользователей остаётся за тобой навсегда."
+        state += " У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда."
     elif st["prices"][0]["founder"]:
         state += " Сейчас действует цена первых пользователей: кто оплатит по ней, так и платит всегда."
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
+    import referrals
+    inv = {"ref_max": referrals.REF_MAX, "ref_counted": await referrals.counted(uid)}
+    friend = (f'<p class="small">Позови друга — команда /invite в боте или «Позвать» в приложении. '
+              f'{escape(referrals.invite_line(inv))}</p>')
     if not st["provider"]:
         pay = '<p class="state">Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.</p>'
     else:
@@ -179,7 +183,7 @@ async def plus_page(k: str = ""):
                'Июль и август в срок не считаются — дни переносятся на сентябрь. Нажимая на тариф, ты '
                'принимаешь <a href="/offer">оферту</a>. Чек придёт от ФНС («Мой налог»).</p>')
     return _page(f'<p class="lead">Подписка на Капибару — помощника студентов МИРЭА.</p>'
-                 f'<p class="state">{state}</p><ul class="perks">{perks}</ul>{pay}')
+                 f'<p class="state">{state}</p><ul class="perks">{perks}</ul>{pay}{friend}')
 
 
 @router.post("/plus/pay")
