@@ -73,6 +73,7 @@ AUTHOR_COLUMNS = (
     ("votes", "created_by"),
     ("file_summaries", "created_by"),
     ("group_admins", "added_by"),
+    ("reports", "author_id"),
 )
 
 
@@ -115,6 +116,7 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         await db.execute("UPDATE feed_posts SET author_id=0 WHERE author_id IN (?, ?)",
                          (uid, feed_author_hash(uid)))
         await db.execute("DELETE FROM oauth_states WHERE link_user=?", (uid,))
+        await db.execute("DELETE FROM user_blocks WHERE blocked_id=?", (uid,))   # его скрыли — забыть
 
         for table in await user_tables(db):
             cur = await db.execute(f"DELETE FROM {table} WHERE user_id=?", (uid,))

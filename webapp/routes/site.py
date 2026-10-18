@@ -116,3 +116,15 @@ async def about_target(request: Request, target_type: int, target_id: int):
     data.pop("pinned", None)
     data["weeks"] = data["weeks"][:2]          # сайту хватит этой и следующей недели
     return data
+
+
+# Расписание без входа в своём приложении (правило Apple 5.1.1(v), 5.99.0):
+# то же, что поиск на сайте, — справочник МИРЭА публичный, ничего личного.
+@router.get("/api/guest/search")
+async def guest_search(request: Request, q: str = "", type: int = 0):
+    return await about_search(request, q=q, type=type)
+
+
+@router.get("/api/guest/target/{target_type}/{target_id}")
+async def guest_target(request: Request, target_type: int, target_id: int):
+    return await about_target(request, target_type, target_id)

@@ -584,4 +584,27 @@ async def init_db():
                 PRIMARY KEY (user_id, deadline_id, kind, at)
             )
         """)
+        # Жалобы на записи людей (ugc.py, правило Apple 1.2): заметка, ДЗ,
+        # файл, общий дедлайн → владельцу в бота «Удалить / Оставить».
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL,
+                kind        TEXT NOT NULL,
+                item_id     INTEGER NOT NULL,
+                author_id   INTEGER,
+                reason      TEXT DEFAULT '',
+                status      TEXT DEFAULT 'new',
+                created_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # «Скрыть автора» — у себя: его записи больше не видны этому человеку
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_blocks (
+                user_id     INTEGER NOT NULL,
+                blocked_id  INTEGER NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, blocked_id)
+            )
+        """)
         await db.commit()

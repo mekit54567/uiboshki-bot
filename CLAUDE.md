@@ -541,6 +541,7 @@ JSON приложения VPN (секрет хостинга, в репозит�
   в базе, лист — `POST /api/consent/asked`), не каждый день. В тестах согласие дано (`conftest._consent_given`), настоящая
   проверка — метка `consent_real`. Оператор в текстах — `PD_FIO`, `PD_INN`,
   `PD_EMAIL`, `PD_CITY` (переменные окружения).
+- **Записи людей (правило Apple 1.2, 5.99)** — `ugc.py`: жалоба на заметку, ДЗ, файл, общий срок → Никите в бота «Удалить / Оставить» (`handlers/reports.py`), «Скрыть автора» — у себя (`user_blocks`; новый список записей людей в API — фильтровать через `ugc.without_hidden`), правила — `legal_texts.RULES` (`/rules`). Расписание без входа — `/api/guest/…` и `app/lib/api/guest.dart` (5.1.1(v)).
 - **Прочее**: длинные сообщения режутся на части (`long_messages.py`,
   middleware сессии бота); ночной бэкап базы старосте в 04:40 и `/backup`
   (`backup.py`); задачи по расписанию — `scheduler.py` (APScheduler).
