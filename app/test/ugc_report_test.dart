@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/api/guest.dart';
-import 'package:uiboshki/main.dart';
 import 'package:uiboshki/screens/login.dart';
 import 'package:uiboshki/screens/search.dart';
 import 'package:uiboshki/theme/app_theme.dart';
