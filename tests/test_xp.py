@@ -315,7 +315,9 @@ def test_rating_all_text():
     d = legal_texts.doc("rating_all")
     assert d["version"] == legal_texts.RATING_ALL_VERSION
     text = d["lead"] + " ".join(str(b) for sec in d["sections"] for b in sec["blocks"])
-    for need in ("всем пользователям", "Капибара №", "10.1", "Показывать меня всем"):
+    for need in ("всем пользователям", "Капибара №", "10.1", "Показывать меня всем",
+                 # приказ РКН № 18: цель, точный адрес, право на свои запреты (5.100.8)
+                 "Цель — показать", "https://www.uiboshki.ru/app", "3 рабочих дней"):
         assert need in text
     # на листе — общая формулировка и что, где и кому; оператор — в полном тексте по ссылке
     short = d["lead_short"] + " ".join(str(b) for sec in d["sections"] if sec.get("short") for b in sec["blocks"])
