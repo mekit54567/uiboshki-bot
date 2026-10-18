@@ -80,7 +80,7 @@ async function openPlus() {
       : '<p class="sheet-hint">Оплата скоро заработает.</p>') +
     secItem("users", "Позови друга", "Когда он попользуется " + inv.friend_days + " дня, вам обоим +" + inv.bonus_days +
       " дней. По твоей ссылке пришло: " + inv.came + ", засчитано: " + inv.rewarded + ".") +
-    (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks + ".") : "") +
+    (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
 }

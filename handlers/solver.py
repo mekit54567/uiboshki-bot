@@ -443,7 +443,7 @@ async def offer_think(uid: int, state: FSMContext, sent: list[Message], question
             or question[-1]["content"].startswith("Задание на фото"):
         return
     offer = await think.offer(uid)
-    if not offer:
+    if not offer or offer["left"] == 0:         # на сегодня кончилось — кнопки нет (нажать всё равно нельзя)
         return
     await state.update_data(think_q=question, think_d={"subject": data.get("subject", ""),
                                                         "has_lectures": data.get("has_lectures", False)})
@@ -477,7 +477,7 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
         if "не списана" in str(e):          # не ответила — кнопка снова под ответом
             try:
                 offer = await think.offer(uid)
-                if offer:
+                if offer and offer["left"] != 0:
                     await callback.message.edit_reply_markup(reply_markup=think_kb(offer["left"]))
             except Exception:
                 pass
