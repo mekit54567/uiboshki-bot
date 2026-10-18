@@ -522,15 +522,22 @@ def _more_menu():
 
 
 def test_more_menu_tiles_with_actions():
-    # 12 плиток: прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам», «Группа», «Позвать»
+    # 12 плиток — три ровных ряда: прежние 6 + ДЗ, «Что нового», «Канал и связь», «Группа», «Позвать»,
+    # «Капибара+». Никита 18.10: нового ряда под «Капибару+» не надо — «Канал бота» и «Написать нам»
+    # сошлись в одну плитку с листом (как «Новости и связь» в приложении)
     menu = _more_menu()
     labels = re.findall(r'<span class="lbl">([^<]+)</span>', menu)
     assert labels == ["Файлы", "Дедлайны", "ДЗ", "Календарь", "Уведомления", "Безопасность",
-                      "Установить", "Что нового", "Канал бота", "Написать нам", "Моя группа", "Позвать"]
-    for call in ("openHomework()", "showWhatsNew()", "openConfigLink(CHANNEL_URL)", "openConfigLink(CONTACT_URL)",
-                 "shareBot()", "openGroup()"):
+                      "Установить", "Что нового", "Канал и связь", "Моя группа", "Позвать", "Капибара+"]
+    assert len(labels) % 4 == 0                                              # без неполного ряда
+    for call in ("openHomework()", "showWhatsNew()", "openLinks()", "shareBot()", "openGroup()", "openPlus()"):
         assert f'toggleMore(false); {call}"' in menu, call
-    assert 'href="#i-send"' in menu and 'href="#i-message"' in menu and 'href="#i-sparkle"' in menu
+    assert 'href="#i-send"' in menu and 'href="#i-sparkle"' in menu
+    # обе ссылки — в листе, ничего не потерялось
+    fn = JS["js/more.js"].split("function openLinks()")[1].split("\n}\n")[0]
+    assert "openConfigLink(CHANNEL_URL)" in fn and "openConfigLink(CONTACT_URL)" in fn
+    assert 'row("send", "Канал бота"' in fn and 'row("message", "Написать нам"' in fn
+    assert 'id="links-sheet"' in HTML and 'id="links-body"' in HTML
     # ДЗ — функцией, а не кликом по кнопке сегмента
     dl = JS["js/deadlines.js"]
     assert "function setDlSeg(seg)" in dl and "function openHomework()" in dl
@@ -1211,3 +1218,49 @@ def test_pwa_login_opens_telegram_directly_and_survives_restart():
     poll = core.split("async function pollLogin")[1].split("\n}\n")[0]
     assert poll.count("savePending(null)") == 2          # вошёл или код сгорел — забыть
     assert ".login-web" in CSS
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="нужен node")
+def test_plus_sheet_invite_limit_from_server():
+    # Никита 18.10: «максимум 3 человека по приглашению дают подписку» — число с сервера (ref_max)
+    import json
+    more = JS["js/more.js"]
+    fn = re.search(r"function inviteText\(.*?\n}\n", more, re.S).group(0)
+
+    def run(inv):
+        res = subprocess.run(["node", "-e", fn + "console.log(JSON.stringify(inviteText(%s)))" % _js_arg(inv)],
+                             capture_output=True, text=True)
+        assert res.returncode == 0, res.stderr
+        return json.loads(res.stdout)
+    base = {"friend_days": 3, "bonus_days": 7, "came": 2}
+    t = run({**base, "ref_max": 3, "ref_counted": 1})
+    assert "вам обоим +7 дней" in t and "максимум за 3 друзей, засчитано 1 из 3" in t
+    t = run({**base, "ref_max": 3, "ref_counted": 3})
+    assert t.startswith("Ты уже позвал 3 друзей — бонус за приглашения закончился, друзьям дни по-прежнему дают")
+    assert "вам обоим" not in t
+    assert "максимум" not in run(base)                                       # старый сервер — без лимита
+    assert "3" not in fn.replace("inv.", "")                                  # тройку фронт у себя не держит
+    assert "secItem(\"users\", \"Позови друга\", inviteText(inv))" in more
+
+
+def test_plus_sheet_early_supporter_label():
+    # Никита 18.10: метка оплативших по цене первых — «Early Supporter», латиницей
+    more = JS["js/more.js"]
+    assert "<i>Early Supporter</i>" in more and "У тебя метка Early Supporter" in more
+    assert "Основател" not in more
+
+
+def test_plus_sheet_price_on_one_line_and_no_double_dot():
+    # робот-скриншотер 18.10: «649 ₽» переносился, у рангов «14 дн..»
+    assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)
+    more = JS["js/more.js"]
+    assert '" дн."' in more and 'ranks + ".")' not in more
+
+
+def test_plus_tag_whole_and_invite_own_icon():
+    # робот 18.10: «Early Supporter» ломался пополам на две строки; у «Позвать» был значок «Моей группы»
+    assert re.search(r"\.plus-price i \{[^}]*display: inline-block;[^}]*white-space: nowrap", CSS)
+    assert "&nbsp;₽</s>" in JS["js/more.js"]
+    assert re.search(r'shareBot\(\)"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/>',
+                     HTML)
+    assert "  invite: '" in JS["js/icons.js"]

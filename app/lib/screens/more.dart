@@ -9,6 +9,7 @@ import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
 import '../api/models.dart';
+import '../plus/plus_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
@@ -79,10 +80,12 @@ class MoreScreen extends StatelessWidget {
           const SizedBox(height: Space.m),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.l),
-            child: FutureBuilder<Map<String, String>>(
-              future: appLinks(api),
+            child: FutureBuilder<List<Object>>(
+              // «Капибара+» — только если сервер её показывает (на iPhone — нет)
+              future: Future.wait<Object>([appLinks(api).catchError((_) => <String, String>{}), plusShown(api)]),
               builder: (context, snap) {
-                final links = _links(snap.data ?? const {});
+                final links = _links(snap.data?[0] as Map<String, String>? ?? const {});
+                final plus = snap.data?[1] == true;
                 return _TileGrid(
                   items: [
                     _TileItem(
@@ -131,6 +134,17 @@ class MoreScreen extends StatelessWidget {
                         title: 'Новости и связь',
                         onTap: () => showLinksSheet(context, links),
                       ),
+                    if (plus)
+                      _TileItem(
+                        key: const Key('more:plus'),
+                        icon: Icons.workspace_premium_outlined,
+                        title: 'Капибара+',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => PlusScreen(api: api, onUnauthorized: onUnauthorized),
+                          ),
+                        ),
+                      ),
                   ],
                 );
               },
@@ -156,8 +170,8 @@ class MoreScreen extends StatelessWidget {
                   _MenuRow(
                     icon: Icons.group_add_outlined,
                     title: 'Позвать',
-                    sub: 'ссылка на бота — для одногруппников',
-                    onTap: () => _invite(context),
+                    sub: 'готовое сообщение со ссылкой — другу или в чат группы',
+                    onTap: () => showInviteSheet(context, api),
                   ),
                   if (me['group'] != null && me['group']['own'] != true) ...[
                     Divider(height: 1, color: p.line),
@@ -306,19 +320,6 @@ class MoreScreen extends StatelessWidget {
           : 'Календарь не открылся — ссылка скопирована, добавь подписку в календаре',
       kind: ToastKind.done,
     );
-  }
-
-  // «Позвать»: ссылка на сайт бота (/about — живое демо и поиск расписания)
-  Future<void> _invite(BuildContext context) async {
-    try {
-      await Clipboard.setData(
-        ClipboardData(text: 'Бот нашей группы: расписание, дедлайны и баллы СДО, лекции и ИИ по ним — $_origin/about'),
-      );
-    } catch (_) {
-      if (context.mounted) showToast(context, 'Не удалось скопировать — попробуй ещё раз.', kind: ToastKind.error);
-      return;
-    }
-    if (context.mounted) showToast(context, 'Ссылка скопирована — отправь одногруппникам', kind: ToastKind.done);
   }
 }
 

@@ -592,6 +592,52 @@ async def init_db():
                 PRIMARY KEY (user_id, deadline_id, kind, at)
             )
         """)
+        # Подписка «Капибара+» (billing.py): оплаты — по налоговым правилам
+        # хранятся и после «удалить мои данные», без человека (payer_id NULL);
+        # бонусы (ранг ачивок, «пригласи друга») — по разу; кто кого пригласил
+        # (referrals) стирается вместе с любым из двух, у пригласившего
+        # остаётся только счёт в bonuses.
+        try:
+            await db.execute("ALTER TABLE subscriptions ADD COLUMN founder INTEGER DEFAULT 0")
+        except Exception:
+            pass  # колонка уже есть
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id         TEXT PRIMARY KEY,
+                provider   TEXT NOT NULL,
+                payer_id   INTEGER,
+                plan       TEXT NOT NULL,
+                amount     INTEGER NOT NULL,
+                days       INTEGER NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT DEFAULT (datetime('now')),
+                paid_at    TEXT
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS bonuses (
+                user_id  INTEGER NOT NULL,
+                kind     TEXT NOT NULL,
+                key      TEXT NOT NULL,
+                days     INTEGER NOT NULL,
+                at       TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (user_id, kind, key)
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS ref_codes (
+                user_id  INTEGER PRIMARY KEY,
+                code     TEXT NOT NULL UNIQUE
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS referrals (
+                friend_id   INTEGER PRIMARY KEY,
+                inviter_id  INTEGER NOT NULL,
+                at          TEXT DEFAULT (datetime('now')),
+                rewarded_at TEXT
+            )
+        """)
         # Ачивки приложения (achievements.py, 5.91): что открыто и когда — на
         # сервере, чтобы не пропадали при смене телефона и за них можно было
         # давать иконки и дни подписки. at — мс от 1970 (как в приложении).

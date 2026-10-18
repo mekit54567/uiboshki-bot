@@ -16,6 +16,7 @@ from .announce import router as announce_router
 from .feed     import router as feed_router
 from .inline   import router as inline_router
 from .channel  import router as channel_router
+from .plus     import router as plus_router
 from .solver   import router as solver_router  # всегда последним
 
 # Общий /cancel для любого диалога — первым роутером. Раньше /cancel был не
@@ -64,6 +65,7 @@ def register_handlers(dp: Dispatcher):
     dp.include_router(feed_router)
     dp.include_router(inline_router)
     dp.include_router(channel_router)
+    dp.include_router(plus_router)
     dp.include_router(solver_router)
     dp.startup.register(_anonymize_feed_on_startup)
     dp.startup.register(_ensure_home_group)
