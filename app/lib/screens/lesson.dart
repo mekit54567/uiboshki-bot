@@ -9,15 +9,18 @@ import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/lesson_reactions.dart';
 import 'files.dart';
 import 'search.dart';
 import 'study.dart';
 
-void openLesson(BuildContext context, Api api, Lesson l) {
+/// [own] — пара своей группы: у неё реакции (5.100). В чужом расписании
+/// (поиск) — нет: счёт там был бы не той группы.
+void openLesson(BuildContext context, Api api, Lesson l, {bool own = true}) {
   AchStore.unlock('lesson');
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => LessonScreen(api: api, lesson: l),
+      builder: (_) => LessonScreen(api: api, lesson: l, own: own),
     ),
   );
 }
@@ -43,7 +46,8 @@ class LessonExtras {
 class LessonScreen extends StatefulWidget {
   final Api api;
   final Lesson lesson;
-  const LessonScreen({super.key, required this.api, required this.lesson});
+  final bool own;
+  const LessonScreen({super.key, required this.api, required this.lesson, this.own = true});
 
   @override
   State<LessonScreen> createState() => _LessonScreenState();
@@ -237,6 +241,7 @@ class _LessonScreenState extends State<LessonScreen> {
                   ),
                 ),
               ),
+              if (widget.own && !lesson.cancelled) LessonReactions(api: api, lesson: lesson),
               FutureBuilder<LessonExtras>(
                 future: _extras,
                 builder: (context, snap) {

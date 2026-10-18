@@ -35,7 +35,7 @@ from fastapi.staticfiles import StaticFiles
 import health as bot_health
 from webapp import deps
 from webapp.routes import (account, achievements, aitest, auth, billing, channel, chat, deadlines, files, legal, meta,
-                           push, reports, schedule, sdo, site)
+                           push, reactions, reports, schedule, sdo, site)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 # httpx на INFO пишет полный адрес каждого запроса — с sesskey СДО в query.
@@ -171,7 +171,7 @@ async def health():
 # Пути у них не пересекаются, так что порядок не важен; важно только, что
 # статика ниже — последней.
 for _module in (schedule, account, achievements, deadlines, files, chat, sdo, channel, site, legal, aitest, auth, meta, push,
-                billing, reports):
+                billing, reports, reactions):
     app.include_router(_module.router)
 
 

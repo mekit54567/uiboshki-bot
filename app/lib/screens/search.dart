@@ -562,7 +562,7 @@ class _TargetScreenState extends State<TargetScreen> {
                   at: t,
                   showGroups: widget.type != 1,
                   onLesson: (l) {
-                    if (widget.api is! GuestApi) openLesson(context, widget.api, l);
+                    if (widget.api is! GuestApi) openLesson(context, widget.api, l, own: false);
                   },
                 ),
           ],
