@@ -1376,3 +1376,13 @@ def test_think_note_wraps_not_cut():
     # робот 18.10: «следующий вопрос решит DeepS…» обрезалось — подсказка переносится, а не режется
     rule = re.search(r"\.think-note \{([^}]*)\}", CSS).group(1)
     assert "nowrap" not in rule and "ellipsis" not in rule
+
+
+def test_device_rows_button_not_full_width():
+    """Баг 19.10: в «Безопасности» общий button.ghost (width: 100%) забирал всю
+    строку устройства, и «Safari · iPhone» шёл в столбик по слову."""
+    css = (STATIC / "app.css").read_text(encoding="utf-8")
+    rule = re.search(r"\.dev-row button\.ghost\s*\{([^}]*)\}", css)
+    assert rule and "width: auto" in rule.group(1) and "flex: none" in rule.group(1)
+    assert css.index(".dev-row button.ghost") > css.index("button.ghost {")  # позже — перебивает
+    assert re.search(r"\.dev-row div\s*\{[^}]*min-width:\s*0", css)
