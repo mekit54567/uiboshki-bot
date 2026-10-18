@@ -71,7 +71,8 @@ async function openPlus() {
   box.innerHTML =
     '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("medal") + '</span><div><h3>Капибара+</h3>' +
       '<p>Подписка на Капибару</p></div></div>' + state +
-    secItem("sparkle", "Что даёт", "ИИ — до 100 вопросов в день для любой группы, иконки и наряды капибары " +
+    secItem("sparkle", "Что даёт", (d.unlimited ? "ИИ без ограничений" + (d.unlimited_until ? " до " + fmtDay(d.unlimited_until) : "")
+      : "ИИ — до 100 вопросов в день для любой группы") + ", иконки и наряды капибары " +
       "«по подписке», значок. Дальше — ответы на билеты, «Пульс группы», «Архив потока».") +
     (d.unlimited ? "" : prices +        // безлимиту цены и оплата ни к чему (робот 18.10)
       (d.pay_url

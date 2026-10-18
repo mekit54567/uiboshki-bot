@@ -62,6 +62,16 @@ const plusPerks = [
   (Icons.upcoming_outlined, 'Дальше', 'ответы на экзаменационные билеты, «Пульс группы», «Архив потока»'),
 ];
 
+/// Что даёт безлимит (/grant … unlimited): ИИ без дневных лимитов — до дня или навсегда.
+List<(IconData, String, String)> unlimitedPerks(String? until) => [
+  (
+    Icons.auto_awesome_outlined,
+    'ИИ без ограничений',
+    until == null ? 'без дневных лимитов, навсегда' : 'без дневных лимитов до ${plusUntil(until)}',
+  ),
+  ...plusPerks.skip(1),
+];
+
 class PlusScreen extends StatelessWidget {
   final Api api;
   final VoidCallback? onUnauthorized;
@@ -117,6 +127,8 @@ class _PlusBody extends StatelessWidget {
     final offerUrl = '${d['offer_url'] ?? ''}';
     final invite = Map<String, dynamic>.from(d['invite'] as Map? ?? const {});
     final ranks = Map<String, dynamic>.from(invite['ranks'] as Map? ?? const {});
+    final unlimitedUntil = d['unlimited_until'] is String ? d['unlimited_until'] as String : null;
+    final perks = unlimited ? unlimitedPerks(unlimitedUntil) : plusPerks;
     final founderPrice = prices.where((x) => x['founder'] == true).map((x) => x['price']).firstOrNull;
     return ListView(
       padding: const EdgeInsets.only(bottom: Space.xxl),
@@ -143,8 +155,8 @@ class _PlusBody extends StatelessWidget {
                       Text(
                         unlimited
                             ? (d['unlimited_until'] is String
-                                  ? 'Безлимит до ${plusUntil(d['unlimited_until'] as String?)}'
-                                  : 'Безлимит навсегда')
+                                  ? 'У тебя безлимит до ${plusUntil(d['unlimited_until'] as String?)}'
+                                  : 'У тебя безлимит навсегда')
                             : gift
                             ? 'Подарок группе до ${plusUntil(d['gift'] as String?)}'
                             : active
@@ -163,7 +175,7 @@ class _PlusBody extends StatelessWidget {
                             : 'Всё главное работает и без неё — она для тех, кому нужно больше',
                         style: s.body(13, color: p.muted),
                       ),
-                      if (founder) ...[
+                      if (founder && !unlimited) ...[
                         const SizedBox(height: Space.s),
                         Row(
                           children: [
@@ -194,15 +206,16 @@ class _PlusBody extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                for (var i = 0; i < plusPerks.length; i++) ...[
+                for (var i = 0; i < perks.length; i++) ...[
                   if (i > 0) Divider(height: 1, color: p.line),
-                  _Row(icon: plusPerks[i].$1, title: plusPerks[i].$2, sub: plusPerks[i].$3),
+                  _Row(icon: perks[i].$1, title: perks[i].$2, sub: perks[i].$3),
                 ],
               ],
             ),
           ),
         ),
-        if (prices.isNotEmpty) ...[
+        // безлимиту цены и оплата ни к чему (робот 18.10)
+        if (!unlimited && prices.isNotEmpty) ...[
           Section(prices.any((x) => x['founder'] == true) ? 'Цены первых пользователей' : 'Цены'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.l),
@@ -219,62 +232,64 @@ class _PlusBody extends StatelessWidget {
             ),
           ),
         ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
-          child: payUrl.isEmpty
-              ? Tile(
-                  key: const Key('plus:soon'),
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule_rounded, color: p.muted),
-                      const SizedBox(width: Space.m),
-                      Expanded(
-                        child: Text(
-                          'Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.',
-                          style: s.body(14, color: p.muted),
+        if (!unlimited) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
+            child: payUrl.isEmpty
+                ? Tile(
+                    key: const Key('plus:soon'),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, color: p.muted),
+                        const SizedBox(width: Space.m),
+                        Expanded(
+                          child: Text(
+                            'Оплата скоро заработает. Бонусные дни за ранги и друзей уже начисляются.',
+                            style: s.body(14, color: p.muted),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  )
+                : FilledButton.icon(
+                    key: const Key('plus:pay'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: p.accent,
+                      foregroundColor: p.onAccent,
+                      minimumSize: const Size.fromHeight(52),
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => _open(context, payUrl),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                    label: Text(
+                      'Оплатить на сайте',
+                      style: s.body(16, weight: FontWeight.w600, color: p.onAccent),
+                    ),
                   ),
-                )
-              : FilledButton.icon(
-                  key: const Key('plus:pay'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: p.accent,
-                    foregroundColor: p.onAccent,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: const StadiumBorder(),
-                  ),
-                  onPressed: () => _open(context, payUrl),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 20),
-                  label: Text(
-                    'Оплатить на сайте',
-                    style: s.body(16, weight: FontWeight.w600, color: p.onAccent),
-                  ),
-                ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.xl, Space.m, Space.xl, 0),
-          child: Text(
-            'Без автосписаний: каждый срок оплачивается отдельно. Июль и август в срок не считаются.',
-            style: s.body(13, color: p.muted),
           ),
-        ),
-        if (offerUrl.isNotEmpty)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(left: Space.m),
-              child: TextButton(
-                key: const Key('plus:offer'),
-                onPressed: () => _open(context, offerUrl),
-                child: Text(
-                  'Оферта',
-                  style: s.body(14, weight: FontWeight.w600, color: p.accent),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.xl, Space.m, Space.xl, 0),
+            child: Text(
+              'Без автосписаний: каждый срок оплачивается отдельно. Июль и август в срок не считаются.',
+              style: s.body(13, color: p.muted),
+            ),
+          ),
+          if (offerUrl.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: Space.m),
+                child: TextButton(
+                  key: const Key('plus:offer'),
+                  onPressed: () => _open(context, offerUrl),
+                  child: Text(
+                    'Оферта',
+                    style: s.body(14, weight: FontWeight.w600, color: p.accent),
+                  ),
                 ),
               ),
             ),
-          ),
+        ],
         const Section('Позови друга'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: Space.l),

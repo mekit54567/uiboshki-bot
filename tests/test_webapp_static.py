@@ -1245,3 +1245,4 @@ def test_plus_sheet_unlimited_without_prices():
     # робот 18.10: у безлимита в листе «Капибара+» были цены и «Оплатить на сайте»
     more = JS["js/more.js"]
     assert '"У тебя безлимит"' in more and '(d.unlimited ? "" : prices +' in more
+    assert '"ИИ без ограничений"' in more                      # не «до 100 вопросов» под «Безлимитом»
