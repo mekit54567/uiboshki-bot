@@ -127,7 +127,13 @@ async def choose_subject(message: Message, state: FSMContext):
         f"✅ Предмет: <b>{esc(subject)}</b>{lectures_note}\n\nПришли задачу — текстом или фото 📸{note}",
         parse_mode="HTML", reply_markup=STOP_DIALOG_KB
     )
-    await state.update_data(msg_ids=[msg.message_id])
+    msg_ids = [msg.message_id]
+    if backend == "gemini":
+        arm = await offer_arm(message)
+        if arm:
+            msg_ids.append(arm.message_id)
+            await state.update_data(think_arm=arm.message_id)
+    await state.update_data(msg_ids=msg_ids)
 
 
 @router.message(F.text == "🛑 Завершить диалог")
@@ -198,9 +204,13 @@ async def handle_first_task(message: Message, state: FSMContext):
     data    = await state.get_data()
     subject = data.get("subject", "")
     backend = data.get("backend", "gemini")
+    if data.get("think_next"):
+        await first_think(message, state, data)
+        return
     if (why := await _ai_block(message)):
         await message.answer(why)
         return
+    await drop_arm(message, state, data)
     wait    = await message.answer("🧠 Решаю, секунду...")
     try:
         answer = await solve_text(message.text, subject, backend=backend, lectures=await _lectures_for(data, message.text))
@@ -257,6 +267,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
     if (why := await _ai_block(message)):
         await message.answer(why)
         return
+    await drop_arm(message, state, data)        # к фото «Подумать» нет — решаем как обычно
     wait    = await message.answer("🧠 Анализирую фото...")
     try:
         answer = await _photo_answer(message, bot, data)
@@ -489,6 +500,150 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
         await state.update_data(history=history,
                                 msg_ids=data.get("msg_ids", []) + [m.message_id for m in sent])
     await offer_think(uid, state, sent, question, d)
+
+
+# ── «Подумать» сразу (Никита 18.10: «выбрать перед ответом») ──────────────
+# В решалке (/solve) под «Пришли задачу» — кнопка-переключатель: включил —
+# задачу сразу решает модель второго уровня, без первого обычного ответа.
+# Вне решалки — /think вопрос (или /think, потом вопрос). Лимит — think.py,
+# обычный дневной счёт ai_quota не трогается; к фото — нет.
+THINK_ARM_CB = "think:arm"
+ARM_TEXT = ("🧠 Нужен разбор поглубже? Включи «Подумать» — задачу сразу решит DeepSeek "
+            "(«Капибара+», {left} на сегодня).\nВне решалки — /think и вопрос.")
+ARM_GONE = "Задача уже решена — включи «Подумать» в новой: /solve"
+THINK_ASK = ("🧠 Пиши вопрос — его сразу решит DeepSeek, подумав ({left} на сегодня).\n"
+             "Передумал — /cancel")
+PHOTO_NO_THINK = "К фото «Подумать» не работает — пришли задачу текстом или /cancel"
+
+
+class ThinkState(StatesGroup):
+    waiting = State()       # /think без текста: следующий вопрос — «подумав»
+
+
+def arm_kb(left: int, on: bool) -> InlineKeyboardMarkup:
+    text = f"✅ Подумать включено · {left}" if on else f"🧠 Подумать · {left}"
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, callback_data=THINK_ARM_CB)]])
+
+
+async def offer_arm(message: Message) -> Message | None:
+    """Переключатель «Подумать» под «Пришли задачу» — подписчику, пока на
+    сегодня не кончилось (кончилось — не предлагаем вовсе)."""
+    import think
+    offer = await think.offer(message.from_user.id)
+    if not offer or offer["left"] <= 0:
+        return None
+    return await message.answer(ARM_TEXT.format(left=offer["left"]), reply_markup=arm_kb(offer["left"], False))
+
+
+async def drop_arm(message: Message, state: FSMContext, data: dict):
+    """Задача ушла — переключатель под «Пришли задачу» больше не нужен."""
+    mid = data.get("think_arm")
+    if not mid:
+        return
+    await state.update_data(think_arm=None, think_next=False)
+    try:
+        await message.bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=mid, reply_markup=None)
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == THINK_ARM_CB)
+async def toggle_arm(callback: CallbackQuery, state: FSMContext):
+    import think
+    data = await state.get_data()
+    if await state.get_state() != SolverState.waiting_task.state or data.get("think_arm") != callback.message.message_id:
+        await callback.answer(ARM_GONE, show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    uid = callback.from_user.id
+    on = not data.get("think_next")
+    why = await think.why_not(uid) if on else None
+    if why:
+        await state.update_data(think_next=False)
+        await callback.answer(why, show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    await state.update_data(think_next=on)
+    await callback.answer("Задачу решит DeepSeek, подумав" if on else "Решу как обычно")
+    try:
+        await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left(uid), on))
+    except Exception:
+        pass
+
+
+async def _think_first(message: Message, question: list, subject: str = "", lectures: str = "") -> str | None:
+    """Вопрос сразу моделью второго уровня: ответ или None (причина уже
+    написана человеку; попытка при сбое не списана)."""
+    import think
+    wait = await message.answer("🧠 Думаю как следует…")
+    try:
+        answer = await think.solve(message.from_user.id, question, subject, lectures, first=True)
+    except think.ThinkError as e:
+        await wait.edit_text("⏳ " + str(e))
+        return None
+    try:
+        await wait.delete()
+    except Exception:
+        pass
+    return answer
+
+
+async def first_think(message: Message, state: FSMContext, data: dict):
+    """Задача в решалке со включённым «Подумать»: дальше — обычный диалог."""
+    subject = data.get("subject", "")
+    await drop_arm(message, state, data)
+    question = [{"role": "user", "content": f"Задание:\n{message.text}"}]
+    answer = await _think_first(message, question, subject, await _lectures_for(data, message.text))
+    if answer is None:
+        await message.answer("Можно прислать задачу ещё раз — решу как обычно.")
+        return
+    await add_solver_history(message.from_user.id, message.text, answer, subject)
+    await state.update_data(history=question + [{"role": "assistant", "content": answer}])
+    await state.set_state(SolverState.in_dialog)
+    await send_answer(message, state, answer)
+
+
+async def _think_free(message: Message, state: FSMContext, text: str):
+    question = [{"role": "user", "content": f"Задание:\n{text}"}]
+    answer = await _think_first(message, question)
+    if answer is None:
+        return
+    await add_solver_history(message.from_user.id, text, answer)
+    sent = await answer_model_text(message, answer)
+    await offer_think(message.from_user.id, state, sent, question, {})
+
+
+@router.message(Command("think"), PRIVATE)
+async def cmd_think(message: Message, state: FSMContext):
+    """/think вопрос — сразу «подумав»; /think — следующий вопрос «подумав»."""
+    import think
+    why = await think.why_not(message.from_user.id)
+    if why:
+        await message.answer("⏳ " + why)
+        return
+    text = ((message.text or "").split(maxsplit=1)[1:] or [""])[0].strip()
+    if text:
+        await _think_free(message, state, text)
+        return
+    await state.set_state(ThinkState.waiting)
+    await message.answer(THINK_ASK.format(left=await think.left(message.from_user.id)))
+
+
+@router.message(ThinkState.waiting, F.text, PRIVATE)
+async def think_waiting_text(message: Message, state: FSMContext):
+    await state.clear()
+    await _think_free(message, state, message.text)
+
+
+@router.message(ThinkState.waiting, F.photo, PRIVATE)
+async def think_waiting_photo(message: Message):
+    await message.answer(PHOTO_NO_THINK)
 
 
 @router.message(Command("aithink"), PRIVATE)

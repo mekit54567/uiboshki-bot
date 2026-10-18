@@ -13,6 +13,12 @@ settings «ai_think:<дата>»), и потолок трат на всех за
 возвращается, если модель не ответила. Выключатель для отката — /aithink off
 у старосты (settings «ai_think»). На iPhone кнопки нет (X-App: ios — как
 иконки подписки: для первой модерации о платном в приложении ни слова).
+
+«Подумать» сразу (Никита 18.10: «чтоб можно было выбрать перед ответом
+сразу»): переключатель у поля ввода (приложение, Mini App), в боте — кнопка
+в решалке и /think. Вопрос сразу решает MODEL, без первого обычного ответа
+(solve(first=True)) — тот же лимит и та же модель, подпись «↪ «Подумать» —
+ответил DeepSeek», обычный счёт ai_quota не трогается.
 """
 
 import json
@@ -34,7 +40,10 @@ LABEL = "Подумать ещё"
 NOTE = ("Это повторный ответ по кнопке «Подумать ещё»: студенту не хватило первого. Разбери вопрос "
         "внимательнее и глубже — по шагам, с проверкой вычислений и выводов, с примером, если он "
         "помогает. Не пересказывай прошлый ответ.")
+NOTE_FIRST = ("Студент сразу попросил ответ «подумав»: разбери вопрос внимательно и глубоко — по шагам, "
+              "с проверкой вычислений и выводов, с примером, если он помогает.")
 FOOTER = "\n\n*↪ «Подумать ещё» — ответил DeepSeek.*"    # курсив — звёздочками: «_…_» md_to_tg_html не понимает
+FOOTER_FIRST = "\n\n*↪ «Подумать» — ответил DeepSeek.*"
 LIMIT_TEXT = "«Подумать ещё» на сегодня кончилось ({n} в день) — завтра снова"
 BUDGET_TEXT = "«Подумать ещё» на сегодня закрыто — слишком много желающих. Завтра снова"
 PLUS_TEXT = "«Подумать ещё» — в «Капибара+»"
@@ -93,6 +102,19 @@ async def offer(uid: int, app: str = "") -> dict | None:
     return {"label": LABEL, "left": await left(uid), "daily": DAILY}
 
 
+async def why_not(uid: int) -> str | None:
+    """Почему «Подумать» сейчас нельзя (для бота: /think, кнопка в решалке) —
+    текст для человека; None — можно."""
+    import plans
+    if not await enabled():
+        return OFF_TEXT
+    if not await plans.has_plus(uid):
+        return PLUS_TEXT
+    if await left(uid) <= 0:
+        return LIMIT_TEXT.format(n=DAILY)
+    return None
+
+
 def _cost(usage: dict) -> float:
     if usage.get("cost") is not None:
         return float(usage["cost"])
@@ -128,9 +150,11 @@ async def _settle(uid: int, usage: dict | None):
         await _save(data)
 
 
-async def solve(uid: int, history: list, subject: str = "", lectures: str = "", context: str = "") -> str:
+async def solve(uid: int, history: list, subject: str = "", lectures: str = "", context: str = "",
+                first: bool = False) -> str:
     """Тот же вопрос (history кончается вопросом) — моделью MODEL. Кидает
-    ThinkError с текстом для человека; не ответила — попытка не списана."""
+    ThinkError с текстом для человека; не ответила — попытка не списана.
+    first — «Подумать» включили до вопроса: первого ответа не было."""
     import ai_solver
     import gemini_solver
     import plans
@@ -148,7 +172,8 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
     try:
         lectures = gemini_solver._fit_context_budget(lectures, LECTURE_CHARS)[0] if lectures else ""
         answer = await ai_solver.solve_with_history(history, subject, "gemini", lectures=lectures,
-                                                    extra_system=(context + "\n\n" if context else "") + NOTE)
+                                                    extra_system=(context + "\n\n" if context else "")
+                                                    + (NOTE_FIRST if first else NOTE))
     except Exception as e:
         logger.warning(f"«Подумать ещё»: {MODEL} не ответил: {e!r}")
         await _settle(uid, None)
@@ -158,7 +183,7 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
         gemini_solver.forced_model.reset(t_model)
         gemini_solver.ai_usage.reset(t_usage)
     await _settle(uid, usage)
-    return answer + FOOTER
+    return answer + (FOOTER_FIRST if first else FOOTER)
 
 
 async def status_line() -> str:

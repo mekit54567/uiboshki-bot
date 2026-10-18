@@ -59,6 +59,9 @@ class ChatBody(BaseModel):
     # «Подумать ещё» (think.py): история кончается вопросом, ответ на него
     # заново решает модель второго уровня; дневной лимит — свой
     think: bool = False
+    # «Подумать» включили до вопроса (переключатель у поля ввода): вопрос
+    # сразу решает та же модель, первого обычного ответа не было
+    think_first: bool = False
 
 
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
@@ -70,18 +73,22 @@ FILE_MEMORY_LIMIT = 10_000
 
 
 @router.get("/api/subjects")
-async def api_subjects(user: dict = CurrentUser):
+async def api_subjects(user: dict = CurrentUser, x_app: str = Header(default="")):
     """Предметы для чата: с загруженными лекциями (чат будет опираться на
     них) — сверху, дальше остальные предметы группы из расписания. quota —
-    сколько вопросов осталось сегодня (null — без лимита, например староста)."""
+    сколько вопросов осталось сегодня (null — без лимита, например староста).
+    think — переключатель «Подумать» у поля ввода ({label, left, daily};
+    null — не подписчик, выключено, iPhone)."""
     import ai_quota
+    import think
     from database import get_subjects_with_lecture_text
     from schedule_parser import get_group_subjects
     with_lectures = await get_subjects_with_lecture_text()
     rest = [s for s in await get_group_subjects() if s not in with_lectures]
     return {"subjects": [{"name": s, "lectures": True} for s in with_lectures]
                         + [{"name": s, "lectures": False} for s in rest],
-            "quota": await ai_quota.left(user["id"])}
+            "quota": await ai_quota.left(user["id"]),
+            "think": await think.offer(user["id"], x_app)}
 
 
 async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
@@ -154,7 +161,9 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
 
     import ai_quota
     import think
-    if body.think:
+    deep = body.think or body.think_first
+    again = deep and not body.think_first        # «Подумать ещё» под ответом
+    if deep:
         if body.attachment or not await think.offer(user["id"], x_app):
             raise HTTPException(status_code=403, detail=think.PLUS_TEXT)
     else:
@@ -179,9 +188,11 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     # заглушку вложения («Разбери этот файл.») не ищем вовсе
     query = lecture_picker.search_query(history)
     last = history[-1]["content"] if history[-1]["role"] == "user" else ""
-    if body.think and history[-1]["role"] != "user":
+    if deep and history[-1]["role"] != "user":
         raise HTTPException(status_code=400, detail="нет вопроса")
-    if not body.attachment and not body.think and history[-1]["role"] == "user":
+    # «скинь практику 3» и «по какому предмету?» — без ИИ, попытку
+    # «Подумать» не тратят; у «Подумать ещё» вопрос уже был отвечен
+    if not body.attachment and not again and history[-1]["role"] == "user":
         found = await _chat_file_request(history[-1]["content"])
         if found:
             return found
@@ -206,7 +217,7 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         lectures = lecture_picker.pick(await get_subject_lecture_context(subject), query)
     elif not subject and query.strip():
         all_lectures = await get_all_lecture_context()
-        if not body.attachment and not body.think and lecture_picker.wants_course(last):
+        if not body.attachment and not again and lecture_picker.wants_course(last):
             # «объясни 3 лекцию» без предмета: вопрос явно про лекции, а предмет
             # не угадывается — не отвечаем наугад, а даём выбрать (фронт
             # переключит предмет и задаст тот же вопрос)
@@ -221,9 +232,10 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     context = await build_group_context(user["id"])
 
     try:
-        if body.think:
+        if deep:
             try:
-                result = {"content": await think.solve(user["id"], history, subject, lectures, context),
+                result = {"content": await think.solve(user["id"], history, subject, lectures, context,
+                                                       first=body.think_first),
                           "reasoning": ""}
             except think.ThinkError as e:
                 raise HTTPException(status_code=502, detail=str(e))
