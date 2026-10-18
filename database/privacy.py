@@ -23,6 +23,13 @@ async def give_consent(user_id: int, kind: str, version: str, via: str):
         await db.commit()
 
 
+async def revoke_consent(user_id: int, kind: str):
+    """Отозвал отдельное согласие (выключил «Показывать меня группе» в рейтинге)."""
+    async with connect() as db:
+        await db.execute("DELETE FROM consents WHERE user_id=? AND kind=?", (user_id, kind))
+        await db.commit()
+
+
 async def has_consent(user_id: int, kind: str, version: str) -> bool:
     async with connect() as db:
         row = await (await db.execute(

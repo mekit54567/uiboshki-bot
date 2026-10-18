@@ -28,6 +28,7 @@
  "GET /api/optional",
  "GET /api/pins",
  "GET /api/push/key",
+ "GET /api/rating",
  "GET /api/schedule/next",
  "GET /api/schedule/today",
  "GET /api/schedule/tomorrow",
@@ -79,5 +80,6 @@
  "POST /api/sdo/submission/remove",
  "POST /api/sdo/submit",
  "POST /api/summary/{file_id}",
- "PUT /api/pins/{target_type}/{target_id}"
+ "PUT /api/pins/{target_type}/{target_id}",
+ "PUT /api/rating/me"
 ]

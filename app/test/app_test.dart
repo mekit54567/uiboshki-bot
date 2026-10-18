@@ -114,6 +114,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('Ещё'));
     await settle(t);
     await t.ensureVisible(find.text('Как пользоваться'));
+    await settle(t); // прокрутка ложится только на следующем кадре
     await t.tap(find.text('Как пользоваться'));
     await settle(t);
     expect(find.text('Что где'), findsOneWidget);

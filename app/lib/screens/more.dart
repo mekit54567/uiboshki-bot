@@ -16,6 +16,7 @@ import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
 import 'look_screen.dart';
 import 'notify.dart';
+import 'rating.dart';
 import 'sdo_connect.dart';
 import 'security.dart';
 import 'study.dart';
@@ -75,6 +76,11 @@ class MoreScreen extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: Space.l),
             child: AchievementsRow(),
+          ),
+          const SizedBox(height: Space.s),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.l),
+            child: RatingRow(api: api, onUnauthorized: onUnauthorized),
           ),
           const SizedBox(height: Space.m),
           Padding(
