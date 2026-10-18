@@ -116,6 +116,17 @@ void main() {
     expect((bodies['POST /api/chat'] as Map)['think_first'], isTrue);
   });
 
+  testWidgets('у чипа «Подумать» отступы слева и справа одинаковые', (t) async {
+    // робот 18.10: справа от подписи пустого места было вдвое больше, чем слева
+    phone(t);
+    await t.pumpWidget(host(ChatScreen(api: fakeApi(overrides: withThink(7)))));
+    await settle(t);
+    final chip = t.getRect(find.byKey(const Key('think-toggle')));
+    final icon = t.getRect(find.descendant(of: find.byKey(const Key('think-toggle')), matching: find.byType(Icon)));
+    final text = t.getRect(find.text('Подумать · 7'));
+    expect(((icon.left - chip.left) - (chip.right - text.right)).abs(), lessThanOrEqualTo(1));
+  });
+
   testWidgets('не подписчик (или iPhone, или выключено) — переключателя нет', (t) async {
     phone(t);
     await t.pumpWidget(host(ChatScreen(api: fakeApi())));

@@ -1361,3 +1361,17 @@ def test_think_toggle_unlimited_without_counter():
     # безлимит (/grant … unlimited): у «Подумать» над полем ввода left=null — без счётчика, нажимается
     chat = JS["js/chat.js"]
     assert "thinkOffer.left == null ||" in chat and '(thinkOffer.left == null ? "" :' in chat
+
+def test_plus_tag_whole_and_invite_own_icon():
+    # робот 18.10: «Early Supporter» ломался пополам на две строки; у «Позвать» был значок «Моей группы»
+    assert re.search(r"\.plus-price i \{[^}]*display: inline-block;[^}]*white-space: nowrap", CSS)
+    assert "&nbsp;₽</s>" in JS["js/more.js"]
+    assert re.search(r'shareBot\(\)"><span class="sq t-share"><svg class="ico" aria-hidden="true"><use href="#i-invite"/>',
+                     HTML)
+    assert "  invite: '" in JS["js/icons.js"]
+
+
+def test_think_note_wraps_not_cut():
+    # робот 18.10: «следующий вопрос решит DeepS…» обрезалось — подсказка переносится, а не режется
+    rule = re.search(r"\.think-note \{([^}]*)\}", CSS).group(1)
+    assert "nowrap" not in rule and "ellipsis" not in rule

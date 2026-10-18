@@ -528,7 +528,7 @@
                   font-size: 13px; font-weight: 700; white-space: nowrap; }
   .think-toggle.on { background: var(--accent); color: #fff; }
   .think-toggle:disabled { border-color: var(--border); color: var(--hint); opacity: .7; }
-  .think-note { font-size: 12px; color: var(--hint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .think-note { font-size: 12px; line-height: 1.3; color: var(--hint); min-width: 0; }   /* целиком, в две строки — не «DeepS…» */
   #attach-preview:empty { display: none; }
   #attach-preview { margin-bottom: 8px; }
   .attach-chip {
@@ -1297,7 +1297,8 @@
 /* «Капибара+»: цены в листе подписки (js/more.js, openPlus) */
 .plus-price { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px;
   margin: 8px 0 0; border-radius: 14px; background: var(--card, rgba(127,127,127,.08)); }
-.plus-price i { font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #5a5ee0; color: #fff; margin-left: 4px; }
+.plus-price i { font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: #5a5ee0; color: #fff; margin-left: 4px;
+  display: inline-block; white-space: nowrap; }     /* «Early Supporter» — целиком: не ломается пополам, переносится вся */
 .plus-price s { opacity: .55; font-weight: 400; margin-right: 4px; }
 .plus-price span { min-width: 0; }
 .plus-price b { flex: none; white-space: nowrap; }     /* «649 ₽» не переносится на вторую строку */
