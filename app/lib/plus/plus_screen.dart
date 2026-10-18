@@ -329,7 +329,7 @@ class _PlusBody extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Сказать спасибо рублём', style: s.body(15, weight: FontWeight.w600)),
-                      Text(donateNote, style: s.body(13, color: p.muted)),
+                      Text('Разово, сумма на выбор', style: s.body(13, color: p.muted)),
                     ],
                   ),
                 ),

@@ -109,8 +109,7 @@ async function openPlus() {
     secItem("users", "Позови друга", inviteText(inv)) +
     (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
-    (d.donate_url ? secItem("heart", "Поддержать проект", "Разово, сумма на выбор — 100, 300, 500 ₽ или своя. " +
-      "Это не подписка и ничего не открывает — просто спасибо.") +
+    (d.donate_url ? secItem("heart", "Поддержать проект", "Разово, сумма на выбор — 100, 300, 500 ₽ или своя.") +
       '<button class="ghost" onclick="openLink(\'' + d.donate_url + '\')">' + icon("heart", "inl") + ' Поддержать проект</button>' : "") +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
 }

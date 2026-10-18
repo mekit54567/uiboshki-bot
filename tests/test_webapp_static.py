@@ -1342,18 +1342,19 @@ def test_plus_sheet_unlimited_without_prices():
 
 def test_donate_row_not_a_tile():
     # Никита 18.10: «Поддержать проект» для всех — но без нового ряда плиток (перегруз):
-    # строкой под сеткой «Ещё» и кнопкой в листе «Капибара+»; подписано «не подписка»
+    # строкой под сеткой «Ещё» и кнопкой в листе «Капибара+»
     menu = _more_menu()
     grid = menu[:menu.index("</div>")]
     assert "openDonate" not in grid and "Поддержать" not in grid             # не плитка
     row = re.search(r'<button class="more-donate"[^>]*onclick="toggleMore\(false\); openDonate\(\)">(.*?)</button>',
                     menu)
-    assert row and "Поддержать проект" in row.group(1) and "не подписка" in row.group(1)
+    assert row and "Поддержать проект" in row.group(1) and "не подписка" not in row.group(1)
     assert 'href="#i-heart"' in row.group(1) and "heart: '" in JS["js/icons.js"]
     more = JS["js/more.js"]
     donate = more.split("async function openDonate()", 1)[1].split("\n}\n", 1)[0]
     assert 'api("/api/donate")' in donate and "d.hidden" in donate and "openLink(d.url)" in donate
-    assert "d.donate_url ?" in more and "Это не подписка и ничего не открывает — просто спасибо." in more
+    # «Это не подписка…» — только на самом листе доната (Никита 18.10: «не надо писать везде»)
+    assert "d.donate_url ?" in more and "ничего не открывает — просто спасибо" not in more
     assert ".more-donate {" in (STATIC / "app.css").read_text(encoding="utf-8")
 
 

@@ -187,7 +187,7 @@ class MoreScreen extends StatelessWidget {
                                 child: _MenuRow(
                                   icon: Icons.favorite_border_rounded,
                                   title: 'Поддержать проект',
-                                  sub: 'не подписка и ничего не открывает — просто спасибо',
+                                  sub: 'разово, сумма на выбор',
                                   onTap: () => showDonateSheet(context, api),
                                 ),
                               ),

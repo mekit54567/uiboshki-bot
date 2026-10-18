@@ -57,7 +57,8 @@ void main() {
     await settle(t);
     await _down(t);
     expect(find.byKey(const Key('more:donate')), findsOneWidget);
-    expect(find.text('не подписка и ничего не открывает — просто спасибо'), findsOneWidget);
+    expect(find.text('разово, сумма на выбор'), findsOneWidget);
+    expect(find.text(donateNote), findsNothing); // «не подписка» — только на листе (Никита 18.10)
     await t.tap(find.byKey(const Key('more:donate')));
     await settle(t);
     expect(find.byType(DonateSheet), findsOneWidget);
@@ -145,6 +146,7 @@ void main() {
     await t.scrollUntilVisible(find.byKey(const Key('plus:donate')), 200, scrollable: list);
     await settle(t);
     expect(find.text('Сказать спасибо рублём'), findsOneWidget);
+    expect(find.text(donateNote), findsNothing);
     await t.tap(find.byKey(const Key('plus:donate')));
     await settle(t);
     expect(find.byType(DonateSheet), findsOneWidget);
