@@ -111,6 +111,7 @@ async def test_webapp_chat_button_and_think_request(db, client, monkeypatch, on)
     asked = (await ai_quota.today()).get(ME, 0)
     r = c.post("/api/chat", headers=_headers_for(ME), json={**q, "think": True}).json()
     assert r["content"].startswith("ответ " + think.MODEL) and r["think"]["left"] == 1
+    assert "<i>↪ «Подумать ещё» — ответил DeepSeek.</i>" in r["html"] and "_↪" not in r["html"]   # курсив, не «_»
     assert (await ai_quota.today()).get(ME, 0) == asked       # в обычный дневной счёт не идёт
 
     await db.upsert_user(OTHER, "", "u")
@@ -144,3 +145,22 @@ async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on
     await press(dp, bot, solver.THINK_CB)
     assert asked == [[{"role": "user", "content": "Задание:\nчто такое NPV и как его посчитать"}]]
     assert "ответ подумав ещё" in bot.session.texts()[-1]
+
+
+@pytest.mark.asyncio
+async def test_bot_no_button_when_none_left(db, dp, bot, monkeypatch, on):  # noqa: F811
+    # робот 18.10: «Подумать ещё · 0» оставалась под ответом и нажималась
+    import handlers.solver as solver
+    from database import set_setting
+    from tests.test_review_bot import UID
+    from utils import today_msk
+    await _plus(db, UID)
+    await set_setting(f"ai_think:{today_msk().isoformat()}", json.dumps({"n": {str(UID): think.DAILY}}))
+
+    async def fake_solve_text(text, subject="", backend="gemini", lectures=""):
+        return "обычный ответ на вопрос про NPV"
+
+    monkeypatch.setattr(solver, "solve_text", fake_solve_text)
+    await send(dp, bot, "что такое NPV и как его посчитать")
+    assert "обычный ответ" in bot.session.texts()[-1]
+    assert not bot.session.named("EditMessageReplyMarkup")
