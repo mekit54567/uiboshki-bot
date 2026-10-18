@@ -39,10 +39,12 @@ async def db(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _write_through(monkeypatch):
     """События /stats пишутся пачкой раз в 10 с, а users — не чаще раза в
-    10 минут (Amvera, v5.89.7); в тестах — сразу, как раньше. Свои тесты на
-    это — test_db_writes.py."""
+    10 минут (Amvera, v5.89.7), отметки «заходил» — в фоне (v5.89.20); в
+    тестах — сразу, как раньше. Свои тесты на это — test_db_writes.py."""
+    import database._conn
     import database.service
     import database.users
+    monkeypatch.setattr(database._conn, "WAIT", True)
     monkeypatch.setattr(database.service, "EVENT_FLUSH_SECONDS", 0)
     monkeypatch.setattr(database.users, "UPSERT_EVERY", 0)
 

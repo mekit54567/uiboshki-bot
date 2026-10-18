@@ -175,11 +175,9 @@ async def seen(user_id: int):
     if _seen.get(user_id) == today:
         return
     _seen[user_id] = today
-    try:
-        from database.privacy import touch_seen
-        await touch_seen(user_id)
-    except Exception as e:
-        logger.info(f"last_seen: {e}")
+    from database._conn import write_later
+    from database.privacy import touch_seen
+    await write_later(touch_seen(user_id))      # запрос этого не ждёт; ошибка — в лог
 
 
 async def erase(user_id: int) -> dict:
