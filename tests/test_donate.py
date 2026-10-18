@@ -133,7 +133,7 @@ async def test_donate_page(db, client, robokassa):  # noqa: F811
     key = billing.make_key(ME)
     page = c.get(f"/donate?k={key}").text
     assert "<h1>Поддержать проект</h1>" in page and "Это не подписка и ничего не открывает" in page
-    assert all(f"{a} ₽" in page for a in (100, 300, 500)) and 'name="own"' in page and "/offer" in page
+    assert all(f"{a}&nbsp;₽" in page for a in (100, 300, 500)) and 'name="own"' in page and "/offer" in page
     r = c.post("/donate/pay", data={"k": key, "amount": "own", "own": "250"}, follow_redirects=False)
     assert r.status_code == 303 and "OutSum=250.00" in r.headers["location"]
     r = c.post("/donate/pay", data={"k": key, "amount": "own", "own": "10"}, follow_redirects=False)

@@ -279,7 +279,7 @@ def _donate_no_key() -> HTMLResponse:
 
 def _donate_form(key: str) -> str:
     import billing
-    rows = "".join(f'<button name="amount" value="{a}"><span>Сказать спасибо</span><b>{a} ₽</b></button>'
+    rows = "".join(f'<button name="amount" value="{a}"><span>Сказать спасибо</span><b>{a}&nbsp;₽</b></button>'
                    for a in billing.DONATE_AMOUNTS)
     own = (f'<div class="own"><input type="number" name="own" inputmode="numeric" min="{billing.DONATE_MIN}" '
            f'max="{billing.DONATE_MAX}" step="1" placeholder="Своя сумма, от {billing.DONATE_MIN} ₽" '
@@ -338,7 +338,7 @@ async def donate_done(k: str = ""):
         f'<script>(function(){{var k="{key}",n=0,s=document.getElementById("s");if(!k){{s.textContent='
         f'"Спасибо! Когда оплата пройдёт, бот напишет.";return}}function t(){{fetch("/donate/state?k="+'
         f'encodeURIComponent(k)).then(function(r){{return r.json()}}).then(function(d){{if(d.paid)'
-        f'{{s.innerHTML="Спасибо за поддержку! <b>"+d.amount+" ₽</b> дошли до Капибары.";return}}'
+        f'{{s.innerHTML="Спасибо за поддержку! <b>"+d.amount+"&nbsp;₽</b> дошли до Капибары.";return}}'
         f'if(++n<20)setTimeout(t,3000);else s.textContent="Касса ещё не ответила. Когда оплата пройдёт, бот '
         f'напишет."}}).catch(function(){{if(++n<20)setTimeout(t,3000)}})}}t()}})()</script>')
 
