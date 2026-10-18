@@ -5,6 +5,7 @@ import time
 
 import pytest
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from fastapi.testclient import TestClient
 
@@ -24,20 +25,38 @@ def env(db, monkeypatch):
     monkeypatch.setattr(config, "STAROSTA_IDS", [OWNER])
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=FakeSession())
     monkeypatch.setattr(server.deps, "tg_bot", lambda: bot)
+    _STORE["fsm"] = MemoryStorage()                     # диалог «Оспорить» живёт между апдейтами
     return TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}, bot
 
 
-async def _press(bot, data, uid=OWNER):
+_STORE = {}
+
+
+async def _feed(bot, **update):
     import handlers.reports as reports
-    dp = Dispatcher()
+    dp = Dispatcher(storage=_STORE.setdefault("fsm", MemoryStorage()))
     dp.include_router(reports.router)
-    user = User(id=uid, is_bot=False, first_name="Никита")
-    msg = Message(message_id=1, date=0, chat=Chat(id=uid, type="private"), from_user=user, text="🚩 Жалоба")
     try:
-        await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, callback_query=CallbackQuery(
-            id="1", from_user=user, chat_instance="c", data=data, message=msg)))
+        await dp.feed_update(bot, Update(update_id=int(time.time() * 1000) % 10**9, **update))
     finally:
         reports.router._parent_router = None
+
+
+async def _press(bot, data, uid=OWNER):
+    user = User(id=uid, is_bot=False, first_name="Никита")
+    msg = Message(message_id=1, date=0, chat=Chat(id=uid, type="private"), from_user=user, text="🚩 Жалоба")
+    await _feed(bot, callback_query=CallbackQuery(id="1", from_user=user, chat_instance="c", data=data, message=msg))
+
+
+async def _say(bot, text, uid=AUTHOR):
+    user = User(id=uid, is_bot=False, first_name="Автор")
+    await _feed(bot, message=Message(message_id=2, date=0, chat=Chat(id=uid, type="private"), from_user=user,
+                                     text=text))
+
+
+async def _dispute(bot, why="Это просто дата контрольной, никого не оскорбляет", uid=AUTHOR):
+    await _press(bot, "dis:1", uid=uid)
+    await _say(bot, why, uid=uid)
 
 
 @pytest.mark.asyncio
@@ -169,13 +188,13 @@ async def test_removed_author_can_dispute_and_owner_restores(env, db):
     to_author = [t for chat, t in bot.session.sent_texts if chat == AUTHOR]
     assert to_author and "убрали по жалобе" in to_author[-1] and "Лекция 3" in to_author[-1]
 
-    await _press(bot, "dis:1", uid=ME)                                   # не автор — не оспорить
+    await _dispute(bot, uid=ME)                                          # не автор — не оспорить
     import ugc
     assert (await ugc.get_report(1))["status"] == "removed"
-    await _press(bot, "dis:1", uid=AUTHOR)
+    await _dispute(bot, "Это моя лекция с пары, не спам & не реклама")
     assert (await ugc.get_report(1))["status"] == "disputed"
     chat, text = [x for x in bot.session.sent_texts if x[0] == OWNER and "Оспаривают" in x[1]][-1]
-    assert "Лекция 3" in text
+    assert "Лекция 3" in text and "не спам &amp; не реклама" in text      # объяснение автора — Никите
 
     await _press(bot, "rep:back:1")
     row = await get_file_by_id(fid)
@@ -191,14 +210,67 @@ async def test_dispute_upheld_keeps_hidden(env, db):
     nid = await db.add_lesson_note(DAY, "", "реклама", AUTHOR)
     c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
     await _press(bot, "rep:del:1")
-    await _press(bot, "dis:1", uid=AUTHOR)
+    await _dispute(bot)
     await _press(bot, "rep:hold:1")
     from database import get_lesson_note
     assert await get_lesson_note(nid) is None
     assert "остаётся скрытой" in [t for chat, t in bot.session.sent_texts if chat == AUTHOR][-1]
-    await _press(bot, "dis:1", uid=AUTHOR)                                # второй раз — уже пересмотрели
+    await _dispute(bot)                                                   # второй раз — уже пересмотрели
     import ugc
     assert (await ugc.get_report(1))["status"] == "upheld"
+
+
+@pytest.mark.asyncio
+async def test_dispute_asks_why_with_limits_and_cancel(env, db):
+    # Никита 18.10: «пусть в оспаривании человек пишет, что и почему не согласен с удалением»
+    import ugc
+    c, h, bot = env
+    nid = await db.add_lesson_note(DAY, "", "перенос пары", AUTHOR)
+    c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
+    await _press(bot, "rep:del:1")
+
+    def owner_disputes():
+        return [t for chat, t in bot.session.sent_texts if chat == OWNER and "Оспаривают" in t]
+
+    await _press(bot, "dis:1", uid=AUTHOR)
+    assert "с чем ты не согласен" in bot.session.sent_texts[-1][1]
+    assert (await ugc.get_report(1))["status"] == "removed" and not owner_disputes()   # пока ждём текст
+    await _say(bot, "нет")                                                # слишком коротко
+    assert "подробнее" in bot.session.sent_texts[-1][1]
+    await _say(bot, "а" * (ugc.APPEAL_MAX + 1))                           # слишком длинно
+    assert "Сократи" in bot.session.sent_texts[-1][1] and not owner_disputes()
+    await _press(bot, "dis:cancel", uid=AUTHOR)                           # передумал
+    await _say(bot, "Заметка про перенос пары, всё по правилам")
+    assert not owner_disputes() and (await ugc.get_report(1))["status"] == "removed"
+
+    await _dispute(bot, "Заметка про перенос пары, всё по правилам")      # «Оспорить» можно снова
+    assert (await ugc.get_report(1))["appeal"] == "Заметка про перенос пары, всё по правилам"
+    assert len(owner_disputes()) == 1 and "Автор не согласен" in owner_disputes()[0]
+    assert "пересмотр" in bot.session.sent_texts[-1][1]
+    await _press(bot, "dis:1", uid=AUTHOR)                                # заявка уже ушла — второй нет
+    assert len(owner_disputes()) == 1
+
+
+@pytest.mark.asyncio
+async def test_pending_dispute_outlives_purge_and_erase_drops_appeal(env, db):
+    import privacy
+    import ugc
+    from database._conn import connect
+    c, h, bot = env
+    nid = await db.add_lesson_note(DAY, "", "перенос пары", AUTHOR)
+    c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
+    await _press(bot, "rep:del:1")
+    await _dispute(bot)
+    async with connect() as d:                     # спор подали в последний день срока
+        await d.execute("UPDATE reports SET created_at=datetime('now', '-40 days') WHERE id=1")
+        await d.commit()
+    other = await db.add_lesson_note(DAY, "", "ещё заметка", AUTHOR)
+    c.post("/api/report", json={"kind": "note", "id": other}, headers=h)
+    await _press(bot, "rep:keep:2")                # решение по другой жалобе чистит старые копии
+    assert (await ugc.get_report(1))["snapshot"]   # ждущий спор — не трогаем
+    await privacy.erase(AUTHOR)
+    rep = await ugc.get_report(1)
+    assert rep["snapshot"] is None and rep["appeal"] == ""
 
 
 @pytest.mark.asyncio

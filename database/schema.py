@@ -596,7 +596,8 @@ async def init_db():
                 reason      TEXT DEFAULT '',
                 status      TEXT DEFAULT 'new',
                 created_at  TEXT DEFAULT (datetime('now')),
-                snapshot    TEXT
+                snapshot    TEXT,
+                appeal      TEXT DEFAULT ''
             )
         """)
         # «Скрыть автора» — у себя: его записи больше не видны этому человеку

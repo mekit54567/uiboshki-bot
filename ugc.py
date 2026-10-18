@@ -16,8 +16,10 @@
 
 Спор (Никита 18.10: «добавить возможность оспорить»): удалённая по жалобе
 запись сохраняется копией в `reports.snapshot` на DISPUTE_DAYS дней, автору
-приходит сообщение с кнопкой «Оспорить» → владельцу заявка «Вернуть» /
-«Оставить скрытым» → автору ответ. «Вернуть» кладёт запись обратно с тем же id.
+приходит сообщение с кнопкой «Оспорить» → бот просит одним сообщением написать,
+с чем он не согласен и почему (Никита 18.10, до APPEAL_MAX знаков, есть отмена;
+`reports.appeal`) → владельцу заявка с этим текстом и «Вернуть» / «Оставить
+скрытым» → автору ответ. «Вернуть» кладёт запись обратно с тем же id.
 """
 
 import logging
@@ -34,6 +36,7 @@ KINDS = {
 LABELS = {"note": "Заметка к паре", "hw": "ДЗ", "file": "Файл", "deadline": "Общий дедлайн"}
 REASON_MAX = 300
 DISPUTE_DAYS = 30
+APPEAL_MIN, APPEAL_MAX = 10, 500       # объяснение автора к спору, знаков
 
 
 class ReportError(Exception):
@@ -169,9 +172,10 @@ async def decide(rid: int, remove: bool) -> str:
             await db.execute("UPDATE reports SET status='removed', snapshot=? WHERE id=?", (snap, rid))
         else:
             await db.execute("UPDATE reports SET status='kept' WHERE id=?", (rid,))
-        # копии старше срока спора — не храним (152-ФЗ: не дольше нужного)
-        await db.execute("UPDATE reports SET snapshot=NULL WHERE snapshot IS NOT NULL "
-                         "AND created_at < datetime('now', ?)", (f"-{DISPUTE_DAYS} days",))
+        # копии и объяснения старше срока спора — не храним (152-ФЗ: не дольше нужного);
+        # спор, который ещё ждёт решения, — держим, иначе «Вернуть» уже нечего
+        await db.execute("UPDATE reports SET snapshot=NULL, appeal='' WHERE snapshot IS NOT NULL "
+                         "AND status<>'disputed' AND created_at < datetime('now', ?)", (f"-{DISPUTE_DAYS} days",))
         await db.commit()
     return status
 
@@ -237,7 +241,8 @@ async def tell_author(bot, rid: int):
     text = (f"🗑 Твою запись убрали по жалобе · {LABELS[rep['kind']].lower()}\n\n"
             f"<blockquote>{esc(_snap_preview(rep))}</blockquote>\n"
             + (f"Причина: {esc(rep['reason'])}\n" if rep["reason"] else "")
-            + f"Правила — /rules. Считаешь, что зря, — нажми «Оспорить» ({DISPUTE_DAYS} дней).")
+            + f"Правила — /rules. Считаешь, что зря, — нажми «Оспорить» и напиши, с чем не согласен "
+            f"({DISPUTE_DAYS} дней).")
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Оспорить", callback_data=f"dis:{rid}")]])
     try:
         await deliver(bot, rep["author_id"], text, kind="ugc", reply_markup=kb)
@@ -245,22 +250,33 @@ async def tell_author(bot, rid: int):
         logger.info(f"жалоба {rid}: автору не сказать: {e!r}")
 
 
-async def dispute(bot, rid: int, user_id: int) -> str:
-    """«Оспорить» от автора → владельцу заявка «Вернуть» / «Оставить скрытым»."""
-    import config
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    from database._conn import connect
-    from utils import esc
+async def can_dispute(rid: int, user_id: int) -> str:
+    """Можно ли автору оспорить: "removed" — да; иначе что ответить."""
     rep = await get_report(rid)
     if not rep or rep["author_id"] != user_id:
         return "missing"
     if rep["status"] != "removed":
         return rep["status"]
-    if not rep.get("snapshot"):
-        return "expired"
+    return "removed" if rep.get("snapshot") else "expired"
+
+
+async def dispute(bot, rid: int, user_id: int, appeal: str = "") -> str:
+    """Спор автора с его объяснением → владельцу заявка «Вернуть» / «Оставить скрытым»."""
+    import config
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from database._conn import connect
+    from utils import esc
+    status = await can_dispute(rid, user_id)
+    if status != "removed":
+        return status
+    appeal = (appeal or "").strip()[:APPEAL_MAX]
     async with connect() as db:
-        await db.execute("UPDATE reports SET status='disputed' WHERE id=? AND status='removed'", (rid,))
+        cur = await db.execute("UPDATE reports SET status='disputed', appeal=? WHERE id=? AND status='removed'",
+                               (appeal, rid))
         await db.commit()
+    if not cur.rowcount:                                  # два нажатия разом — заявка уже ушла
+        return "disputed_already"
+    rep = await get_report(rid)
     if config.STAROSTA_ID and bot is not None:
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="↩️ Вернуть", callback_data=f"rep:back:{rid}"),
@@ -268,7 +284,8 @@ async def dispute(bot, rid: int, user_id: int) -> str:
         ]])
         text = (f"⚖️ <b>Оспаривают удаление</b> · {LABELS[rep['kind']]}\n\n"
                 f"<blockquote>{esc(_snap_preview(rep))}</blockquote>\n"
-                + (f"Жалоба была: {esc(rep['reason'])}" if rep["reason"] else "Жалоба без причины"))
+                + (f"Жалоба была: {esc(rep['reason'])}\n" if rep["reason"] else "Жалоба без причины\n")
+                + (f"\n<b>Автор не согласен:</b>\n<blockquote>{esc(appeal)}</blockquote>" if appeal else ""))
         try:
             await bot.send_message(config.STAROSTA_ID, text, parse_mode="HTML", reply_markup=kb)
         except Exception as e:

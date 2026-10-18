@@ -109,8 +109,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
         done["deadlines"] = cur.rowcount
         await db.execute("UPDATE deadlines SET created_by=0 WHERE created_by=?", (uid,))
 
-        # убранная по жалобе запись (ugc.py) хранится для спора — с автором уходит и она
-        await db.execute("UPDATE reports SET snapshot=NULL WHERE author_id=?", (uid,))
+        # убранная по жалобе запись (ugc.py) хранится для спора — с автором уходят она и его объяснение
+        await db.execute("UPDATE reports SET snapshot=NULL, appeal='' WHERE author_id=?", (uid,))
         for table, col in AUTHOR_COLUMNS:
             if col in await _columns(db, table):
                 await db.execute(f"UPDATE {table} SET {col}=NULL WHERE {col}=?", (uid,))
