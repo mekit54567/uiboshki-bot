@@ -1243,6 +1243,13 @@ def test_plus_sheet_invite_limit_from_server():
     assert "secItem(\"users\", \"Позови друга\", inviteText(inv))" in more
 
 
+def test_plus_sheet_early_supporter_label():
+    # Никита 18.10: метка оплативших по цене первых — «Early Supporter», латиницей
+    more = JS["js/more.js"]
+    assert "<i>Early Supporter</i>" in more and "У тебя метка Early Supporter" in more
+    assert "Основател" not in more
+
+
 def test_plus_sheet_price_on_one_line_and_no_double_dot():
     # робот-скриншотер 18.10: «649 ₽» переносился, у рангов «14 дн..»
     assert re.search(r"\.plus-price b \{[^}]*white-space: nowrap", CSS)

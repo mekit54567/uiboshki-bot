@@ -23,7 +23,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     else:
         head = "✨ <b>Капибара+</b> — подписка на Капибару. Сейчас её нет."
     if st["founder"]:
-        head += "\nТы «Основатель»: цена первых пользователей остаётся за тобой навсегда."
+        head += "\nУ тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда."
     prices = " · ".join(f"{p['title'].lower()} {p['price']} ₽" for p in st["prices"])
     price_line = (f"Цены первых пользователей: {prices}. Кто оплатит по ним, так и платит всегда."
                   if st["prices"][0]["founder"] else f"Цены: {prices}.")

@@ -143,7 +143,7 @@ void main() {
     expect(find.byKey(const Key('more:plus')), findsNothing);
   });
 
-  testWidgets('экран подписки: срок, «Основатель», цены, оплата на сайте, друзья и ранги', (t) async {
+  testWidgets('экран подписки: срок, Early Supporter, цены, оплата на сайте, друзья и ранги', (t) async {
     phone(t);
     await t.pumpWidget(_more(fakeApi(overrides: {'GET /api/plus': _plus, 'GET /api/invite': _invite})));
     await settle(t);
@@ -151,7 +151,8 @@ void main() {
     await settle(t);
     expect(find.byType(PlusScreen), findsOneWidget);
     expect(find.text('Действует до 14 ноября'), findsOneWidget);
-    expect(find.text('Основатель'), findsWidgets);
+    expect(find.text('Early Supporter'), findsWidgets);
+    expect(find.textContaining('Основател'), findsNothing);
     expect(find.text('месяц для тебя — 149 ₽, навсегда'), findsOneWidget);
     expect(find.text('ИИ сверх пробы'), findsOneWidget);
     await _see(t, 'plus:price:half');

@@ -145,7 +145,7 @@ def _plans_form(key: str, st: dict) -> str:
     rows = []
     for p in st["prices"]:
         old = f"<s>{p['full']} ₽</s>" if p["price"] < p["full"] else ""
-        tag = '<span class="tag">Основатель</span>' if p["founder"] else ""
+        tag = '<span class="tag">Early Supporter</span>' if p["founder"] else ""
         rows.append(f'<button name="plan" value="{p["plan"]}"><span>{escape(p["title"])} · {p["days"]} дней{tag}'
                     f'</span><span>{old}<b>{p["price"]} ₽</b></span></button>')
     return (f'<form method="post" action="/plus/pay"><input type="hidden" name="k" value="{escape(key)}">'
@@ -167,7 +167,7 @@ async def plus_page(k: str = ""):
     else:
         state = "Подписки сейчас нет."
     if st["founder"]:
-        state += " Ты «Основатель»: цена первых пользователей остаётся за тобой навсегда."
+        state += " У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда."
     elif st["prices"][0]["founder"]:
         state += " Сейчас действует цена первых пользователей: кто оплатит по ней, так и платит всегда."
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)

@@ -1,5 +1,5 @@
 """«Капибара+» (billing.py, referrals.py, webapp/routes/billing.py, handlers/plus.py):
-срок без лета, цена «Основателя», оплата один раз на платёж, подпись ссылки
+срок без лета, цена первых (метка Early Supporter), оплата один раз на платёж, подпись ссылки
 и уведомлений касс, бонусы за ранг и друга, iOS без подписки, удаление данных."""
 import hashlib
 from datetime import date
@@ -142,8 +142,16 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
     assert hook("649.00").text == f"OK{inv}"
     assert hook("649.00").text == f"OK{inv}"                                 # повтор — без второго продления
     st = await billing.status(ME)
-    assert st["active"] and st["founder"]                                    # по цене первых — «Основатель»
+    assert st["active"] and st["founder"]                                    # по цене первых — Early Supporter
     assert c.get(f"/plus/state?k={key}").json()["active"]
+    # метка — Early Supporter (Никита 18.10), латиницей; «Основатель» нигде не показываем
+    page = c.get(f"/plus?k={key}").text
+    assert '<span class="tag">Early Supporter</span>' in page and "У тебя метка Early Supporter" in page
+    assert "Основател" not in page and "Основател" not in c.get("/offer").text
+    from handlers.plus import plus_text
+    text, _ = await plus_text(ME)
+    assert "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда" in text
+    assert "Основател" not in text
     assert c.get("/api/me", headers=_headers_for(ME)).json()["plus"] is True
     assert "Оферта" in c.get("/offer").text
 

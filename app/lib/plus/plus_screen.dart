@@ -178,7 +178,7 @@ class _PlusBody extends StatelessWidget {
                         const SizedBox(height: Space.s),
                         Row(
                           children: [
-                            const _Tag('Основатель'),
+                            const _Tag('Early Supporter'),
                             if (founderPrice != null) ...[
                               const SizedBox(width: Space.s),
                               Expanded(
@@ -395,7 +395,7 @@ class _PriceRow extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (days > 0) Text(_days(days), style: s.body(13, color: p.muted)),
-                    if (price['founder'] == true) const _Tag('Основатель'),
+                    if (price['founder'] == true) const _Tag('Early Supporter'),
                   ],
                 ),
               ],

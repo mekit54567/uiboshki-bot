@@ -81,7 +81,7 @@ async function openPlus() {
   try { d = await api("/api/plus"); }
   catch (e) { box.innerHTML = '<p class="sheet-hint">' + escapeHtml(e.message) + '</p>'; return; }
   const inv = d.invite || {};
-  const founderNote = d.founder ? "Ты «Основатель»: цена первых пользователей — за тобой навсегда"
+  const founderNote = d.founder ? "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда"
     : (d.prices || []).some(p => p.founder) ? "Сейчас цена первых пользователей: кто оплатит по ней, так и платит всегда" : "";
   const state = d.paid_until
     ? statusCard("ok", "Подписка до " + fmtDay(d.until), founderNote || "Оплата добавит дни к этому сроку")
@@ -89,7 +89,7 @@ async function openPlus() {
       ? statusCard("ok", "Подарок группе до " + fmtDay(d.gift), "Платить не нужно — всё уже включено")
       : statusCard("off", "Подписки нет", founderNote || "Всё бесплатное — расписание, сроки, баллы, файлы — остаётся бесплатным");
   const prices = (d.prices || []).map(p => '<div class="plus-price"><span>' + escapeHtml(p.title) + ' · ' + p.days + ' дней' +
-    (p.founder ? ' <i>Основатель</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + ' ₽</s> ' : '') + p.price + ' ₽</b></div>').join("");
+    (p.founder ? ' <i>Early Supporter</i>' : '') + '</span><b>' + (p.price < p.full ? '<s>' + p.full + ' ₽</s> ' : '') + p.price + ' ₽</b></div>').join("");
   const ranks = Object.entries(inv.ranks || {}).map(([k, r]) =>
     RANK_NAMES[k] + " — " + r.days + " дн." + (r.claimed ? " (получен)" : "")).join(" · ");
   box.innerHTML =
