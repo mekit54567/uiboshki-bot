@@ -38,6 +38,10 @@ void main() {
     );
     await settle(t);
     expect(find.text('Войти через Яндекс ID'), findsOneWidget);
+    // официальные знаки на кнопках (Никита 18.10), а не значки Material
+    for (final id in ['telegram', 'vk', 'yandex']) {
+      expect(find.byKey(Key('logo:$id')), findsOneWidget, reason: id);
+    }
     await t.tap(find.text('Войти через VK ID'));
     await settle(t);
     expect(opened, startsWith('https://id.vk.com/authorize'));

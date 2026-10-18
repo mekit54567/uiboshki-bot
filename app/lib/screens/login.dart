@@ -17,6 +17,7 @@ import '../api/api.dart';
 import '../api/links.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../widgets/brand_logo.dart';
 import '../widgets/capy.dart';
 import '../widgets/common.dart';
 
@@ -310,7 +311,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                       SizedBox(
                         width: double.infinity,
                         height: 54,
-                        child: FilledButton(
+                        child: FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: p.accent,
                             foregroundColor: p.onAccent,
@@ -318,7 +319,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                             textStyle: s.body(16, weight: FontWeight.w700),
                           ),
                           onPressed: _busy && _link == null ? null : (_busy ? () => openBot(_link!) : _start),
-                          child: Text(_busy ? 'Открыть бота ещё раз' : 'Войти через Telegram'),
+                          icon: const BrandLogo('telegram', size: 24),
+                          label: Text(_busy ? 'Открыть бота ещё раз' : 'Войти через Telegram'),
                         ),
                       ),
                       // Apple просит свою кнопку не мельче остальных (HIG): та же высота, чёрная/белая
@@ -346,7 +348,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                         SizedBox(
                           width: double.infinity,
                           height: 50,
-                          child: OutlinedButton(
+                          child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: p.text,
                               side: BorderSide(color: p.line),
@@ -354,7 +356,8 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
                               textStyle: s.body(15, weight: FontWeight.w600),
                             ),
                             onPressed: () => _oauth(pr.id),
-                            child: Text('Войти через ${pr.name}'),
+                            icon: BrandLogo.has(pr.id) ? BrandLogo(pr.id) : null,
+                            label: Text('Войти через ${pr.name}'),
                           ),
                         ),
                       ],
