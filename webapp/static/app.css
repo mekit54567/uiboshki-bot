@@ -641,6 +641,11 @@
   .more-grid .sq.badge::after { content: ""; position: absolute; top: 6px; right: 6px; width: 9px; height: 9px;
     border-radius: 50%; background: var(--ok); border: 2px solid var(--bg-raised); }
   .more-grid .sq.badge.bad::after { background: var(--danger); }
+  .more-donate { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+    margin-top: 10px; padding: 9px 8px 2px; border: none; border-top: 1px solid var(--border); background: none;
+    color: var(--hint); font-size: 12px; text-align: center; }
+  .more-donate b { color: var(--text); font-weight: 600; }
+  .more-donate .ico { width: 16px; height: 16px; flex: none; color: var(--accent); }
   nav.tabs button.open { color: var(--accent); }
 
   /* ── СДО: статус, подключение, сдача ── */

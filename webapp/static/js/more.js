@@ -83,7 +83,22 @@ async function openPlus() {
       " дней. По твоей ссылке пришло: " + inv.came + ", засчитано: " + inv.rewarded + ".") +
     (ranks ? secItem("medal", "Ранги ачивок", "Закрыл ранг в приложении — дни подписки: " + ranks) : "") +
     '<button class="ghost" onclick="shareBot()">' + icon("share", "inl") + ' Позвать друга</button>' +
+    (d.donate_url ? secItem("heart", "Поддержать проект", "Разово, сумма на выбор — 100, 300, 500 ₽ или своя. " +
+      "Это не подписка и ничего не открывает — просто спасибо.") +
+      '<button class="ghost" onclick="openLink(\'' + d.donate_url + '\')">' + icon("heart", "inl") + ' Поддержать проект</button>' : "") +
     '<button class="ghost" onclick="closeSheet(\'plus-sheet\')">Закрыть</button>';
+}
+
+// «Поддержать проект» (строка под плитками «Ещё»): донат на сайте по личной
+// ссылке (billing.py) — не подписка, ничего не открывает, просто спасибо
+async function openDonate() {
+  haptic();
+  let d;
+  try { d = await api("/api/donate"); }
+  catch (e) { showToast("Не вышло: " + e.message); return; }
+  if (d.hidden) return;
+  if (d.url) openLink(d.url);
+  else showToast("Поддержать можно будет совсем скоро — оплата ещё подключается");
 }
 
 function closeSheet(id) {
