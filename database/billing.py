@@ -130,7 +130,7 @@ async def get_sub(user_id: int) -> dict | None:
 
 
 async def put_sub(user_id: int, until: str, source: str, founder: bool | None = None):
-    """Записать срок; founder=None — отметку «Основатель» не трогать."""
+    """Записать срок; founder=None — метку Early Supporter не трогать."""
     async with connect() as db:
         await db.execute(
             "INSERT INTO subscriptions (user_id, until, source, founder) VALUES (?, ?, ?, ?) "

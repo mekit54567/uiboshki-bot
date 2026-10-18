@@ -1,5 +1,5 @@
 """«Капибара+» (billing.py, referrals.py, webapp/routes/billing.py, handlers/plus.py):
-срок без лета, цена «Основателя», оплата один раз на платёж, подпись ссылки
+срок без лета, цена первых (метка Early Supporter), оплата один раз на платёж, подпись ссылки
 и уведомлений касс, бонусы за ранг и друга, iOS без подписки, удаление данных."""
 import hashlib
 from datetime import date
@@ -142,8 +142,16 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
     assert hook("649.00").text == f"OK{inv}"
     assert hook("649.00").text == f"OK{inv}"                                 # повтор — без второго продления
     st = await billing.status(ME)
-    assert st["active"] and st["founder"]                                    # по цене первых — «Основатель»
+    assert st["active"] and st["founder"]                                    # по цене первых — Early Supporter
     assert c.get(f"/plus/state?k={key}").json()["active"]
+    # метка — Early Supporter (Никита 18.10), латиницей; «Основатель» нигде не показываем
+    page = c.get(f"/plus?k={key}").text
+    assert '<span class="tag">Early Supporter</span>' in page and "У тебя метка Early Supporter" in page
+    assert "Основател" not in page and "Основател" not in c.get("/offer").text
+    from handlers.plus import plus_text
+    text, _ = await plus_text(ME)
+    assert "У тебя метка Early Supporter: цена первых пользователей остаётся за тобой навсегда" in text
+    assert "Основател" not in text
     assert c.get("/api/me", headers=_headers_for(ME)).json()["plus"] is True
     assert "Оферта" in c.get("/offer").text
 
@@ -368,3 +376,96 @@ async def test_yookassa_metadata_without_person(db, monkeypatch, robokassa):
     await db.upsert_user(ME, "", "u")
     assert await billing.create(ME, "month", "https://x/done") == "https://yoomoney.ru/pay"
     assert str(ME) not in str(sent) and sent["metadata"] == {"plan": "month"}
+
+
+async def _invited_and_active(db, inviter, friend):
+    """friend пришёл по ссылке inviter и попользовался FRIEND_DAYS дней."""
+    from database.billing import ref_code
+    await db.upsert_user(friend, "", f"f{friend}")
+    assert await referrals.bind(friend, await ref_code(inviter), was_new=True)
+    async with aiosqlite.connect(db.DATABASE_PATH) as conn:
+        for i in range(referrals.FRIEND_DAYS):
+            await conn.execute("INSERT INTO events (user_id, kind, at) VALUES (?, 'open', datetime('now', ?))",
+                               (friend, f"+{i} days"))
+        await conn.commit()
+
+
+@pytest.mark.asyncio
+async def test_invite_limit_three_friends_for_all_time(db, monkeypatch):
+    # Никита 18.10: «максимум 3 человека по приглашению дают подписку» — пригласившему,
+    # за всё время; друг свои дни получает всегда, а пригласившему пишем честно
+    from database.billing import get_bonuses
+    sent = []
+
+    async def notify(_bot, uid, text):
+        sent.append((uid, text))
+    monkeypatch.setattr(billing, "notify", notify)
+    assert referrals.REF_MAX == 3 and not hasattr(referrals, "REF_PERIOD")
+    await db.upsert_user(ME, "", "u")
+    friends = [FRIEND + i for i in range(4)]
+    for f in friends:
+        await _invited_and_active(db, ME, f)
+        assert await referrals.check(f, bot=object())
+    mine = [b for b in await get_bonuses(ME) if b["kind"] == "ref"]
+    assert len(mine) == 3 and sum(b["days"] for b in mine) == 3 * referrals.REF_BONUS
+    for f in friends:                                                         # четвёртый друг — тоже с днями
+        assert [b["days"] for b in await get_bonuses(f)] == [referrals.REF_BONUS]
+    to_me = [t for uid, t in sent if uid == ME]
+    assert "Это 3-й друг" in to_me[2] and "друзьям дни по-прежнему дают" in to_me[2]
+    assert "ему +7 дней" in to_me[3] and "Ты уже позвал 3 друзей — бонус за приглашения закончился" in to_me[3]
+    s = await referrals.summary(ME)
+    assert (s["ref_max"], s["ref_counted"], s["rewarded"]) == (3, 3, 4)
+    assert referrals.invite_line(s).endswith("Ты уже позвал 3 друзей — бонус за приглашения закончился, "
+                                             "друзьям дни по-прежнему дают.")
+    assert "вам обоим" not in referrals.invite_line(s)
+    assert "максимум за 3 друзей, засчитано 0 из 3" in referrals.invite_line({"ref_max": 3, "ref_counted": 0})
+
+
+@pytest.mark.asyncio
+async def test_invite_limit_shown_everywhere(db, bot, dp, client, robokassa):  # noqa: F811
+    c, _ = client
+    h = _headers_for(ME)
+    await db.upsert_user(ME, "", "u")
+    inv = c.get("/api/invite", headers=h).json()
+    assert (inv["ref_max"], inv["ref_counted"]) == (3, 0)                    # число — с сервера, фронты его не держат
+    assert c.get("/api/plus", headers=h).json()["invite"]["ref_max"] == 3
+    assert "ref_max" not in c.get("/api/invite", headers={**h, "X-App": "ios"}).json()
+    assert "максимум за 3 друзей" in c.get(f"/plus?k={billing.make_key(ME)}").text      # сайт /plus
+    import offer_text
+    assert any("не больше чем за 3 друзей" in b for sec in offer_text.OFFER["sections"]
+               for b in sec["blocks"] if isinstance(b, str))
+    await send(dp, bot, "/plus", uid=ME)
+    assert "максимум за 3 друзей, засчитано 0 из 3" in bot.session.texts()[-1]
+    await send(dp, bot, "/invite", uid=ME)
+    assert "максимум за 3 друзей" in bot.session.texts()[-1]
+    from handlers.plus import launch_text
+    assert "максимум за 3 друзей" in await launch_text(ME)
+    for f in range(3):                                                       # лимит выбран
+        await _invited_and_active(db, ME, FRIEND + f)
+        await referrals.check(FRIEND + f)
+    assert c.get("/api/invite", headers=h).json()["ref_counted"] == 3
+    await send(dp, bot, "/plus", uid=ME)
+    assert "Ты уже позвал 3 друзей — бонус за приглашения закончился" in bot.session.texts()[-1]
+    await send(dp, bot, "/invite", uid=ME)
+    assert "друзьям дни по-прежнему дают" in bot.session.texts()[-1]
+
+
+def test_invite_image_is_own_light_picture(client):  # noqa: F811
+    # Никита 18.10: «Картинка приложения нужна будет в светлой теме» — своя картинка
+    # приглашения (tools/site_og.py --invite), превью сайта og.jpg остаётся как было
+    import io
+    from pathlib import Path
+
+    from PIL import Image, ImageStat
+    c, _ = client
+    assert referrals.share_image() == f"{billing.site()}/site/invite.jpg"
+    r = c.get("/site/invite.jpg")
+    assert r.status_code == 200 and r.content[:3] == b"\xff\xd8\xff"
+    img = Image.open(io.BytesIO(r.content)).convert("L")
+    assert img.size == (1200, 630)
+    phone = img.crop((800, 130, 1070, 600))                                   # экран приложения в телефоне
+    assert ImageStat.Stat(phone).mean[0] > 170                                # светлый (у og.jpg ~60)
+    tool = Path("tools/site_og.py").read_text(encoding="utf-8")
+    assert "--invite" in tool and "invite.jpg" in tool and 'colorScheme: "light"' in tool
+    html = Path("webapp/static/site/index.html").read_text(encoding="utf-8")
+    assert "/site/og.jpg" in html and "invite.jpg" not in html               # превью сайта — прежнее

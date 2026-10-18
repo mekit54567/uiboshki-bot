@@ -8,8 +8,9 @@
 Приглашение: ссылка t.me/<бот>?start=ref_<код> (или /app?ref=<код>).
 Засчитывается только новому человеку (пришёл по ссылке впервые) и только
 когда друг правда пользуется: FRIEND_DAYS разных дней с заходами за первые
-FRIEND_WINDOW дней. Тогда обоим по REF_BONUS дней, пригласившему — не
-больше REF_MAX друзей за REF_PERIOD дней. Проверка — раз в день (scheduler).
+FRIEND_WINDOW дней. Тогда другу REF_BONUS дней всегда, пригласившему — тоже,
+но не больше чем за REF_MAX друзей за всё время (Никита 18.10: «максимум 3
+человека по приглашению дают подписку»). Проверка — раз в день (scheduler).
 
 «Поделиться» (бот, Mini App, PWA, приложение) отправляет не голую ссылку, а
 готовое сообщение: картинка, пара строк и кнопка с личной ссылкой."""
@@ -27,8 +28,7 @@ REF_BONUS = 7
 FRIEND_DAYS = 3
 FRIEND_WINDOW = 14
 NEW_USER_HOURS = 48             # «новый» — появился в базе не раньше, чем за 2 дня до ссылки
-REF_MAX = 8
-REF_PERIOD = 182
+REF_MAX = 3                     # пригласившему — дни максимум за 3 друзей, за всё время
 
 
 # Тексты «Поделиться» — тред постов (release/group-message.md, раздел 2);
@@ -54,8 +54,10 @@ def tg_share_url(link: str) -> str:
 
 
 def share_image() -> str:
+    """Картинка приглашения — своя, приложение в светлой теме (Никита 18.10):
+    tools/site_og.py --invite; превью сайта og.jpg — отдельно."""
     import billing
-    return f"{billing.site()}/site/og.jpg"
+    return f"{billing.site()}/site/invite.jpg"
 
 
 class BonusError(Exception):
@@ -121,7 +123,7 @@ async def bind(friend_id: int, code: str, was_new: bool | None = None) -> bool:
 async def check(friend_id: int, bot=None) -> bool:
     """Друг уже правда пользуется? Тогда обоим дни. True — наградили сейчас."""
     import billing
-    from database.billing import active_days, add_bonus, count_bonuses, get_referral, mark_rewarded
+    from database.billing import active_days, add_bonus, get_referral, mark_rewarded
     ref = await get_referral(friend_id)
     if not ref or ref["rewarded_at"]:
         return False
@@ -138,14 +140,45 @@ async def check(friend_id: int, bot=None) -> bool:
     if bot is not None:
         await billing.notify(bot, friend_id, f"Тебя пригласил друг, и ты пользуешься Капибарой: "
                                              f"+{REF_BONUS} дней «Капибары+» в подарок.")
-    if await count_bonuses(inviter, "ref", REF_PERIOD) < REF_MAX:
-        n = await count_bonuses(inviter, "ref", 100_000)
+    n = await counted(inviter)
+    if n < REF_MAX:
         await add_bonus(inviter, "ref", f"friend{n + 1}", REF_BONUS)
         until = await billing.grant(inviter, REF_BONUS, "ref:inviter")
         if bot is not None:
             await billing.notify(bot, inviter, f"Друг, которого ты позвал, пользуется Капибарой: "
-                                               f"+{REF_BONUS} дней «Капибары+», теперь до {billing.fmt_day(until)}.")
+                                               f"+{REF_BONUS} дней «Капибары+», теперь до {billing.fmt_day(until)}."
+                                               + (f" Это {REF_MAX}-й друг — бонус за приглашения на этом всё, "
+                                                  f"друзьям дни по-прежнему дают." if n + 1 >= REF_MAX else ""))
+    elif bot is not None:
+        await billing.notify(bot, inviter, f"Друг, которого ты позвал, пользуется Капибарой — ему "
+                                           f"+{REF_BONUS} дней «Капибары+». {limit_done()}")
     return True
+
+
+async def counted(uid: int) -> int:
+    """Скольких друзей уже засчитали пригласившему (дали ему дни) — за всё время."""
+    from database.billing import count_bonuses
+    return await count_bonuses(uid, "ref", 100_000)
+
+
+def limit_done() -> str:
+    return (f"Ты уже позвал {REF_MAX} {_friends(REF_MAX)} — бонус за приглашения закончился, "
+            f"друзьям дни по-прежнему дают.")
+
+
+def _friends(n: int) -> str:
+    """3 друзей, 1 друга (родительный: «позвал 3 друзей», «за 1 друга»)."""
+    return "друга" if n % 10 == 1 and n % 100 != 11 else "друзей"
+
+
+def invite_line(inv: dict) -> str:
+    """Про приглашения для бота и сайта (/plus, /invite, рассылка): кому сколько
+    дней и сколько друзей ещё засчитают пригласившему — или честно, что всё."""
+    when = f"Когда друг попользуется Капибарой {FRIEND_DAYS} дня"
+    if inv["ref_counted"] >= inv["ref_max"]:
+        return f"{when}, ему +{REF_BONUS} дней «Капибары+». {limit_done()}"
+    return (f"{when}, вам обоим +{REF_BONUS} дней «Капибары+». Тебе — максимум за "
+            f"{inv['ref_max']} {_friends(inv['ref_max'])}, засчитано {inv['ref_counted']} из {inv['ref_max']}.")
 
 
 async def check_all(bot=None) -> int:
@@ -167,7 +200,7 @@ async def summary(uid: int) -> dict:
     bonuses = await get_bonuses(uid)
     return {"link": await link(uid), "share_text": share_text(), "share_image": share_image(),
             "came": came, "rewarded": rewarded, "bonus_days": REF_BONUS,
-            "friend_days": FRIEND_DAYS,
+            "friend_days": FRIEND_DAYS, "ref_max": REF_MAX, "ref_counted": await counted(uid),
             "ranks": {r: {"days": d, "need_days": need,
                           "claimed": any(b["kind"] == "rank" and b["key"] == r for b in bonuses)}
                       for r, (d, need) in RANKS.items()}}

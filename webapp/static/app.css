@@ -1136,6 +1136,11 @@
   .more-grid .sq.t-share { background: linear-gradient(145deg, #f59e0b, #e8590c); }
   .more-grid .sq.t-group { background: linear-gradient(145deg, #34d399, #0f9d74); }
   .more-grid .sq.t-plus { background: linear-gradient(145deg, #f2c46d, #c98a1e); }
+  /* лист «Канал и связь» (js/more.js, openLinks): строки — кнопки */
+  .link-item { width: 100%; align-items: center; background: none; border-left: 0; border-right: 0; border-bottom: 0;
+    color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+  .link-item div { flex: 1; min-width: 0; }
+  .link-item .link-chev { flex: none; color: var(--hint); }
   .share-row { display: flex; gap: 12px; align-items: center; padding: 12px 14px; margin: 10px 0; border-radius: var(--radius-sm); background: var(--bg-raised); }
   .share-row div { flex: 1; } .share-row b { display: block; font-size: 14px; } .share-row span { font-size: 12px; color: var(--hint); }
   #group-results { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
