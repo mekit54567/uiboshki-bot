@@ -228,6 +228,17 @@ async def init_db():
                 locked    INTEGER NOT NULL DEFAULT 0
             )
         """)
+        # «Показывать меня всем» (5.100.5): виден и тем, кто открыл группу из рейтинга
+        try:
+            await db.execute("ALTER TABLE rating_profiles ADD COLUMN show_all INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # колонка уже есть
+        # «Капибара №…» — ник для чужих групп, если свой не задан: случайный
+        # номер, без связи с id и именем (ревью 152-ФЗ 18.10)
+        try:
+            await db.execute("ALTER TABLE rating_profiles ADD COLUMN alias INTEGER")
+        except Exception:
+            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
