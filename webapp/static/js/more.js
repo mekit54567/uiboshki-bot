@@ -24,6 +24,22 @@ function openConfigLink(url) {
   else openLink(url);
 }
 
+// «Канал и связь»: канал бота и «Написать нам» — одна плитка, лист с двумя
+// строками (как «Новости и связь» в приложении); ссылки не задана — «Скоро»
+function openLinks() {
+  haptic();
+  const row = (ic, title, text, call) => '<button class="sec-item link-item" onclick="closeSheet(\'links-sheet\'); ' +
+    call + '"><span class="sec-ic">' + icon(ic) + '</span><div><b>' + title + '</b><p>' + text + '</p></div>' +
+    icon("chevron", "link-chev") + '</button>';
+  document.getElementById("links-body").innerHTML =
+    '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("send") + '</span><div><h3>Канал и связь</h3>' +
+      '<p>Новости бота и как с нами связаться</p></div></div>' +
+    row("send", "Канал бота", "Новости, как всё устроено и что нового", "openConfigLink(CHANNEL_URL)") +
+    row("message", "Написать нам", "Идея, ошибка или вопрос — ответим", "openConfigLink(CONTACT_URL)") +
+    '<button class="ghost" onclick="closeSheet(\'links-sheet\')">Закрыть</button>';
+  document.getElementById("links-sheet").classList.add("open");
+}
+
 // «Позвать»: готовое сообщение с личной ссылкой (referrals.py) — Telegram сам
 // предложит выбрать чат; друг начнёт пользоваться — обоим дни «Капибары+»
 async function shareBot() {

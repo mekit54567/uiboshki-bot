@@ -522,15 +522,22 @@ def _more_menu():
 
 
 def test_more_menu_tiles_with_actions():
-    # 13 плиток: прежние 6 + ДЗ, «Что нового», «Канал бота», «Написать нам», «Группа», «Позвать», «Капибара+»
+    # 12 плиток — три ровных ряда: прежние 6 + ДЗ, «Что нового», «Канал и связь», «Группа», «Позвать»,
+    # «Капибара+». Никита 18.10: нового ряда под «Капибару+» не надо — «Канал бота» и «Написать нам»
+    # сошлись в одну плитку с листом (как «Новости и связь» в приложении)
     menu = _more_menu()
     labels = re.findall(r'<span class="lbl">([^<]+)</span>', menu)
     assert labels == ["Файлы", "Дедлайны", "ДЗ", "Календарь", "Уведомления", "Безопасность",
-                      "Установить", "Что нового", "Канал бота", "Написать нам", "Моя группа", "Позвать", "Капибара+"]
-    for call in ("openHomework()", "showWhatsNew()", "openConfigLink(CHANNEL_URL)", "openConfigLink(CONTACT_URL)",
-                 "shareBot()", "openGroup()", "openPlus()"):
+                      "Установить", "Что нового", "Канал и связь", "Моя группа", "Позвать", "Капибара+"]
+    assert len(labels) % 4 == 0                                              # без неполного ряда
+    for call in ("openHomework()", "showWhatsNew()", "openLinks()", "shareBot()", "openGroup()", "openPlus()"):
         assert f'toggleMore(false); {call}"' in menu, call
-    assert 'href="#i-send"' in menu and 'href="#i-message"' in menu and 'href="#i-sparkle"' in menu
+    assert 'href="#i-send"' in menu and 'href="#i-sparkle"' in menu
+    # обе ссылки — в листе, ничего не потерялось
+    fn = JS["js/more.js"].split("function openLinks()")[1].split("\n}\n")[0]
+    assert "openConfigLink(CHANNEL_URL)" in fn and "openConfigLink(CONTACT_URL)" in fn
+    assert 'row("send", "Канал бота"' in fn and 'row("message", "Написать нам"' in fn
+    assert 'id="links-sheet"' in HTML and 'id="links-body"' in HTML
     # ДЗ — функцией, а не кликом по кнопке сегмента
     dl = JS["js/deadlines.js"]
     assert "function setDlSeg(seg)" in dl and "function openHomework()" in dl
