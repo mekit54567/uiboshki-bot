@@ -4,6 +4,7 @@ import aiosqlite
 
 import database
 from database._conn import connect
+from database.privacy import NOT_ERASING
 
 
 # ── Solver history ────────────────────────────────────────────────────────────
@@ -97,7 +98,8 @@ async def events_since(days: int) -> list[tuple[int, str, str]]:
     await flush_events()
     async with connect() as db:
         cursor = await db.execute(
-            "SELECT user_id, kind, at FROM events WHERE at >= datetime('now', ?)", (f"-{int(days)} days",))
+            f"SELECT user_id, kind, at FROM events WHERE at >= datetime('now', ?) AND {NOT_ERASING}",
+            (f"-{int(days)} days",))
         return await cursor.fetchall()
 
 

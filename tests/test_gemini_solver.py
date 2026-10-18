@@ -279,9 +279,9 @@ async def test_spare_openrouter_model_when_gemini_limited(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ling_main_by_subscription(db, monkeypatch):
-    """18.10, Никита: Ling основная — у него и у кого «Капибара+», у остальных
-    Gemini (Ling — запасная). /aimain all — все, me — только староста,
-    gemini — никто; старое «group» в настройке — как по умолчанию."""
+    """18.10, Никита: Ling основная у всех (по умолчанию), Gemini — запасная.
+    На случай отката: /aimain plus — он и у кого «Капибара+», me — только
+    староста, gemini — никто; старое «group» в настройке — как по умолчанию."""
     from config import STAROSTA_ID
     from database import set_setting
     from database import set_subscription_until
@@ -306,10 +306,11 @@ async def test_ling_main_by_subscription(db, monkeypatch):
     monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", [])
     monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
-    monkeypatch.setattr(gemini_solver, "AI_MAIN", "plus")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")
     ask = lambda **kw: gemini_solver.generate_text([{"role": "user", "content": "?"}], "s", **kw)  # noqa: E731
 
     gemini_solver.answered.clear()
+    await set_setting("ai_main", "plus")
     await set_subscription_until(555, "2099-01-01")
     tok_g, tok_u = current_group.set(99999), current_user.set(555)         # у 555 — «Капибара+»
     try:
@@ -333,7 +334,7 @@ async def test_ling_main_by_subscription(db, monkeypatch):
         await set_setting("ai_main", "all")                                 # /aimain all — всем
         assert await ask() == "ответ Ling" and calls == ["ling"]
         await set_setting("ai_main", "group")                               # старое значение — по умолчанию
-        assert await gemini_solver.ai_main() == "plus"
+        assert await gemini_solver.ai_main() == "all"
 
         await set_setting("ai_main", "me")                                  # /aimain me: только староста
         current_user.set(555)
@@ -357,7 +358,7 @@ async def test_aimain_command(db, monkeypatch):
     from config import STAROSTA_ID
     from handlers.group_tools import cmd_aimain
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
-    monkeypatch.setattr(gemini_solver, "AI_MAIN", "plus")
+    monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")
     sent = []
 
     async def answer(text, **kw):
@@ -365,9 +366,10 @@ async def test_aimain_command(db, monkeypatch):
 
     msg = lambda uid, text: SimpleNamespace(from_user=SimpleNamespace(id=uid), text=text, answer=answer)  # noqa: E731
     await cmd_aimain(msg(STAROSTA_ID, "/aimain"))
-    assert "«Капибара+»" in sent[-1] and "только ты" in sent[-1]   # по умолчанию — по подписке
+    assert "Ling основная: <b>все</b>" in sent[-1] and "только ты" in sent[-1]
+    assert "основная — Gemini" not in sent[-1]                       # 18.10: Ling у всех
     monkeypatch.setattr(gemini_solver, "AI_MAIN", "")
-    assert await gemini_solver.ai_main() == "plus"
+    assert await gemini_solver.ai_main() == "all"
     await cmd_aimain(msg(STAROSTA_ID, "/aimain me"))
     assert "только старосты" in sent[-1] and await gemini_solver.ai_main() == "me"
     await cmd_aimain(msg(424242, "/aimain gemini"))                 # не староста — ничего

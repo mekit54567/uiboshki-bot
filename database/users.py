@@ -7,6 +7,7 @@ import aiosqlite
 
 import database
 from database._conn import connect
+from database.privacy import NOT_ERASING
 
 # Amvera (16.10): запись в базу ~0,2 с (сетевой диск), а upsert_user шёл на
 # каждый запрос WebApp. Те же имя и ник — пишем не чаще раза в 10 минут
@@ -52,7 +53,7 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
 
 async def get_all_subscribed_users() -> list[int]:
     async with connect() as db:
-        cursor = await db.execute("SELECT user_id FROM users WHERE subscribed = 1")
+        cursor = await db.execute(f"SELECT user_id FROM users WHERE subscribed = 1 AND {NOT_ERASING}")
         return [r[0] for r in await cursor.fetchall()]
 
 
@@ -60,7 +61,7 @@ async def get_reminder_users() -> list[dict]:
     """Подписчики с их настройками уведомлений — одним запросом (напоминания
     о парах проверяются раз в минуту, по запросу на человека — лишнее)."""
     async with connect() as db:
-        cursor = await db.execute("SELECT user_id, notify, group_id FROM users WHERE subscribed = 1")
+        cursor = await db.execute(f"SELECT user_id, notify, group_id FROM users WHERE subscribed = 1 AND {NOT_ERASING}")
         return [{"user_id": r[0], "notify": r[1], "group_id": r[2]} for r in await cursor.fetchall()]
 
 
@@ -162,10 +163,10 @@ async def get_all_users() -> list[dict]:
     """Все, кто запускал бота: id, ник, имя (для «кто пользуется» в /stats)."""
     async with connect() as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT user_id, username, full_name, joined_at FROM users")
+        cursor = await db.execute(f"SELECT user_id, username, full_name, joined_at FROM users WHERE {NOT_ERASING}")
         return [dict(r) for r in await cursor.fetchall()]
 
 
 async def count_users() -> int:
     async with connect() as db:
-        return (await (await db.execute("SELECT COUNT(*) FROM users")).fetchone())[0]
+        return (await (await db.execute(f"SELECT COUNT(*) FROM users WHERE {NOT_ERASING}")).fetchone())[0]

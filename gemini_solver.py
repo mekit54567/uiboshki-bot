@@ -107,7 +107,7 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
         generation_config["maxOutputTokens"] = max_output_tokens
     ling_tried = False
     if fallback and AI_SPARE_MODEL and await ling_first():
-        # Ling основная (ai_main: староста и «Капибара+»): Gemini — запасная, если Ling не ответила
+        # Ling основная (ai_main, по умолчанию у всех): Gemini — запасная, если Ling не ответила
         try:
             text = await _openrouter_once(contents, system_instruction, generation_config, timeout, mark_truncated)
             answered["ling"] += 1
@@ -168,7 +168,7 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
 # Кто сколько ответил с запуска — для /status (проверка Ling на своей группе).
 answered: Counter = Counter()
 
-MAIN_MODES = {"plus": "староста и «Капибара+»", "all": "все", "me": "только старосты",
+MAIN_MODES = {"all": "все", "plus": "староста и «Капибара+»", "me": "только старосты",
               "gemini": "никто"}
 
 
@@ -183,7 +183,7 @@ async def ai_main() -> str:
     mode = (mode or "").strip().lower()
     if mode not in MAIN_MODES:          # не задано или старое «group» — как в переменной
         mode = (AI_MAIN or "").strip().lower()
-    return mode if mode in MAIN_MODES else "plus"
+    return mode if mode in MAIN_MODES else "all"
 
 
 async def _has_plus(uid: int) -> bool:
@@ -195,10 +195,10 @@ async def _has_plus(uid: int) -> bool:
 
 
 async def ling_first() -> bool:
-    """Этот запрос — сначала Ling. По умолчанию (plus, Никита 18.10: «у
-    остальных от подписки зависит») — староста и у кого «Капибара+», в том
-    числе подаренная группе; остальным Ling — только запасная, когда у Gemini
-    лимит. /aimain у старосты: all — все, me — только старосты, gemini — никто.
+    """Этот запрос — сначала Ling. По умолчанию — все (all, Никита 18.10:
+    «Ling основной у всех», своя группа — как все), Gemini — запасная.
+    /aimain у старосты, на случай отката: plus — староста и у кого
+    «Капибара+», me — только старосты, gemini — никто.
     Человек — тот, чей запрос (database.groups.current_user)."""
     mode = await ai_main()
     if mode in ("gemini", "all"):

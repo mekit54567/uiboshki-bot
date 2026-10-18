@@ -195,6 +195,24 @@ async def test_erase_after_seven_days(db, monkeypatch):
     assert await db.get_user(ME) is None and not await privacy.erasing(ME)
 
 
+@pytest.mark.asyncio
+async def test_erasing_hidden_everywhere(db):
+    """Ревью 152-ФЗ 18.10: в эти 7 дней человек не попадает ни в рассылки, ни
+    в /stats, ни в выборки по людям (NOT_ERASING)."""
+    import privacy
+    from database import count_users, events_since, get_all_subscribed_users, get_all_users, get_reminder_users
+    from database.service import add_event, flush_events
+    for uid in (ME, OTHER):
+        await db.upsert_user(uid, "u", "U")
+        await add_event(uid, "bot")
+    await flush_events()
+    await privacy.request_erase(ME)
+    assert ME not in await get_all_subscribed_users() and OTHER in await get_all_subscribed_users()
+    assert ME not in {u["user_id"] for u in await get_reminder_users()}
+    assert ME not in {u["user_id"] for u in await get_all_users()} and await count_users() == 1
+    assert {e[0] for e in await events_since(1)} == {OTHER}
+
+
 @pytest.mark.consent_real
 @pytest.mark.asyncio
 async def test_refuse_consent_erases_now(db, monkeypatch):

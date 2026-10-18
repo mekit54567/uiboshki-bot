@@ -149,6 +149,19 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
 
 # ── Отложенное удаление (7 дней на «удалил по ошибке») ──────────────────────
 
+# Кто попросил удалить данные, в эти 7 дней не попадает никуда: ни в рассылки,
+# ни в /stats, ни туда, где его видят другие (рейтинги, участники группы,
+# «показывать меня всем»). Общий фильтр для выборок по людям:
+#   f"SELECT … FROM users WHERE … AND {NOT_ERASING}"   (колонка user_id)
+# или NOT_ERASING_FOR("u.user_id") для своей колонки. По одному человеку —
+# privacy.blocked(uid).
+def NOT_ERASING_FOR(column: str) -> str:  # noqa: N802 — как константа рядом
+    return f"{column} NOT IN (SELECT user_id FROM erase_requests)"
+
+
+NOT_ERASING = NOT_ERASING_FOR("user_id")
+
+
 async def request_erase(user_id: int, due: str):
     """Запрос «удалить мои данные»: сразу — согласия, входы на устройствах,
     пуши и вход в СДО; остальное стирает erase_user в день due."""

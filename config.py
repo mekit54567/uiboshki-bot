@@ -13,12 +13,12 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 # бесплатный лимит (429): по отбору /aitest 10.10 — Ling 3.0 Flash VL, почти
 # на уровне Gemini, видит фото, ~10 ₽ за 1000 вопросов. Пусто — без неё.
 AI_SPARE_MODEL = os.getenv("AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl") if OPENROUTER_API_KEY else ""
-# Кому эта модель (Ling) — основная, а Gemini — запасная (Никита 18.10: «у
-# остальных от подписки зависит»): plus — староста и у кого «Капибара+» (в том
-# числе подаренная), all — все, me — только старосты, gemini — все на Gemini.
+# Кому эта модель (Ling) — основная, а Gemini — запасная (Никита 18.10: «Ling
+# основной у всех», своя группа — как все): all — все; на случай отката: plus —
+# староста и у кого «Капибара+», me — только старосты, gemini — все на Gemini.
 # Меняется без деплоя только старостой: /aimain (settings ai_main поверх этой
 # переменной).
-AI_MAIN = os.getenv("AI_MAIN", "plus").strip().lower()
+AI_MAIN = os.getenv("AI_MAIN", "all").strip().lower()
 ICAL_URL      = os.getenv("ICAL_URL", "https://english.mirea.ru/schedule/api/ical/1/4928")
 
 # ─── БД ───────────────────────────────────────────────────────────────────────
