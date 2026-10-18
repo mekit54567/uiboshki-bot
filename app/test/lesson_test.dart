@@ -14,6 +14,17 @@ void main() {
     expect(sameSubject('Анализ данных', 'Архитектура предприятия'), isFalse);
   });
 
+  test('этаж по номеру аудитории — как на табличках', () {
+    expect(roomFloor('А-223'), '2 этаж');
+    expect(roomFloor('ИВЦ-102'), '1 этаж');
+    expect(roomFloor('Г-103-1'), '1 этаж');
+    expect(roomFloor('426'), '4 этаж');
+    expect(roomFloor('А-046а'), 'цокольный этаж');
+    expect(roomFloor('А-17'), ''); // большие аудитории без этажа в номере
+    expect(roomFloor('1212'), '');
+    expect(roomFloor('Спортзал'), '');
+  });
+
   testWidgets('пара: где, кто, поток, баллы и лекции; все пары преподавателя', (t) async {
     phone(t);
     final asked = <String>[];
@@ -80,6 +91,40 @@ void main() {
     expect(asked.any((k) => k.startsWith('GET /api/target/2/77')), isTrue);
     expect(find.text('преподаватель'), findsNothing); // без курсивной подписи над именем (2.4)
     expect(find.textContaining('УИБО-01-24, УИБО-02-24'), findsOneWidget); // чьи это пары
+  });
+
+  testWidgets('этаж — в строке аудитории, корпус не дублируется', (t) async {
+    phone(t);
+    final api = fakeApi();
+    for (final (room, text) in [
+      ('А-223 (В-78)', '2 этаж · корпус В-78 · расписание аудитории'),
+      ('426', '4 этаж · расписание аудитории'),
+      ('Спортзал', 'аудитория · её расписание'),
+    ]) {
+      await t.pumpWidget(
+        AppStyle(
+          p: Palette.depth,
+          font: FontChoice.strict,
+          child: MaterialApp(
+            home: LessonScreen(
+              key: UniqueKey(),
+              api: api,
+              lesson: Lesson(
+                start: '09:00',
+                end: '10:30',
+                title: 'Анализ данных',
+                kind: '',
+                room: room,
+                teacher: '',
+                status: '',
+              ),
+            ),
+          ),
+        ),
+      );
+      await settle(t);
+      expect(find.text(text), findsOneWidget, reason: room);
+    }
   });
 
   testWidgets('2.18: карточка пары спрашивает баллы и файлы по одному разу', (t) async {

@@ -28,6 +28,16 @@ bool sameSubject(String a, String b) {
   return n(a) == n(b) || (n(a).length > 12 && n(b).startsWith(n(a))) || (n(b).length > 12 && n(a).startsWith(n(b)));
 }
 
+/// Этаж по номеру аудитории (5.100.1, Никита 18.10): первая цифра
+/// трёхзначного номера, как на табличках — «А-223» → 2, «426» → 4, «А-046» →
+/// цоколь. Двузначные («А-17») и без номера — не знаем, строки нет. Правило
+/// сверено с планами этажей корпусов В-78, В-86, С-20, МП-1.
+String roomFloor(String room) {
+  final m = RegExp(r'^(?:[А-ЯЁA-Z]{1,4}-?)?(\d)\d\d(?!\d)').firstMatch(room.trim());
+  if (m == null) return '';
+  return m.group(1) == '0' ? 'цокольный этаж' : '${m.group(1)} этаж';
+}
+
 /// Одна лекция в PDF и PPTX — одной строкой (как в «Файлах»).
 Iterable<FileItem> _uniqueLectures(Iterable<FileItem> files) {
   final seen = <String>{};
@@ -104,6 +114,7 @@ class _LessonScreenState extends State<LessonScreen> {
         lesson.startAt != null && lesson.endAt != null && !t.isBefore(lesson.startAt!) && t.isBefore(lesson.endAt!);
     final campus = RegExp(r'\(([^)]+)\)').firstMatch(lesson.room)?.group(1) ?? '';
     final room = lesson.room.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
+    final floor = roomFloor(room);
     final groups = lesson.groups.split(RegExp(r',\s*')).where((g) => g.isNotEmpty).toList();
     return Scaffold(
       body: Backdrop(
@@ -187,7 +198,11 @@ class _LessonScreenState extends State<LessonScreen> {
                         _InfoRow(
                           icon: Icons.place_outlined,
                           title: room,
-                          text: campus.isEmpty ? 'аудитория · её расписание' : 'корпус $campus · расписание аудитории',
+                          text: [
+                            if (floor.isNotEmpty) floor,
+                            if (campus.isNotEmpty) 'корпус $campus',
+                            campus.isEmpty && floor.isEmpty ? 'аудитория · её расписание' : 'расписание аудитории',
+                          ].join(' · '),
                           onTap: () => openTarget(context, api, room, 3),
                         ),
                       if (lesson.teacher.isNotEmpty) ...[
