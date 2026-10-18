@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 import aiosqlite
 
 import database
+from database import _conn
 from config import GROUP_NAME
 from utils import TZ, today_msk
 
@@ -32,7 +33,7 @@ async def list_homework(limit: int = 30, group_id: int | None = None) -> list[di
     try:
         from database.homework import init_hw_table
         await init_hw_table()            # колонка group_id (этап 1 (б)) — и у таблиц старого вида
-        async with aiosqlite.connect(database.DATABASE_PATH) as db:
+        async with _conn.connect() as db:
             db.row_factory = aiosqlite.Row
             from database.groups import g_or_home, scope_sql
             cur = await db.execute(

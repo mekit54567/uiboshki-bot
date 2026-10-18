@@ -154,6 +154,7 @@ class _UiboAppState extends State<UiboApp> {
     };
     final p = dark ? Palette.ofDark(look.dark) : Palette.ofLight(look.light).dusk(sun?.dusk ?? 0);
     SystemChrome.setSystemUIOverlayStyle(dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark);
+    if (kIsWeb) paintPage(p.bg);
     return AppStyle(
       p: p,
       font: font,
