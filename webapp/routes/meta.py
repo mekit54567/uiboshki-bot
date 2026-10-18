@@ -51,5 +51,7 @@ async def api_meta():
 async def _links() -> dict:
     import config
     from webapp.server import _guide_link
+    import login_channel
+    # news — открытый канал Капибары (LOGIN_CHANNEL) для «Капибара в других местах»
     return {"bot": f"https://t.me/{config.BOT_USERNAME}", "channel": config.CHANNEL_URL or "",
-            "contact": config.CONTACT_URL or "", "sdo_guide": await _guide_link()}
+            "contact": config.CONTACT_URL or "", "sdo_guide": await _guide_link(), "news": login_channel.link()}
