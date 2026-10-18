@@ -25,7 +25,15 @@ final appNavigator = GlobalKey<NavigatorState>();
 /// Имя на полароиде — из профиля (оболочка кладёт после /me).
 String achName = '';
 
-const _bot = '@UiboshkiBot';
+/// Адрес бота на полароиде и в «Поделиться» — из /api/meta (BOT_USERNAME
+/// на сервере), до ответа — нынешний.
+String achBot = '@UiboshkiBot';
+
+/// links.bot из /api/meta: «https://t.me/Имя» → «@Имя».
+void setAchBot(String? link) {
+  final m = RegExp(r't\.me/(\w+)').firstMatch(link ?? '');
+  if (m != null) achBot = '@${m.group(1)}';
+}
 
 /// «'26 10 15 08:41» — как дата на плёночной мыльнице.
 String filmStamp(DateTime d) {
@@ -263,9 +271,9 @@ class Polaroid extends StatelessWidget {
                           style: const TextStyle(fontFamily: 'Onest', fontSize: 12, color: muted),
                         ),
                       ),
-                      const Text(
-                        _bot,
-                        style: TextStyle(fontFamily: 'Onest', fontSize: 12, color: muted),
+                      Text(
+                        achBot,
+                        style: const TextStyle(fontFamily: 'Onest', fontSize: 12, color: muted),
                       ),
                     ],
                   ),
@@ -376,7 +384,7 @@ Future<void> sharePolaroid(GlobalKey key, Achievement a, {Rect? origin}) async {
     ShareParams(
       files: [XFile.fromData(data.buffer.asUint8List(), mimeType: 'image/png', name: file)],
       fileNameOverrides: [file],
-      text: 'Ачивка «${a.title}» в Капибаре · $_bot',
+      text: 'Ачивка «${a.title}» в Капибаре · $achBot',
       sharePositionOrigin: origin,
     ),
   );

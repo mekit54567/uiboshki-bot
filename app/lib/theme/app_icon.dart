@@ -5,12 +5,18 @@
 // его нет — тихо ничего не делаем.
 //
 // 5.84: плюс иконки-картинки (Никита 13.10: 47 из 288 вариантов ChatGPT),
-// каждая светлая и тёмная. iOS 18 сам берёт тёмную в тёмной теме телефона,
-// Android так не умеет — там переключатель «Тёмная версия» (alias …Dark).
+// каждая светлая и тёмная — по выбору человека: Android — alias …Dark, iOS —
+// свой набор Icon<Имя>Dark (5.91.6, Никита 18.10: «выбираешь тёмную, а она не
+// тёмная» — appearance dark у альтернативной иконки iPhone не включал).
 // Список — design/app_icons.json → app_icons_art.dart.
+//
+// 5.91: часть иконок открывается ачивкой (ранг, все ачивки) или подпиской —
+// поле unlock в том же json; закрытые видны в листе с замком.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
+
+import '../achievements/catalog.dart';
 
 part 'app_icons_art.dart';
 
@@ -49,11 +55,56 @@ class AppIcon {
   /// Все, что есть в приложении (и в сборке под iOS/Android).
   static const values = <AppIcon>[...drawn, ...artIcons];
 
-  /// Что можно выбрать в «Оформлении»: без праздничных и подписочных.
+  /// Есть подписка (/api/me plus). Задаёт оболочка.
+  static final premium = ValueNotifier<bool>(false);
+
+  /// Как открыть (design/app_icons.json → unlock): null — бесплатно, `sub`,
+  /// `ach:<id>`, `rank:<dawn|noon|dusk|midnight>`, `all`, `none` — убрана.
+  String? get unlock => sub ? 'sub' : (unlockForTest ?? iconUnlock)[name];
+
+  @visibleForTesting
+  static Map<String, String>? unlockForTest;
+
+  /// Что видно в «Оформлении»: без праздничных и убранных; подписочные —
+  /// только подписчикам (купить в приложении нельзя — нечего и дразнить),
+  /// а на iPhone — никому: подписка куплена не через Apple (App Store, 3.1.1).
   static List<AppIcon> get choosable => [
     for (final i in values)
-      if (!i.sub && i.season == null) i,
+      if (i.season == null && i.unlock != 'none' && (i.unlock != 'sub' || (premium.value && !_ios))) i,
   ];
+
+  static bool get _ios => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// Открыта ли: [got] — открытые ачивки (AchStore.got).
+  bool isOpen(Map<String, Object> got) {
+    final u = unlock;
+    if (u == null) return true;
+    if (u == 'sub') return premium.value;
+    if (u == 'all') return achievements.every((a) => got.containsKey(a.id));
+    if (u.startsWith('ach:')) return got.containsKey(u.substring(4));
+    if (u.startsWith('rank:')) {
+      final rank = Rank.values.where((r) => r.name == u.substring(5)).firstOrNull;
+      return rank != null && achievements.where((a) => a.rank == rank).every((a) => got.containsKey(a.id));
+    }
+    return false;
+  }
+
+  /// Как открыть — подпись для закрытой.
+  String get howToOpen {
+    final u = unlock ?? '';
+    if (u == 'sub') return 'Откроется с подпиской';
+    if (u == 'all') return 'Откроется, когда соберёшь все ачивки';
+    if (u.startsWith('ach:')) {
+      final a = achievementById(u.substring(4));
+      if (a == null) return 'Откроется ачивкой';
+      return a.secret ? 'Откроется секретной ачивкой ранга «${a.rank.title}»' : 'Откроется ачивкой «${a.title}»';
+    }
+    if (u.startsWith('rank:')) {
+      final rank = Rank.values.where((r) => r.name == u.substring(5)).firstOrNull;
+      if (rank != null) return 'Откроется, когда соберёшь все ачивки ранга «${rank.title}»';
+    }
+    return 'Пока закрыта';
+  }
 
   static AppIcon byName(String? name) => values.firstWhere((i) => i.name == name, orElse: () => classic);
 
@@ -121,12 +172,12 @@ bool get appIconSupported =>
     const bool.fromEnvironment('ICONS') ||
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
-/// Имя для канала: на Android у картинок тёмная версия — отдельный alias.
-/// null — основная иконка.
+/// Имя для канала: у картинок тёмная версия — отдельная иконка (Android —
+/// alias, iOS — набор Icon<Имя>Dark). null — основная иконка.
 @visibleForTesting
 String? channelName(AppIcon icon, {bool dark = false}) {
   if (icon == AppIcon.classic) return null;
-  if (icon.art && dark && defaultTargetPlatform == TargetPlatform.android) return '${icon.name}Dark';
+  if (icon.art && dark) return '${icon.name}Dark';
   return icon.name;
 }
 
