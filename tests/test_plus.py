@@ -472,3 +472,19 @@ def test_invite_image_is_own_light_picture(client):  # noqa: F811
     assert "--invite" in tool and "invite.jpg" in tool and 'colorScheme: "light"' in tool
     html = Path("webapp/static/site/index.html").read_text(encoding="utf-8")
     assert "/site/og.jpg" in html and "invite.jpg" not in html               # превью сайта — прежнее
+
+
+def test_offer_contractor_has_npd_status(monkeypatch):
+    # исполнитель в оферте — всегда со статусом плательщика НПД (нужен по смыслу договора),
+    # отдельно от оператора в текстах про персональные данные
+    import json
+    import legal_texts
+    import privacy
+    for fio, inn in (("", ""), ("Иванов Никита Сергеевич", "771234567890")):
+        monkeypatch.setattr(privacy, "FIO", fio)
+        monkeypatch.setattr(privacy, "INN", inn)
+        offer = json.dumps(legal_texts.doc("offer"), ensure_ascii=False)
+        assert offer.count("плательщик налога на профессиональный доход") == 2 and "{CONTRACTOR}" not in offer
+        assert (fio or "Никита") in offer and (not inn or f"ИНН {inn}" in offer)
+    consent = json.dumps(legal_texts.doc("consent"), ensure_ascii=False)
+    assert "плательщик налога" not in consent
