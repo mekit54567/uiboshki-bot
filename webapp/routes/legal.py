@@ -44,6 +44,10 @@ ul{{padding-left:22px;margin:0 0 10px}}
 a{{color:var(--link)}}
 .meta{{color:var(--secondary);font-size:14px;margin-bottom:22px}}
 .lead{{font-size:17px}}
+summary{{color:var(--link);cursor:pointer;list-style:none;margin:0 0 10px}}
+summary::-webkit-details-marker{{display:none}}
+details[open] summary{{display:none}}
+.short:has(+ details[open]){{display:none}}
 footer{{max-width:760px;margin:0 auto;padding:0 20px 32px;color:var(--secondary);font-size:13px}}
 .embed header,.embed footer{{display:none}}
 .embed main{{padding-top:8px}}
@@ -64,13 +68,18 @@ footer{{max-width:760px;margin:0 auto;padding:0 20px 32px;color:var(--secondary)
 
 def _html(d: dict) -> str:
     out = [f'<p class="lead">{escape(d["lead"])}</p>']
+    def blocks(items: list) -> str:
+        return "".join("<ul>" + "".join(f"<li>{escape(i)}</li>" for i in b["ul"]) + "</ul>"
+                       if "ul" in b else f"<p>{escape(b['p'])}</p>" for b in items)
+
     for sec in d["sections"]:
         out.append(f"<h2>{escape(sec['title'])}</h2>")
-        for b in sec["blocks"]:
-            if "ul" in b:
-                out.append("<ul>" + "".join(f"<li>{escape(i)}</li>" for i in b["ul"]) + "</ul>")
-            else:
-                out.append(f"<p>{escape(b['p'])}</p>")
+        if sec.get("short"):
+            # главное — сразу, полный текст — по «Подробнее» (открыл — краткое прячется)
+            out.append(f'<div class="short">{blocks(sec["short"])}</div>'
+                       f'<details><summary>Подробнее</summary>{blocks(sec["blocks"])}</details>')
+        else:
+            out.append(blocks(sec["blocks"]))
     return "\n".join(out)
 
 

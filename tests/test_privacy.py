@@ -248,6 +248,52 @@ def test_legal_texts_and_pages(monkeypatch):
     assert "Gemini" not in Path("webapp/static/js/more.js").read_text(encoding="utf-8").split("Вопросы к ИИ")[1][:300]
 
 
+def test_legal_short_and_more(monkeypatch):
+    """Никита 18.10: в длинных разделах сразу главное, полный текст — по
+    «Подробнее»; сам полный текст на месте."""
+    import legal_texts
+    c, _ = _client(monkeypatch)
+    want = {"consent": {"Срок и отзыв"}, "privacy": {"Что храним и сколько", "Твои права"}}
+    for name, titles in want.items():
+        d = c.get("/api/legal/" + name).json()
+        short = {s["title"] for s in d["sections"] if s.get("short")}
+        assert short == titles
+        for s in d["sections"]:
+            assert all(set(b) in ({"p"}, {"ul"}) for b in s.get("short", []))
+        full = json.dumps(d["sections"], ensure_ascii=False)
+        assert "{" not in full.replace('{"', "")
+        assert all(len(json.dumps(s["short"], ensure_ascii=False)) < len(json.dumps(s["blocks"], ensure_ascii=False))
+                   for s in d["sections"] if s.get("short"))
+        assert len(legal_texts.DOCS[name]["sections"]) == len(d["sections"])
+        page = c.get("/" + name).text
+        assert page.count("<summary>Подробнее</summary>") == len(titles)
+    d = c.get("/api/legal/consent").json()
+    term = next(s for s in d["sections"] if s["title"] == "Срок и отзыв")
+    assert "удалить мои данные" in json.dumps(term["blocks"], ensure_ascii=False)   # фраза — в полном тексте
+
+
+def test_erasing_text_official():
+    """Никита 18.10: строка «войдёшь заново» звучала как сленг — что будет до
+    и после срока, официально."""
+    import privacy
+    t = privacy.erasing_text("2026-10-25")
+    assert "войдёшь заново" not in t and "ничего не делаем" not in t
+    assert "Повторный вход до 25.10.2026 удаление не отменяет" in t
+    assert "После 25.10.2026 данные восстановить нельзя" in t and "без гарантии" in t
+
+
+def test_erase_phrase_no_paste():
+    """Никита 18.10: фразу удаления не вставить и не скопировать из текста выше."""
+    from pathlib import Path
+    js = Path("webapp/static/js/privacy.js").read_text(encoding="utf-8")
+    field = js[js.index('id="erase-phrase"'):js.index('id="erase-go"')]
+    assert 'onpaste="return false"' in field and 'ondrop="return false"' in field and "noPasteInput" in field
+    assert '<b class="no-copy"' in js
+    assert "user-select: none" in Path("webapp/static/app.css").read_text(encoding="utf-8").split(".no-copy")[1][:120]
+    dart = Path("app/lib/screens/legal.dart").read_text(encoding="utf-8")
+    assert "noPaste: true" in dart
+
+
 @pytest.mark.asyncio
 async def test_bot_deleteme(db, dp, bot):  # noqa: F811
     """/deleteme — фразой руками; не та — ничего; та — через 7 дней, старосте

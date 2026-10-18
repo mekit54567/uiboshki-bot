@@ -50,38 +50,7 @@ class LegalScreen extends StatelessWidget {
                   Section(sec['title'] as String),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                    child: Tile(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (final b in (sec['blocks'] as List))
-                            if (b['ul'] != null)
-                              for (final item in (b['ul'] as List))
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: Space.s),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 7, right: Space.m),
-                                        child: Container(
-                                          width: 5,
-                                          height: 5,
-                                          decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
-                                        ),
-                                      ),
-                                      Expanded(child: Text(item as String, style: s.body(14))),
-                                    ],
-                                  ),
-                                )
-                            else
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: Space.s),
-                                child: Text(b['p'] as String, style: s.body(14)),
-                              ),
-                        ],
-                      ),
-                    ),
+                    child: Tile(child: _LegalSection(sec as Map)),
                   ),
                 ],
               ],
@@ -91,6 +60,73 @@ class LegalScreen extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Раздел текста. У длинного есть short — главное коротко (Никита 18.10),
+/// полный текст — по ссылке «Подробнее», вместо краткого.
+class _LegalSection extends StatefulWidget {
+  final Map sec;
+  const _LegalSection(this.sec);
+
+  @override
+  State<_LegalSection> createState() => _LegalSectionState();
+}
+
+class _LegalSectionState extends State<_LegalSection> {
+  bool _full = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final short = widget.sec['short'] as List?;
+    final blocks = (short != null && !_full ? short : widget.sec['blocks']) as List;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final b in blocks)
+          if (b['ul'] != null)
+            for (final item in (b['ul'] as List))
+              Padding(
+                padding: const EdgeInsets.only(bottom: Space.s),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 7, right: Space.m),
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(color: p.accent, shape: BoxShape.circle),
+                      ),
+                    ),
+                    Expanded(child: Text(item as String, style: s.body(14))),
+                  ],
+                ),
+              )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: Space.s),
+              child: Text(b['p'] as String, style: s.body(14)),
+            ),
+        if (short != null && !_full)
+          Semantics(
+            button: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                tick();
+                setState(() => _full = true);
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: Space.s),
+                child: Text('Подробнее', style: s.body(14, color: p.link)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Галочка «Даю согласие на обработку персональных данных» и строка
@@ -325,6 +361,7 @@ Future<bool> deleteMyData(BuildContext context, Api api, {bool confirmed = false
           'Чтобы удалить, впиши: $erasePhrase',
       hint: erasePhrase,
       action: 'Удалить',
+      noPaste: true,
     );
     if (typed == null) return false;
     if (!erasePhraseOk(typed)) {

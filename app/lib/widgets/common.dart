@@ -766,15 +766,37 @@ Future<String?> inputSheet(
   String initial = '',
   String action = 'Сохранить',
   TextInputType keyboard = TextInputType.text,
+  bool noPaste = false,
 }) => appSheet<String>(
   context,
-  (ctx) => _InputSheet(title: title, text: text, hint: hint, initial: initial, action: action, keyboard: keyboard),
+  (ctx) => _InputSheet(
+    title: title,
+    text: text,
+    hint: hint,
+    initial: initial,
+    action: action,
+    keyboard: keyboard,
+    noPaste: noPaste,
+  ),
 );
+
+/// Вписать только руками (фраза удаления данных, Никита 18.10): кусок от
+/// [maxChunk] знаков за раз — вставка или подсказка буфера клавиатуры —
+/// не проходит; слово с клавиатуры-свайпа короче.
+class NoPasteFormatter extends TextInputFormatter {
+  final int maxChunk;
+  const NoPasteFormatter({this.maxChunk = 8});
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue value) =>
+      value.text.length - old.text.length >= maxChunk ? old : value;
+}
 
 class _InputSheet extends StatefulWidget {
   final String title, hint, initial, action;
   final String? text;
   final TextInputType keyboard;
+  final bool noPaste;
   const _InputSheet({
     required this.title,
     this.text,
@@ -782,6 +804,7 @@ class _InputSheet extends StatefulWidget {
     required this.initial,
     required this.action,
     required this.keyboard,
+    this.noPaste = false,
   });
 
   @override
@@ -811,6 +834,10 @@ class _InputSheetState extends State<_InputSheet> {
         keyboardType: widget.keyboard,
         style: s.body(17),
         cursorColor: s.p.accent,
+        enableInteractiveSelection: !widget.noPaste,
+        autocorrect: !widget.noPaste,
+        enableSuggestions: !widget.noPaste,
+        inputFormatters: widget.noPaste ? const [NoPasteFormatter()] : null,
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
         decoration: fieldDecoration(s, widget.hint),
       ),

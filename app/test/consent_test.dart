@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/screens/legal.dart';
 import 'package:uiboshki/theme/app_theme.dart';
+import 'package:uiboshki/widgets/common.dart';
 
 import 'fake_api.dart';
 import 'util.dart';
@@ -104,7 +105,7 @@ void main() {
     final api = fakeApi(
       requests: asked,
       overrides: {
-        'POST /api/me/delete': {'ok': true, 'due': '2026-10-15', 'text': 'Твои данные удаляются: полностью — 15.10.2026.'},
+        'POST /api/me/delete': {'ok': true, 'due': '2026-10-15', 'text': 'Твои данные будут удалены полностью 15.10.2026.'},
       },
     );
     late BuildContext ctx;
@@ -124,15 +125,65 @@ void main() {
 
     deleteMyData(ctx, api).then((v) => done = v);
     await settle(t);
-    await t.enterText(find.byType(TextField), 'Удалить мои данные.');
+    await t.enterText(find.byType(TextField), 'Удалить мои данные.'); // вставка целиком — не проходит
+    await t.pump();
+    expect(t.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
+    const typed = 'Удалить мои данные.';
+    for (var i = 1; i <= typed.length; i++) {
+      await t.enterText(find.byType(TextField), typed.substring(0, i)); // руками, по букве
+    }
+    await t.pump();
+    expect(t.widget<TextField>(find.byType(TextField)).controller!.text, typed);
+    expect(t.widget<TextField>(find.byType(TextField)).enableInteractiveSelection, isFalse);
     await t.tap(find.text('Удалить'));
     await settle(t);
-    expect(find.textContaining('полностью — 15.10.2026'), findsOneWidget);
+    expect(find.textContaining('удалены полностью 15.10.2026'), findsOneWidget);
     await t.tap(find.text('Понятно'));
     await settle(t);
     expect(done, isTrue);
     expect(asked, contains('POST /api/me/delete'));
     expect(api.token, isNull);
+  });
+
+  testWidgets('длинный раздел: главное, «Подробнее» — полный текст', (t) async {
+    phone(t);
+    final api = fakeApi(
+      overrides: {
+        'GET /api/legal/privacy': {
+          ..._doc,
+          'name': 'privacy',
+          'sections': [
+            {
+              'title': 'Твои права',
+              'short': [
+                {'p': 'Коротко'},
+              ],
+              'blocks': [
+                {'p': 'Полный текст'},
+              ],
+            },
+          ],
+        },
+      },
+    );
+    await t.pumpWidget(_wrap(LegalScreen(api: api, name: 'privacy')));
+    await settle(t);
+    expect(find.text('Коротко'), findsOneWidget);
+    expect(find.text('Полный текст'), findsNothing);
+    await t.tap(find.text('Подробнее'));
+    await settle(t);
+    expect(find.text('Полный текст'), findsOneWidget);
+    expect(find.text('Коротко'), findsNothing);
+    expect(find.text('Подробнее'), findsNothing);
+  });
+
+  test('фраза — только руками: кусок от 8 знаков не вставляется', () {
+    const f = NoPasteFormatter();
+    const empty = TextEditingValue.empty;
+    expect(f.formatEditUpdate(empty, const TextEditingValue(text: 'удалить мои данные')), empty);
+    expect(f.formatEditUpdate(empty, const TextEditingValue(text: 'у')).text, 'у');
+    const word = TextEditingValue(text: 'удалить ');
+    expect(f.formatEditUpdate(word, const TextEditingValue(text: 'удалить мои ')).text, 'удалить мои ');
   });
 
   test('фраза удаления — как на сервере', () {

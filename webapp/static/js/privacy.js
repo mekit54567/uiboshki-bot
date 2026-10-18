@@ -17,6 +17,20 @@ function consentChecked(id) {
   return !!(box && box.checked);
 }
 
+function legalBlocks(blocks) {
+  return blocks.map(b => b.ul
+    ? '<ul>' + b.ul.map(i => '<li>' + escapeHtml(i) + '</li>').join("") + '</ul>'
+    : '<p>' + escapeHtml(b.p) + '</p>').join("");
+}
+
+/* Длинный раздел: сначала главное, «Подробнее» — полный текст вместо него. */
+function legalMore(a) {
+  haptic();
+  const short = a.closest("div");
+  short.nextElementSibling.hidden = false;
+  short.remove();
+}
+
 async function openLegal(ev, name) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }   // ссылка в подписи галочки — не ставить её
   haptic();
@@ -31,9 +45,11 @@ async function openLegal(ev, name) {
   box.innerHTML = '<h3>' + escapeHtml(d.title) + '</h3>' +
     '<p class="sheet-hint">Версия ' + escapeHtml(d.version) + ' от ' + escapeHtml(d.date) + '</p>' +
     '<div class="legal-text"><p class="legal-lead">' + escapeHtml(d.lead) + '</p>' +
-    d.sections.map(s => '<h4>' + escapeHtml(s.title) + '</h4>' + s.blocks.map(b => b.ul
-      ? '<ul>' + b.ul.map(i => '<li>' + escapeHtml(i) + '</li>').join("") + '</ul>'
-      : '<p>' + escapeHtml(b.p) + '</p>').join("")).join("") + '</div>' +
+    d.sections.map(s => '<h4>' + escapeHtml(s.title) + '</h4>' + (s.short
+      ? '<div>' + legalBlocks(s.short) +
+        '<p><a class="legal-link" onclick="legalMore(this)">Подробнее</a></p></div>' +
+        '<div hidden>' + legalBlocks(s.blocks) + '</div>'
+      : legalBlocks(s.blocks))).join("") + '</div>' +
     '<button class="primary" onclick="closeSheet(\'legal-sheet\')">Понятно</button>';
 }
 
@@ -96,6 +112,13 @@ function erasePhraseOk(text) {
   return t === ERASE_PHRASE;
 }
 
+/* Фразу вписывают руками (Никита 18.10): вставка, перетаскивание и подсказки
+   буфера клавиатуры — целым куском — не проходят. */
+function noPasteInput(e) {
+  if (/^insertFrom(Paste|Drop|PasteAsQuotation)$/.test(e.inputType || "")) return false;
+  return !(e.inputType === "insertText" && (e.data || "").length >= 8);
+}
+
 function deleteMyData(confirmed) {
   if (confirmed) return eraseNow();
   haptic();
@@ -105,8 +128,9 @@ function deleteMyData(confirmed) {
     '<p class="sheet-hint">Сразу — выход со всех устройств и из СДО, рассылки и ИИ остановятся. Полностью всё ' +
       'сотрём через 7 дней: если удалил по ошибке, до этого можно написать Никите (@Partykq) — вернём вручную, ' +
       'если получится, без гарантии.</p>' +
-    '<p class="sheet-hint">Чтобы удалить, впиши: <b>' + ERASE_PHRASE + '</b></p>' +
+    '<p class="sheet-hint">Чтобы удалить, впиши: <b class="no-copy" oncopy="return false">' + ERASE_PHRASE + '</b></p>' +
     '<input class="searchbox" id="erase-phrase" autocomplete="off" autocapitalize="off" spellcheck="false" ' +
+      'onpaste="return false" ondrop="return false" onbeforeinput="return noPasteInput(event)" ' +
       'placeholder="' + ERASE_PHRASE + '" oninput="document.getElementById(\'erase-go\').disabled = !erasePhraseOk(this.value)">' +
     '<button class="primary danger" id="erase-go" disabled onclick="eraseByPhrase()">Удалить</button>' +
     '<button class="ghost" onclick="closeSheet(\'consent-sheet\')">Оставить</button>';
