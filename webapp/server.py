@@ -134,12 +134,14 @@ async def security_headers(request: Request, call_next):
         if int(length) > limit:
             return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
     started = time.monotonic()
+    import timing
+    spent = timing.start()          # база и СДО за этот запрос (timing.py)
     resp = await call_next(request)
     if request.url.path.startswith("/api/"):
         # путь шаблоном (/api/sdo/task/{cmid}), чтобы долгие сводились по разделам
         route = request.scope.get("route")
         path = getattr(route, "path", request.url.path).replace("/api/v1/", "/api/", 1)
-        bot_health.note_request(path, time.monotonic() - started)
+        bot_health.note_request(path, time.monotonic() - started, parts=spent)
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")

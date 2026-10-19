@@ -1,4 +1,4 @@
-"""152-ФЗ (сервер в России, Amvera): согласие, «удалить все мои данные», срок
+"""152-ФЗ (сервер в России, хостинг — HOSTS): согласие, «удалить все мои данные», срок
 хранения. Тексты — legal_texts.py (страницы /consent и /privacy, JSON
 /api/legal/<имя> — webapp/routes/legal.py).
 
@@ -23,8 +23,31 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "2"                  # 16.10: Amvera и «Капибара+» (касса, чек, приглашения)
-DATE = "16.10.2026"
+# Где работают сервер и база (переменная HOSTING): кто получает данные по
+# поручению — в политике и согласии. Сменился хостинг — сменился получатель,
+# поэтому у каждого свои версии согласия (VERSION — по ней спрашивают заново)
+# и политики. 19.10: переезд с Amvera на Timeweb Cloud (Amvera зависала на
+# запуске контейнера); юрлицо Timeweb — из договора, HOSTING_ORG.
+HOSTS = {
+    "amvera": {"version": "2", "date": "16.10.2026",       # 16.10: Amvera и «Капибара+»
+               "policy": "2.1", "policy_date": "18.10.2026",  # 18.10: «Поддержка проекта»
+               "name": "Amvera", "org": "ООО «Амвера» (ИНН 9724135016, Москва)",
+               "basis": "договор поручения Amvera от 14.07.2026"},
+    "timeweb": {"version": "3", "date": "19.10.2026", "policy": "3", "policy_date": "19.10.2026",
+                "name": "Timeweb Cloud", "org": "",
+                "basis": "договор с Timeweb Cloud (оферта, условия обработки персональных данных)"},
+}
+
+
+def _host() -> dict:
+    h = dict(HOSTS.get(os.getenv("HOSTING", "").strip().lower()) or HOSTS["amvera"])
+    h["org"] = os.getenv("HOSTING_ORG", "").strip() or h["org"] or h["name"]
+    return h
+
+
+HOST = _host()
+VERSION = HOST["version"]
+DATE = HOST["date"]
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
 
@@ -89,8 +112,8 @@ def backup_texts() -> dict:
                  + (f" в {country}" if country else " за границей")
                  + ": содержимое там не хранится и не расшифровывается (HTTPS). СДО МИРЭА, VK и Яндекс — напрямую.")
     else:
-        proxy = ("Запросы к Telegram и ИИ уходят с сервера через сеть хостинга Amvera в зашифрованном виде "
-                 "(HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
+        proxy = (f"Запросы к Telegram и ИИ уходят с сервера через сеть хостинга {HOST['name']} в зашифрованном "
+                 "виде (HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
     if s3_store.configured():
         return {
             "PROXY": proxy,
@@ -113,7 +136,15 @@ def backup_texts() -> dict:
 
 def operator_missing() -> list[str]:
     """Каких данных оператора нет в текстах — предупреждение старосте в /status."""
-    return [k for k, v in (("PD_FIO", FIO), ("PD_INN", INN), ("PD_EMAIL", EMAIL), ("PD_CITY", CITY)) if not v]
+    missing = [k for k, v in (("PD_FIO", FIO), ("PD_INN", INN), ("PD_EMAIL", EMAIL), ("PD_CITY", CITY)) if not v]
+    if HOST["name"] != "Amvera" and HOST["org"] == HOST["name"]:
+        missing.append("HOSTING_ORG")       # юрлицо хостинга (из договора) — в политике должно быть
+    return missing
+
+
+def hosting_texts() -> dict:
+    """Хостинг для legal_texts: {HOST_NAME}, {HOST_ORG}, {HOST_BASIS}."""
+    return {"HOST_NAME": HOST["name"], "HOST_ORG": HOST["org"], "HOST_BASIS": HOST["basis"]}
 
 _seen: dict[int, str] = {}     # id → день последней отметки (пишем раз в день)
 _given: set[tuple[int, str, str]] = set()   # (id, вид, версия) — уже дал, в базу не ходим

@@ -1,0 +1,35 @@
+# Бот на своём сервере Timeweb Cloud (19.10, переезд с Amvera): контейнер из
+# того же Dockerfile + Caddy (HTTPS для www.uiboshki.ru, сертификат сам).
+# Пути на сервере — deploy/timeweb/setup.sh: код /opt/kapibara/app,
+# переменные /opt/kapibara/.env, база /opt/kapibara/data (быстрый диск машины).
+services:
+  bot:
+    build: ../..
+    restart: unless-stopped
+    env_file: /opt/kapibara/.env
+    environment:
+      HOSTING: timeweb                 # политика: данные хранятся у Timeweb Cloud (privacy.HOSTS)
+      DATABASE_PATH: /data/mirea_bot.db
+      PORT: "8080"
+    volumes:
+      - /opt/kapibara/data:/data
+    expose:
+      - "8080"
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: 20m, max-file: "5"}
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on: [bot]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/kapibara/caddy:/data
+    logging:
+      driver: json-file
+      options: {max-size: 5m, max-file: "2"}

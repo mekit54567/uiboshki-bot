@@ -30,7 +30,8 @@ class _Tuned(sqlite3.Connection):
 
 
 def connect():
-    return aiosqlite.connect(database.DATABASE_PATH, timeout=BUSY_SECONDS, factory=_Tuned)
+    import timing                # время в базе — в «Долгие запросы» /status
+    return timing.Timed(aiosqlite.connect(database.DATABASE_PATH, timeout=BUSY_SECONDS, factory=_Tuned), "db")
 
 
 # Отметки «заходил» на каждом запросе (сессия устройства, users.last_seen) —

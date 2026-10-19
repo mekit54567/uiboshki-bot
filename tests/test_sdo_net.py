@@ -98,3 +98,5 @@ async def test_http_error_does_not_trip(monkeypatch):
 def test_connect_timeout_is_short():
     c = sdo_net.client("c", timeout=60)
     assert c.timeout.connect == sdo_net.CONNECT_TIMEOUT and c.timeout.read == 60
+    # 19.10: DNS у хостинга по 5–15 с — за 6 с соединение не успевало и СДО выключался на 3 мин
+    assert sdo_net.CONNECT_TIMEOUT >= 10 and sdo_net.DOWN_SECONDS <= 60

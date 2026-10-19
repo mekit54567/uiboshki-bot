@@ -553,12 +553,44 @@ async def _overview(user_id: int, cookie: str, fresh: bool) -> dict:
     return _store(key, data)
 
 
-async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
+async def course_detail(user_id: int, cookie: str, course_id: int, stale_ok: bool = False) -> dict:
     """Предмет подробно + по каждой работе текущего контроля страница задания
-    (порог, статус, срок) — для экрана «Текущий контроль»."""
+    (порог, статус, срок) — для экрана «Текущий контроль».
+
+    19.10: смена цели шла по 15 с — экран предмета ещё грузился из медленного
+    СДО, а каждое нажатие начинало ту же загрузку заново. Теперь одновременные
+    запросы ждут одну загрузку, а действиям (цель, отметка посещения) хватает
+    прошлой загрузки любой давности (stale_ok) — баллы им не нужны свежими."""
     key = ("detail", user_id, course_id)
     if hit := _cached(key):
         return hit
+    if stale_ok and (old := _cache.get(key)):
+        return old[1]
+    if (running := _inflight_detail.get(key)) is not None:
+        return await asyncio.shield(running)
+    fut = asyncio.get_running_loop().create_future()
+    _inflight_detail[key] = fut
+    try:
+        result = await _course_detail(user_id, cookie, course_id)
+    except asyncio.CancelledError:
+        fut.cancel()
+        raise
+    except BaseException as e:
+        fut.set_exception(e)
+        fut.exception()
+        raise
+    else:
+        fut.set_result(result)
+        return result
+    finally:
+        _inflight_detail.pop(key, None)
+
+
+_inflight_detail: dict[tuple, asyncio.Future] = {}
+
+
+async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
+    key = ("detail", user_id, course_id)
     from sdo_files import make_client
     async with make_client(cookie) as client:
         base = _cached(("course", user_id, course_id))
