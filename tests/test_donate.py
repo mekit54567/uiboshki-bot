@@ -132,7 +132,7 @@ async def test_donate_page(db, client, robokassa):  # noqa: F811
     assert c.get("/donate").status_code == 403 and "/donate" in c.get("/donate").text
     key = billing.make_key(ME)
     page = c.get(f"/donate?k={key}").text
-    assert "<h1>Поддержать проект</h1>" in page and "Это не подписка и ничего не открывает" in page
+    assert "<h1>Поддержать проект</h1>" in page and "Это не подписка — просто спасибо" in page and "роадмап" in page
     assert all(f"{a}&nbsp;₽" in page for a in (100, 300, 500)) and 'name="own"' in page and "/offer" in page
     r = c.post("/donate/pay", data={"k": key, "amount": "own", "own": "250"}, follow_redirects=False)
     assert r.status_code == 303 and "OutSum=250.00" in r.headers["location"]
@@ -185,7 +185,7 @@ async def test_bot_donate(db, bot, dp, robokassa):  # noqa: F811
     await db.upsert_user(ME, "", "u")
     await send(dp, bot, "/donate", uid=ME)
     m = bot.session.named("SendMessage")[-1]
-    assert "Поддержать проект" in m.text and "не подписка и ничего не открывает" in m.text
+    assert "Поддержать проект" in m.text and "не подписка — просто спасибо" in m.text and "/roadmap" in m.text
     assert m.reply_markup.inline_keyboard[0][0].url.startswith(billing.site() + "/donate?k=")
     await send(dp, bot, "/plus", uid=ME)
     kb = bot.session.named("SendMessage")[-1].reply_markup.inline_keyboard
@@ -216,3 +216,38 @@ async def test_erase_keeps_donations_without_person(db):
     await privacy.erase(ME)
     rows = await _rows(db, "donations")
     assert [(r["payer_id"], r["amount"]) for r in rows] == [(None, 300)]               # налоговый учёт — без человека
+
+
+@pytest.mark.asyncio
+async def test_roadmap_for_supporters(db, bot, dp, client, robokassa):  # noqa: F811
+    """Роадмап (Никита 18.10) — тем, кто поддержал проект любой суммой, как спасибо;
+    до доната — замок и ссылка на донат; на iPhone — нет вовсе (как и доната)."""
+    import roadmap
+    c, _ = client
+    h = _headers_for(ME)
+    await db.upsert_user(ME, "", "u")
+    d = c.get("/api/roadmap", headers=h).json()
+    assert d["locked"] and d["donate_url"].startswith(billing.site() + "/donate?k=") and "items" not in d
+    assert c.get("/api/roadmap", headers={**h, "X-App": "ios"}).json() == {"hidden": True}
+    await send(dp, bot, "/roadmap", uid=ME)
+    m = bot.session.named("SendMessage")[-1]
+    assert "открывается тем, кто поддержал" in m.text and m.reply_markup.inline_keyboard[0][0].url
+
+    inv = parse_qs(urlparse(await billing.create_donation(ME, 50, "https://x")).query)["InvId"][0]
+    assert not (await roadmap.can_see(ME))                                            # ещё не оплачен
+    assert await billing.settle(inv, bot)
+    assert "/roadmap" in _to(bot, ME)[-1]                                             # в спасибо — где роадмап
+    d = c.get("/api/roadmap", headers=h).json()
+    assert not d["locked"] and d["items"] and set(d["statuses"]) == {"now", "next", "idea", "done"}
+    order = [i["status"] for i in d["items"]]
+    assert order == sorted(order, key=list(roadmap.STATUSES).index)                    # сейчас → дальше → вышло
+    await send(dp, bot, "/roadmap", uid=ME)
+    assert "Роадмап Капибары" in bot.session.texts()[-1] and "Делаю сейчас" in bot.session.texts()[-1]
+    assert await roadmap.can_see(STAROSTA_ID)                                         # Никите — всегда
+
+
+def test_roadmap_file_is_valid():
+    import roadmap
+    data = roadmap.load()
+    assert data["updated"] and all(i["title"] and i["about"] for i in data["items"])
+    assert len(roadmap.text()) < 4096

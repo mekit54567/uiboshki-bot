@@ -877,6 +877,7 @@
   /* ── Безопасность (меню «Ещё») ── */
   .more-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .more-grid .sq.t-sec { background: linear-gradient(145deg, #34d399, #0f9f77); }
+  .sheet-sub { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--hint); margin: 16px 0 6px; }
   .sec-hero { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px; }
   .sec-hero h3 { margin: 0 0 2px; }
   .sec-hero p { margin: 0; color: var(--hint); font-size: 13px; }

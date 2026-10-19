@@ -1,5 +1,5 @@
 // «Поддержать проект» (Никита 18.10): донат на сайте (/donate по личной ссылке,
-// webapp/routes/billing.py) — не подписка, ничего не открывает, просто спасибо.
+// webapp/routes/billing.py) — не подписка, просто спасибо; в ответ — роадмап (roadmap.dart).
 // В приложении — только лист с пояснением и кнопка на сайт, без кассы. На
 // iPhone нет вовсе: донат не через Apple — против правил App Store; сервер на
 // X-App: ios отвечает {"hidden": true}, а сборка для iPhone и не спрашивает.
@@ -12,7 +12,7 @@ import '../widgets/common.dart';
 import 'plus.dart';
 import 'plus_screen.dart' show PlusLinks;
 
-const donateNote = 'Это не подписка и ничего не открывает — просто спасибо.';
+const donateNote = 'Это не подписка — просто спасибо. В ответ откроется роадмап: что я делаю сейчас и что дальше.';
 
 final _shown = Expando<bool>();
 
