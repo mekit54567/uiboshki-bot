@@ -152,10 +152,15 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
 restore` из S3-копии (`tools/s3_restore.py`) или `/restore` в боте. VPN —
 `XRAY_CONFIG` (Gemini Россию не пускает, прокси Amvera тут нет). Политика
 называет хостинг из `HOSTING` (`privacy.HOSTS`, на Timeweb — согласие v3,
-юрлицо — `HOSTING_ORG`). Пока DNS www не переключён на IP сервера — живёт
-Amvera (ниже); после переезда Amvera остановить, остаток денег — заявлением.
+юрлицо — `HOSTING_ORG`). **Переехали 19.10 ~20:40 МСК** (v5.103.1): Москва
+Ultra 15 (1 ГБ, NVMe, публичный IPv4 72.56.243.65), VPN — первый vless-сервер
+из JSON Никиты (Латвия, `PROXY_COUNTRY`), ветка сервера — `deploy`. Никита
+заходит по ssh из PowerShell (веб-консоль Timeweb плохо вставляет; VPN на
+компьютере — выключить). Amvera **заморожена** («Остановить» не помогает: она
+сама пересобирает из `deploy` после мержа — второй бот на том же токене);
+остаток денег — заявлением.
 
-С 16.10 бот живёт на **Amvera** (Москва_1, проект `kapibara-stud`): Amvera
+С 16.10 по 19.10 бот жил на **Amvera** (для истории) (Москва_1, проект `kapibara-stud`): Amvera
 сама собирает и деплоит из `mekit54567/uiboshki-bot` — Sync fork больше не
 нужен. Ветка сборки — `deploy` (v5.89.15): её двигает `deploy.yml` на main
 после сборок CHANGELOG и PWA — одна сборка на мерж (раньше из main было 2–3
@@ -167,9 +172,9 @@ WebApp: `https://www.uiboshki.ru`, живёт в процессе бота (Fast
 `webapp/server.py`, `bot.start_webapp`); запасной адрес Amvera —
 `kapibara-stud-partyk.msk1.amvera.tech` (с VPN «всё, кроме РФ» не
 открывается — .tech идёт через VPN).
-Домен `uiboshki.ru` (reg.ru, NS — Cloudflare, бесплатный тариф): CNAME `www` →
-`edge.msk1.amvera.tech` (серое облако) + TXT `_amvera.www`, сертификат
-выдаёт Amvera. Корень `@` — A 192.0.2.1 с оранжевым облаком + Redirect Rule
+Домен `uiboshki.ru` (reg.ru, NS — Cloudflare, бесплатный тариф): A `www` →
+72.56.243.65 (серое облако, с 19.10; сертификат — Caddy на сервере; до этого —
+CNAME на `edge.msk1.amvera.tech`). Корень `@` — A 192.0.2.1 с оранжевым облаком + Redirect Rule
 корень → www. Сайт и приложение только через серое облако: Cloudflare-прокси
 в России тормозят.
 
