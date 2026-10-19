@@ -8,9 +8,18 @@
   const arrow = (d) => '<svg><use href="#' + (d ? "arrow-d" : "arrow") + '"/></svg>';
   const spinner = (t) => '<p class="state-text"><span class="spinner"></span> ' + t + '</p>';
 
-  // демо: заглушка «Открываем приложение…», пока iframe не загрузился
+  // демо: заглушка «Открываем приложение…», пока приложение не нарисовало
+  // первый кадр (site/demo-app.js шлёт «uib-demo-ready»); страница iframe
+  // грузится раньше, чем Flutter запустится, — поэтому не по load, а по
+  // сигналу, и на всякий случай через 15 с после load
   const frame = $("demo-frame");
-  if (frame) frame.addEventListener("load", () => $("demo-loading").classList.add("loaded"));
+  if (frame) {
+    const ready = () => $("demo-loading").classList.add("loaded");
+    window.addEventListener("message", (e) => {
+      if (e.origin === location.origin && e.data === "uib-demo-ready") ready();
+    });
+    frame.addEventListener("load", () => setTimeout(ready, 15000));
+  }
 
   // «Поделиться» — системное меню телефона (там же Telegram); где его нет —
   // кнопка скрыта, ссылку и так видно в адресной строке

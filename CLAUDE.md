@@ -464,9 +464,13 @@ RuStore — «Вход по коду доступа» в приложении, �
   Дымовой тест WebApp в Chromium — `tests/test_webapp_smoke_browser.py`.
 - **Сайт-презентация** `/about` (`webapp/routes/site.py`, `webapp/static/site/`):
   статичная страница (свои шрифты в `site/fonts`), живое приложение в рамке
-  телефона — `/about/demo` (index.html + `site/demo.js` вместо SDK Telegram:
-  заглушка, сдвиг времени на запись, ответы `/api/…` из `site/demo.json` —
-  записаны со стенда, ничьих настоящих данных; при изменении API — перезаписать),
+  телефона — `/about/demo`: с 5.104 — само приложение (веб-сборка Flutter
+  `webapp/flutter`, Никита 19.10) + первым скриптом `site/demo-app.js`: сдвиг
+  времени на запись, вход «demo» в своём localStorage в памяти (настоящий —
+  общий с `/app`, не трогать), без service worker, ответы `/api/v1/…` из
+  `site/demo.json` — записаны со стенда, ничьих настоящих данных; при
+  изменении API — перезаписать; прежний Mini App на демо-данных —
+  `/about/demo/tg` (`site/demo.js` вместо SDK Telegram), он же, пока сборки нет),
   публичный поиск расписания `/about/api/search|target` (ratelimit по IP —
   самый правый публичный адрес X-Forwarded-For, плюс общий `site_all`).
   Дизайн (v5.17.0) — макет владельца, перенесён статикой без сборки;
