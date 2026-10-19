@@ -779,4 +779,29 @@ async def init_db():
                 PRIMARY KEY (user_id, blocked_id)
             )
         """)
+        # Комментарии под парой (lesson_comments.py, 19.10): видит своя группа;
+        # lesson — «начало|название», как у реакций; day — дата для чистки
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_comments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id    INTEGER NOT NULL,
+                lesson      TEXT NOT NULL,
+                user_id     INTEGER NOT NULL,
+                text        TEXT NOT NULL,
+                day         TEXT NOT NULL,
+                created_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_lesson_comments ON lesson_comments(group_id, lesson)")
+        # Оценка преподавателя в капибарах (teacher_rating.py, 19.10): одна на
+        # человека, только цифра 1–5; среднее видно от SHOW_MIN оценок
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS teacher_ratings (
+                teacher     TEXT NOT NULL,
+                user_id     INTEGER NOT NULL,
+                score       INTEGER NOT NULL,
+                updated_at  TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (teacher, user_id)
+            )
+        """)
         await db.commit()
