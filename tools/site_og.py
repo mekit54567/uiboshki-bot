@@ -10,7 +10,6 @@
 Страница — стили сайта и живое демо (/about/demo) в телефоне.
 """
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -18,18 +17,9 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# Светлая тема Telegram (iOS) для демо: заглушка site/demo.js по умолчанию тёмная.
-# Подменяем только в браузере снимка — сам демо на сайте остаётся как есть.
-LIGHT = ('colorScheme: "light", themeParams: {bg_color: "#f2f2f7", secondary_bg_color: "#ffffff", '
-         'section_bg_color: "#ffffff", text_color: "#000000", hint_color: "#8e8e93", '
-         'section_separator_color: "#e4e6ea"}')
-DARK = 'colorScheme: "dark", themeParams: {}'
-
-
-def light_demo(js: str) -> str:
-    if DARK not in js:
-        raise SystemExit("site/demo.js: не нашёл тёмную тему заглушки — поправь tools/site_og.py")
-    return js.replace(DARK, LIGHT, 1)
+# С 5.104 демо на сайте — само приложение (веб-сборка Flutter): тему оно берёт
+# из системы (prefers-color-scheme), её и задаём браузеру снимка —
+# приглашение светлое, превью сайта тёмное.
 
 
 def main(base: str, invite: bool = False):
@@ -38,16 +28,12 @@ def main(base: str, invite: bool = False):
     html = (ROOT / "tools" / page_html).read_text(encoding="utf-8")
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path=os.environ.get("CHROMIUM") or None)   # своя сборка — CHROMIUM=…
-        ctx = b.new_context(viewport={"width": 1200, "height": 630})
-        if invite:
-            def patch(route):
-                resp = route.fetch()
-                route.fulfill(response=resp, body=light_demo(resp.text()))
-            ctx.route(re.compile(r"/site/demo\.js(\?|$)"), patch)     # не demo.json
+        ctx = b.new_context(viewport={"width": 1200, "height": 630},
+                            color_scheme="light" if invite else "dark")
         pg = ctx.new_page()
         pg.goto(base.rstrip("/") + "/about", wait_until="networkidle")
         pg.set_content(html, wait_until="networkidle")
-        pg.wait_for_timeout(3000)                     # демо в iframe дорисовывает главную
+        pg.wait_for_timeout(6000)                     # приложение в iframe запускается и рисует главную
         pg.screenshot(path=str(ROOT / "webapp/static/site" / out), type="jpeg", quality=88)
         b.close()
 

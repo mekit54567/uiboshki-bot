@@ -82,7 +82,24 @@ async def about_page(request: Request):
 
 @router.get("/about/demo", include_in_schema=False)
 async def about_demo(request: Request):
-    """Приложение как в Telegram, но на демо-данных: base href — чтобы
+    """Демо на сайте — само приложение (веб-сборка Flutter, как на iPhone и в
+    PWA; Никита 19.10) на демо-данных: первым скриптом — site/demo-app.js
+    (время, вход «demo» в памяти, ответы /api/v1/…). Сборки нет (тесты,
+    разработка) — прежний Mini App."""
+    from webapp.server import FLUTTER_DIR
+    index = FLUTTER_DIR / "index.html"
+    if not index.is_file():
+        return await about_demo_tg(request)
+    demo = _site_dir() / "demo-app.js"
+    v = hashlib.sha1(demo.read_bytes() + (_site_dir() / "demo.json").read_bytes()).hexdigest()[:10]
+    html = index.read_text(encoding="utf-8")
+    html = html.replace("<head>", f'<head>\n  <script src="/site/demo-app.js?v={v}"></script>', 1)
+    return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/about/demo/tg", include_in_schema=False)
+async def about_demo_tg(request: Request):
+    """Прежний Mini App как в Telegram, но на демо-данных: base href — чтобы
     относительные js/… и app.css грузились от корня, а SDK Telegram
     заменён на site/demo.js (он же подменяет fetch для /api/…)."""
     from webapp.server import index_page

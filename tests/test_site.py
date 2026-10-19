@@ -29,11 +29,18 @@ def test_about_page_and_demo():
     # превью ссылки в Telegram — абсолютный адрес картинки, сама картинка есть
     assert '<meta property="og:image" content="http' in r.text and "__BASE__" not in r.text
     assert c.get("/site/og.jpg").content[:3] == b"\xff\xd8\xff"
-    demo = c.get("/about/demo").text
+    # демо — само приложение (веб-сборка Flutter, Никита 19.10): заглушка
+    # demo-app.js — первым скриптом, до base href и запуска Flutter
+    import webapp.server as server
+    if (server.FLUTTER_DIR / "index.html").is_file():
+        app_demo = c.get("/about/demo").text
+        assert "/site/demo-app.js?v=" in app_demo and "flutter_bootstrap.js" in app_demo
+        assert app_demo.index("demo-app.js") < app_demo.index("<base") < app_demo.index("<script>")
+    demo = c.get("/about/demo/tg").text
     assert '<base href="/">' in demo and "site/demo.js?v=" in demo
     assert "telegram.org/js/telegram-web-app.js" not in demo                 # без настоящего SDK
     assert demo.index("site/demo.js") < demo.index("js/core.js")              # заглушка — до приложения
-    for f in ("site/site.css", "site/site.js", "site/demo.js", "site/demo.json", "site/capy.svg",
+    for f in ("site/site.css", "site/site.js", "site/demo.js", "site/demo-app.js", "site/demo.json", "site/capy.svg",
               "site/fonts/serif-cyrillic.woff2", "site/fonts/sans-latin.woff2"):
         assert c.get("/" + f).status_code == 200, f
     # всё, что ищет site.js по id, есть на странице; шрифты — из /site/fonts
@@ -46,8 +53,14 @@ def test_about_page_and_demo():
 
 
 def test_site_scripts_parse_and_demo_data_is_complete():
-    for f in ("site.js", "demo.js"):
+    for f in ("site.js", "demo.js", "demo-app.js"):
         subprocess.run(["node", "--check", str(SITE / f)], check=True)
+    # демо приложения: вход «demo» — только в своём localStorage в памяти (сайт и
+    # PWA /app — один адрес: настоящий вход в /app демо трогать не должно),
+    # без service worker; запросы приложения идут на /api/v1/…
+    app_demo = (SITE / "demo-app.js").read_text(encoding="utf-8")
+    assert 'Object.defineProperty(window, "localStorage"' in app_demo
+    assert "serviceWorker.register = " in app_demo and "/api\\/v1\\/" in app_demo
     # iOS: в iframe прокручивается body внутри экрана фиксированной высоты, а не
     # окно — иначе на коротком дне нижняя панель уезжала вверх (живой тест 04.10)
     demo = (SITE / "demo.js").read_text(encoding="utf-8")
