@@ -1,4 +1,4 @@
-"""152-ФЗ (сервер в России, Amvera): согласие, «удалить все мои данные», срок
+"""152-ФЗ (сервер в России, хостинг — HOSTS): согласие, «удалить все мои данные», срок
 хранения. Тексты — legal_texts.py (страницы /consent и /privacy, JSON
 /api/legal/<имя> — webapp/routes/legal.py).
 
@@ -23,8 +23,31 @@ from config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
-VERSION = "2"                  # 16.10: Amvera и «Капибара+» (касса, чек, приглашения)
-DATE = "16.10.2026"
+# Где работают сервер и база (переменная HOSTING): кто получает данные по
+# поручению — в политике и согласии. Сменился хостинг — сменился получатель,
+# поэтому у каждого свои версии согласия (VERSION — по ней спрашивают заново)
+# и политики. 19.10: переезд с Amvera на Timeweb Cloud (Amvera зависала на
+# запуске контейнера); юрлицо Timeweb — из договора, HOSTING_ORG.
+HOSTS = {
+    "amvera": {"version": "2", "date": "16.10.2026",       # 16.10: Amvera и «Капибара+»
+               "policy": "2.1", "policy_date": "18.10.2026",  # 18.10: «Поддержка проекта»
+               "name": "Amvera", "org": "ООО «Амвера» (ИНН 9724135016, Москва)",
+               "basis": "договор поручения Amvera от 14.07.2026"},
+    "timeweb": {"version": "3", "date": "19.10.2026", "policy": "3", "policy_date": "19.10.2026",
+                "name": "Timeweb Cloud", "org": "",
+                "basis": "договор с Timeweb Cloud (оферта, условия обработки персональных данных)"},
+}
+
+
+def _host() -> dict:
+    h = dict(HOSTS.get(os.getenv("HOSTING", "").strip().lower()) or HOSTS["amvera"])
+    h["org"] = os.getenv("HOSTING_ORG", "").strip() or h["org"] or h["name"]
+    return h
+
+
+HOST = _host()
+VERSION = HOST["version"]
+DATE = HOST["date"]
 KINDS = ("pd", "sdo")
 VIAS = ("bot", "pwa", "tg", "app")
 
@@ -89,8 +112,8 @@ def backup_texts() -> dict:
                  + (f" в {country}" if country else " за границей")
                  + ": содержимое там не хранится и не расшифровывается (HTTPS). СДО МИРЭА, VK и Яндекс — напрямую.")
     else:
-        proxy = ("Запросы к Telegram и ИИ уходят с сервера через сеть хостинга Amvera в зашифрованном виде "
-                 "(HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
+        proxy = (f"Запросы к Telegram и ИИ уходят с сервера через сеть хостинга {HOST['name']} в зашифрованном "
+                 "виде (HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
     if s3_store.configured():
         return {
             "PROXY": proxy,
@@ -113,10 +136,22 @@ def backup_texts() -> dict:
 
 def operator_missing() -> list[str]:
     """Каких данных оператора нет в текстах — предупреждение старосте в /status."""
-    return [k for k, v in (("PD_FIO", FIO), ("PD_INN", INN), ("PD_EMAIL", EMAIL), ("PD_CITY", CITY)) if not v]
+    missing = [k for k, v in (("PD_FIO", FIO), ("PD_INN", INN), ("PD_EMAIL", EMAIL), ("PD_CITY", CITY)) if not v]
+    if HOST["name"] != "Amvera" and HOST["org"] == HOST["name"]:
+        missing.append("HOSTING_ORG")       # юрлицо хостинга (из договора) — в политике должно быть
+    return missing
+
+
+def hosting_texts() -> dict:
+    """Хостинг для legal_texts: {HOST_NAME}, {HOST_ORG}, {HOST_BASIS}."""
+    return {"HOST_NAME": HOST["name"], "HOST_ORG": HOST["org"], "HOST_BASIS": HOST["basis"]}
 
 _seen: dict[int, str] = {}     # id → день последней отметки (пишем раз в день)
 _given: set[tuple[int, str, str]] = set()   # (id, вид, версия) — уже дал, в базу не ходим
+# Не заблокирован (был до согласий или давал прошлую версию): blocked зовётся
+# по 3 раза на запрос и на каждого человека в рейтинге — по 4 открытия базы
+# (19.10, медленный диск: рейтинг — 162 с). Сбрасывается вместе с _given.
+_open: set[int] = set()
 
 
 async def needs(user_id: int, kind: str = "pd") -> bool:
@@ -136,12 +171,37 @@ async def blocked(user_id: int) -> bool:
     пользуется и без него (Никита, 11.10). Давал согласие прошлой версии
     текста — тоже: новую спросят один раз (ask_once), не блокируя (переезд
     16.10). Старосты — операторы."""
-    if user_id in STAROSTA_IDS or not await needs(user_id):
+    if user_id in STAROSTA_IDS or user_id in _open or not await needs(user_id):
         return False
     from database.privacy import has_any_consent, is_legacy
     if await erasing(user_id):       # попросил удалить — до полного стирания ничего не обрабатываем
         return True
-    return not await is_legacy(user_id) and not await has_any_consent(user_id)
+    if await is_legacy(user_id) or await has_any_consent(user_id):
+        _open.add(user_id)
+        return False
+    return True
+
+
+async def blocked_ids(user_ids) -> set[int]:
+    """blocked для многих сразу (рейтинг — все люди): одно подключение к базе
+    вместо четырёх на человека."""
+    rest = [u for u in user_ids
+            if u not in STAROSTA_IDS and u not in _open and (u, "pd", VERSION) not in _given]
+    if not rest:
+        return set()
+    from database.privacy import consent_sets
+    current, any_, legacy, erasing_ = await consent_sets("pd", VERSION)
+    out = set()
+    for u in rest:
+        if u in current:
+            _given.add((u, "pd", VERSION))
+        elif u in erasing_:
+            out.add(u)
+        elif u in legacy or u in any_:
+            _open.add(u)
+        else:
+            out.add(u)
+    return out
 
 
 async def should_ask(user_id: int) -> bool:
@@ -206,6 +266,7 @@ async def erase(user_id: int) -> dict:
     forget_user(user_id)
     _seen.pop(user_id, None)
     _given.difference_update({g for g in _given if g[0] == user_id})
+    _open.discard(user_id)
     try:
         import sdo_grades
         sdo_grades.forget(user_id)
@@ -244,6 +305,7 @@ async def request_erase(user_id: int, bot=None) -> str:
     due = await erasing(user_id) or (today_msk() + timedelta(days=ERASE_DAYS)).isoformat()
     await _request(user_id, due)
     _given.difference_update({g for g in _given if g[0] == user_id})
+    _open.discard(user_id)
     try:
         import sdo_grades
         sdo_grades.forget(user_id)

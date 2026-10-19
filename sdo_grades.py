@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 
 PASS_SHARE = 0.75           # доля зачтённых работ текущего контроля для БРС
 CACHE_SECONDS = 10 * 60
+# Экран предмета ждёт страницы работ (порог, статус, срок) не дольше этого:
+# 19.10 СДО отвечал медленно, и экран с целью грузился 76–100 с. Не успевшие
+# страницы — из прошлого раза или без порога; такой ответ не кэшируется.
+PAGES_BUDGET = 20
 EXAM_MARKS = ((40, "3"), (60, "4"), (80, "5"))
 CREDIT_MARKS = ((40, "зачёт"),)
 
@@ -549,12 +553,44 @@ async def _overview(user_id: int, cookie: str, fresh: bool) -> dict:
     return _store(key, data)
 
 
-async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
+async def course_detail(user_id: int, cookie: str, course_id: int, stale_ok: bool = False) -> dict:
     """Предмет подробно + по каждой работе текущего контроля страница задания
-    (порог, статус, срок) — для экрана «Текущий контроль»."""
+    (порог, статус, срок) — для экрана «Текущий контроль».
+
+    19.10: смена цели шла по 15 с — экран предмета ещё грузился из медленного
+    СДО, а каждое нажатие начинало ту же загрузку заново. Теперь одновременные
+    запросы ждут одну загрузку, а действиям (цель, отметка посещения) хватает
+    прошлой загрузки любой давности (stale_ok) — баллы им не нужны свежими."""
     key = ("detail", user_id, course_id)
     if hit := _cached(key):
         return hit
+    if stale_ok and (old := _cache.get(key)):
+        return old[1]
+    if (running := _inflight_detail.get(key)) is not None:
+        return await asyncio.shield(running)
+    fut = asyncio.get_running_loop().create_future()
+    _inflight_detail[key] = fut
+    try:
+        result = await _course_detail(user_id, cookie, course_id)
+    except asyncio.CancelledError:
+        fut.cancel()
+        raise
+    except BaseException as e:
+        fut.set_exception(e)
+        fut.exception()
+        raise
+    else:
+        fut.set_result(result)
+        return result
+    finally:
+        _inflight_detail.pop(key, None)
+
+
+_inflight_detail: dict[tuple, asyncio.Future] = {}
+
+
+async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
+    key = ("detail", user_id, course_id)
     from sdo_files import make_client
     async with make_client(cookie) as client:
         base = _cached(("course", user_id, course_id))
@@ -578,9 +614,20 @@ async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
                 except httpx.HTTPError:
                     return None
 
-        pages = await asyncio.gather(*(page(w) for w in s["works"]))
-    for w, p in zip(s["works"], pages):
-        if p is not None:
+        tasks = [asyncio.ensure_future(page(w)) for w in s["works"]]
+        if tasks:
+            await asyncio.wait(tasks, timeout=PAGES_BUDGET)
+        late = [t for t in tasks if not t.done()]
+        for t in late:
+            t.cancel()
+        if late:
+            await asyncio.gather(*late, return_exceptions=True)
+            logger.info(f"предмет {course_id}: {len(late)} из {len(tasks)} страниц работ не успели за {PAGES_BUDGET} с")
+        # не успевшую страницу берём из прошлого раза (если была) — лучше старый порог, чем никакого
+        pages = [t.result() if t.done() and not t.cancelled() else (_pages.get((user_id, w["cmid"])) or (0, None))[1]
+                 for t, w in zip(tasks, s["works"])]
+    for t, w, p in zip(tasks, s["works"], pages):
+        if p is not None and t.done() and not t.cancelled():
             _pages[(user_id, w["cmid"])] = (time.time(), p)
     import quiz_time        # время тестов — одно на всех, видно в «Сдать»
     await quiz_time.remember({w["cmid"]: p for w, p in zip(s["works"], pages) if w["module"] == "quiz"})
@@ -599,6 +646,8 @@ async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
         for c in hit["courses"]:
             if c["id"] == course_id:
                 c.update({k: s[k] for k in ("works_passed", "works_need", "auto")})
+    if late:
+        return out                  # не всё успели — в кэш не кладём, следующий заход доберёт
     return _store(key, out)
 
 

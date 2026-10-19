@@ -43,7 +43,7 @@ async def test_course_detail_marks_finished_works(db, monkeypatch):
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
     did = await db.add_deadline("Практика 1", URL.format(m="assign", i=4242), "2026-10-10", None, 0, external_id="sdo:z")
 
-    async def detail(uid, cookie, cid):
+    async def detail(uid, cookie, cid, stale_ok=False):
         return {"id": cid, "name": "Анализ данных", "title": "Анализ данных", "score": 10, "categories": [],
                 "works": [{"cmid": 4242, "status": "wait", "name": "Практика 1"}]}
 

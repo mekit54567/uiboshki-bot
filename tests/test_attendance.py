@@ -127,7 +127,7 @@ async def test_webapp_attendance_and_marks(db, monkeypatch):
     today = datetime.now(TZ).date()
     lect = [today - timedelta(days=d) for d in (30, 23, 16, 9, 2)] + [today + timedelta(days=5 + 7 * i) for i in range(3)]
 
-    async def detail(uid, cookie, cid):
+    async def detail(uid, cookie, cid, stale_ok=False):
         return {"id": cid, "name": "Анализ данных (Экз) [I.26-27]", "title": "Анализ данных", "score": 40,
                 "categories": [{"name": "Посещаемость", "score": 5.0, "max": 20.0, "tk": False}], "works": []}
 

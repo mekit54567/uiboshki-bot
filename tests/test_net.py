@@ -95,7 +95,7 @@ async def test_gemini_geoblock_goes_to_spare(monkeypatch):
         await gemini_solver.generate_text([{"role": "user", "content": "?"}], "s")
 
 
-async def test_netcheck_report(no_proxy_env, monkeypatch):
+async def test_netcheck_report(no_proxy_env, monkeypatch, tmp_path):
     def handler(request):
         host = request.url.host
         if host == "ipinfo.io":
@@ -116,6 +116,15 @@ async def test_netcheck_report(no_proxy_env, monkeypatch):
         async def get_me(self):
             return {"id": 1}
 
+    async def resolve(host):                       # 19.10: DNS отдельно от запроса
+        if host == "id.vk.com":
+            raise OSError("timeout")
+        return [("addr",)]
+    monkeypatch.setattr(net_check, "_resolve", resolve)
+    (tmp_path / "cpu.stat").write_text("usage_usec 100\nnr_periods 10\nnr_throttled 5\nthrottled_usec 900\n")
+    (tmp_path / "cpu.max").write_text("50000 100000\n")
+    monkeypatch.setattr(net_check, "CGROUP", str(tmp_path))
+
     rep = await net_check.check(FakeBot())
     by = {r["name"]: r for r in rep["results"]}
     assert by["Telegram"]["ok"] and by["Telegram"]["route"] == "напрямую"
@@ -124,3 +133,5 @@ async def test_netcheck_report(no_proxy_env, monkeypatch):
     assert by["СДО"]["ok"] and by["СДО"]["route"] == "напрямую"
     text = net_check.text(rep)
     assert "203.0.113.5 (US)" in text and "Прокси не задан" in text and "🔴 Gemini" in text
+    assert "🔴 DNS" in text and "id.vk.com" in text and "OSError" in text           # медленный DNS — видно сразу
+    assert "из 0.5 ядра" in text and "Самое долгое зависание бота" in text

@@ -322,7 +322,7 @@ async def api_sdo_goal(course_id: int, body: Goal, user: dict = CurrentUser):
     from sdo_parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     try:
-        course = await sdo_grades.course_detail(user["id"], cookie, course_id)
+        course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
     except LookupError:
         raise HTTPException(status_code=404, detail="курс не найден")
     except SdoSessionExpired:
@@ -364,7 +364,7 @@ async def api_attendance_mark(course_id: int, body: AttendanceMark, user: dict =
     from sdo_parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     try:
-        course = await sdo_grades.course_detail(user["id"], cookie, course_id)
+        course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
     except LookupError:
         raise HTTPException(status_code=404, detail="курс не найден")
     except SdoSessionExpired:

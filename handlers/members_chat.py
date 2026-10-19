@@ -26,6 +26,7 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     if await members.chat_id() == event.chat.id:
         return
     await set_setting("group_chat_id", str(event.chat.id))
+    members.forget_chat()
     logger.info(f"чат своей группы: {event.chat.id} ({event.chat.title})")
     try:
         await event.bot.send_message(
