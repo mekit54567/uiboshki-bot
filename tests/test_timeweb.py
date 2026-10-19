@@ -38,7 +38,12 @@ def test_scripts_are_valid_shell():
     setup = (DIR / "setup.sh").read_text()
     assert '[ ! -f "$ROOT/.env" ]' in setup                  # повторный запуск не затирает переменные
     assert "dockerhub.timeweb.cloud" in setup
-    assert "/opt/kapibara/branch" in (DIR / "update.sh").read_text()
+    update = (DIR / "update.sh").read_text()
+    assert "/opt/kapibara/branch" in update
+    # «уже обновлено» — по отметке удачного запуска, а не по HEAD: упавшая сборка повторится
+    assert '"$(git rev-parse HEAD)"' not in update
+    assert update.index("up -d --build") < update.index('echo "$NEW" > "$DONE"')
+    assert update.index("flock -w") < update.index("git fetch -q")            # руками и по таймеру — не вместе
     timer = (DIR / "kapibara-update.timer").read_text()
     assert "OnUnitActiveSec=1min" in timer
 

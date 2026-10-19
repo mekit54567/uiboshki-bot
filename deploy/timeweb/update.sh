@@ -6,14 +6,23 @@
 # --force — пересобрать, даже если коммит тот же.
 set -eu
 ROOT=/opt/kapibara
+# По одному: `kap update` руками и таймер в ту же секунду ломали друг другу
+# git fetch («shallow file has changed», 19.10) — второй ждёт первого
+exec 9>"$ROOT/update.lock"
+flock -w 900 9
 cd "$ROOT/app"
 BRANCH=$(cat "$ROOT/branch" 2>/dev/null || echo deploy)
 git fetch -q --depth 50 origin "$BRANCH"
 NEW=$(git rev-parse FETCH_HEAD)
-if [ "$NEW" = "$(git rev-parse HEAD)" ] && [ "${1:-}" != "--force" ]; then
+# Сверяем с последним удачно запущенным коммитом, а не с HEAD: упала сборка
+# после reset — следующая минута попробует снова (19.10: HEAD уже новый, а
+# бот так и остался старым)
+DONE="$ROOT/deployed"
+if [ "$NEW" = "$(cat "$DONE" 2>/dev/null)" ] && [ "${1:-}" != "--force" ]; then
     exit 0
 fi
 git reset -q --hard "$NEW"
 docker compose -f deploy/timeweb/docker-compose.yml up -d --build --remove-orphans
+echo "$NEW" > "$DONE"
 docker image prune -f >/dev/null
 echo "Капибара обновлена: $(git log -1 --format='%h %s')"
