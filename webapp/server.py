@@ -22,6 +22,8 @@ index и статика. Обработчики разнесены по тема
 initData и общее для них — webapp/deps.py.
 """
 
+import asyncio
+import gzip
 import logging
 import re
 import time
@@ -255,12 +257,33 @@ FLUTTER_DIR = Path(__file__).parent / "flutter"
 
 class _NoCacheStatic(StaticFiles):
     """У файлов Flutter нет метки версии в адресе — браузер каждый раз
-    сверяет их с сервером (ETag), иначе после выпуска оставался бы старый код."""
+    сверяет их с сервером (ETag), иначе после выпуска оставался бы старый код.
+
+    И сжимаем (19.10, PWA в Safari): CanvasKit, main.dart.js и шрифты — около
+    13 МБ при первом открытии, в gzip около 4,5. Сжатое помнится в памяти,
+    пока файл не поменялся (новая сборка — новое время изменения)."""
+
+    _GZ_EXT = (".js", ".mjs", ".wasm", ".json", ".html", ".css", ".otf", ".ttf", ".symbols")
+    _gz: dict[str, tuple[float, bytes]] = {}
 
     async def get_response(self, path, scope):
         resp = await super().get_response(path, scope)
         resp.headers["Cache-Control"] = "no-cache"
-        return resp
+        accept = dict(scope.get("headers") or []).get(b"accept-encoding", b"")
+        if resp.status_code != 200 or b"gzip" not in accept or not path.endswith(self._GZ_EXT):
+            return resp
+        full, st = self.lookup_path(path)
+        if not full or st is None:
+            return resp
+        cached = self._gz.get(full)
+        if not cached or cached[0] != st.st_mtime:
+            raw = await asyncio.to_thread(Path(full).read_bytes)
+            cached = (st.st_mtime, await asyncio.to_thread(gzip.compress, raw, 6))
+            self._gz[full] = cached
+        headers = {"Cache-Control": "no-cache", "Content-Encoding": "gzip", "Vary": "Accept-Encoding"}
+        if resp.headers.get("etag"):
+            headers["ETag"] = resp.headers["etag"]
+        return Response(cached[1], media_type=resp.media_type, headers=headers)
 
 
 @app.get("/app", include_in_schema=False)

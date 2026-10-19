@@ -89,3 +89,31 @@ def test_web_index_push_bridge():
     assert "applicationServerKey" in js and "sub.toJSON()" in js
     dart = (ROOT / "app" / "lib" / "web_push_web.dart").read_text(encoding="utf-8")
     assert all(f"@JS('uibPush.{n}')" in dart for n in ("state", "enable", "disable"))
+
+
+def test_flutter_assets_gzipped():
+    """PWA в Safari (19.10): ~13 МБ при первом открытии — сжимаем. Браузер без
+    gzip получает файл как есть; ETag тот же — повторный заход отвечает 304."""
+    import webapp.server as server
+    f = server.FLUTTER_DIR / "main.dart.js"
+    if not f.is_file():
+        return
+    c = TestClient(server.app)
+    r = c.get("/app/main.dart.js", headers={"Accept-Encoding": "gzip"})
+    assert r.status_code == 200 and r.headers["content-encoding"] == "gzip"
+    assert r.headers["vary"] == "Accept-Encoding" and r.headers["cache-control"] == "no-cache"
+    assert r.content == f.read_bytes()  # httpx распаковал
+    assert int(r.headers["content-length"]) < f.stat().st_size / 2
+    assert c.get("/app/main.dart.js", headers={"Accept-Encoding": "gzip",
+                                               "If-None-Match": r.headers["etag"]}).status_code == 304
+    raw = c.get("/app/main.dart.js", headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in raw.headers and raw.content == f.read_bytes()
+
+
+def test_iphone_draws_at_2x():
+    """iPhone 3x → Flutter рисует в 2x: на 56% меньше точек на кадр. Только
+    iPhone/iPad и только до запуска Flutter."""
+    js = WEB_INDEX.split('<script id="uib-dpr">')[1].split("</script>")[0]
+    assert "iPhone|iPod|iPad" in js and 'defineProperty(window, "devicePixelRatio"' in js
+    assert "return 2;" in js and "real > 2" in js
+    assert WEB_INDEX.index('id="uib-dpr"') < WEB_INDEX.index('src="flutter_bootstrap.js"')

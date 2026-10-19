@@ -1223,7 +1223,10 @@
   .login-card p { color: var(--hint); margin: 0 0 18px; }
   .login-card .primary { width: 100%; margin-bottom: 12px; }
   .dev-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-raised); margin-top: 6px; }
-  .dev-row div { flex: 1; } .dev-row b { display: block; font-size: 14px; } .dev-row span { font-size: 12px; color: var(--hint); }
+  .dev-row div { flex: 1; min-width: 0; } .dev-row b { display: block; font-size: 14px; } .dev-row span { font-size: 12px; color: var(--hint); }
+  /* кнопка справа по размеру слова: общий button.ghost на всю ширину сжимал
+     название в столбик («Safari · iPhone» по слову в строке, Никита 19.10) */
+  .dev-row button.ghost { width: auto; flex: none; margin: 0; padding: 8px 4px; }
 
   /* ── Ночь 09.10: СДО, файлы, чат, листы ── */
   /* Блок кода в ответе ИИ (<pre>) не переносится: длинная строка раздвигала
