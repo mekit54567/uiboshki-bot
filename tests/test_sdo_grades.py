@@ -404,3 +404,38 @@ async def test_overview_retry_partial_and_dedup(monkeypatch):
     broken.update({1: 99, 2: 99, 3: 99})
     with pytest.raises(httpx.HTTPError):                        # ничего — «СДО не отвечает»
         await sdo_grades.overview(7, "k")
+
+
+async def test_course_detail_does_not_wait_slow_pages(monkeypatch):
+    """19.10: СДО отвечал медленно — экран предмета и цель грузились 76–100 с.
+    Страницы работ ждём не дольше PAGES_BUDGET; не успели — ответ без них и
+    не в кэш, следующий заход доберёт."""
+    import asyncio
+    import time
+    sdo_grades._cache.clear()
+    sdo_grades._pages.clear()
+    monkeypatch.setattr(sdo_grades, "PAGES_BUDGET", 0.3)
+    slow = {"on": True}
+
+    async def courses(client):
+        return [{"id": 18672, "name": "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]",
+                 "title": "Основы предпринимательской деятельности"}]
+
+    async def moodle(request):
+        url = str(request.url)
+        if "grade/report/user" in url:
+            return httpx.Response(200, text=REPORT)
+        if "id=101" in url and slow["on"]:
+            await asyncio.sleep(30)
+        return httpx.Response(200, text="<table><tr><th>Проходной балл</th><td>7,0</td></tr></table>")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(moodle), **kw))
+    monkeypatch.setattr(sdo_grades, "this_semester_courses", courses)
+    started = time.monotonic()
+    d = await sdo_grades.course_detail(1, "c", 18672)
+    assert time.monotonic() - started < 5 and d["works"]
+    assert sdo_grades._cached(("detail", 1, 18672)) is None         # неполный — не в кэш
+    slow["on"] = False
+    d = await sdo_grades.course_detail(1, "c", 18672)
+    assert sdo_grades._cached(("detail", 1, 18672)) is d
