@@ -2,7 +2,8 @@
 Посты канала бота (этап 3): лежат в репозитории, публикует сам бот — админ
 канала, — по кнопке старосты (`/channel`, handlers/channel.py).
 
-Каждый пост — папка channel/posts/NN-имя/:
+Каждый пост — папка channel/posts/NN-имя/ («news» в имени — пост для
+открытого канала Капибары, остальные — канал разработки, target):
   • post.html — текст в разметке Telegram (HTML: <b>, <i>, <u>, <s>,
     <tg-spoiler>, <code>, <pre><code class="language-python">, <blockquote>,
     <blockquote expandable>, <a href>), до 4096 символов;
@@ -34,6 +35,15 @@ CAPTION_LIMIT = 1024     # подпись к фото/альбому
 TEXT_LIMIT = 4096        # обычное сообщение
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")
 COVER_VERSION = "1"      # поменять — Telegram заберёт обложки заново
+
+
+def target(slug: str) -> str:
+    """Куда выходит пост: «news» в имени папки (`25-news-hello-pinned`) —
+    открытый канал Капибары для всех (LOGIN_CHANNEL, Никита 19.10), остальные —
+    канал разработки (CHANNEL_ID). Не задан — пусто."""
+    import config
+    import login_channel
+    return login_channel.channel() if "news" in slug.split("-") else config.CHANNEL_ID
 
 
 def visible_len(html: str) -> int:

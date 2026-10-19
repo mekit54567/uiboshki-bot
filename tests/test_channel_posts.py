@@ -227,6 +227,39 @@ async def test_offer_next_after_deploy(db, tmp_path, monkeypatch):
     assert await channel.offer_next(bot) is None                              # канал не задан — молчим
 
 
+@pytest.mark.asyncio
+async def test_news_posts_go_to_open_channel(db, tmp_path, monkeypatch):
+    """«news» в имени папки — пост для открытого канала Капибары (LOGIN_CHANNEL,
+    Никита 19.10), остальные — в канал разработки; закреп — там же, куда вышел."""
+    from handlers import channel
+    _post(tmp_path, "24-bot-or-app", "<b>Бот или приложение</b>")
+    _post(tmp_path, "25-news-hello-pinned", "<b>Капибара — учёба МИРЭА</b>")
+    monkeypatch.setattr(channel_posts, "POSTS_DIR", tmp_path)
+    monkeypatch.setattr(config, "CHANNEL_ID", "@uiboshki_dev")
+    monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
+    monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
+    assert channel_posts.target("25-news-hello-pinned") == "" and channel_posts.target("24-bot-or-app") == "@uiboshki_dev"
+    assert channel_posts.target("03-newspaper") == "@uiboshki_dev"           # только слово целиком
+    await channel_posts.mark_published("24-bot-or-app", [1])
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=Session())
+    assert await channel.offer_next(bot) is None                              # канала новостей нет — не предлагаем
+    monkeypatch.setattr(config, "LOGIN_CHANNEL", "https://t.me/kapibara_mirea")
+    assert channel_posts.target("25-news-hello-pinned") == "@kapibara_mirea"
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(channel.router)
+    star = User(id=STAROSTA_ID, is_bot=False, first_name="S")
+    msg = Message(message_id=1, date=0, chat=Chat(id=STAROSTA_ID, type="private"), from_user=star, text="x")
+    try:
+        await dp.feed_update(bot, Update(update_id=1, callback_query=CallbackQuery(
+            id="1", from_user=star, chat_instance="c", data="chan:pub:25-news-hello-pinned", message=msg)))
+        chats = [c for c, _, _ in bot.session.sent]
+        assert "@kapibara_mirea" in chats and "@uiboshki_dev" not in chats
+        assert any(c == "@kapibara_mirea" and t == "PinChatMessage" for c, t, _ in bot.session.sent)
+        assert "t.me/kapibara_mirea/" in bot.session.sent[-1][1]
+    finally:
+        channel.router._parent_router = None
+
+
 # Теги, которые понимает Telegram в parse_mode=HTML
 TG_TAGS = {"b", "strong", "i", "em", "u", "ins", "s", "strike", "del", "code", "pre", "a",
            "tg-spoiler", "blockquote", "span", "tg-emoji"}

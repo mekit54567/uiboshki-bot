@@ -44,6 +44,13 @@ def link() -> str:
     return f"https://t.me/{c[1:]}" if c.startswith("@") else ""
 
 
+def news_line() -> str:
+    """Строка про открытый канал для /start, /help, /app и описания бота
+    (Капибара везде); канала нет — пусто."""
+    c = channel()
+    return f"📣 Новости Капибары — {c}" if c.startswith("@") else ""
+
+
 def store_app(device: str) -> bool:
     """Вход из своего приложения из стора (webapp/routes/auth._device)."""
     return (device or "").startswith("Капибара ·")

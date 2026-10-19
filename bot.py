@@ -97,6 +97,15 @@ BOT_DESCRIPTION = (
     "📱 И без Telegram: uiboshki.ru/app ставится на телефон и компьютер как приложение"
 )
 BOT_SHORT_DESCRIPTION = "Расписание, СДО, лекции и ИИ для любой группы МИРЭА — в Telegram и на uiboshki.ru"
+# Имя бота в Telegram (Никита 17.10: «Капибара МИРЭА»; адрес @UiboshkiBot не
+# меняем — старые ссылки умрут). Ставит сам бот, без BotFather.
+BOT_NAME = "Капибара МИРЭА"
+
+
+def bot_description(group: str) -> str:
+    import login_channel
+    news = login_channel.news_line()
+    return BOT_DESCRIPTION.format(group=group) + (f"\n{news}" if news else "")
 
 
 async def setup_bot_menu(bot: Bot):
@@ -114,7 +123,13 @@ async def setup_bot_menu(bot: Bot):
                 logger.info(f"Команды старосты {sid}: {e}")
         from config import GROUP_NAME
         try:
-            await bot.set_my_description(BOT_DESCRIPTION.format(group=GROUP_NAME))
+            # имя — только если другое: Telegram ограничивает частую смену
+            if (await bot.get_my_name()).name != BOT_NAME:
+                await bot.set_my_name(BOT_NAME)
+        except Exception as e:
+            logger.info(f"Имя бота: {e}")
+        try:
+            await bot.set_my_description(bot_description(GROUP_NAME))
             await bot.set_my_short_description(BOT_SHORT_DESCRIPTION.format(group=GROUP_NAME))
         except Exception as e:          # лимит Telegram на частую смену — не страшно
             logger.info(f"Описание бота: {e}")
