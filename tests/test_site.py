@@ -165,6 +165,6 @@ def test_root_has_site_link_preview(monkeypatch):
     monkeypatch.setattr(deps, "WEBAPP_URL", "https://www.uiboshki.ru")
     r = _client().get("/")
     assert r.status_code == 200 and "js/core.js" in r.text                    # это всё ещё приложение
-    assert '<meta property="og:image" content="https://www.uiboshki.ru/site/og.jpg">' in r.text
+    assert '<meta property="og:image" content="https://www.uiboshki.ru/site/og.jpg?v=' in r.text and "__OGV__" not in r.text
     assert '<meta property="og:url" content="https://www.uiboshki.ru/about">' in r.text
     assert "__BASE__" not in r.text and r.text.index("og:title") < r.text.index("</head>")

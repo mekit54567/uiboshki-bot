@@ -58,7 +58,10 @@ def og_meta(base: str) -> str:
     lines = (_site_dir() / "index.html").read_text(encoding="utf-8").splitlines()
     keep = [ln for ln in lines if ln.startswith(('<meta name="description"', '<meta property="og:',
                                                  '<meta name="twitter:'))]
-    return "\n".join(keep).replace("__BASE__", base)
+    from webapp.server import _digest
+    # метка версии у картинки: Telegram помнит превью по адресу — новая og.jpg
+    # без неё не показалась бы (19.10, @WebpageBot отдал старую)
+    return "\n".join(keep).replace("__BASE__", base).replace("__OGV__", _digest("site/og.jpg"))
 
 
 @router.get("/about", include_in_schema=False)
@@ -72,7 +75,8 @@ async def about_page(request: Request):
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     import config
     html = ((_site_dir() / "index.html").read_text(encoding="utf-8")
-            .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME))
+            .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
+            .replace("__OGV__", _digest("site/og.jpg")))
     # стили и скрипт сайта — по ссылке с хэшем: после обновления браузер не
     # склеит новую страницу со старым site.js (и кэширует их надолго)
     for rel in ("site/site.css", "site/site.js"):
