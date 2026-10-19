@@ -48,8 +48,8 @@
       `CHANNEL_URL=https://t.me/kapibara_mirea`, `CHANNEL_ID=@uiboshki_dev`
       (иначе посты о разработке уйдут в новый канал). После мержа #227 бот
       пришлёт превью первого поста — «В канал».
-- [ ] BotFather → `/setdescriptionpic` → @UiboshkiBot → картинка «Капибара МИРЭА»
-      от ChatGPT (что видно до /start). Картинку превью сайта прислать Claude файлом.
+- [x] BotFather → `/setdescriptionpic` → картинка «Капибара МИРЭА» (19.10);
+      превью сайта от ChatGPT — в 5.108.2.
 
 ## 5. Сервер и безопасность
 
