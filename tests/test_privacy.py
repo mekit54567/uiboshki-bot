@@ -568,3 +568,40 @@ def test_legal_proxy_as_configured(monkeypatch):
     monkeypatch.setenv("PROXY_COUNTRY", "Нидерландах")
     text = json.dumps(c.get("/api/legal/privacy").json(), ensure_ascii=False)
     assert "туннель на сервер оператора в Нидерландах" in text and "не расшифровывается" in text
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_blocked_cached_and_batch(db, monkeypatch):
+    """19.10, медленный диск Amvera: blocked открывал базу по 4 раза — 3 раза
+    на запрос и на каждого человека в рейтинге (рейтинг 162 с). Теперь «можно»
+    помнится до просьбы удалить, а рейтинг проверяет всех одним подключением."""
+    import database._conn
+    import database.privacy as dbp
+    import privacy
+    from database.privacy import give_consent
+    NEW, OLD_V, GONE = 444, 555, 666
+    await _legacy(db, ME)
+    for uid in (OTHER, NEW, OLD_V, GONE):
+        await db.upsert_user(uid, "", "x")
+    await give_consent(NEW, "pd", privacy.VERSION, "bot")
+    await give_consent(OLD_V, "pd", "old", "bot")
+    await give_consent(GONE, "pd", "old", "bot")
+    await privacy.request_erase(GONE)
+    everyone = [ME, OTHER, NEW, OLD_V, GONE, STAROSTA_ID]
+    one_by_one = {u for u in everyone if await privacy.blocked(u)}
+    assert one_by_one == {OTHER, GONE}
+    privacy._given.clear()
+    privacy._open.clear()
+    assert await privacy.blocked_ids(everyone) == one_by_one
+
+    opened = []
+    real = database._conn.connect
+    monkeypatch.setattr(dbp, "connect", lambda: opened.append(1) or real())
+    assert not await privacy.blocked(ME) and not await privacy.blocked(OLD_V)
+    assert opened == []                                   # ответ «можно» — из памяти
+    assert await privacy.blocked_ids(everyone) == {OTHER, GONE}
+    assert len(opened) == 1                               # заблокированные — одним подключением
+    monkeypatch.setattr(dbp, "connect", real)
+    await privacy.request_erase(ME)                       # попросил удалить — память сбрасывается
+    assert await privacy.blocked(ME)

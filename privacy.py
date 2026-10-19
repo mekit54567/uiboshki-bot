@@ -117,6 +117,10 @@ def operator_missing() -> list[str]:
 
 _seen: dict[int, str] = {}     # id → день последней отметки (пишем раз в день)
 _given: set[tuple[int, str, str]] = set()   # (id, вид, версия) — уже дал, в базу не ходим
+# Не заблокирован (был до согласий или давал прошлую версию): blocked зовётся
+# по 3 раза на запрос и на каждого человека в рейтинге — по 4 открытия базы
+# (19.10, медленный диск: рейтинг — 162 с). Сбрасывается вместе с _given.
+_open: set[int] = set()
 
 
 async def needs(user_id: int, kind: str = "pd") -> bool:
@@ -136,12 +140,37 @@ async def blocked(user_id: int) -> bool:
     пользуется и без него (Никита, 11.10). Давал согласие прошлой версии
     текста — тоже: новую спросят один раз (ask_once), не блокируя (переезд
     16.10). Старосты — операторы."""
-    if user_id in STAROSTA_IDS or not await needs(user_id):
+    if user_id in STAROSTA_IDS or user_id in _open or not await needs(user_id):
         return False
     from database.privacy import has_any_consent, is_legacy
     if await erasing(user_id):       # попросил удалить — до полного стирания ничего не обрабатываем
         return True
-    return not await is_legacy(user_id) and not await has_any_consent(user_id)
+    if await is_legacy(user_id) or await has_any_consent(user_id):
+        _open.add(user_id)
+        return False
+    return True
+
+
+async def blocked_ids(user_ids) -> set[int]:
+    """blocked для многих сразу (рейтинг — все люди): одно подключение к базе
+    вместо четырёх на человека."""
+    rest = [u for u in user_ids
+            if u not in STAROSTA_IDS and u not in _open and (u, "pd", VERSION) not in _given]
+    if not rest:
+        return set()
+    from database.privacy import consent_sets
+    current, any_, legacy, erasing_ = await consent_sets("pd", VERSION)
+    out = set()
+    for u in rest:
+        if u in current:
+            _given.add((u, "pd", VERSION))
+        elif u in erasing_:
+            out.add(u)
+        elif u in legacy or u in any_:
+            _open.add(u)
+        else:
+            out.add(u)
+    return out
 
 
 async def should_ask(user_id: int) -> bool:
@@ -206,6 +235,7 @@ async def erase(user_id: int) -> dict:
     forget_user(user_id)
     _seen.pop(user_id, None)
     _given.difference_update({g for g in _given if g[0] == user_id})
+    _open.discard(user_id)
     try:
         import sdo_grades
         sdo_grades.forget(user_id)
@@ -244,6 +274,7 @@ async def request_erase(user_id: int, bot=None) -> str:
     due = await erasing(user_id) or (today_msk() + timedelta(days=ERASE_DAYS)).isoformat()
     await _request(user_id, due)
     _given.difference_update({g for g in _given if g[0] == user_id})
+    _open.discard(user_id)
     try:
         import sdo_grades
         sdo_grades.forget(user_id)

@@ -24,13 +24,29 @@ TTL = 12 * 3600
 IN_CHAT = {"creator", "administrator", "member"}
 
 
+# Запомненный чат — в памяти на минуту: chat_id зовётся по 5 раз на запрос
+# приложения, и каждый раз — открытие базы (19.10, медленный диск).
+_chat: dict[str, tuple[float, int]] = {}
+CHAT_TTL = 60
+
+
 async def chat_id() -> int:
     import config
+    import database
     from database import get_setting
     if config.GROUP_CHAT_ID:
         return config.GROUP_CHAT_ID
+    hit = _chat.get(database.DATABASE_PATH)
+    if hit and time.monotonic() - hit[0] < CHAT_TTL:
+        return hit[1]
     v = await get_setting("group_chat_id")
-    return int(v) if v and v.lstrip("-").isdigit() else 0
+    cid = int(v) if v and v.lstrip("-").isdigit() else 0
+    _chat[database.DATABASE_PATH] = (time.monotonic(), cid)
+    return cid
+
+
+def forget_chat():
+    _chat.clear()
 
 
 async def _cached(user_id: int) -> tuple[bool | None, bool]:
