@@ -1,5 +1,5 @@
-// Экран пары, вариант А (Никита 19.10): обсуждение группы пузырями с полем
-// ввода; долгое нажатие на чужое — жалоба/скрыть, на своё — удалить. Оценка
+// Экран пары (Никита 19.10): обсуждение — два последних и кнопка, всё и поле
+// ввода — листом; долгое нажатие на чужое — жалоба/скрыть, на своё — удалить. Оценка
 // преподавателя — ряд капибар под именем, лист с пятью капибарами и эмоцией.
 // В чужом расписании (поиск) — ни того, ни другого. Данные выдуманные.
 import 'package:flutter/material.dart';
@@ -63,19 +63,29 @@ Future<void> _open(WidgetTester t, api, {bool own = true}) async {
 }
 
 void main() {
-  testWidgets('обсуждение: пузыри, отправка, своё — удалить, чужое — жалоба', (t) async {
+  testWidgets('на экране — два последних и кнопка; всё обсуждение и ввод — листом', (t) async {
     phone(t);
-    final asked = <String>[];
     final bodies = <String, Object?>{};
+    const masha = {
+      'id': 3,
+      'text': 'А тест будет?',
+      'created_at': '2026-10-18 06:20:00',
+      'author': 'Маша С.',
+      'mine': false,
+    };
     final api = fakeApi(
-      requests: asked,
       bodies: bodies,
       overrides: {
-        _comments: _list([_egor]),
+        _comments: _list([_egor, masha, _me]),
         'POST /api/lesson/comments': {
           'ok': true,
-          'id': 2,
-          ..._list([_egor, _me]),
+          'id': 4,
+          ..._list([
+            _egor,
+            masha,
+            _me,
+            {'id': 4, 'text': 'Ок', 'created_at': '2026-10-18 06:30:00', 'author': 'Аня С.', 'mine': true},
+          ]),
         },
         _rating: {'count': 0, 'avg': null, 'mine': null, 'show_min': 3, 'can_rate': false},
       },
@@ -83,22 +93,48 @@ void main() {
     await _open(t, api);
     await t.drag(find.byType(ListView), const Offset(0, -600));
     await settle(t);
-    expect(find.text('Обсуждение группы · 1'), findsOneWidget);
+    expect(find.text('Обсуждение группы · 3'), findsOneWidget);
+    expect(find.text('Пару перенесли в А-17'), findsNothing); // старое — только в листе
+    expect(find.text('А тест будет?'), findsOneWidget);
+    expect(find.text('Сказал, что на следующей'), findsOneWidget);
+    expect(find.byKey(const Key('comment:input')), findsNothing); // поля на экране нет
+
+    await t.tap(find.byKey(const Key('comments:open')));
+    await settle(t);
+    expect(find.text('Обсуждение пары'), findsOneWidget);
     expect(find.text('Пару перенесли в А-17'), findsOneWidget);
-    await t.enterText(find.byKey(const Key('comment:input')), '  Сказал, что на следующей ');
+    await t.enterText(find.byKey(const Key('comment:input')), '  Ок ');
     await t.tap(find.byKey(const Key('comment:send')));
     await settle(t);
     expect(bodies['POST /api/lesson/comments'], {
       'start': '2026-10-18T07:40:00.000Z',
       'title': 'Анализ данных',
-      'text': 'Сказал, что на следующей',
+      'text': 'Ок',
     });
-    expect(find.text('Обсуждение группы · 2'), findsOneWidget);
-    expect(find.textContaining('ты ·'), findsOneWidget); // своё — «ты», справа
+    expect(find.text('Ок'), findsOneWidget);
 
-    await t.longPress(find.byKey(const Key('comment:1')));
+    await t.longPress(find.byKey(const Key('sheet:comment:1')));
     await settle(t);
     expect(find.text('Пожаловаться'), findsWidgets); // лист жалобы (report.dart)
+  });
+
+  testWidgets('пусто, но открыто — «Написать группе» открывает лист с полем', (t) async {
+    phone(t);
+    await _open(
+      t,
+      fakeApi(
+        overrides: {
+          _comments: _list([]),
+          _rating: {'count': 0, 'avg': null, 'mine': null, 'show_min': 3, 'can_rate': false},
+        },
+      ),
+    );
+    await t.drag(find.byType(ListView), const Offset(0, -600));
+    await settle(t);
+    expect(find.text('Написать группе'), findsOneWidget);
+    await t.tap(find.byKey(const Key('comments:open')));
+    await settle(t);
+    expect(find.byKey(const Key('comment:input')), findsOneWidget);
   });
 
   testWidgets('закрыто и пусто — блока нет; в чужом расписании — не спрашивает', (t) async {
