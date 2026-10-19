@@ -4,11 +4,19 @@ is_editor — кто правит доску ДЗ и общие дедлайны
 
 import aiosqlite
 
+import database
 from config import is_starosta
 from database._conn import connect
 
+# Базы, где таблицы уже проверены. Раньше init_hw_table шёл перед каждым
+# get_setting — лишнее открытие базы на каждое чтение настройки (по 8 на
+# запрос приложения; на медленном диске Amvera 19.10 — секунды).
+_ready: set[str] = set()
+
 
 async def init_hw_table():
+    if database.DATABASE_PATH in _ready:
+        return
     async with connect() as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS homework (
@@ -39,6 +47,7 @@ async def init_hw_table():
             )
         """)
         await db.commit()
+    _ready.add(database.DATABASE_PATH)
 
 
 async def get_setting(key: str) -> str | None:

@@ -121,12 +121,17 @@ def _consent_given(request, monkeypatch):
     tests/test_privacy.py (метка consent_real)."""
     import privacy
     privacy._given.clear()
+    privacy._open.clear()
     if "consent_real" in request.keywords:
         return
 
     async def never(user_id):
         return False
+
+    async def by_one(user_ids):        # рейтинг проверяет всех сразу — через тот же blocked (его подменяют)
+        return {u for u in user_ids if await privacy.blocked(u)}
     monkeypatch.setattr(privacy, "blocked", never)
+    monkeypatch.setattr(privacy, "blocked_ids", by_one)
 
 
 @pytest.fixture(autouse=True)

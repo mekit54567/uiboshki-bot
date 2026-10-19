@@ -92,3 +92,23 @@ async def test_bot_added_to_chat_by_starosta_remembers_it(db, monkeypatch):
     assert await members.chat_id() == 0
     await bot_added_to_group(event(STAROSTA_ID))
     assert await members.chat_id() == CHAT and sent and "уибошки" in sent[0][1]
+
+
+@pytest.mark.asyncio
+async def test_chat_id_and_settings_without_extra_db_opens(db, monkeypatch):
+    """19.10, медленный диск: chat_id открывал базу по 5 раз на запрос, а каждое
+    чтение настройки — ещё раз ради проверки таблиц (init_hw_table)."""
+    import database.homework as hw
+    import members
+    monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
+    await db.set_setting("group_chat_id", str(CHAT))
+    members.forget_chat()
+    opened = []
+    real = hw.connect
+    monkeypatch.setattr(hw, "connect", lambda: opened.append(1) or real())
+    assert await members.chat_id() == CHAT
+    opened.clear()
+    assert await members.chat_id() == CHAT
+    assert opened == []                                     # второй раз — из памяти
+    await hw.get_setting("x")
+    assert len(opened) == 1                                 # таблицы уже проверены — одно открытие

@@ -39,6 +39,18 @@ async def has_consent(user_id: int, kind: str, version: str) -> bool:
         return row is not None
 
 
+async def consent_sets(kind: str, version: str) -> tuple[set[int], set[int], set[int], set[int]]:
+    """Одним подключением: (дали эту версию, дали любую, legacy, ждут удаления)
+    — для privacy.blocked_ids (рейтинг проверяет всех сразу)."""
+    async with connect() as db:
+        async def ids(sql, args=()):
+            return {r[0] for r in await (await db.execute(sql, args)).fetchall()}
+        return (await ids("SELECT user_id FROM consents WHERE kind=? AND version=?", (kind, version)),
+                await ids("SELECT user_id FROM consents WHERE kind=?", (kind,)),
+                await ids("SELECT user_id FROM users WHERE legacy=1"),
+                await ids("SELECT user_id FROM erase_requests"))
+
+
 async def has_any_consent(user_id: int, kind: str = "pd") -> bool:
     """Давал согласие хоть какой-то версии текста."""
     async with connect() as db:

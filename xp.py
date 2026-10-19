@@ -234,7 +234,8 @@ async def board() -> dict:
     raw, people = await _raw(), await _people()
     # Без согласия или в ожидании удаления (privacy.blocked) — ни в опыте
     # группы, ни среди людей (ревью 152-ФЗ 18.10).
-    people = {uid: p for uid, p in people.items() if not await privacy.blocked(uid)}
+    blocked = await privacy.blocked_ids(people)
+    people = {uid: p for uid, p in people.items() if uid not in blocked}
     xp = _totals(raw)
     names = await _group_names({p["group"] for p in people.values()})
     groups = _groups(xp, people, names)
