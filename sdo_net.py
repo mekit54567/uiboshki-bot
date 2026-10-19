@@ -11,6 +11,11 @@
 хотя СДО отвечал. Теперь предохранитель срабатывает после TRIP_AFTER неудач
 подряд (любой ответ СДО сбрасывает счёт), а одновременно к СДО с сервера идёт
 не больше MAX_PARALLEL запросов — все студенты ходят с одного адреса.
+
+19.10: у Amvera медленно искались адреса (по 5–15 с на любой хост), за 6 с
+соединение не успевало — три таких подряд выключали СДО всем на 3 минуты
+(«Сдать» — «СДО МИРЭА недоступно» при живом СДО). Соединение теперь ждём до
+10 с, а выключаем на минуту: полностью СДО не пускает только из-за границы.
 """
 import asyncio
 import logging
@@ -20,8 +25,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DOWN_SECONDS = 180
-CONNECT_TIMEOUT = 6
+DOWN_SECONDS = 60
+CONNECT_TIMEOUT = 10
 TRIP_AFTER = 3
 MAX_PARALLEL = 6
 
@@ -63,6 +68,7 @@ def client(cookie: str, timeout: float = 30) -> httpx.AsyncClient:
         global _fails
         if is_down():
             raise httpx.ConnectError("СДО недоступен с сервера (недавно не ответил)", request=request)
+        started = time.monotonic()
         try:
             async with _sem():
                 resp = await send(request, **kw)
@@ -75,6 +81,9 @@ def client(cookie: str, timeout: float = 30) -> httpx.AsyncClient:
             else:
                 logger.info(f"СДО: не соединились ({type(e).__name__}), неудача {_fails} из {TRIP_AFTER}")
             raise
+        finally:
+            import timing            # время в СДО (с очередью) — в «Долгие запросы» /status
+            timing.spend("sdo", time.monotonic() - started)
         _fails = 0
         return resp
 

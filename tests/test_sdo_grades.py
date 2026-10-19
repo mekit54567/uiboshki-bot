@@ -439,3 +439,34 @@ async def test_course_detail_does_not_wait_slow_pages(monkeypatch):
     slow["on"] = False
     d = await sdo_grades.course_detail(1, "c", 18672)
     assert sdo_grades._cached(("detail", 1, 18672)) is d
+
+
+async def test_course_detail_shared_and_stale_for_actions(monkeypatch):
+    """19.10: смена цели — 15 с: каждое нажатие заново грузило предмет из СДО.
+    Одновременные запросы ждут одну загрузку, цели хватает прошлой."""
+    import asyncio
+    sdo_grades._cache.clear()
+    sdo_grades._pages.clear()
+    reports = []
+
+    async def courses(client):
+        return [{"id": 18672, "name": "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]",
+                 "title": "Основы предпринимательской деятельности"}]
+
+    async def moodle(request):
+        if "grade/report/user" in str(request.url):
+            reports.append(1)
+            await asyncio.sleep(0.05)
+            return httpx.Response(200, text=REPORT)
+        return httpx.Response(200, text="<p></p>")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(moodle), **kw))
+    monkeypatch.setattr(sdo_grades, "this_semester_courses", courses)
+    a, b = await asyncio.gather(sdo_grades.course_detail(1, "c", 18672), sdo_grades.course_detail(1, "c", 18672))
+    assert a is b and len(reports) == 1                              # одна загрузка на двоих
+    key = ("detail", 1, 18672)
+    sdo_grades._cache[key] = (0, a)                                  # кэш давно устарел
+    assert await sdo_grades.course_detail(1, "c", 18672, stale_ok=True) is a and len(reports) == 1
+    await sdo_grades.course_detail(1, "c", 18672)                   # экран — свежий
+    assert len(reports) == 2

@@ -194,22 +194,39 @@ _SLOW: deque = deque(maxlen=500)       # (когда, путь, с) — запр
 SLOW_REQ = 5.0
 
 
-def note_request(path: str, seconds: float, now: float | None = None) -> None:
+def note_request(path: str, seconds: float, now: float | None = None, parts: dict | None = None) -> None:
     """Долгий запрос к API (webapp/server.py) — в «Сервер» у /status: какие
-    разделы отвечают по 40–60 с (17.10 по метрикам Amvera были такие)."""
+    разделы отвечают по 40–60 с (17.10 по метрикам Amvera были такие) и на
+    что ушло время (parts — timing.py: база, СДО; остальное — сам сервер)."""
     if seconds >= SLOW_REQ:
-        _SLOW.append((now or time.time(), path, seconds))
-        logging.getLogger(__name__).info(f"долгий запрос {path}: {seconds:.1f} с")
+        _SLOW.append((now or time.time(), path, seconds, dict(parts or {})))
+        logging.getLogger(__name__).info(f"долгий запрос {path}: {seconds:.1f} с {why_slow(seconds, parts)}")
 
 
-def slow_requests(now: float | None = None, top: int = 3) -> tuple[int, list[tuple[str, float]]]:
-    """(сколько долгих за час, самые долгие пути — по худшему разу)."""
+def why_slow(seconds: float, parts: dict | None) -> str:
+    """«(база 3 с · 17 раз, СДО 70 с, сервер 3 с)» — куда ушло время запроса."""
+    parts = parts or {}
+    db, sdo = parts.get("db", 0.0), parts.get("sdo", 0.0)
+    bits = []
+    if db >= 0.5:
+        bits.append(f"база {db:.0f} с · {parts.get('db_n', 0)} раз")
+    if sdo >= 0.5:
+        bits.append(f"СДО {sdo:.0f} с")
+    rest = seconds - db - sdo       # СДО и база могли идти параллельно — тогда остаток меньше нуля
+    if rest >= 0.5:
+        bits.append(f"сервер {rest:.0f} с")
+    return f"({', '.join(bits)})" if bits else ""
+
+
+def slow_requests(now: float | None = None, top: int = 3) -> tuple[int, list[tuple[str, float, str]]]:
+    """(сколько долгих за час, самые долгие пути — по худшему разу, с разбором)."""
     now = now or time.time()
-    recent = [(p, s) for t, p, s in _SLOW if now - t <= 3600]
-    worst: dict[str, float] = {}
-    for p, s in recent:
-        worst[p] = max(worst.get(p, 0.0), s)
-    return len(recent), sorted(worst.items(), key=lambda x: -x[1])[:top]
+    recent = [(p, s, parts) for t, p, s, parts in _SLOW if now - t <= 3600]
+    worst: dict[str, tuple[float, str]] = {}
+    for p, s, parts in recent:
+        if s > worst.get(p, (0.0, ""))[0]:
+            worst[p] = (s, why_slow(s, parts))
+    return len(recent), [(p, s, why) for p, (s, why) in sorted(worst.items(), key=lambda x: -x[1][0])[:top]]
 
 
 async def db_probe() -> tuple[str, float, float]:
@@ -256,7 +273,7 @@ async def report() -> str:
     lines.append(("⚠️ " if lag >= LAG_WARN else "") + f"Самое долгое зависание за час: {lag:.1f} с")
     n, worst = slow_requests()
     lines += [f"Долгих запросов (от {SLOW_REQ:.0f} с) за час: {n} — "
-              + ", ".join(f"{p} {s:.0f} с" for p, s in worst) if n
+              + ", ".join(f"{p} {s:.0f} с" + (f" {why}" if why else "") for p, s, why in worst) if n
               else f"Долгих запросов (от {SLOW_REQ:.0f} с) за час нет", ""]
 
     lines.append("<b>СДО</b>")

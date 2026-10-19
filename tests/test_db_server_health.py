@@ -37,13 +37,16 @@ async def test_status_shows_slow_requests(db, monkeypatch):
     now = time.time()
     monkeypatch.setattr(health, "_SLOW", health.deque(maxlen=10))
     health.note_request("/api/today", 0.4, now)                      # быстрый — не в счёт
-    health.note_request("/api/sdo/grades", 52.3, now - 60)
+    health.note_request("/api/sdo/grades", 52.3, now - 60, {"db": 2.2, "db_n": 14, "sdo": 48.0})
     health.note_request("/api/sdo/grades", 12.0, now - 30)
     health.note_request("/api/chat", 31.0, now - 10)
     health.note_request("/api/files", 70.0, now - 7200)              # старше часа
-    assert health.slow_requests(now) == (3, [("/api/sdo/grades", 52.3), ("/api/chat", 31.0)])
+    assert health.slow_requests(now) == (3, [("/api/sdo/grades", 52.3, "(база 2 с · 14 раз, СДО 48 с, сервер 2 с)"),
+                                             ("/api/chat", 31.0, "(сервер 31 с)")])
     text = await health.report()
-    assert "Долгих запросов (от 5 с) за час: 3 — /api/sdo/grades 52 с, /api/chat 31 с" in text
+    # 19.10: видно, куда ушло время — база, СДО или сам сервер
+    assert ("Долгих запросов (от 5 с) за час: 3 — /api/sdo/grades 52 с (база 2 с · 14 раз, СДО 48 с, сервер 2 с), "
+            "/api/chat 31 с (сервер 31 с)") in text
 
     monkeypatch.setattr(health, "_SLOW", health.deque(maxlen=10))
     assert "Долгих запросов (от 5 с) за час нет" in await health.report()
@@ -53,7 +56,8 @@ def test_server_notes_api_requests_by_route(monkeypatch):
     from fastapi.testclient import TestClient
     from webapp import server
     seen = []
-    monkeypatch.setattr(health, "note_request", lambda path, s, now=None: seen.append(path))
+    monkeypatch.setattr(health, "note_request", lambda path, s, now=None, parts=None: seen.append((path, parts)))
     TestClient(server.app).get("/api/v1/meta")
     TestClient(server.app).get("/health")
-    assert seen == ["/api/meta"]                 # v1 → тот же путь, /health не API
+    assert [p for p, _ in seen] == ["/api/meta"]    # v1 → тот же путь, /health не API
+    assert "sdo" not in seen[0][1]                   # разбор времени запроса: в СДО /api/meta не ходит
