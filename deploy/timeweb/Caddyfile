@@ -1,0 +1,17 @@
+# HTTPS для приложения и сайта: сертификат Let's Encrypt Caddy получает сам,
+# как только www.uiboshki.ru в Cloudflare смотрит на IP сервера (серое облако).
+www.uiboshki.ru {
+	encode gzip
+	reverse_proxy bot:8080
+}
+
+# По голому IP (http://<IP>/api/meta) — только проверка, что бот жив, до
+# переключения домена; остальное по IP не отдаём (токены — только по HTTPS).
+http:// {
+	handle /api/meta {
+		reverse_proxy bot:8080
+	}
+	handle {
+		respond "Капибара: https://www.uiboshki.ru" 404
+	}
+}

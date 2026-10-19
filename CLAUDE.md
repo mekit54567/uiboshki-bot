@@ -140,6 +140,21 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
   до применения. Догадки без примеров уже ошибались.
 
 ## Деплой
+**19.10 — переезд на свой сервер Timeweb Cloud** (Никита: Amvera час висела
+на «Выполняется запуск», сайт и панель тормозят; v5.103.0): `deploy/timeweb/` —
+`setup.sh` одной командой из «Консоли» Timeweb (Docker с зеркалом
+`dockerhub.timeweb.cloud`, подкачка, код в `/opt/kapibara/app`, переменные
+`/opt/kapibara/.env`, база `/opt/kapibara/data`), docker compose: бот из
+того же Dockerfile + Caddy (HTTPS www.uiboshki.ru сам; по IP — только
+`/api/meta`), автообновление — systemd-таймер раз в минуту тянет ветку из
+`/opt/kapibara/branch` (`deploy`), секретов в GitHub нет. На сервере —
+команда `kap` (start/stop/logs/restart/update/restore/env). База — `kap
+restore` из S3-копии (`tools/s3_restore.py`) или `/restore` в боте. VPN —
+`XRAY_CONFIG` (Gemini Россию не пускает, прокси Amvera тут нет). Политика
+называет хостинг из `HOSTING` (`privacy.HOSTS`, на Timeweb — согласие v3,
+юрлицо — `HOSTING_ORG`). Пока DNS www не переключён на IP сервера — живёт
+Amvera (ниже); после переезда Amvera остановить, остаток денег — заявлением.
+
 С 16.10 бот живёт на **Amvera** (Москва_1, проект `kapibara-stud`): Amvera
 сама собирает и деплоит из `mekit54567/uiboshki-bot` — Sync fork больше не
 нужен. Ветка сборки — `deploy` (v5.89.15): её двигает `deploy.yml` на main

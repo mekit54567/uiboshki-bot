@@ -1,0 +1,22 @@
+#!/bin/sh
+# Короткие команды на сервере (ставит setup.sh в /usr/local/bin/kap):
+#   kap start    — запустить бота и автообновление
+#   kap stop     — остановить бота (автообновление тоже)
+#   kap logs     — логи бота (выход — Ctrl+C)
+#   kap restart  — перезапустить бота (после правки /opt/kapibara/.env)
+#   kap update   — пересобрать из GitHub прямо сейчас
+#   kap restore  — забрать базу из S3-копии (только пока бот остановлен)
+#   kap env      — открыть переменные (/opt/kapibara/.env)
+set -eu
+cd /opt/kapibara/app
+DC="docker compose -f deploy/timeweb/docker-compose.yml"
+case "${1:-}" in
+    start)   $DC up -d --build && systemctl enable --now kapibara-update.timer ;;
+    stop)    systemctl disable --now kapibara-update.timer; $DC stop ;;
+    logs)    $DC logs -f --tail 200 bot ;;
+    restart) $DC up -d --force-recreate bot ;;
+    update)  sh deploy/timeweb/update.sh --force ;;
+    restore) shift; $DC run --rm --no-deps bot python tools/s3_restore.py "$@" ;;
+    env)     ${EDITOR:-nano} /opt/kapibara/.env ;;
+    *)       sed -n '2,10p' "$0" ;;
+esac

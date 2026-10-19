@@ -84,6 +84,23 @@ async def put(key: str, data: bytes, content_type: str = "application/gzip") -> 
     return resp.status_code
 
 
+async def get(key: str) -> tuple[int, bytes]:
+    """Взять объект (перенос базы на новый сервер, tools/s3_restore.py). → (HTTP-код, байты)."""
+    endpoint = (os.getenv("BACKUP_S3_ENDPOINT") or DEFAULT_ENDPOINT).rstrip("/")
+    bucket = os.getenv("BACKUP_S3_BUCKET", "").strip()
+    url = f"{endpoint}/{bucket}/{quote(key, safe='/~')}"
+    now = datetime.now(timezone.utc)
+    payload_hash = hashlib.sha256(b"").hexdigest()
+    headers = {"host": urlsplit(url).netloc, "x-amz-content-sha256": payload_hash,
+               "x-amz-date": now.strftime("%Y%m%dT%H%M%SZ")}
+    headers["authorization"] = sign("GET", url, headers, payload_hash, os.getenv("BACKUP_S3_KEY_ID", "").strip(),
+                                    os.getenv("BACKUP_S3_SECRET", "").strip(),
+                                    os.getenv("BACKUP_S3_REGION", "ru-central1").strip(), now)
+    async with net.client(timeout=120) as c:
+        resp = await c.get(url, headers={k: v for k, v in headers.items() if k != "host"})
+    return resp.status_code, resp.content
+
+
 def backup_keys(now: datetime) -> list[str]:
     """Куда положить сегодняшнюю копию: день недели (через неделю — поверх)."""
     return [f"daily/uiboshki-{now.isoweekday()}-{now.strftime('%a').lower()}.db.gz"]

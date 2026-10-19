@@ -1,0 +1,8 @@
+[Unit]
+Description=Капибара: обновление из GitHub (ветка из /opt/kapibara/branch)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/kapibara/app/deploy/timeweb/update.sh
