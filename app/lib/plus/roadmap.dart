@@ -92,14 +92,20 @@ class RoadmapSheet extends StatelessWidget {
                   showDonateSheet(context, api);
                 },
                 icon: const Icon(Icons.favorite_border_rounded, size: 20),
-                label: Text('Поддержать проект', style: s.body(16, weight: FontWeight.w600, color: p.onAccent)),
+                label: Text(
+                  'Поддержать проект',
+                  style: s.body(16, weight: FontWeight.w600, color: p.onAccent),
+                ),
               ),
             ] else ...[
               for (final st in statuses.keys)
                 if (items.any((i) => i['status'] == st)) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: Space.m, bottom: Space.s),
-                    child: Text('${statuses[st]}'.toUpperCase(), style: s.body(12, color: p.muted, weight: FontWeight.w600)),
+                    child: Text(
+                      '${statuses[st]}'.toUpperCase(),
+                      style: s.body(12, color: p.muted, weight: FontWeight.w600),
+                    ),
                   ),
                   for (final i in items.where((i) => i['status'] == st))
                     Padding(

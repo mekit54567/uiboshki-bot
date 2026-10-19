@@ -9,7 +9,9 @@ import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/lesson_comments.dart';
 import '../widgets/lesson_reactions.dart';
+import '../widgets/teacher_rating.dart';
 import 'files.dart';
 import 'search.dart';
 import 'study.dart';
@@ -215,6 +217,8 @@ class _LessonScreenState extends State<LessonScreen> {
                           icon: Icons.person_outline_rounded,
                           title: lesson.teacher,
                           text: 'все пары преподавателя',
+                          // оценка в капибарах (вариант А, 19.10) — своей группе
+                          extra: widget.own ? TeacherRatingLine(api: api, name: lesson.teacher) : null,
                           onTap: () => openTarget(context, api, lesson.teacher, 2),
                         ),
                       ],
@@ -257,6 +261,7 @@ class _LessonScreenState extends State<LessonScreen> {
                 ),
               ),
               if (widget.own && !lesson.cancelled) LessonReactions(api: api, lesson: lesson),
+              if (widget.own) LessonComments(api: api, lesson: lesson),
               FutureBuilder<LessonExtras>(
                 future: _extras,
                 builder: (context, snap) {
@@ -315,7 +320,10 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String title, text;
   final VoidCallback? onTap;
-  const _InfoRow({required this.icon, required this.title, required this.text, this.onTap});
+
+  /// Ещё строка под подписью (оценка преподавателя) — со своим нажатием.
+  final Widget? extra;
+  const _InfoRow({required this.icon, required this.title, required this.text, this.onTap, this.extra});
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +347,7 @@ class _InfoRow extends StatelessWidget {
                 children: [
                   Text(title, style: s.body(16, weight: FontWeight.w600)),
                   Text(text, style: s.body(13, color: s.p.muted)),
+                  ?extra,
                 ],
               ),
             ),
