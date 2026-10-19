@@ -1,11 +1,13 @@
 """Картинки 1200×630 со стендом сайта:
-  • превью ссылки на сайт /about — webapp/static/site/og.jpg (tools/site_og.html);
+  • превью ссылки на сайт /about — webapp/static/site/og.jpg (tools/site_og.html).
+    С 19.10 og.jpg — картинка, которую Никита сделал в ChatGPT: снимок отсюда
+    её перезапишет, поэтому только с флагом --og (запасной вариант);
   • приглашение друга — webapp/static/site/invite.jpg (tools/site_invite.html,
     флаг --invite): приложение в телефоне — в светлой теме (Никита 18.10).
 
 Сервер с WebApp должен быть запущен (стенд или локально):
-    python tools/site_og.py http://localhost:8766
     python tools/site_og.py http://localhost:8766 --invite
+    python tools/site_og.py http://localhost:8766 --og       # перезапишет og.jpg от ChatGPT
 (свой Chromium — переменная CHROMIUM=/путь/к/chrome).
 Страница — стили сайта и живое демо (/about/demo) в телефоне.
 """
@@ -40,4 +42,6 @@ def main(base: str, invite: bool = False):
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--invite" not in sys.argv and "--og" not in sys.argv:
+        raise SystemExit("--invite — картинка приглашения; --og — превью сайта (заменит og.jpg от ChatGPT)")
     main(args[0] if args else "http://localhost:8766", invite="--invite" in sys.argv)
