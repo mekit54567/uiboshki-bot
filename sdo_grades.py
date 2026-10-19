@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 
 PASS_SHARE = 0.75           # доля зачтённых работ текущего контроля для БРС
 CACHE_SECONDS = 10 * 60
+# Экран предмета ждёт страницы работ (порог, статус, срок) не дольше этого:
+# 19.10 СДО отвечал медленно, и экран с целью грузился 76–100 с. Не успевшие
+# страницы — из прошлого раза или без порога; такой ответ не кэшируется.
+PAGES_BUDGET = 20
 EXAM_MARKS = ((40, "3"), (60, "4"), (80, "5"))
 CREDIT_MARKS = ((40, "зачёт"),)
 
@@ -578,9 +582,20 @@ async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
                 except httpx.HTTPError:
                     return None
 
-        pages = await asyncio.gather(*(page(w) for w in s["works"]))
-    for w, p in zip(s["works"], pages):
-        if p is not None:
+        tasks = [asyncio.ensure_future(page(w)) for w in s["works"]]
+        if tasks:
+            await asyncio.wait(tasks, timeout=PAGES_BUDGET)
+        late = [t for t in tasks if not t.done()]
+        for t in late:
+            t.cancel()
+        if late:
+            await asyncio.gather(*late, return_exceptions=True)
+            logger.info(f"предмет {course_id}: {len(late)} из {len(tasks)} страниц работ не успели за {PAGES_BUDGET} с")
+        # не успевшую страницу берём из прошлого раза (если была) — лучше старый порог, чем никакого
+        pages = [t.result() if t.done() and not t.cancelled() else (_pages.get((user_id, w["cmid"])) or (0, None))[1]
+                 for t, w in zip(tasks, s["works"])]
+    for t, w, p in zip(tasks, s["works"], pages):
+        if p is not None and t.done() and not t.cancelled():
             _pages[(user_id, w["cmid"])] = (time.time(), p)
     import quiz_time        # время тестов — одно на всех, видно в «Сдать»
     await quiz_time.remember({w["cmid"]: p for w, p in zip(s["works"], pages) if w["module"] == "quiz"})
@@ -599,6 +614,8 @@ async def course_detail(user_id: int, cookie: str, course_id: int) -> dict:
         for c in hit["courses"]:
             if c["id"] == course_id:
                 c.update({k: s[k] for k in ("works_passed", "works_need", "auto")})
+    if late:
+        return out                  # не всё успели — в кэш не кладём, следующий заход доберёт
     return _store(key, out)
 
 
