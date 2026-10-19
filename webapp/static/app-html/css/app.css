@@ -122,7 +122,7 @@ img { -webkit-user-drag: none; }
 .screen-title { padding: var(--l) var(--xl) var(--m); display: flex; align-items: flex-end; gap: var(--m); }
 .screen-title .bar { width: 34px; height: 3px; border-radius: 2px; background: var(--accent); margin-top: 10px; }
 .section { padding: var(--xl) var(--xl) var(--s); }
-.backrow { padding: var(--s) var(--m) 0; height: 48px; display: flex; align-items: center; }
+.backrow { padding: 2px var(--m) 0; height: 40px; display: flex; align-items: center; }
 .backrow button { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--text); }
 
 /* ── Кнопки ── */
@@ -255,3 +255,29 @@ textarea.field { resize: none; min-height: 96px; }
 .td-cap { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--l); background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   animation: fade-in .25s both; padding: var(--xl); text-align: center; color: var(--text); }
+
+/* ── «Пара» (screens/lesson.js) ── */
+.ls-rate { display: inline-flex; align-items: center; gap: var(--s); padding: 3px 0; max-width: 100%; cursor: pointer; }
+.ls-rrow { display: inline-flex; gap: 2px; flex: none; }
+.ls-choice { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--xs); padding: var(--s) 0;
+  border-radius: calc(var(--r-tile) - 4px); transition: background .18s; }
+.ls-choice.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ls-bub { display: flex; flex-direction: column; align-items: flex-start; }
+.ls-bub.mine { align-items: flex-end; }
+.ls-msg { max-width: 80%; padding: 10px 14px; border-radius: 18px 18px 18px 6px; background: var(--card); border: 1px solid var(--line);
+  font-size: 15px; white-space: pre-wrap; word-break: break-word; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ls-bub.mine .ls-msg { background: var(--accent); color: var(--on-accent); border-color: transparent; border-radius: 18px 18px 6px 18px; }
+.sheet.ls-sheet { height: 80%; display: flex; flex-direction: column; }
+.sheet.ls-sheet .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.sheet.ls-sheet .body > .ttl, .sheet.ls-sheet .body > .bd { padding: 0 var(--xl); }
+.ls-list { flex: 1; overflow-y: auto; padding: var(--s) var(--l); }
+.ls-input { padding: var(--xs) var(--l) 0; }
+.ls-field { display: flex; align-items: flex-end; gap: var(--xs); padding: 4px 4px 4px var(--l); border-radius: 28px; background: var(--card);
+  border: 1px solid var(--line); }
+.ls-field textarea { flex: 1; border: 0; background: none; outline: none; resize: none; font-size: 15px; padding: 9px 0; max-height: 110px; }
+.ls-send { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: flex;
+  align-items: center; justify-content: center; flex: none; }
+.ls-pick { display: flex; justify-content: space-between; margin-top: var(--l); }
+.ls-pick button { transition: transform .16s; }
+.ls-pick button.on { transform: scale(1.12); }
+.ls-mood { height: 80px; margin-top: var(--l); display: flex; align-items: center; justify-content: center; gap: var(--m); }
