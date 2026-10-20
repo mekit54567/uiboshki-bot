@@ -12,6 +12,10 @@
 //
 // 5.91: часть иконок открывается ачивкой (ранг, все ачивки) или подпиской —
 // поле unlock в том же json; закрытые видны в листе с замком.
+//
+// 5.113: на iPhone подписочные открываются набором ачивок ([iosCombo],
+// Никита 20.10) — подписка куплена не через Apple (App Store 3.1.1), а
+// ачивки — можно.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
@@ -59,18 +63,25 @@ class AppIcon {
   static final premium = ValueNotifier<bool>(false);
 
   /// Как открыть (design/app_icons.json → unlock): null — бесплатно, `sub`,
-  /// `ach:<id>`, `rank:<dawn|noon|dusk|midnight>`, `all`, `none` — убрана.
-  String? get unlock => sub ? 'sub' : (unlockForTest ?? iconUnlock)[name];
+  /// `ach:<id>`, `rank:<dawn|noon|dusk|midnight>`, `all`, `none` — убрана;
+  /// `combo` — подписочная на iPhone ([iosCombo]).
+  String? get unlock {
+    final u = sub ? 'sub' : (unlockForTest ?? iconUnlock)[name];
+    return u == 'sub' && _ios ? 'combo' : u;
+  }
+
+  /// Набор ачивок, которым на iPhone открываются подписочные (Никита 20.10).
+  static const iosCombo = ['secret', 't2222', 'calm', 'found', 'submit', 'sdo'];
 
   @visibleForTesting
   static Map<String, String>? unlockForTest;
 
   /// Что видно в «Оформлении»: без праздничных и убранных; подписочные —
-  /// только подписчикам (купить в приложении нельзя — нечего и дразнить),
-  /// а на iPhone — никому: подписка куплена не через Apple (App Store, 3.1.1).
+  /// только подписчикам (купить в приложении нельзя — нечего и дразнить);
+  /// на iPhone они всем, с замком до набора ачивок ([iosCombo]).
   static List<AppIcon> get choosable => [
     for (final i in values)
-      if (i.season == null && i.unlock != 'none' && (i.unlock != 'sub' || (premium.value && !_ios))) i,
+      if (i.season == null && i.unlock != 'none' && (i.unlock != 'sub' || premium.value)) i,
   ];
 
   static bool get _ios => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
@@ -81,6 +92,7 @@ class AppIcon {
     if (u == null) return true;
     if (u == 'sub') return premium.value;
     if (u == 'all') return achievements.every((a) => got.containsKey(a.id));
+    if (u == 'combo') return iosCombo.every(got.containsKey);
     if (u.startsWith('ach:')) return got.containsKey(u.substring(4));
     if (u.startsWith('rank:')) {
       final rank = Rank.values.where((r) => r.name == u.substring(5)).firstOrNull;
@@ -94,6 +106,13 @@ class AppIcon {
     final u = unlock ?? '';
     if (u == 'sub') return 'Откроется с подпиской';
     if (u == 'all') return 'Откроется, когда соберёшь все ачивки';
+    if (u == 'combo') {
+      final list = [for (final id in iosCombo) achievementById(id)].whereType<Achievement>();
+      final open = [for (final a in list.where((a) => !a.secret)) '«${a.title}»'];
+      final hidden = list.where((a) => a.secret).length;
+      return 'Откроется за ачивки ${open.join(', ')}'
+          '${hidden > 0 ? ' и ${hidden == 1 ? 'секретную' : '$hidden секретные'} ранга «${Rank.midnight.title}»' : ''}';
+    }
     if (u.startsWith('ach:')) {
       final a = achievementById(u.substring(4));
       if (a == null) return 'Откроется ачивкой';
