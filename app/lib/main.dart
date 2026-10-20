@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'achievements/store.dart';
 import 'achievements/ui.dart' show appNavigator;
 import 'api/api.dart';
+import 'app_push.dart';
 import 'plus/plus.dart';
 import 'screens/login.dart';
 import 'screens/sdo_relogin.dart';
@@ -135,6 +136,7 @@ class _UiboAppState extends State<UiboApp> {
   }
 
   Future<void> _logout() async {
+    await AppPush.forget(widget.api); // пуши — пока вход ещё действует
     await widget.api.logout();
     unawaited(HomeWidgets.clear()); // чужому телефону — без расписания на экране
     unawaited(SdoRelogin.forget()); // и без единого входа МИРЭА в окне СДО

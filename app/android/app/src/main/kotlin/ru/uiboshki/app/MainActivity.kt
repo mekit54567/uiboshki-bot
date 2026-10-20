@@ -1,11 +1,13 @@
 package ru.uiboshki.app
 
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.webkit.CookieManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import ru.uiboshki.app.push.PushBridge
 import ru.uiboshki.app.widget.WidgetBridge
 
 class MainActivity : FlutterActivity() {
@@ -61,6 +63,9 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         // виджеты рабочего стола: снимок дня из приложения (widget/WidgetBridge.kt)
         WidgetBridge.attach(this, flutterEngine)
+        // пуши приложения с шифрованием (push/, lib/app_push.dart); открыли нажатием — вкладка
+        PushBridge.attach(this, flutterEngine)
+        PushBridge.fromIntent(intent, running = false)
         // вход в СДО страницей (5.93.2): кука MoodleSession — HttpOnly, из Dart её не видно
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "uiboshki/cookies").setMethodCallHandler { call, result ->
             if (call.method != "get") return@setMethodCallHandler result.notImplemented()
@@ -93,5 +98,20 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        PushBridge.fromIntent(intent, running = true)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        PushBridge.onPermissionResult(this, requestCode)
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        PushBridge.detach()
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }

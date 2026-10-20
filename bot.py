@@ -218,6 +218,8 @@ async def main():
 
     import sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
     asyncio.create_task(sdo_accounts.rotate_all())
+    import app_push
+    asyncio.create_task(app_push.rotate_keys())         # ключи телефонов для пушей — тем же секретом
 
     import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
     if (missing := privacy.operator_missing()) and STAROSTA_ID:

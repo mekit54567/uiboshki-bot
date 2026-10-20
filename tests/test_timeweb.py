@@ -65,11 +65,15 @@ def test_privacy_names_hosting_from_env(monkeypatch):
     monkeypatch.setenv("HOSTING", "timeweb")
     monkeypatch.setenv("HOSTING_ORG", "ООО «Облако» (ИНН 123, Санкт-Петербург)")
     host = privacy._host()
-    assert host["version"] == "3" and host["policy"] >= host["version"]   # новый получатель — согласие заново
+    # 3 — новый получатель (19.10), 4 — комментарии, оценки и пуши приложения к магазинам (20.10)
+    assert host["version"] == "4" and host["policy"] >= host["version"]
     monkeypatch.setattr(privacy, "HOST", host)
     text = str(legal_texts.doc("privacy"))
     assert "ООО «Облако» (ИНН 123, Санкт-Петербург)" in text and "Timeweb Cloud" in text
     assert "Амвера" not in text and "Amvera" not in text
+    consent = str(legal_texts.doc("consent"))
+    for doc in (text, consent):
+        assert "комментарии к парам" in doc and "RuStore" in doc
     assert "HOSTING_ORG" not in privacy.operator_missing()
     monkeypatch.setattr(privacy, "HOST", {**host, "org": host["name"]})
     assert "HOSTING_ORG" in privacy.operator_missing()                     # /status напомнит юрлицо

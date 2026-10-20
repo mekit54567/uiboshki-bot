@@ -9,6 +9,7 @@ import '../achievements/store.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
+import '../app_push.dart';
 import '../plus/plus.dart';
 import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
@@ -155,18 +156,30 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     PlusBonus.api = widget.api;
     AchStore.api = widget.api;
     WidgetsBinding.instance.addObserver(this);
+    AppPush.tab.addListener(_pushTab);
     _visit();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureGroup();
       unawaited(PlusBonus.sendRef(widget.api)); // после согласия: до него API закрыт
+      unawaited(AppPush.start(widget.api)); // нажатое уведомление, новый токен телефона
       await _maybeTour();
       if (mounted) await _sdoRefresh();
     });
   }
 
+  /// Нажали уведомление приложения — его вкладка (как `?tab=` у веб-пуша).
+  void _pushTab() {
+    final t = AppPush.tab.value;
+    if (t == null || !mounted) return;
+    AppPush.tab.value = null;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    _open(tabByName(t));
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppPush.tab.removeListener(_pushTab);
     Api.onOk = null;
     AchStore.onUnlock = null;
     AchStore.openTab = null;
@@ -214,7 +227,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     // попросил удалить данные — до полного стирания только это, потом ко входу
     final erasing = me['erasing'];
     if (erasing is Map) {
-      await confirmSheet(context, title: 'Данные удаляются', text: '${erasing['text']}', action: 'Понятно', cancel: 'Закрыть');
+      await confirmSheet(
+        context,
+        title: 'Данные удаляются',
+        text: '${erasing['text']}',
+        action: 'Понятно',
+        cancel: 'Закрыть',
+      );
       return widget.onLogout();
     }
     appLinks(widget.api).then((l) => setAchBot(l['bot']), onError: (_) {});

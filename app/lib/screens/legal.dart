@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
+import '../app_push.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
@@ -379,6 +380,7 @@ Future<bool> deleteMyData(BuildContext context, Api api, {bool confirmed = false
   }
   await api.saveToken(null);
   await api.clearCache();
+  await AppPush.forgetLocal(); // на сервере пуши уже стёрты — ключ с телефона тоже
   final text = '${r?['text'] ?? ''}';
   if (!context.mounted) return true;
   if (text.isEmpty) {

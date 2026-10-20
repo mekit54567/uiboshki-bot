@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- API бота и вход через Telegram (в релизе без этого — нет сети) -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Пуши приложения (push/, Android 13+ спрашивает разрешение) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Капибара"
         android:name="${applicationName}"
@@ -1191,6 +1193,28 @@
         <receiver
             android:name=".widget.WidgetTickReceiver"
             android:exported="false" />
+        <!-- Пуши приложения с шифрованием (push/PushNotify.kt, сервер — app_push.py).
+             FCM: без google-services.json при сборке Firebase не запускается — пуши
+             через Google выключены. Токен — только когда человек включил пуши. -->
+        <service
+            android:name=".push.FcmService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false"/>
+        <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true"/>
+        <!-- RuStore Push: включён только в сборке с RUSTORE_PROJECT_ID (app/build.gradle.kts) -->
+        <service
+            android:name=".push.RuStoreService"
+            android:enabled="${rustoreEnabled}"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ru.rustore.sdk.pushclient.MESSAGING_EVENT"/>
+            </intent-filter>
+        </service>
+        <meta-data android:name="ru.rustore.sdk.pushclient.project_id" android:value="${rustoreProjectId}"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

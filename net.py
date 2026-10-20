@@ -68,7 +68,7 @@ def client(**kw) -> httpx.AsyncClient:
     if proxy and "transport" not in kw:
         mounts = dict(kw.pop("mounts", None) or {})
         for h in proxy_hosts():
-            transport = httpx.AsyncHTTPTransport(proxy=proxy)
+            transport = httpx.AsyncHTTPTransport(proxy=proxy, http2=bool(kw.get("http2")))
             mounts[f"all://{h}"] = transport
             mounts[f"all://*.{h}"] = transport
         kw["mounts"] = mounts
