@@ -177,6 +177,22 @@ async def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
+        # Пуши своего приложения (app_push.py): устройство = токен FCM/RuStore/APNs,
+        # key_enc — ключ AES-256 устройства, зашифрованный как входы СДО (Fernet):
+        # сервисы доставки видят только шифротекст уведомления
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS app_push (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL,
+                platform   TEXT NOT NULL,
+                token      TEXT NOT NULL,
+                key_enc    TEXT NOT NULL,
+                device     TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE (platform, token)
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_app_push_user ON app_push(user_id)")
         # Подписка (ИИ сверх базы): до какой даты; source — откуда (вручную
         # старостой, оплата — потом)
         await db.execute("""
