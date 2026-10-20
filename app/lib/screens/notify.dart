@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
+import '../app_push.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../web_push.dart';
@@ -43,6 +44,19 @@ class _NotifyBody extends StatefulWidget {
 
 class _NotifyBodyState extends State<_NotifyBody> {
   late Map<String, dynamic> _s = widget.initial;
+
+  /// Пуши этого телефона (app_push.dart): '' — ещё не знаем, unsupported — нет.
+  String _app = '';
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb && AppPush.device != null) {
+      AppPush.state(widget.api).then((v) {
+        if (mounted) setState(() => _app = v);
+      });
+    }
+  }
 
   // Быстрые нажатия (Пн, Вт, Ср подряд) не теряются: у себя меняем сразу,
   // запросы уходят по очереди, ответ сервера берём от последнего.
@@ -139,7 +153,7 @@ class _NotifyBodyState extends State<_NotifyBody> {
               const SizedBox(width: Space.s),
               Expanded(
                 child: Text(
-                  kIsWeb
+                  kIsWeb || const ['on', 'off', 'denied'].contains(_app)
                       ? 'Уведомления приходят в Telegram, а сюда — когда включишь их ниже.'
                       : 'Уведомления — в Telegram и в браузере; в приложении — скоро.',
                   style: s.body(13, color: p.muted),
@@ -148,7 +162,16 @@ class _NotifyBodyState extends State<_NotifyBody> {
             ],
           ),
         ),
-        if (kIsWeb) _WebPushCard(api: widget.api, tgCopy: _prefs['tg_copy'] != false, onTgCopy: () => _toggle('tg_copy')),
+        if (kIsWeb)
+          _WebPushCard(api: widget.api, tgCopy: _prefs['tg_copy'] != false, onTgCopy: () => _toggle('tg_copy')),
+        if (!kIsWeb && const ['on', 'off', 'denied'].contains(_app))
+          _AppPushCard(
+            api: widget.api,
+            state: _app,
+            onState: (v) => setState(() => _app = v),
+            tgCopy: _prefs['tg_copy'] != false,
+            onTgCopy: () => _toggle('tg_copy'),
+          ),
         _Card(
           title: 'Присылать уведомления',
           sub: on ? 'Включены — ниже, что именно' : 'Выключены — бот ничего не пришлёт сам',
@@ -618,6 +641,73 @@ class _WebPushCardState extends State<_WebPushCard> {
           prefs: {'tg_copy': widget.tgCopy},
           onTap: (_) => widget.onTgCopy(),
         ),
+      ],
+    );
+  }
+}
+
+/// Телефон: пуши своего приложения (app_push.dart). Текст уведомления
+/// шифруется ключом этого телефона — Google, Apple и RuStore видят только шифр.
+class _AppPushCard extends StatefulWidget {
+  final Api api;
+  final String state;
+  final ValueChanged<String> onState;
+  final bool tgCopy;
+  final VoidCallback onTgCopy;
+  const _AppPushCard({
+    required this.api,
+    required this.state,
+    required this.onState,
+    required this.tgCopy,
+    required this.onTgCopy,
+  });
+
+  @override
+  State<_AppPushCard> createState() => _AppPushCardState();
+}
+
+class _AppPushCardState extends State<_AppPushCard> {
+  bool _busy = false;
+
+  Future<void> _switch() async {
+    if (_busy) return;
+    tick();
+    setState(() => _busy = true);
+    var v = widget.state;
+    try {
+      v = widget.state == 'on' ? await AppPush.disable(widget.api) : await AppPush.enable(widget.api);
+    } catch (e) {
+      if (mounted) showToast(context, 'Не получилось: ${errorText(e)}', kind: ToastKind.error);
+      v = await AppPush.state(widget.api);
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+    widget.onState(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final on = widget.state == 'on';
+    return _Card(
+      icon: Icons.notifications_active_outlined,
+      title: 'На этом телефоне',
+      sub: switch (widget.state) {
+        'on' => 'Включены. Текст зашифрован — сервис доставки видит только шифр',
+        'denied' => 'Запрещены в настройках телефона — разреши там, потом включи здесь',
+        _ => 'Включи — и уведомления придут на телефон, текст зашифрован',
+      },
+      switchKey: 'app_push',
+      on: on,
+      onChanged: _switch,
+      children: [
+        if (on)
+          _Row(
+            title: 'Дублировать в Telegram',
+            sub: widget.tgCopy ? 'приходят и сюда, и в Telegram' : 'только сюда; не дошло — тогда в Telegram',
+            k: 'tg_copy',
+            prefs: {'tg_copy': widget.tgCopy},
+            onTap: (_) => widget.onTgCopy(),
+          ),
       ],
     );
   }

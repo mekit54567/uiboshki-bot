@@ -6,6 +6,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Пуши приложения (push/, docs/app-push.md). FCM — только со своим
+// google-services.json (Firebase): нет файла — сборка та же, пуши через Google
+// выключены. RuStore Push — только с RUSTORE_PROJECT_ID (переменная окружения
+// или -PrustoreProjectId=…): их SDK — из репозитория RuStore, который виден
+// не отовсюду, поэтому по умолчанию — заглушка (src/norustore).
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+val rustoreProjectId = (findProperty("rustoreProjectId") ?: System.getenv("RUSTORE_PROJECT_ID") ?: "").toString().trim()
+val rustore = rustoreProjectId.isNotEmpty()
+if (rustore) {
+    repositories {
+        maven { url = uri("https://artifactory-external.vkpartner.ru/artifactory/maven") }
+    }
+}
+
 // Ключ подписи выпуска: android/key.properties (CI пишет его из секретов
 // ANDROID_KEYSTORE…). Нет файла — подпись отладочным ключом, как раньше.
 val keyProps = Properties().apply {
@@ -35,6 +51,12 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["rustoreProjectId"] = rustoreProjectId
+        manifestPlaceholders["rustoreEnabled"] = rustore.toString()
+    }
+
+    sourceSets {
+        getByName("main").java.srcDir(if (rustore) "src/rustore/kotlin" else "src/norustore/kotlin")
     }
 
     signingConfigs {
@@ -63,4 +85,13 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    if (rustore) {
+        implementation("ru.rustore.sdk:pushclient:7.2.0")
+    }
+    testImplementation("junit:junit:4.13.2")
 }
