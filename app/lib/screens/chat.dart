@@ -20,6 +20,7 @@ import '../api/models.dart' show monthsShort, plural;
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/msg_menu.dart';
 import '../widgets/tg_html.dart';
 import 'files.dart';
 
@@ -1066,45 +1067,48 @@ class _Bubble extends StatelessWidget {
     final p = s.p;
     if (m.role == 'user') {
       final a = m.att;
+      final bubble = Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+        padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
+        decoration: BoxDecoration(
+          color: p.accent,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(Radii.tile),
+            topRight: Radius.circular(Radii.tile),
+            bottomLeft: Radius.circular(Radii.tile),
+            bottomRight: Radius.circular(6),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (a != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(a.image ? Icons.image_outlined : Icons.description_outlined, size: 16, color: p.onAccent),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        a.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: s.body(13, weight: FontWeight.w600, color: p.onAccent),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Text(m.content, style: s.body(15, color: p.onAccent)),
+          ],
+        ),
+      );
       return Align(
         alignment: Alignment.centerRight,
-        child: Container(
-          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
-          margin: const EdgeInsets.fromLTRB(Space.xxl, Space.s, Space.l, Space.s),
-          padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
-          decoration: BoxDecoration(
-            color: p.accent,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(Radii.tile),
-              topRight: Radius.circular(Radii.tile),
-              bottomLeft: Radius.circular(Radii.tile),
-              bottomRight: Radius.circular(6),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (a != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(a.image ? Icons.image_outlined : Icons.description_outlined, size: 16, color: p.onAccent),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          a.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: s.body(13, weight: FontWeight.w600, color: p.onAccent),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Text(m.content, style: s.body(15, color: p.onAccent)),
-            ],
-          ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Space.xxl, Space.s, Space.l, Space.s),
+          child: MessageHold(right: true, text: () => m.content, bubble: (_) => bubble, child: bubble),
         ),
       );
     }
@@ -1133,17 +1137,27 @@ class _Bubble extends StatelessWidget {
       );
     }
 
+    final answer = m.html.isNotEmpty
+        ? Text.rich(tgHtml(m.html, body, link: p.accent, codeBg: p.line, cite: cite))
+        : (cites.isEmpty
+              ? Text(m.content, style: body)
+              : Text.rich(TextSpan(children: citeSpans(m.content, body, cite))));
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.xl, Space.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SelectionArea(
-            child: m.html.isNotEmpty
-                ? Text.rich(tgHtml(m.html, body, link: p.accent, codeBg: p.line, cite: cite))
-                : (cites.isEmpty
-                      ? Text(m.content, style: body)
-                      : Text.rich(TextSpan(children: citeSpans(m.content, body, cite)))),
+          // выделение — в меню долгого нажатия (раньше SelectionArea здесь
+          // ловила одно слово и легко сбрасывалась, Никита 20.10)
+          MessageHold(
+            inflate: Space.m,
+            text: () => _plain(cites),
+            bubble: (ctx) => DecoratedBox(
+              decoration: BoxDecoration(color: p.cardSolid, borderRadius: BorderRadius.circular(Radii.tile)),
+              child: Padding(padding: const EdgeInsets.all(Space.m), child: answer),
+            ),
+            child: answer,
           ),
           if (m.choose.isNotEmpty) ...[
             const SizedBox(height: Space.s),
@@ -1204,6 +1218,15 @@ class _Bubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Ответ простым текстом — для «Копировать»: без разметки, «[n]» источников убраны.
+  String _plain(Map<int, Map<String, dynamic>> cites) {
+    final raw = m.html.isNotEmpty ? tgHtml(m.html, const TextStyle()).toPlainText() : m.content;
+    return raw
+        .replaceAllMapped(citeRe, (x) => cites.containsKey(int.parse(x.group(1)!)) ? '' : x.group(0)!)
+        .replaceAllMapped(RegExp(r' +([.,;:!?])'), (x) => x.group(1)!)
+        .trim();
   }
 
   /// Источник ответа: страница лекции (есть номер страницы) или весь файл.
