@@ -90,13 +90,16 @@ void main() {
     await reach(t, 'look:icon');
     await t.tap(find.byKey(const Key('look:icon')));
     await settle(t);
-    // в листе — все, что можно выбрать, а праздничной и подписочной нет
+    // в листе — все, что можно выбрать, а праздничной нет
     final sheet = find.descendant(of: find.byKey(const Key('look:icons')), matching: find.byType(Scrollable)).first;
     for (final i in AppIcon.choosable) {
       await t.scrollUntilVisible(find.byKey(Key('look:icon:${i.name}')), 200, scrollable: sheet);
     }
     expect(find.byKey(const Key('look:icon:halloween'), skipOffstage: false), findsNothing);
-    expect(find.byKey(const Key('look:icon:crown'), skipOffstage: false), findsNothing);
+    // подписочная без подписки: на Android не видна, на iPhone — с замком
+    // (открывается набором ачивок, 5.113)
+    final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    expect(find.byKey(const Key('look:icon:crown'), skipOffstage: false), ios ? findsOneWidget : findsNothing);
     await t.scrollUntilVisible(find.byKey(const Key('look:icon:sunset')), -200, scrollable: sheet);
     await t.tap(find.byKey(const Key('look:icon:sunset')));
     await settle(t);
