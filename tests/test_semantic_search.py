@@ -126,6 +126,7 @@ async def test_hybrid_search_finds_by_meaning(db, embed):
     # «привет» без предмета — лекции не тянем
     assert await ss.search("привет") == []
 
+
     ctx, sources = ss.build_context(hits)
     assert ctx.startswith("=== [1] Анализ данных: Лекция 5. Инвестиции · слайд 2 ===")
     assert sources[0] == {"n": 1, "id": f1, "title": "Лекция 5. Инвестиции", "page": 2, "kind": "слайд",
@@ -264,8 +265,16 @@ async def test_local_model_own_vectors_and_switch_back(db, embed, monkeypatch):
 
 def test_cited_numbers():
     from webapp.routes.chat import cited
-    assert cited("по [1] и [2, 4], ещё [5–6]; [x] [2023 год]") == {1, 2, 4, 5, 6}
+    assert cited("по [1] и [2, 4], ещё [5–6]; [x] [2023 год]") == {1, 2, 4}            # диапазон — не ссылка
     assert cited("ничего") == set()
+
+
+def test_prompt_follows_current_subject():
+    # предмет сменили посреди чата — ИИ держится нового выбора (Никита 20.10)
+    import ai_solver
+    assert "не выбран" in ai_solver.build_system_prompt("") and "больше им не ограничивайся" in ai_solver.build_system_prompt("")
+    assert "Сейчас выбран предмет «Анализ данных»" in ai_solver.build_system_prompt("Анализ данных")
+    assert "без диапазонов" in ai_solver.lecture_system_prompt("", "=== [1] ЛК1 ===\nтекст")
 
 
 def test_prompt_honest_and_without_home_group():
@@ -276,3 +285,45 @@ def test_prompt_honest_and_without_home_group():
                    ai_solver.lecture_system_prompt("Анализ данных", "=== [1] ЛК1 ===\nтекст")):
         assert config.GROUP_NAME not in prompt and "погоды" in prompt
     assert "не ставь номеров" in ai_solver.lecture_system_prompt("", "=== [1] ЛК1 ===\nтекст")
+
+
+@pytest.mark.asyncio
+async def test_relevance_gate_with_subject(db, embed, monkeypatch):
+    # Никита 20.10: при выбранном предмете на «Буря мглою… оценка» тянулся кусок
+    # по одному общему слову — у модели с порогом rel_min он отсекается
+    import embedder
+    fid = await db.add_file("Лекция 5. Инвестиции", "Анализ данных", "tg1", "лк5.pptx", 1)
+    await db.save_file_text(fid, "текст")
+    await si.index_file(fid, pptx_bytes(["Оценка проектов. Дисконтирование и NPV. " * 7]), "лк5.pptx")
+    await si.embed_pending(pause=0)
+    assert await ss.search("буря мглою, оценка стиха", "Анализ данных")      # без порога — по слову «оценка»
+    monkeypatch.setattr(embedder, "rel_min", lambda p: 0.5)
+    assert await ss.search("буря мглою, оценка стиха", "Анализ данных") == []
+    assert (await ss.search("как считать NPV проекта", "Анализ данных"))[0]["file_id"] == fid
+
+
+@pytest.mark.asyncio
+async def test_chat_offtopic_gets_no_lectures(db, embed, monkeypatch):
+    # поиск отсёк всё — целые лекции «по словам» тоже не подмешиваем (Никита 20.10)
+    from fastapi.testclient import TestClient
+    import ai_solver
+    import embedder
+    import webapp.server as server
+    from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setattr(embedder, "rel_min", lambda p: 0.5)
+    fid = await db.add_file("Лекция 5. Инвестиции", "Анализ данных", "tg5", "лк5.pptx", 1)
+    await db.save_file_text(fid, "Оценка проектов. Дисконтирование и NPV.")
+    await si.index_file(fid, pptx_bytes(["Оценка проектов. Дисконтирование и NPV. " * 7]), "лк5.pptx")
+    await si.embed_pending(pause=0)
+    seen = {}
+
+    async def fake_chat(history, subject="", extra_system="", lectures=""):
+        seen["lectures"] = lectures
+        return {"content": "Буря мглою небо кроет [1].", "reasoning": ""}
+
+    monkeypatch.setattr(ai_solver, "chat_with_reasoning", fake_chat)
+    c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
+    res = c.post("/api/chat", headers=h, json={"subject": "Анализ данных", "history": [
+        {"role": "user", "content": "буря мглою, дай оценка стиху"}]}).json()
+    assert seen["lectures"] == "" and "sources" not in res

@@ -148,8 +148,9 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
         sem: list[int] = []
         sims: dict[int, float] = {}
         vecs: dict[int, list[float]] = {}
+        qv_all = None
         if await si.has_vectors(db, p):
-            qv = await _query_vec(query, p)
+            qv = qv_all = await _query_vec(query, p)
             if qv:
                 rows = await (await db.execute(
                     f"SELECT rowid, distance, embedding FROM {vt} WHERE embedding MATCH ? AND k = ? "
@@ -185,6 +186,17 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
                     f"SELECT rowid, embedding FROM {vt} WHERE rowid IN ({','.join('?' * len(missing))})",
                     missing)).fetchall():
                 vecs[cid] = unpack(blob)
+    # Порог «вопрос вообще про лекции» — и при выбранном предмете (Никита
+    # 20.10: на «Буря мглою», Тайвань и «тебя обижают?» тянулись куски,
+    # найденные по одному общему слову). Похожесть — у всех кандидатов, и у
+    # найденных только по словам (векторы единичной длины — косинус = скалярное).
+    rel = embedder.rel_min(p) if qv_all else None
+    if rel is not None:
+        for cid, v in vecs.items():
+            sims.setdefault(cid, sum(a * b for a, b in zip(qv_all, v)))
+        rows = [r for r in rows if sims.get(r[0], 0) >= rel]
+        if not rows:
+            return []
     lex_pos = {c: i for i, c in enumerate(lex, 1)}
     sem_pos = {c: i for i, c in enumerate(sem, 1)}
     cands = [{"id": r[0], "file_id": r[1], "page_from": r[2], "page_to": r[3], "kind": r[4], "text": r[5],

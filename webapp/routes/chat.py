@@ -92,7 +92,7 @@ async def api_subjects(user: dict = CurrentUser, x_app: str = Header(default="")
 
 
 _HEAD = re.compile(r"^=== (?:\[(\d+)\] )?(.+?) ===$", re.M)
-_CITE = re.compile(r"\[(\d{1,2}(?:\s*[,;–-]\s*\d{1,2})*)\]")
+_CITE = re.compile(r"\[(\d{1,2}(?:\s*[,;]\s*\d{1,2})*)\]")
 
 
 def _number_lectures(lectures: str) -> str:
@@ -111,12 +111,12 @@ def _number_lectures(lectures: str) -> str:
 
 
 def cited(answer: str) -> set[int]:
-    """Номера материалов, на которые сослался ИИ: [2], [1, 3], [2–4]."""
+    """Номера материалов, на которые сослался ИИ: [2], [1, 3]. Диапазон
+    «[1–10]» — не ссылка: так ИИ говорит о материалах вообще («в [1–10] этого
+    нет», живой тест 20.10), а не опирается на них."""
     out = set()
     for group in _CITE.findall(answer or ""):
-        for part in re.split(r"\s*[,;]\s*", group):
-            ends = [int(x) for x in re.split(r"\s*[–-]\s*", part)]
-            out.update(range(ends[0], min(ends[-1], ends[0] + 20) + 1))
+        out.update(int(x) for x in re.split(r"\s*[,;]\s*", group))
     return out
 
 
@@ -227,6 +227,7 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         if found:
             return found
     lectures, sources = "", None
+    searched = False        # поиск по смыслу отработал: пусто — значит, вопрос не про лекции
     with_text = await get_subjects_with_lecture_text()
     # Сначала — поиск по смыслу (semantic_search): куски лекций с номером
     # страницы/слайда. «Объясни 3 лекцию» (номер лекции, а не смысл) и пустой
@@ -235,13 +236,18 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         try:
             import semantic_search
             if await semantic_search.ready():
+                import embedder
                 hits = await semantic_search.search(query, subject)
+                searched = embedder.rel_min(embedder.provider()) is not None   # у модели есть порог
                 if hits:
                     lectures, sources = semantic_search.build_context(hits)
         except Exception as e:
             logger.warning(f"поиск по смыслу: {type(e).__name__}: {e} — подбираю лекции по словам")
             lectures, sources = "", None
-    if lectures:
+            searched = False
+    if lectures or searched:
+        # нашлось — или поиск решил, что вопрос не про лекции («Буря мглою»,
+        # «тебя обижают?»): целые лекции по словам тогда не подмешиваем
         pass
     elif subject and subject in with_text:
         lectures = lecture_picker.pick(await get_subject_lecture_context(subject), query)

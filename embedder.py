@@ -60,6 +60,12 @@ def min_sim(p: str, gemini_default: float) -> float:
     return gemini_default if p == GEMINI else local_embed.MODELS[p]["min_sim"]
 
 
+def rel_min(p: str) -> float | None:
+    """Порог «вопрос про лекции» для любого чата (и с предметом); None — у
+    модели не замерен, отсеиваем только без предмета (min_sim)."""
+    return None if p == GEMINI else local_embed.MODELS[p].get("rel_min")
+
+
 async def embed(texts: list[str], *, query: bool = False, titles: list[str] | None = None,
                 p: str | None = None) -> list[list[float]]:
     """Векторы единичной длины. Куски лекций — с названием файла (так точнее)."""
