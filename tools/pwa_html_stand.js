@@ -28,6 +28,17 @@ const extra = {
   'GET /api/auth/identities': { items: [], available: [{ id: 'vk', name: 'VK ID' }, { id: 'yandex', name: 'Яндекс ID' }], telegram: true },
   'GET /api/auth/providers': { items: [{ id: 'vk', name: 'VK ID' }, { id: 'yandex', name: 'Яндекс ID' }] },
   'GET /api/calendar/link': { token: 'demo', ics_path: '/ics/demo' },
+  // «Капибара+» как на сайте без оплаты: цены первых, касса ещё не подключена
+  'GET /api/plus': { hidden: false, active: false, until: null, paid_until: null, gift: null, unlimited: false, unlimited_until: null,
+    founder: false, early: true, provider: '', pay_url: '', offer_url: 'https://www.uiboshki.ru/offer', donate_url: '',
+    prices: [{ plan: 'month', title: 'Месяц', days: 30, price: 149, full: 249, founder: true },
+             { plan: 'semester', title: 'Семестр', days: 150, price: 649, full: 790, founder: true }],
+    invite: { link: 'https://t.me/UiboshkiBot?start=ref_demo', share_text: 'Капибара — расписание, сроки и баллы МИРЭА', share_image: '',
+      came: 1, rewarded: 1, bonus_days: 7, friend_days: 3, ref_max: 3, ref_counted: 1,
+      ranks: { dawn: { days: 3, need_days: 1, claimed: false }, noon: { days: 5, need_days: 7, claimed: false },
+        dusk: { days: 7, need_days: 14, claimed: false }, midnight: { days: 14, need_days: 21, claimed: false } } } },
+  'GET /api/donate': { hidden: false, url: '', amounts: [100, 300, 500], min: 50, max: 15000,
+    note: 'Это не подписка — просто спасибо. В ответ откроется роадмап: что я делаю сейчас и что дальше.', offer_url: 'https://www.uiboshki.ru/offer' },
   'GET /api/sdo/submit-rules': { accepted: ['.pdf', '.docx'], labels: ['Документ PDF', 'Документ Word'], maxfiles: 3, maxbytes: 20971520 },
 };
 // расписание преподавателя или группы на 3 недели — из пар своей группы (как app/robot/lib.js)

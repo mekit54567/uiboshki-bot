@@ -565,6 +565,17 @@ RuStore — «Вход по коду доступа» в приложении, �
   `index.html` + `js/…`. В вебе (`kIsWeb`) — без `BackdropFilter` и без
   бесконечных анимаций: тормозят (Никита 15.10); отступы выреза iPhone —
   `window.uibInsets` → `lib/web_safe_area.dart` (Flutter их сам не знает).
+  **PWA на HTML (5.109, Никита 19.10)** — `webapp/static/app-html`: всё
+  приложение страницей, 1:1 с приложением на iPhone (оплата — как в вебе).
+  `js/core.js` (Prefs = ключи shared_preferences `flutter.<имя>`, Api, Theme,
+  Nav, Sheet, notice с выглядывающей капибарой), `shell.js` (вкладки,
+  `afterStart`: согласие, группа, тур), `capy_scenes.js` (капибара-загрузка
+  `spinner()`, `pullRefresh`), экраны — `js/screens/*.js` (по файлу на экран
+  Flutter, связь — `window.openX`), стили — `css/app.css` + `css/<экран>.css`.
+  Стенд — `tools/pwa_html_stand.js`. `/app` отдаёт её, когда `PWA_DEFAULT` в
+  `webapp/server.py` = "html" (пока "flutter" — ждём слова Никиты);
+  переменная `PWA_ENGINE=html|flutter` — без выпуска. Новый экран в
+  приложении — переносить и сюда.
   **API как контракт (2 (в))**: `/api/v1/…` = `/api/…` (`server.ApiV1`), своё
   приложение и PWA — на v1; `/api/meta` — версия сервера и минимальные версии
   приложения (`APP_MIN_WEB/ANDROID/IOS`); снимок путей —
