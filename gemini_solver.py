@@ -35,8 +35,8 @@ import httpx
 
 import net
 
-from config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL, GROUP_NAME,
-                    GROUP_PROGRAM, OPENROUTER_API_KEY)
+from config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL,
+                    OPENROUTER_API_KEY)
 
 logger = logging.getLogger(__name__)
 
@@ -397,7 +397,7 @@ async def generate_from_image(image_bytes: bytes, mime: str, prompt: str, system
     )
 
 SYSTEM_INSTRUCTION = (
-    f"Ты помощник студентов группы {GROUP_NAME} РТУ МИРЭА ({GROUP_PROGRAM}). "
+    "Ты помощник студентов РТУ МИРЭА. "
     "Тебе дан текст лекций по предмету — используй его как ОСНОВНОЙ источник при "
     "решении задания: если в лекциях есть подход, определение или метод для части "
     "задания — используй именно его и формулировки из лекции, а не общие знания. "
