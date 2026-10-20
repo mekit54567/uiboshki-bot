@@ -414,6 +414,7 @@ Screens.more = {
     loadOptional();
     loadExtras();
     screen.mrDraw = () => { if (st.me) draw(); };
+    pullRefresh(screen, () => Promise.all([load(), loadRating(), loadOptional(), loadExtras()]));
   },
   // ачивки могли открыться на других вкладках — строка ачивок свежая
   onShow(body, screen) { if (screen.mrDraw) screen.mrDraw(); },

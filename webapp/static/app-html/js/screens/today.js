@@ -232,9 +232,16 @@ Screens.today = {
         tick();
         taps++;
         clearTimeout(tapTimer);
-        tapTimer = setTimeout(() => (taps = 0), 1500);
+        tapTimer = setTimeout(() => (taps = 0), 12000);
         const lines = screen.capyLines || CAPY_LINES.day;
-        const text = taps >= 5 ? "Ну хватит щекотать" : lines[capyN++ % lines.length];
+        // редкие фразы — полночные ачивки (achievements/captions.dart)
+        let text = Math.floor(Math.random() * 10000) === 0 ? "Ты нашёл меня. Теперь ты один из нас"
+          : Math.floor(Math.random() * 100) === 0 ? "Это секретная фраза. Никому не говори"
+          : taps >= 5 ? "Ну хватит щекотать" : lines[capyN++ % lines.length];
+        if (taps >= 5) taps = 0;
+        if (Ach.capyTouched) Ach.capyTouched(new Date());
+        if (text.startsWith("Ты нашёл меня")) Ach.unlock("one_of_us");
+        if (text.startsWith("Это секретная")) Ach.unlock("secret");
         const ov = document.createElement("div");
         ov.className = "td-cap";
         ov.innerHTML = `${capy(poseAt(msk().h), 180)}<div class="ttl" style="--sz:24px;max-width:320px">${esc(text)}</div>`;

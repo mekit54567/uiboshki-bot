@@ -692,6 +692,7 @@ Screens.deadlines = {
     reload();
     const timer = setInterval(() => { if (data && !sw) draw(); }, 30000);
     screen.reload = reload;
+    pullRefresh(screen, reload);
     return () => clearInterval(timer);
   },
   onShow(body, screen) { if (screen.reload) screen.reload(); },

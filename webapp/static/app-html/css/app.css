@@ -39,7 +39,7 @@ a { color: inherit; text-decoration: none; }
 img { -webkit-user-drag: none; }
 
 /* ── Типографика (как AppStyle.title/number/name/body/eyebrow) ── */
-.ttl { font-family: var(--f-head); font-weight: var(--head-w); line-height: 1.1;
+.ttl { font-optical-sizing: none; font-family: var(--f-head); font-weight: var(--head-w); line-height: 1.1;
   font-size: calc(var(--sz, 34px) * var(--head-k)); letter-spacing: calc(var(--sz, 34px) * var(--head-ls)); }
 .num { font-family: var(--f-num); font-weight: var(--num-w); line-height: .95; font-variant-numeric: tabular-nums;
   font-size: calc(var(--sz, 34px) * var(--num-k)); letter-spacing: calc(var(--sz, 34px) * var(--num-ls)); }

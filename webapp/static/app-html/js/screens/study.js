@@ -142,6 +142,7 @@ Screens.study = {
       course: (b) => { tick(); const c = data && data.courses[+b.dataset.k]; if (c) openCourse(c.raw); },
     });
     screen.reload = refresh;
+    pullRefresh(screen, refresh);
     // сразу — из запаса телефона, свежие следом (Loader.fromCache)
     body.innerHTML = spinner();
     load(true).then((d) => { if (d && !data) { data = d; draw(); } }).catch(() => {});
