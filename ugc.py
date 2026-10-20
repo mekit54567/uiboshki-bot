@@ -1,7 +1,7 @@
 """Записи людей: жалоба и «Скрыть автора» (правило Apple 1.2, 5.99.0).
 
-Что пишут сами люди и видят другие — заметки к парам, доска ДЗ, файлы и
-общие дедлайны старост. Под каждой чужой записью в приложении — «Пожаловаться»
+Что пишут сами люди и видят другие — заметки к парам, комментарии под парой,
+доска ДЗ, файлы и общие дедлайны старост. Под каждой чужой записью в приложении — «Пожаловаться»
 и «Скрыть автора»:
 
 - жалоба уходит владельцу бота (config.STAROSTA_ID) сообщением с текстом записи,
@@ -32,8 +32,10 @@ KINDS = {
     "hw": ("homework", "created_by"),
     "file": ("files", "uploaded_by"),
     "deadline": ("deadlines", "created_by"),
+    "comment": ("lesson_comments", "user_id"),
 }
-LABELS = {"note": "Заметка к паре", "hw": "ДЗ", "file": "Файл", "deadline": "Общий дедлайн"}
+LABELS = {"note": "Заметка к паре", "hw": "ДЗ", "file": "Файл", "deadline": "Общий дедлайн",
+          "comment": "Комментарий под парой"}
 REASON_MAX = 300
 DISPUTE_DAYS = 30
 APPEAL_MIN, APPEAL_MAX = 10, 500       # объяснение автора к спору, знаков
@@ -46,9 +48,11 @@ class ReportError(Exception):
 
 
 async def item(kind: str, item_id: int) -> dict | None:
+    import lesson_comments
     from database import get_deadline, get_file_by_id, get_lesson_note
     from database.homework import get_hw
-    get = {"note": get_lesson_note, "hw": get_hw, "file": get_file_by_id, "deadline": get_deadline}.get(kind)
+    get = {"note": get_lesson_note, "hw": get_hw, "file": get_file_by_id, "deadline": get_deadline,
+           "comment": lesson_comments.get}.get(kind)
     if not get:
         return None
     row = await get(item_id)
@@ -68,6 +72,8 @@ def preview(kind: str, row: dict) -> str:
         parts = [row.get("subject") or "", row.get("content") or "", "📎 файл" if row.get("file_id") else ""]
     elif kind == "file":
         parts = [row.get("subject") or "", row.get("title") or "", row.get("file_name") or ""]
+    elif kind == "comment":
+        parts = [(row.get("lesson") or "").split("|", 1)[-1], row.get("text") or ""]
     else:
         parts = [row.get("subject") or "", row.get("description") or "", row.get("due_date") or ""]
     return " · ".join(p for p in parts if p)[:900]
@@ -152,6 +158,7 @@ async def decide(rid: int, remove: bool) -> str:
     """«Удалить» — запись пропадает у всех (копия — в жалобе, для спора), жалобы
     на неё закрыты; «Оставить» — только закрыть."""
     import json
+    import lesson_comments
     from database import delete_deadline, delete_file, delete_hw, delete_lesson_note
     from database._conn import connect
     rep = await get_report(rid)
@@ -164,7 +171,7 @@ async def decide(rid: int, remove: bool) -> str:
     if remove and await item(rep["kind"], rep["item_id"]):
         snap = json.dumps(await _snapshot(rep["kind"], rep["item_id"]), ensure_ascii=False)
         await {"note": delete_lesson_note, "hw": delete_hw, "file": delete_file,
-               "deadline": delete_deadline}[rep["kind"]](rep["item_id"])
+               "deadline": delete_deadline, "comment": lesson_comments.delete}[rep["kind"]](rep["item_id"])
     async with connect() as db:
         if remove:
             await db.execute("UPDATE reports SET status='closed' WHERE kind=? AND item_id=? AND status='new' AND id<>?",

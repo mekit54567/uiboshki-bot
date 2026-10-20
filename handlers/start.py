@@ -298,9 +298,12 @@ async def cmd_app(message: Message):
     if not kb:
         await message.answer("🚧 Приложение скоро появится — его ещё не включили.")
         return
+    import login_channel
+    news = login_channel.news_line()
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.\n"
-        "📱 Без Telegram — uiboshki.ru/app: ставится на телефон и компьютер как приложение.",
+        "📱 Без Telegram — uiboshki.ru/app: ставится на телефон и компьютер как приложение."
+        + (f"\n{news}" if news else ""),
         reply_markup=kb,
     )
 
@@ -391,8 +394,15 @@ def start_text(first_name: str) -> str:
         "задать вопрос или прислать фото задачи — отвечу.\n\n"
         "📱 Без Telegram — тоже: <b>uiboshki.ru/app</b> ставится на экран телефона "
         "или компьютера как приложение (как — в приложении: Ещё → Установить).\n\n"
-        "✨ Всё это бесплатно. Хочешь больше — /plus: подписка «Капибара+», оплата на сайте."
+        + _news()
+        + "✨ Всё это бесплатно. Хочешь больше — /plus: подписка «Капибара+», оплата на сайте."
     )
+
+
+def _news() -> str:
+    import login_channel
+    news = login_channel.news_line()
+    return f"{news}\n\n" if news else ""
 
 
 HELP_TEXT = (
@@ -420,10 +430,16 @@ HELP_TEXT = (
     "/plus — подписка: что даёт, сколько стоит, дни в подарок за друзей и ранги ачивок. "
     "Оплата — на сайте uiboshki.ru (кнопка в /plus или «Ещё → Капибара+» в приложении), "
     "работает везде, и на iPhone\n"
-    "/donate — поддержать проект рублём\n\n"
+    "/donate — поддержать проект рублём · /roadmap — что я делаю дальше (для поддержавших)\n\n"
     "🔒 <b>Твои данные</b>\n"
     "/privacy — согласие и политика обработки персональных данных · /deleteme — удалить всё о себе"
 )
+
+def help_text() -> str:
+    """HELP_TEXT и строка про открытый канал под «Без Telegram», если он задан."""
+    news = _news()
+    return HELP_TEXT.replace("уведомления пушем.\n\n", "уведомления пушем.\n" + news, 1) if news else HELP_TEXT
+
 
 STAROSTA_HELP = (
     "\n\n👑 <b>Для старосты</b>\n"
@@ -454,7 +470,7 @@ async def cmd_help(message: Message):
     # Команды старосты видит только староста (и зам): остальным они только
     # мешали — и всё равно отвечали бы «только для старосты».
     from database import is_editor
-    text = HELP_TEXT
+    text = help_text()
     if await is_editor(message.from_user.id):
         text += STAROSTA_HELP
     await message.answer(text, parse_mode="HTML", reply_markup=app_button())

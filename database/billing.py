@@ -107,6 +107,14 @@ async def user_donations(user_id: int, limit: int = 20) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+async def has_donated(user_id: int) -> bool:
+    """Есть ли у человека оплаченный донат (роадмап — roadmap.py)."""
+    async with connect() as db:
+        row = await (await db.execute(
+            "SELECT 1 FROM donations WHERE payer_id = ? AND status = 'succeeded' LIMIT 1", (user_id,))).fetchone()
+        return row is not None
+
+
 async def donation_totals(days: int | None = None) -> tuple[int, int]:
     """(сколько оплаченных донатов, сумма ₽) — всего или за последние days дней."""
     async with connect() as db:

@@ -1,0 +1,148 @@
+/* «Сдать» (js/screens/deadlines.js, homework.js): список сроков, листы
+   срока, сдача файлом, задание СДО, ДЗ группы и заметки. */
+:root { --dl-link: #2F6FD6; }
+:root[data-dark="1"] { --dl-link: #7FB0FF; }
+
+/* «+» — IconButton.filled */
+.dl-fab { width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--on-accent); flex: none;
+  display: flex; align-items: center; justify-content: center; }
+.dl-fab:active { filter: brightness(.92); }
+
+/* входы «ДЗ группы» и «Заметки» */
+.dl-entries { display: flex; gap: var(--s); padding: 0 var(--l) var(--m); }
+.dl-entries > .tile { flex: 1; min-width: 0; }
+.dl-entry { display: flex; align-items: center; gap: var(--s); padding: var(--m); }
+
+/* «Впереди · N | Сдано · N» */
+.dl-segwrap { padding: 0 var(--l) var(--m); }
+.dl-seg { display: flex; padding: 3px; border-radius: 999px; background: var(--line); }
+.dl-seg button { flex: 1; min-width: 0; padding: 9px var(--s); border-radius: 999px; text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 600; color: var(--muted);
+  transition: background-color .2s cubic-bezier(.2,.8,.2,1), color .2s; }
+.dl-seg button.on { background: var(--accent); color: var(--on-accent); }
+
+/* «СДО не ответил» над списком */
+.dl-sdowrap { padding: 0 var(--l) var(--m); }
+.dl-sdo { display: flex; align-items: flex-start; gap: var(--m); padding: var(--m) var(--m) var(--s); }
+.dl-retry { color: var(--accent); font-size: 14px; min-height: 36px; padding: 0; }
+
+/* горит */
+.dl-hot { border-radius: var(--r-card); cursor: pointer;
+  background: linear-gradient(to bottom left, color-mix(in srgb, var(--danger) 20%, transparent), var(--card-solid)); }
+:root[data-dark="1"] .dl-hot { background: linear-gradient(to bottom left, color-mix(in srgb, var(--danger) 34%, transparent),
+  color-mix(in srgb, var(--card-solid) 60%, transparent)); }
+.dl-hot:active { filter: brightness(.96); }
+.dl-count { display: flex; align-items: flex-end; overflow: hidden; white-space: nowrap; }
+.dl-unit { font-size: 14px; padding: 0 8px 5px 3px; }
+.dl-hotbtn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px; border-radius: 999px; flex: none;
+  background: var(--danger); color: #fff; font-size: 14px; font-weight: 600; }
+:root[data-dark="1"] .dl-hotbtn { color: var(--bg); }
+.dl-hotbtn:active { filter: brightness(.92); }
+
+/* строка срока со свайпом */
+.dl-sw { position: relative; overflow: hidden; }
+.dl-swbg { position: absolute; inset: 0; display: none; align-items: center; padding-left: var(--xl); }
+.dl-sw.moving .dl-swbg { display: flex; }
+.dl-row { position: relative; display: flex; align-items: flex-start; gap: var(--m); width: 100%; text-align: left;
+  padding: var(--m); background: transparent; }
+.dl-sw.moving .dl-row { background: var(--card-solid); }
+.dl-row.done { padding-top: 10px; padding-bottom: 10px; }
+.dl-row:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.dl-date { width: 40px; flex: none; display: flex; flex-direction: column; align-items: center; white-space: nowrap; }
+.dl-dot { width: 7px; height: 7px; margin-right: 6px; vertical-align: 1px; }
+
+/* пометки срока */
+.dl-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.dl-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px var(--s); border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--c); font-size: 12px; font-weight: 600; line-height: 1.3; }
+.dl-tag .mi { font-size: 13px; }
+
+/* листы: строки действий (ListTile), чипы, плитки выбора, поля */
+.dl-act { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 56px; text-align: left; }
+.dl-act:active, .dl-rrow:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.dl-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--s); }
+.dl-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 15px;
+  border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 14px; font-weight: 600;
+  color: var(--text); text-align: left; transition: background-color .15s, color .15s; }
+.dl-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.dl-chip-own { padding-left: 10px; }
+.dl-two { display: flex; gap: var(--s); margin: var(--m) 0 var(--l); }
+.dl-two > * { flex: 1; min-width: 0; }
+.dl-pick { position: relative; display: flex; align-items: center; gap: var(--s); padding: var(--m); border-radius: var(--r-chip); }
+.dl-native { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; margin: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none; font-size: 16px; }
+.dl-native::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.dl-field { border-radius: var(--r-chip); padding: var(--m) var(--l); font-size: 15px; }
+input.dl-field { font-size: 16px; font-weight: 600; }
+textarea.dl-field { min-height: 0; line-height: 1.35; }
+.dl-field:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.hw-text { font-size: 16px; }
+.dl-field::placeholder { color: var(--muted); font-weight: 400; }
+.dl-btn50 { min-height: 50px; margin-top: var(--l); font-size: 14px; }
+.dl-ib { width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.dl-ib:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.dl-rem { display: flex; align-items: center; gap: var(--s); padding: 4px 4px 4px var(--l); margin-bottom: var(--s); }
+.dl-done-btn { color: var(--text); background: transparent; min-height: 40px; font-size: 14px; }
+.dl-rrow { display: flex; align-items: center; gap: var(--m); width: 100%; padding: var(--m) 0; border-radius: var(--r-chip); text-align: left; }
+.dl-rules { color: var(--muted); font-size: 14px; min-height: 40px; padding: 0; }
+
+/* сдача файлом */
+.dl-frow { display: flex; align-items: center; gap: var(--s); padding: var(--s) 4px var(--s) var(--l); margin-bottom: var(--s); }
+.dl-obtn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; position: relative; }
+.dl-obtn.off { opacity: .45; }
+.dl-obtn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.dl-mini { width: 18px; height: 18px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--on-accent) 30%, transparent);
+  border-top-color: var(--on-accent); animation: spin .9s linear infinite; }
+.btn.primary.dl-btn50:disabled { opacity: 1; background: color-mix(in srgb, var(--text) 12%, transparent); color: color-mix(in srgb, var(--text) 38%, transparent); }
+.dl-donebox { display: flex; flex-direction: column; align-items: center; padding-top: var(--s); }
+.dl-hop { position: relative; width: 112px; height: 112px; color: var(--ok); animation: dl-pop .7s cubic-bezier(.34,1.56,.64,1) both; }
+.dl-hop .capy { animation: dl-hopj 1.1s both; }
+.dl-hopcheck { position: absolute; right: 0; bottom: 0; width: 38px; height: 38px; border-radius: 50%; background: var(--ok); color: #fff;
+  border: 3px solid var(--card-solid); display: flex; align-items: center; justify-content: center; }
+.dl-okbtn { background: var(--ok); color: #fff; margin-top: var(--xl); min-height: 44px; font-size: 15px; }
+@keyframes dl-pop { from { transform: scale(.6); } to { transform: none; } }
+@keyframes dl-hopj {
+  0% { transform: none; animation-timing-function: ease-out; }
+  30% { transform: translateY(-20.8px) rotate(-6deg); animation-timing-function: ease-in; }
+  55% { transform: none; animation-timing-function: ease-out; }
+  70% { transform: translateY(-6.7px) rotate(-1.9deg); animation-timing-function: ease-in; }
+  100% { transform: none; }
+}
+
+/* порадоваться «сдано» */
+.dl-cheer { position: fixed; inset: 0; z-index: 90; pointer-events: none; display: flex; align-items: flex-end; justify-content: center; }
+.dl-cheer canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dl-cheer-capy { margin-bottom: 130px; padding: 14px; border-radius: 50%; background: var(--card-solid); display: flex;
+  animation: dl-cheer 1.4s linear both; }
+@keyframes dl-cheer {
+  0% { transform: translateY(80px) scale(.6); opacity: 1; animation-timing-function: cubic-bezier(.18,.89,.32,1.28); }
+  30% { transform: none; opacity: 1; }
+  75% { transform: none; opacity: 1; }
+  100% { transform: none; opacity: 0; }
+}
+
+/* задание СДО */
+.dl-tchip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 12%, transparent); }
+.dl-sel { white-space: pre-wrap; -webkit-user-select: text; user-select: text; }
+.dl-tfile { padding: var(--m) var(--l); }
+.dl-tfile:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.dl-qline { align-items: flex-start; gap: var(--s); padding: 4px 0; }
+.dl-tlink { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px; }
+.dl-dangerline { border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); color: var(--danger); }
+
+/* ДЗ группы и заметки (homework.js) */
+.hw-card { display: flex; align-items: stretch; }
+.hw-bar { width: 3px; border-radius: 2px; margin-right: var(--m); flex: none; }
+.hw-more { align-self: flex-start; margin: -4px 0 0 var(--xs); }
+.hw-file { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 10px; margin-top: var(--s);
+  border-radius: 999px; border: 1px solid var(--line); font-size: 14px; font-weight: 600; color: var(--text); }
+.hw-note { display: flex; align-items: flex-start; gap: var(--m); }
+.hw-note.act { padding-right: var(--xs); }
+.hw-note .dl-ib { margin: -8px 0; }
+.hw-public { display: flex; align-items: center; gap: var(--m); padding: var(--m); margin-top: var(--s); border-radius: var(--r-chip);
+  background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.hw-rules { display: block; text-align: left; margin-top: var(--s); }
+.hw-tawrap { position: relative; }
+.hw-count { text-align: right; padding: 4px var(--m) 0; }

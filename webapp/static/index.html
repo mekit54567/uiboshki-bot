@@ -260,6 +260,8 @@
     </div>
     <!-- «Поддержать проект» — строкой под сеткой, не плиткой (Никита 18.10: без перегруза) -->
     <button class="more-donate" id="more-donate" onclick="toggleMore(false); openDonate()"><svg class="ico" aria-hidden="true"><use href="#i-heart"/></svg><span><b>Поддержать проект</b> · разово, сумма на выбор</span></button>
+    <!-- роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть -->
+    <button class="more-donate" id="more-roadmap" onclick="toggleMore(false); openRoadmap()"><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg><span><b>Роадмап</b> · что дальше, для поддержавших</span></button>
   </div>
 </div>
 
@@ -312,6 +314,13 @@
   <div class="sheet">
     <div class="sheet-grip"></div>
     <div id="plus-body"></div>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="roadmap-sheet" onclick="if (event.target === this) closeSheet('roadmap-sheet')">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div id="roadmap-body"></div>
   </div>
 </div>
 

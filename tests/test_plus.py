@@ -474,7 +474,7 @@ def test_invite_image_is_own_light_picture(client):  # noqa: F811
     phone = img.crop((800, 130, 1070, 600))                                   # экран приложения в телефоне
     assert ImageStat.Stat(phone).mean[0] > 170                                # светлый (у og.jpg ~60)
     tool = Path("tools/site_og.py").read_text(encoding="utf-8")
-    assert "--invite" in tool and "invite.jpg" in tool and 'colorScheme: "light"' in tool
+    assert "--invite" in tool and "invite.jpg" in tool and 'color_scheme="light" if invite' in tool
     html = Path("webapp/static/site/index.html").read_text(encoding="utf-8")
     assert "/site/og.jpg" in html and "invite.jpg" not in html               # превью сайта — прежнее
 

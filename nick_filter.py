@@ -108,3 +108,15 @@ def default(full_name: str) -> str:
     if len(parts) > 1 and parts[1][:1].isalpha():
         nick += f" {parts[1][0].upper()}."
     return nick
+
+
+def rude(text: str) -> bool:
+    """Мат или оскорбление в свободном тексте (комментарии под парой,
+    lesson_comments.py): те же корни и слова, что у ников, по каждому слову."""
+    raw = (text or "").lower()
+    parts = [w for w in re.split(r"[^A-Za-zА-Яа-яЁё0-9@$]+", text or "") if w]
+    words = {_squash(w, k) for w in parts for k in (False, True)}
+    if any(r in w for w in words for r in _ROOTS) or words & _WORDS:
+        return True
+    latin = set(re.split(r"[^a-z]+", raw))
+    return any(r in w for w in latin for r in _ROOTS_EN) or bool(latin & _WORDS_EN)

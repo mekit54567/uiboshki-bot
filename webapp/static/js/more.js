@@ -115,7 +115,7 @@ async function openPlus() {
 }
 
 // «Поддержать проект» (строка под плитками «Ещё»): донат на сайте по личной
-// ссылке (billing.py) — не подписка, ничего не открывает, просто спасибо
+// ссылке (billing.py) — не подписка, просто спасибо; в ответ — роадмап
 async function openDonate() {
   haptic();
   let d;
@@ -124,6 +124,33 @@ async function openDonate() {
   if (d.hidden) return;
   if (d.url) openLink(d.url);
   else showToast("Поддержать можно будет совсем скоро — оплата ещё подключается");
+}
+
+// «Роадмап» (roadmap.py): что Никита делает сейчас и дальше — тем, кто
+// поддержал проект любой суммой; остальным — как открыть (донат на сайте)
+async function openRoadmap() {
+  haptic();
+  let d;
+  try { d = await api("/api/roadmap"); }
+  catch (e) { showToast("Не вышло: " + e.message); return; }
+  if (d.hidden) return;
+  const box = document.getElementById("roadmap-body");
+  const hero = '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("pin") + '</span><div><h3>Роадмап</h3>' +
+    '<p>Что я делаю сейчас и что дальше</p></div></div>';
+  const close = '<button class="ghost" onclick="closeSheet(\'roadmap-sheet\')">Закрыть</button>';
+  if (d.locked) {
+    box.innerHTML = hero +
+      secItem("heart", "Для тех, кто поддержал проект", "Любая сумма от " + d.min + " ₽ — это спасибо, а не покупка. Роадмап откроется сам.") +
+      (d.donate_url ? '<button class="primary" onclick="openLink(\'' + d.donate_url + '\')">' + icon("heart", "inl") + ' Поддержать проект</button>'
+                    : '<p class="sheet-hint">Поддержать можно будет совсем скоро — оплата ещё подключается.</p>') + close;
+  } else {
+    box.innerHTML = hero + Object.keys(d.statuses).map(st => {
+      const rows = d.items.filter(i => i.status === st);
+      return rows.length ? '<h4 class="sheet-sub">' + escapeHtml(d.statuses[st]) + '</h4>' +
+        rows.map(i => secItem(st === "done" ? "check" : st === "idea" ? "sparkle" : "pin", escapeHtml(i.title), escapeHtml(i.about))).join("") : "";
+    }).join("") + '<p class="sheet-hint">Спасибо, что поддержал! Планы — не обещания: что-то может сдвинуться.</p>' + close;
+  }
+  document.getElementById("roadmap-sheet").classList.add("open");
 }
 
 function closeSheet(id) {

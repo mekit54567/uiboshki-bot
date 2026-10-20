@@ -9,6 +9,7 @@ import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/plus/donate.dart';
 import 'package:uiboshki/plus/plus.dart';
 import 'package:uiboshki/plus/plus_screen.dart';
+import 'package:uiboshki/plus/roadmap.dart';
 import 'package:uiboshki/screens/more.dart';
 import 'package:uiboshki/theme/app_theme.dart';
 
@@ -21,7 +22,7 @@ const _donate = {
   'amounts': [100, 300, 500],
   'min': 50,
   'max': 15000,
-  'note': 'Это не подписка и ничего не открывает — просто спасибо.',
+  'note': 'Это не подписка — просто спасибо. В ответ откроется роадмап: что я делаю сейчас и что дальше.',
 };
 
 Widget _more(Api api) => AppStyle(
@@ -110,6 +111,62 @@ void main() {
     await settle(t);
     await _down(t);
     expect(find.byKey(const Key('more:donate')), findsNothing);
+  });
+
+  testWidgets('«Роадмап» под донатом: до доната — замок и «Поддержать» ведёт на лист доната', (t) async {
+    phone(t);
+    await t.pumpWidget(
+      _more(
+        fakeApi(
+          overrides: {
+            'GET /api/donate': _donate,
+            'GET /api/roadmap': {'hidden': false, 'locked': true, 'donate_url': 'https://x', 'min': 50},
+          },
+        ),
+      ),
+    );
+    await settle(t);
+    await _down(t);
+    await t.tap(find.byKey(const Key('more:roadmap')));
+    await settle(t);
+    expect(find.byKey(const Key('roadmap:locked')), findsOneWidget);
+    await t.tap(find.byKey(const Key('roadmap:donate')));
+    await settle(t);
+    expect(find.byType(RoadmapSheet), findsNothing);
+    expect(find.byType(DonateSheet), findsOneWidget); // ведёт на тот же лист доната
+  });
+
+  testWidgets('«Роадмап» у поддержавшего: пункты по статусам, пустых разделов нет', (t) async {
+    phone(t);
+    const statuses = {'now': 'Делаю сейчас', 'next': 'Следующее', 'idea': 'Попробую', 'done': 'Недавно вышло'};
+    await t.pumpWidget(
+      _more(
+        fakeApi(
+          overrides: {
+            'GET /api/donate': _donate,
+            'GET /api/roadmap': {
+              'hidden': false,
+              'locked': false,
+              'updated': '2026-10-19',
+              'statuses': statuses,
+              'items': [
+                {'status': 'now', 'title': 'Комментарии под парой', 'about': 'обсудить пару'},
+                {'status': 'done', 'title': 'Открытый канал', 'about': 'новости'},
+              ],
+            },
+          },
+        ),
+      ),
+    );
+    await settle(t);
+    await _down(t);
+    await t.tap(find.byKey(const Key('more:roadmap')));
+    await settle(t);
+    expect(find.byKey(const Key('roadmap:locked')), findsNothing);
+    expect(find.text('ДЕЛАЮ СЕЙЧАС'), findsOneWidget);
+    expect(find.text('НЕДАВНО ВЫШЛО'), findsOneWidget);
+    expect(find.text('СЛЕДУЮЩЕЕ'), findsNothing); // пустых разделов нет
+    expect(find.text('Комментарии под парой'), findsOneWidget);
   });
 
   test('iPhone: ни строки, ни запроса', () async {

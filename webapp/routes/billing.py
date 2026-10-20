@@ -43,7 +43,7 @@ async def api_plus(user: dict = CurrentUser, x_app: str = Header(default="")):
     return st
 
 
-DONATE_NOTE = "Это не подписка и ничего не открывает — просто спасибо."
+DONATE_NOTE = "Это не подписка — просто спасибо. В ответ откроется роадмап: что я делаю сейчас и что дальше."
 
 
 @router.get("/api/donate")
@@ -56,6 +56,20 @@ async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
     return {"hidden": False, "url": billing.donate_link(user["id"]) if billing.provider() else "",
             "amounts": list(billing.DONATE_AMOUNTS), "min": billing.DONATE_MIN, "max": billing.DONATE_MAX,
             "note": DONATE_NOTE, "offer_url": f"{billing.site()}/offer"}
+
+
+@router.get("/api/roadmap")
+async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default="")):
+    """Роадмап (roadmap.py) — тем, кто поддержал проект; остальным — locked и
+    ссылка на донат. На iPhone (X-App: ios) — hidden, как и донат."""
+    import billing
+    import roadmap
+    if x_app == "ios":
+        return {"hidden": True}
+    if not await roadmap.can_see(user["id"]):
+        return {"hidden": False, "locked": True,
+                "donate_url": billing.donate_link(user["id"]) if billing.provider() else "", "min": billing.DONATE_MIN}
+    return {"hidden": False, "locked": False, **roadmap.load()}
 
 
 @router.get("/api/invite")

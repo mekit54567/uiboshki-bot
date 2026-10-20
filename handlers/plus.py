@@ -112,8 +112,9 @@ def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
     lines = ["💛 <b>Поддержать проект</b>", "",
              "Если Капибара помогает тебе учиться — можно сказать спасибо рублём: деньги идут на сервер, "
              "ИИ и время на новые функции.", "",
-             "<b>Это не подписка и ничего не открывает — просто спасибо.</b> Всё бесплатное остаётся "
-             "бесплатным, «Капибара+» — отдельно (/plus).", ""]
+             "<b>Это не подписка — просто спасибо.</b> Всё бесплатное остаётся бесплатным, "
+             "«Капибара+» — отдельно (/plus). А в ответ откроется роадмап — что я делаю сейчас "
+             "и что дальше (/roadmap).", ""]
     if not billing.provider():
         lines.append("Поддержать можно будет совсем скоро — оплата ещё подключается.")
         return "\n".join(lines), None
@@ -132,6 +133,19 @@ async def send_donate(message: Message, uid: int):
 @router.message(Command("donate"))
 async def cmd_donate(message: Message):
     await send_donate(message, message.from_user.id)
+
+
+@router.message(Command("roadmap"))
+async def cmd_roadmap(message: Message):
+    """Роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть."""
+    import roadmap
+    if await roadmap.can_see(message.from_user.id):
+        await message.answer(roadmap.text(), parse_mode="HTML", disable_web_page_preview=True)
+        return
+    text, kb = donate_text(message.from_user.id)
+    await message.answer("🗺 Роадмап — что я делаю сейчас и что дальше — открывается тем, кто поддержал "
+                         "проект любой суммой. Это спасибо, а не покупка.\n\n" + text,
+                         parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
 @router.callback_query(F.data == "plus:donate")

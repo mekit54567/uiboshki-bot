@@ -11,6 +11,7 @@ import '../api/api.dart';
 import '../api/links.dart';
 import '../api/models.dart';
 import '../plus/donate.dart';
+import '../plus/roadmap.dart';
 import '../plus/plus_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
@@ -206,6 +207,16 @@ class MoreScreen extends StatelessWidget {
                                   title: 'Поддержать проект',
                                   sub: 'разово, сумма на выбор',
                                   onTap: () => showDonateSheet(context, api),
+                                ),
+                              ),
+                              Divider(height: 1, color: p.line),
+                              KeyedSubtree(
+                                key: const Key('more:roadmap'),
+                                child: _MenuRow(
+                                  icon: Icons.push_pin_outlined,
+                                  title: 'Роадмап',
+                                  sub: 'что дальше — для тех, кто поддержал',
+                                  onTap: () => showRoadmapSheet(context, api),
                                 ),
                               ),
                             ],
