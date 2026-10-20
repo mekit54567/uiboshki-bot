@@ -68,6 +68,7 @@ const Tabs = {
     s.scroller.addEventListener("scroll", () => {
       if (!Theme.design2) return;
       const y = s.scroller.scrollTop, max = s.scroller.scrollHeight - s.scroller.clientHeight;
+      if (s.quietUntil && Date.now() < s.quietUntil) { last = y; return; }  // прокрутила программа, не человек
       if (y < 40 || y >= max - 4) this.setHidden(false);
       else if (y > last + 6) this.setHidden(true);
       else if (y < last - 6) this.setHidden(false);

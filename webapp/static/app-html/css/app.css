@@ -281,3 +281,39 @@ textarea.field { resize: none; min-height: 96px; }
 .ls-pick button { transition: transform .16s; }
 .ls-pick button.on { transform: scale(1.12); }
 .ls-mood { height: 80px; margin-top: var(--l); display: flex; align-items: center; justify-content: center; gap: var(--m); }
+
+/* ── «Неделя» (screens/week.js): шапка и полоса дней стоят, едет лента ── */
+.wrap.wk { display: flex; flex-direction: column; height: 100%; }
+.wk-head, .wk-strip, .wk .divider { flex: none; }
+.wk-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+.wk-list::-webkit-scrollbar { display: none; }
+.wk-label { display: flex; align-items: center; margin-left: -4px; }
+.wk-label > button:not(.wk-lt):not(.wk-today) { padding: 6px 4px; color: var(--muted); display: flex; }
+.wk-lt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-today { margin-left: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  color: var(--accent); font-size: 12px; font-weight: 600; }
+.wk-ic { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+.wk-toggle { display: flex; gap: 2px; padding: 3px; border-radius: 13px; background: var(--line); }
+.wk-toggle button { width: 36px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); transition: background .24s, color .24s; }
+.wk-toggle button.on { background: var(--accent); color: var(--on-accent); }
+.wk-strip { display: flex; padding: 0 var(--m); margin-bottom: var(--s); }
+.wk-day { flex: 1; min-width: 0; margin: 0 3px; padding: 9px 0; border-radius: var(--r-chip); display: flex; flex-direction: column;
+  align-items: center; transition: background .26s; }
+.wk-day .bd { color: var(--muted); }
+.wk-day.today .num { color: var(--accent); }
+.wk-day.sel { background: var(--text); }
+.wk-day.sel .bd, .wk-day.sel .num { color: var(--bg); }
+.wk-dots { height: 5px; margin-top: 5px; display: flex; gap: 2px; }
+.wk-dots i { width: 4px; height: 4px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 80%, transparent); }
+.wk-day.sel .wk-dots i { background: color-mix(in srgb, var(--bg) 80%, transparent); }
+.wk-block { padding: var(--l) var(--l) 0; }
+.wk-sum { display: flex; align-items: center; gap: var(--m); padding: var(--m) var(--m) var(--m) var(--l);
+  background: color-mix(in srgb, var(--card) 50%, transparent); }
+.wk-sline { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.wk-body { transition: opacity .2s; }
+.wk-body.wk-waiting { opacity: .45; pointer-events: none; }
+.wk-in-r { animation: wk-r .28s cubic-bezier(.2,.8,.2,1) both; }
+.wk-in-l { animation: wk-l .28s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes wk-r { from { opacity: 0; transform: translateX(18%); } to { opacity: 1; transform: none; } }
+@keyframes wk-l { from { opacity: 0; transform: translateX(-18%); } to { opacity: 1; transform: none; } }
