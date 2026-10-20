@@ -32,7 +32,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import health as bot_health
@@ -289,9 +289,10 @@ class _NoCacheStatic(StaticFiles):
 
 # С 20.10 /app — то же приложение страницей на HTML (webapp/static/app-html,
 # Никита 19.10: веб-сборка Flutter в Safari тяжёлая, внизу чёрная полоса).
-# Откат без выпуска кода — переменная PWA_ENGINE=flutter (нужна сборка).
+# Веб-сборка Flutter — запасная, на /app-flutter (Никита 20.10); откат /app
+# без выпуска кода — переменная PWA_ENGINE=flutter (нужна сборка).
 HTML_APP = "app-html"
-PWA_DEFAULT = "flutter"  # пока HTML-версия не готова целиком; потом — "html"
+PWA_DEFAULT = "html"
 _HTML_ASSET_RE = re.compile(r'(src|href)="((?:css|js)/[\w./-]+\.(?:css|js))"')
 
 
@@ -316,6 +317,17 @@ async def pwa_page(request: Request):
     if (os.environ.get("PWA_ENGINE") or PWA_DEFAULT).strip().lower() == "flutter" and index.is_file():
         return Response(index.read_bytes(), media_type="text/html", headers={"Cache-Control": "no-cache"})
     return _html_app()
+
+
+@app.get("/app-flutter", include_in_schema=False)
+@app.get("/app-flutter/", include_in_schema=False)
+async def pwa_flutter_page():
+    """Запасная PWA — веб-сборка Flutter. Собрана с base href /app/, поэтому
+    её файлы по-прежнему берутся из /app/… (там их отдаёт mount ниже)."""
+    index = FLUTTER_DIR / "index.html"
+    if not index.is_file():
+        return RedirectResponse("/app")
+    return Response(index.read_bytes(), media_type="text/html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/sw.js", include_in_schema=False)
