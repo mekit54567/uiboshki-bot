@@ -251,3 +251,16 @@ def test_roadmap_file_is_valid():
     data = roadmap.load()
     assert data["updated"] and all(i["title"] and i["about"] for i in data["items"])
     assert len(roadmap.text()) < 4096
+
+
+def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811
+    """Success URL в кабинете Robokassa один (/plus/done), поэтому донат
+    возвращает на «спасибо» сам — SuccessUrl2, отказ — FailUrl2; оба в подписи."""
+    url = billing.robokassa_url(7, 300, "x", "https://x/donate/done?k=K")
+    q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+    assert q["SuccessUrl2"] == "https://x/donate/done?k=K" and q["SuccessUrl2Method"] == "GET"
+    assert q["FailUrl2"] == "https://x/donate?k=K" and q["FailUrl2Method"] == "GET"
+    want = hashlib.md5("shop:300.00:7:https://x/donate/done?k=K:GET:https://x/donate?k=K:GET:p1".encode())
+    assert q["SignatureValue"] == want.hexdigest()
+    plain = {k: v[0] for k, v in parse_qs(urlparse(billing.robokassa_url(7, 300, "x")).query).items()}
+    assert "SuccessUrl2" not in plain and plain["SignatureValue"] == hashlib.md5(b"shop:300.00:7:p1").hexdigest()
