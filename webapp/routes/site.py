@@ -51,13 +51,17 @@ def _client_key(request: Request) -> int:
     return -(zlib.crc32(ip.encode()) + 1)
 
 
-def og_meta(base: str) -> str:
+def og_meta(base: str, path: str = "/about", description: bool = True) -> str:
     """Теги превью ссылки (description, og:*, twitter:*) со страницы сайта —
     их же отдаёт корень: www.uiboshki.ru в Telegram должен выглядеть как
-    сайт, а JS-переход на /about ботам-превьюшникам не виден."""
+    сайт, а JS-переход на /about ботам-превьюшникам не виден. И /app: ссылка
+    uiboshki.ru/app из /help без своих тегов держала в Telegram превью
+    «УИБО-бот» (Никита 20.10)."""
     lines = (_site_dir() / "index.html").read_text(encoding="utf-8").splitlines()
-    keep = [ln for ln in lines if ln.startswith(('<meta name="description"', '<meta property="og:',
-                                                 '<meta name="twitter:'))]
+    heads = ('<meta property="og:', '<meta name="twitter:') + (('<meta name="description"',) if description else ())
+    keep = [ln for ln in lines if ln.startswith(heads)]
+    if path != "/about":
+        keep = [ln.replace("__BASE__/about", "__BASE__" + path) for ln in keep]
     from webapp.server import _digest
     # метка версии у картинки: Telegram помнит превью по адресу — новая og.jpg
     # без неё не показалась бы (19.10, @WebpageBot отдал старую)

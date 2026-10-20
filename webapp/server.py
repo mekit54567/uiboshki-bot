@@ -296,10 +296,17 @@ PWA_DEFAULT = "html"
 _HTML_ASSET_RE = re.compile(r'(src|href)="((?:css|js)/[\w./-]+\.(?:css|js))"')
 
 
-def _html_app() -> Response:
+def _app_og(html: str, request: Request) -> str:
+    """Превью ссылки /app — как у сайта (своё описание у страницы уже есть)."""
+    from webapp.routes.site import og_meta
+    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
+    return html.replace("</head>", og_meta(base, "/app", description=False) + "\n</head>", 1)
+
+
+def _html_app(request: Request) -> Response:
     """index.html PWA: файлы — по полному адресу с меткой версии (?v=хэш),
     страница живёт на /app, а не в своей папке."""
-    html = (STATIC_DIR / HTML_APP / "index.html").read_text(encoding="utf-8")
+    html = _app_og((STATIC_DIR / HTML_APP / "index.html").read_text(encoding="utf-8"), request)
 
     def versioned(m):
         rel = f"{HTML_APP}/{m.group(2)}"
@@ -317,8 +324,9 @@ def _html_app() -> Response:
 async def pwa_page(request: Request):
     index = FLUTTER_DIR / "index.html"
     if (os.environ.get("PWA_ENGINE") or PWA_DEFAULT).strip().lower() == "flutter" and index.is_file():
-        return Response(index.read_bytes(), media_type="text/html", headers={"Cache-Control": "no-cache"})
-    return _html_app()
+        return Response(_app_og(index.read_text(encoding="utf-8"), request), media_type="text/html",
+                        headers={"Cache-Control": "no-cache"})
+    return _html_app(request)
 
 
 @app.get("/app-flutter", include_in_schema=False)
