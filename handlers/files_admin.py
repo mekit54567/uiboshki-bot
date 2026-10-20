@@ -141,7 +141,7 @@ async def cmd_restore(message: Message, state: FSMContext):
         return
     await state.set_state(RestoreDb.waiting_file)
     await message.answer(
-        "♻️ <b>Восстановление базы</b>\n\nПришли файл копии — <code>uiboshki-….db.gz</code> из /backup "
+        "♻️ <b>Восстановление базы</b>\n\nПришли файл копии — <code>uiboshki-….db.gz.enc</code> (или <code>.db.gz</code>) из /backup "
         "(до 20 МБ). Я проверю его и покажу, что внутри; ничего не заменю без твоего «да».\n\n"
         "Передумал — /cancel или «❌ Отмена».", parse_mode="HTML")
 
@@ -186,7 +186,7 @@ async def restore_wait_text(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("Отменено — база не тронута.")
         return
-    await message.answer("Жду файл копии (.db.gz). Передумал — /cancel.")
+    await message.answer("Жду файл копии (.db.gz.enc или .db.gz). Передумал — /cancel.")
 
 
 @router.callback_query(F.data.startswith("restore:"))

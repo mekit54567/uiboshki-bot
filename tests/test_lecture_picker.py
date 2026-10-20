@@ -69,7 +69,7 @@ async def test_chat_without_subject_gets_matching_lectures(db, monkeypatch):
 
     client.post("/api/chat", json={"history": [{"role": "user", "content": "Что такое линейная регрессия?"}]},
                 headers=headers)
-    assert "=== Анализ данных: Лекция 2. Регрессия ===" in seen["lectures"] and "OSI" not in seen["lectures"]
+    assert "=== [1] Анализ данных: Лекция 2. Регрессия ===" in seen["lectures"] and "OSI" not in seen["lectures"]
 
     client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет!"}]}, headers=headers)
     assert seen["lectures"] == ""

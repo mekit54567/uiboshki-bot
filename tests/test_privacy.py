@@ -605,3 +605,14 @@ async def test_blocked_cached_and_batch(db, monkeypatch):
     monkeypatch.setattr(dbp, "connect", real)
     await privacy.request_erase(ME)                       # попросил удалить — память сбрасывается
     assert await privacy.blocked(ME)
+
+
+def test_timeweb_not_processor(monkeypatch):
+    """Поддержка Timeweb 20.10: поручений на обработку ПД не подписывают — в политике и
+    согласии Timeweb только сдаёт сервер, «по поручению» про него не пишем."""
+    import privacy
+    monkeypatch.setattr(privacy, "HOST", {**privacy.HOSTS["timeweb"]})
+    role = privacy.hosting_texts()["HOST_ROLE"]
+    assert "ТАЙМВЭБ.КЛАУД" in role and "не получает" in role and "по поручению" not in role
+    monkeypatch.setattr(privacy, "HOST", {**privacy.HOSTS["amvera"], "org": "ООО «Амвера»"})
+    assert "по поручению оператора" in privacy.hosting_texts()["HOST_ROLE"]

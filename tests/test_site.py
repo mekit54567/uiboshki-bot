@@ -168,3 +168,17 @@ def test_root_has_site_link_preview(monkeypatch):
     assert '<meta property="og:image" content="https://www.uiboshki.ru/site/og.jpg?v=' in r.text and "__OGV__" not in r.text
     assert '<meta property="og:url" content="https://www.uiboshki.ru/about">' in r.text
     assert "__BASE__" not in r.text and r.text.index("og:title") < r.text.index("</head>")
+
+
+def test_app_has_site_link_preview(monkeypatch):
+    """Ссылка uiboshki.ru/app из /help — превью Капибары, а не старое «УИБО-бот»:
+    у /app своих og-тегов не было, Telegram держал давнее превью (Никита 20.10)."""
+    import webapp.deps as deps
+    monkeypatch.setattr(deps, "WEBAPP_URL", "https://www.uiboshki.ru")
+    r = _client().get("/app")
+    assert r.status_code == 200
+    assert '<meta property="og:title" content="Капибара' in r.text
+    assert '<meta property="og:image" content="https://www.uiboshki.ru/site/og.jpg?v=' in r.text
+    assert '<meta property="og:url" content="https://www.uiboshki.ru/app">' in r.text
+    assert r.text.count('<meta name="description"') == 1 and "__BASE__" not in r.text
+    assert "УИБО-бот" not in r.text

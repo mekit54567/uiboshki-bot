@@ -181,12 +181,17 @@ async def test_webapp_chat_returns_lecture_sources(db, monkeypatch):
 
     async def fake_chat(history, subject="", extra_system="", lectures=""):
         seen["lectures"] = lectures
-        return {"content": "Дебет — левая сторона счёта.", "reasoning": ""}
+        return {"content": seen.get("answer", "Дебет — левая сторона счёта [1]."), "reasoning": ""}
 
     monkeypatch.setattr(ai_solver, "chat_with_reasoning", fake_chat)
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
     c, headers = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
     data = c.post("/api/chat", headers=headers, json={"history": [
         {"role": "user", "content": "Что такое дебет?"}], "subject": UCH}).json()
-    assert "ЛК1" in seen["lectures"]
+    assert "=== [1] ЛК1 ===" in seen["lectures"]                           # целые лекции — тоже с номерами
     assert data["sources"] == [{"id": lk, "title": "ЛК1"}]
+    # ИИ на лекцию не сослался (вопрос не по учёбе) — плашек нет (Никита 20.10)
+    seen["answer"] = "Посмотреть погоду я не могу."
+    data = c.post("/api/chat", headers=headers, json={"history": [
+        {"role": "user", "content": "Что такое дебет?"}], "subject": UCH}).json()
+    assert "sources" not in data

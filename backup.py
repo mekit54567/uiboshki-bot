@@ -10,10 +10,16 @@
 .db), бот проверяет целостность и таблицы, показывает, что внутри, и после
 подтверждения сначала присылает копию текущей базы, потом переливает копию
 на её место тем же backup API (без перезапуска) и докатывает миграции.
+
+Шифрование (20.10, Никита: копия уходит в Telegram за границу): с BACKUP_KEY
+копия — AES-256-GCM, файл .db.gz.enc; Telegram хранит только нечитаемый файл.
+Ключ — только у Никиты (переменная сервера и его менеджер паролей): без ключа
+копию не открыть. Расшифровать без бота — tools/backup_decrypt.py.
 """
 
 import asyncio
 import gzip
+import hashlib
 import logging
 import os
 import sqlite3
@@ -28,6 +34,35 @@ from utils import TZ
 logger = logging.getLogger(__name__)
 
 MAX_SEND_BYTES = 48 * 1024 * 1024   # sendDocument бота — до 50 МБ
+MAGIC = b"UIBK1\n"                 # начало зашифрованной копии: версия формата, потом nonce и шифротекст
+
+
+def backup_key() -> bytes | None:
+    """Ключ копии из BACKUP_KEY (любая длинная строка, 32 байта — sha256) или None."""
+    v = os.getenv("BACKUP_KEY", "").strip()
+    return hashlib.sha256(b"uiboshki-backup:" + v.encode()).digest() if v else None
+
+
+def encrypt(data: bytes, key: bytes) -> bytes:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    nonce = os.urandom(12)
+    return MAGIC + nonce + AESGCM(key).encrypt(nonce, data, MAGIC)
+
+
+def decrypt(raw: bytes, key: bytes | None = None) -> bytes:
+    """Зашифрованная копия → .db.gz; незашифрованная — как есть."""
+    if not raw.startswith(MAGIC):
+        return raw
+    key = key or backup_key()
+    if not key:
+        raise RestoreError("копия зашифрована, а BACKUP_KEY на сервере не задан")
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    body = raw[len(MAGIC):]
+    try:
+        return AESGCM(key).decrypt(body[:12], body[12:], MAGIC)
+    except (InvalidTag, ValueError):
+        raise RestoreError("копия не расшифровалась — ключ не тот (BACKUP_KEY) или файл повреждён")
 
 
 def _snapshot(db_path: str) -> bytes:
@@ -49,7 +84,10 @@ def _snapshot(db_path: str) -> bytes:
 
 async def make_backup() -> tuple[bytes, str]:
     data = await asyncio.to_thread(_snapshot, database.DATABASE_PATH)
-    return data, f"uiboshki-{datetime.now(TZ).strftime('%Y-%m-%d_%H-%M')}.db.gz"
+    name = f"uiboshki-{datetime.now(TZ).strftime('%Y-%m-%d_%H-%M')}.db.gz"
+    if key := backup_key():
+        return await asyncio.to_thread(encrypt, data, key), name + ".enc"
+    return data, name
 
 
 async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
@@ -83,11 +121,14 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         await health.note("backup", False, f"{size_mb:.0f} МБ — больше лимита Telegram")
         await bot.send_message(chat_id, f"⚠️ Копия базы — {size_mb:.0f} МБ, больше лимита Telegram (50 МБ).")
         return False
+    if name.endswith(".enc"):
+        caption = (f"💾 Копия базы ({size_mb:.1f} МБ), зашифрована ключом BACKUP_KEY. Храни — это все файлы, "
+                   "дедлайны и заметки.\nВосстановить: /restore (или tools/backup_decrypt.py с ключом).")
+    else:
+        caption = (f"💾 Копия базы ({size_mb:.1f} МБ). Храни — это все файлы, дедлайны и заметки.\n"
+                   "⚠️ Не зашифрована: задай BACKUP_KEY на сервере.\nВосстановить: /restore.")
     await bot.send_document(
-        chat_id, BufferedInputFile(data, filename=name), disable_notification=silent,
-        caption=(f"💾 Копия базы ({size_mb:.1f} МБ). Храни — это все файлы, дедлайны и заметки.\n"
-                 "Восстановить: распаковать .gz и положить вместо базы на диске /data (Amvera) или /restore."),
-    )
+        chat_id, BufferedInputFile(data, filename=name), disable_notification=silent, caption=caption)
     await health.note("backup", True, f"{size_mb:.1f} МБ")
     return True
 
@@ -107,6 +148,7 @@ def inspect_backup(raw: bytes) -> tuple[str, dict]:
     """Проверить присланную копию: распаковать, integrity_check, нужные
     таблицы. Возвращает (путь к временному .db, сводка). Временный файл
     удаляет apply_backup или вызывающий."""
+    raw = decrypt(raw)
     if raw[:2] == b"\x1f\x8b":
         try:
             d = zlib.decompressobj(16 + zlib.MAX_WBITS)      # gzip, но с пределом на размер
