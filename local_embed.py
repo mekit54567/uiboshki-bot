@@ -28,11 +28,14 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ключ → репозиторий и приставки запроса/документа (как у авторов модели);
-# min_sim — порог «это про лекции» без выбранного предмета (semantic_search)
+# min_sim — порог «это про лекции» без выбранного предмета (semantic_search);
+# rel_min — порог «вопрос вообще про лекции» и при выбранном предмете: замер
+# 20.10 на rubert-mini-frida — болтовня, погода, «Буря мглою», Тайвань ≤ 0.17,
+# вопросы по лекциям ≥ 0.27 (живые косинусы — в логах «лучший косинус»)
 MODELS = {
     "rubert-tiny-turbo": {"repo": "sergeyzh/rubert-tiny-turbo", "dims": 312, "query": "", "doc": "", "min_sim": 0.55},
     "rubert-mini-frida": {"repo": "sergeyzh/rubert-mini-frida", "dims": 312, "query": "search_query: ",
-                          "doc": "search_document: ", "min_sim": 0.55},
+                          "doc": "search_document: ", "min_sim": 0.55, "rel_min": 0.2},
     "e5-small": {"repo": "intfloat/multilingual-e5-small", "dims": 384, "query": "query: ", "doc": "passage: ",
                  "min_sim": 0.80},
 }
