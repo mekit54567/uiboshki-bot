@@ -1,1 +1,107 @@
-/* Стили экранов: account (см. js/screens). */
+/* Вход, правовое, ачивки, рейтинг, «Капибара+» (js/screens/login.js,
+   extras.js, plus.js). Классы — с приставкой ac-. */
+
+/* ── Вход (login.dart) ── */
+body.ac-login #tabbar { display: none !important; }
+.ac-login-page { min-height: calc(100vh - var(--sat) - var(--sab)); min-height: calc(100dvh - var(--sat) - var(--sab));
+  padding: var(--xl); display: flex; flex-direction: column; align-items: flex-start; }
+.ac-login-page > * { flex: none; }
+.ac-login-page .ac-sp { flex: 1 1 0; min-height: 0; }
+.ac-login-page .ac-bottom { width: 100%; }
+.ac-fit { white-space: nowrap; max-width: 100%; }
+.ac-brand { display: inline-flex; flex: none; }
+.ac-brand svg { width: 100%; height: 100%; display: block; }
+.ac-tg { min-height: 54px; font-weight: 700; }
+.ac-tg:disabled { opacity: 1; background: color-mix(in srgb, var(--text) 12%, transparent); color: color-mix(in srgb, var(--text) 38%, transparent); }
+.ac-tg:disabled .ac-brand { opacity: .5; }
+/* обводная кнопка (OutlinedButton): цвет текста, рамка линии */
+.ac-ob { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 50px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text); font-size: 16px; font-weight: 600; padding: 0 var(--xl); }
+.ac-ob:active { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.ac-prov { font-size: 15px; }
+/* текстовая кнопка (TextButton) */
+.ac-tb { min-height: 40px; padding: 0 12px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; }
+.ac-tb:active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.ac-center { display: flex; justify-content: center; width: 100%; }
+
+/* ── Правовое (legal.dart) ── */
+.ac-link { color: #2F6FD6; cursor: pointer; text-decoration: none; }
+:root[data-dark="1"] .ac-link { color: #7FB0FF; }
+button.ac-link { display: block; }
+.ac-li { display: flex; align-items: flex-start; margin-bottom: var(--s); }
+.ac-li > i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; margin: 7px var(--m) 0 0; }
+.ac-li > .bd { flex: 1; min-width: 0; }
+.ac-lsec > :last-child { margin-bottom: 0; }
+.ac-check { display: flex; align-items: flex-start; gap: var(--m); padding: var(--s) 0; border-radius: var(--r-chip); cursor: pointer; }
+.ac-box { width: 22px; height: 22px; flex: none; border-radius: 7px; border: 2px solid var(--muted); display: flex; align-items: center;
+  justify-content: center; transition: background .15s, border-color .15s; }
+.ac-box.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ac-box .mi { font-size: 16px; }
+
+/* ── «Капибара+» (plus_screen.dart) ── */
+.ac-tag { display: inline-block; padding: 2px var(--s); border-radius: 99px; background: var(--accent); color: var(--on-accent);
+  font-size: 12px; font-weight: 600; white-space: nowrap; flex: none; }
+.ac-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s); }
+
+/* ── Ачивки (achievements/ui.dart) ── */
+.ac-badge { position: relative; display: inline-block; border-radius: 50%; overflow: hidden; flex: none; vertical-align: middle; }
+.ac-badge > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ac-badge.off { filter: grayscale(1); opacity: .4; }
+.ac-badge.q { background: var(--line); display: inline-flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 800; }
+.ac-ring { position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 90deg, #7B5CFF, #29D3C4, #FF7AD9, #FFD36B, #7B5CFF);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - var(--rw)), #000 calc(100% - var(--rw) + .5px));
+  mask: radial-gradient(closest-side, transparent calc(100% - var(--rw)), #000 calc(100% - var(--rw) + .5px)); }
+.ac-stack { position: relative; height: 36px; flex: none; display: block; }
+.ac-ringed { position: absolute; top: -2px; border-radius: 50%; border: 2px solid var(--card-solid); display: flex; }
+.ac-stack > .ac-badge { position: absolute; left: 0; top: 0; }
+.ac-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--s); }
+.ac-tile { padding: var(--m) var(--s); display: flex; flex-direction: column; align-items: center; text-align: center !important; }
+.ac-tile .clamp2 { width: 100%; }
+
+.ac-pol-fit { width: 100%; display: flex; justify-content: center; overflow: visible; }
+.ac-pol-pad { padding: var(--m); transform-origin: top center; flex: none; }
+.ac-pol { position: relative; width: 300px; }
+.ac-pol-card { margin-top: 10px; padding: 14px 14px 16px; background: #FDFBF6; border-radius: 6px; box-shadow: 0 14px 30px rgba(0,0,0,.33); }
+.ac-pol-photo { position: relative; width: 272px; height: 272px; border-radius: 3px; overflow: hidden; }
+.ac-pol-photo > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ac-sticker { position: absolute; left: 10px; top: 10px; transform: rotate(-6deg); transform-origin: top left; padding: 4px 8px; border-radius: 99px;
+  font-family: Onest; font-size: 11px; font-weight: 800; letter-spacing: .9px; color: #141823; line-height: 1.2; }
+.ac-stamp { position: absolute; right: 8px; bottom: 8px; padding: 3px 6px; border-radius: 4px; background: rgba(20,10,5,.55);
+  font-family: Onest; font-size: 14px; font-weight: 700; letter-spacing: 1.2px; color: #FF9A3C; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(255,122,26,.6); line-height: 1.2; }
+.ac-caption { margin-top: 10px; padding-left: 6px; transform: rotate(-3deg); transform-origin: left center; font-family: Neucha;
+  font-size: 30px; line-height: 1.05; color: #1D3B8F; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ac-pol-foot { margin-top: 10px; padding: 0 4px; display: flex; gap: 6px; font-family: Onest; font-size: 12px; color: #7D776B; }
+.ac-tape { position: absolute; top: 0; left: 105px; width: 90px; height: 22px; background: rgba(243,217,138,.8);
+  transform: rotate(-4deg); box-shadow: 0 1px 2px rgba(0,0,0,.13); }
+
+.ac-banner { position: fixed; left: var(--l); right: var(--l); z-index: 70; cursor: pointer;
+  bottom: calc(max(var(--sab), var(--m)) + 64px + var(--s)); transition: bottom .25s cubic-bezier(.2,.8,.2,1);
+  background: var(--card-solid); border: 1px solid var(--line); border-radius: var(--r-tile); padding: var(--m) var(--l) var(--m) var(--m);
+  box-shadow: 0 8px 24px rgba(0,0,0,.16); animation: ac-ban-in .36s cubic-bezier(.34,1.56,.64,1) both; max-width: 640px; margin: 0 auto; }
+:root[data-dark="1"] .ac-banner { box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.ac-banner.up { bottom: calc(max(var(--sab), var(--m)) + 128px + var(--s)); }
+.ac-banner.out { animation: ac-ban-out .3s ease-in both; }
+@keyframes ac-ban-in { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes ac-ban-out { to { transform: translateY(20px); opacity: 0; } }
+
+/* ── Рейтинг (rating.dart) ── */
+.ac-brow { width: 100%; padding: var(--m) var(--l); text-align: left; gap: 0; }
+.ac-brow:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+#rating-nick { gap: var(--m); }
+.ac-chip { padding: 6px 12px; border-radius: var(--r-chip); border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 600; }
+.ac-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ac-tr-head { height: 20px; white-space: nowrap; overflow: hidden; }
+.ac-tr-plot { touch-action: none; }
+/* выключатель (AppSwitch: Material 3) */
+.ac-sw { position: relative; width: 52px; height: 32px; flex: none; border-radius: 16px; background: var(--line); transition: background .2s; margin: 0 4px; }
+.ac-sw > i { position: absolute; left: 8px; top: 8px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted);
+  transition: all .2s cubic-bezier(.2,.8,.2,1); }
+.ac-sw.on { background: var(--accent); }
+.ac-sw.on > i { left: 24px; top: 4px; width: 24px; height: 24px; background: var(--on-accent); }
+.ac-seen { margin: var(--m) 0; padding: var(--m) var(--l); border-radius: var(--r-chip); background: var(--card); }
+.sheet.ac-sa { max-height: 85%; display: flex; flex-direction: column; overflow: hidden; }
+.sheet.ac-sa > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.ac-sa-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--xl) var(--m); }
+.ac-sa-foot { flex: none; padding: var(--s) var(--xl) 0; }
