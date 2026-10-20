@@ -67,6 +67,8 @@ img { -webkit-user-drag: none; }
 
 /* ── Экран: фон с подсветками (Backdrop) ── */
 #app { position: fixed; inset: 0; overflow: hidden; }
+/* iPhone с «Домой»: низ fixed-слоёв — до низа экрана, а не окна (--gap — index.html, uib-gap) */
+#app, .sheet-wrap, .td-cap, .mr-tour, .dl-cheer { bottom: calc(-1 * var(--gap, 0px)); }
 .screen { position: absolute; inset: 0; overflow: hidden; background: var(--bg); will-change: transform; }
 .screen > .bg { position: absolute; inset: 0; pointer-events: none;
   background:
@@ -144,7 +146,7 @@ img { -webkit-user-drag: none; }
   background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
 
 /* ── Нижнее меню «капсула» (CapsuleTabBar) ── */
-#tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; pointer-events: none;
+#tabbar { position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap, 0px)); z-index: 20; pointer-events: none;
   padding: 0 calc(var(--l) + var(--sal)) calc(max(var(--sab), var(--m))) calc(var(--l) + var(--sar));
   transition: transform .28s cubic-bezier(.2,.8,.2,1); }
 #tabbar::before { content: ""; position: absolute; left: 0; right: 0; top: -28px; bottom: 0; pointer-events: none;
@@ -178,7 +180,7 @@ img { -webkit-user-drag: none; }
 @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
 
 /* ── Всплывашка (AppToast) ── */
-#toast { position: fixed; left: var(--l); right: var(--l); z-index: 80; bottom: calc(max(var(--sab), var(--m)) + 64px + var(--m));
+#toast { position: fixed; left: var(--l); right: var(--l); z-index: 80; bottom: calc(max(var(--sab), var(--m)) + 64px + var(--m) - var(--gap, 0px));
   display: flex; justify-content: center; pointer-events: none; }
 .toast { pointer-events: auto; max-width: 560px; width: 100%; display: flex; gap: var(--m); align-items: center;
   background: var(--card-solid); border: 1px solid var(--line); border-radius: 18px; padding: 14px var(--l);
