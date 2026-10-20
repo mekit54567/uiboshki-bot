@@ -232,8 +232,8 @@ function openChat() {
       }
       log.push(answer);
       waiting = false;
-      draw();
       save();
+      draw();
       toEnd();
     };
     const answerOf = (r, withFiles) => chMsg({ role: "assistant", content: r.content || "", html: r.html || "", sources: r.sources || [],
@@ -358,6 +358,7 @@ function openChat() {
           if (lock === null && Math.abs(mx) + Math.abs(my) > 8) lock = Math.abs(mx) > Math.abs(my) ? "x" : "y";
           if (lock !== "x") return;
           dx = Math.min(0, mx);
+          el.classList.add("drag");
           el.querySelector(".tile").style.transform = `translateX(${dx}px)`;
         }, { passive: true });
         box.addEventListener("touchend", () => {
@@ -367,7 +368,10 @@ function openChat() {
           if (lock === "x" && -dx > w * 0.4) {
             tile.style.transition = "transform .2s"; tile.style.transform = `translateX(${-w}px)`;
             setTimeout(() => remove(i), 200);
-          } else { tile.style.transition = "transform .2s"; tile.style.transform = ""; setTimeout(() => (tile.style.transition = ""), 220); }
+          } else {
+            tile.style.transition = "transform .2s"; tile.style.transform = "";
+            setTimeout(() => { tile.style.transition = ""; el.classList.remove("drag"); }, 220);
+          }
         });
       });
       if (!alive) return;

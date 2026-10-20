@@ -3,7 +3,6 @@
 /* ── Файлы ── */
 .fl-search { display: flex; align-items: center; gap: var(--m); min-height: 50px; padding: 0 var(--xs) 0 var(--l);
   background: var(--card); border: 1px solid var(--line); border-radius: 999px; cursor: text; }
-.fl-search:focus-within { border-color: var(--accent); }
 .fl-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 15px; color: var(--text);
   padding: 12px 0; -webkit-appearance: none; appearance: none; }
 .fl-search input::placeholder { color: var(--muted); }
@@ -38,7 +37,7 @@
 .fl-btn.fill { background: var(--accent); color: var(--on-accent); }
 .fl-btn.line { border: 1px solid var(--line); color: var(--text); }
 .fl-btn:active { filter: brightness(.95); }
-.fl-tbtn { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; margin-top: 2px; border-radius: 999px;
+.fl-tbtn { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px; border-radius: 999px;
   font-size: 14px; font-weight: 500; color: var(--muted); }
 .fl-tbtn.acc, .fl-tbtn.acc .mi { color: var(--accent); }
 .fl-tbtn:active { background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -59,22 +58,22 @@
 
 /* ── Помощник ── */
 .wrap.ch { display: flex; flex-direction: column; height: 100%; }
-.ch-top { flex: none; display: flex; align-items: center; height: 48px; padding: 0 var(--l) 0 var(--s); margin-top: 4px; }
+.ch-top { flex: none; display: flex; align-items: center; height: 40px; padding: 0 var(--l) 0 4px; }
 .ch-top .ch-back { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--text); }
 .ch-top .ch-ic { width: 48px; height: 48px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--text); }
-.ch-subj { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 32px; padding: 0 12px 0 8px;
+.ch-subj { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; height: 30px; padding: 0 16px 0 10px;
   border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
 .ch-subj span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
 .ch-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
   padding-bottom: var(--l); }
 .ch-list::-webkit-scrollbar { display: none; }
 .ch-chips { display: flex; flex-wrap: wrap; gap: var(--s); padding: 0 var(--xl); }
-.ch-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 12px; border-radius: 999px; background: var(--card);
+.ch-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 17px; border-radius: 999px; background: var(--card);
   border: 1px solid var(--line); font-size: 13px; color: var(--text); text-align: left; max-width: 100%; }
-.ch-chip.src { color: var(--muted); font-size: 12px; padding-left: 8px; }
+.ch-chip.src { color: var(--muted); font-size: 12px; padding: 4px 16px 4px 10px; }
 .ch-chip.src > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-chip.pick { border-color: var(--accent); font-weight: 600; }
-.ch-chip.think { border-color: var(--accent); font-weight: 600; padding-left: 8px; }
+.ch-chip.think { border-color: var(--accent); font-weight: 600; padding: 4px 14px 4px 10px; }
 .ch-chip.think:disabled { border-color: var(--line); }
 .ch-chip:active:not(:disabled) { filter: brightness(.95); }
 .ch-me { display: flex; justify-content: flex-end; padding: var(--s) var(--l) var(--s) var(--xxl); }
@@ -120,6 +119,7 @@
 .ch-thread { position: relative; margin-bottom: var(--s); border-radius: var(--r-tile); overflow: hidden; touch-action: pan-y; }
 .ch-thread .ch-del { position: absolute; inset: 0; background: var(--danger); color: #fff; display: flex; align-items: center;
   justify-content: flex-end; padding-right: var(--xl); font-weight: 700; font-size: 15px; border-radius: var(--r-tile); }
+.ch-thread:not(.drag) .ch-del { visibility: hidden; }
 .ch-thread .tile { position: relative; padding: var(--m) var(--xs) var(--m) var(--l); }
 .ch-thread .tile.cur { border-color: var(--accent); }
 .ch-thread .ch-x { width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--muted); }
