@@ -43,6 +43,9 @@ const AC_ACH = [
   ["secret", "midnight", "Тайная фраза", "Услышать от капибары фразу, которая выпадает раз на сотню касаний"],
   ["one_of_us", "midnight", "Один из нас", "Капибара повернулась к тебе: раз на десять тысяч касаний"],
 ].map(([id, rank, title, how, place]) => ({ id, rank, title, how, place: place ? { tab: place[0], hint: place[1] } : null, secret: rank === "midnight" }));
+/** Для «Ещё»: каталог ({id, rank, title, …}) и значок ранга. */
+window.ACHIEVEMENTS = AC_ACH;
+window.rankBadge = (rank, size = 64, open = true) => acBadge(rank, size, open);
 function acAch(id) { return AC_ACH.find((a) => a.id === id) || null; }
 
 /** Подпись маркером на полароиде; нет своей — название ачивки. */
@@ -252,7 +255,6 @@ async function acVisit() {
     acVisit();
     Api.get("/me").then((me) => { acName = String((me && me.first_name) || "").trim(); }).catch(() => {});
     Api.get("/meta").then((m) => acSetBot(m && m.links && m.links.bot)).catch(() => {});
-    if (typeof PlusBonus !== "undefined") PlusBonus.sendRef();
   };
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Tabs.screens.length) acVisit(); });
 })();
@@ -331,7 +333,7 @@ function acPolaroid(a, at) {
     <div class="ac-pol-card">
       <div class="ac-pol-photo" style="background:${acSky(r)}">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">${acLight(r.id, false)}</svg>
-        <i class="capy" style="--img:url(/img/capy/${r.pose}.png);width:170px;height:170px;color:${r.ink};position:absolute;left:51px;top:79px"></i>
+        <i class="capy" style="--img:url(/img/capy/${r.pose}.png);width:170px;height:170px;color:${r.ink};position:absolute;left:51px;top:87px"></i>
         <span class="ac-sticker" style="background:${r.sticker}">${esc(r.title.toUpperCase())}</span>
         <span class="ac-stamp">${esc(acFilmStamp(at))}</span>
       </div>
@@ -406,7 +408,7 @@ async function acPolaroidPng(a, at) {
     const k = Math.min(170 / img.width, 170 / img.height), w = img.width * k, h = img.height * k;
     tg.drawImage(img, (170 - w) / 2 * K, (170 - h) / 2 * K, w * K, h * K);
     tg.globalCompositeOperation = "source-in"; tg.fillStyle = r.ink; tg.fillRect(0, 0, t.width, t.height);
-    g.drawImage(t, px + 51, py + 79, 170, 170);
+    g.drawImage(t, px + 51, py + 87, 170, 170);
   } catch (e) {}
   // наклейка ранга
   g.save();
@@ -477,8 +479,8 @@ function acShowAchievement(a) {
     <div class="ttl" style="--sz:24px;text-align:center">${esc(acRank(a.rank).title + " · " + a.title)}</div>
     <div class="bd mut" style="--sz:15px;text-align:center;margin-top:var(--s)">${esc(how)}</div>
     ${open || where ? '<div style="height:var(--xl)"></div>' : ""}
-    ${open ? `<button class="btn primary" style="min-height:50px" data-act="share">${icon("ios_share", "", "font-size:20px")}Поделиться</button>` : ""}
-    ${where ? `${open ? '<div style="height:var(--s)"></div>' : ""}<button class="${open ? "ac-ob" : "btn primary"}" id="ach-where" style="min-height:50px" data-act="where">Показать где</button>` : ""}`,
+    ${open ? `<button class="btn primary" style="min-height:50px;font-size:14px;font-weight:500" data-act="share">${icon("ios_share", "", "font-size:20px")}Поделиться</button>` : ""}
+    ${where ? `${open ? '<div style="height:var(--s)"></div>' : ""}<button class="${open ? "ac-ob" : "btn primary"}" id="ach-where" style="min-height:50px;font-size:14px;font-weight:500" data-act="where">Показать где</button>` : ""}`,
   (body, close) => {
     const fit = body.querySelector(".ac-pol-fit");
     if (fit) {

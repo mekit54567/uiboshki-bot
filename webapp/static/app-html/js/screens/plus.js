@@ -315,3 +315,6 @@ const PlusBonus = {
     }
   },
 };
+
+/** shell.js afterStart: «кто позвал» — после согласия. */
+window.sendRef = () => PlusBonus.sendRef();

@@ -129,7 +129,7 @@ Screens.login = {
         <div class="bd mut" style="--sz:12px;text-align:center">${esc(AC_UNOFFICIAL)}</div>
         ${codeLogin ? `<div class="ac-center"><button class="ac-tb" data-act="code"><span class="bd mut" style="--sz:14px">Вход по коду доступа</span></button></div>` : ""}
         <div style="height:var(--s)"></div>
-        <div class="ac-center"><button class="ac-tb" data-act="guest"><span class="bd b6 mut" style="--sz:15px">Расписание без входа</span></button></div>`;
+        <div class="ac-center"><button class="ac-tb" data-act="guest"><span class="bd b6" style="--sz:15px">Расписание без входа</span></button></div>`;
     };
 
     const finish = () => {
@@ -287,7 +287,7 @@ function acBindConsent(el, get, onChange) {
 /**
  * «Твои данные» (ConsentScreen): первый вход и новая версия текста.
  * required — новый человек: без согласия дальше нельзя (назад не уйти).
- * → Promise: true — согласился, false — отказался (данные удалены), null — «Не сейчас».
+ * → Promise: true — согласился, false — отказался (данные удалены), undefined — «Не сейчас».
  */
 window.openConsent = function openConsent({ required = true } = {}) {
   return new Promise((resolve) => {
@@ -307,7 +307,7 @@ window.openConsent = function openConsent({ required = true } = {}) {
           <div style="height:var(--l)"></div>
           <div class="ac-consent">${acConsentCheck(agree)}</div>
           <div style="height:var(--xl)"></div>
-          <button class="btn primary" style="min-height:50px" data-act="go"${agree && !busy ? "" : " disabled"}>Продолжить</button>
+          <button class="btn primary" style="min-height:50px;font-size:14px;font-weight:500" data-act="go"${agree && !busy ? "" : " disabled"}>Продолжить</button>
           <div style="height:var(--s)"></div>
           <button class="btn text" data-act="no"${busy ? " disabled" : ""}><span class="bd b6 mut" style="--sz:15px">${required ? "Не даю согласие" : "Не сейчас"}</span></button>
         </div>`;
@@ -322,7 +322,7 @@ window.openConsent = function openConsent({ required = true } = {}) {
           finish(true);
         },
         no: async () => {
-          if (!required) { finish(null); return; }
+          if (!required) { finish(undefined); return; }
           const ok = await confirmSheet({ title: "Без согласия — никак",
             text: "Приложение не может хранить твои данные без согласия. Удалить то, что уже есть, и выйти?",
             action: "Удалить и выйти", cancel: "Назад", danger: true });
@@ -334,7 +334,7 @@ window.openConsent = function openConsent({ required = true } = {}) {
       return () => {
         if (done) return;
         if (required) setTimeout(() => { if (!done) openConsent({ required }).then((v) => { done = true; resolve(v); }); }, 320);
-        else { done = true; resolve(null); }
+        else { done = true; resolve(undefined); }
       };
     });
   });
