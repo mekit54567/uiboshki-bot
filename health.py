@@ -257,6 +257,10 @@ async def report() -> str:
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
+    import backup
+    import s3_store
+    if not s3_store.configured() and not backup.backup_key():     # копия уходит в Telegram (ОАЭ)
+        lines += ["⚠️ Ночная копия базы уходит в Telegram без шифрования: задай BACKUP_KEY", ""]
     import billing
     if billing.provider(configured_only=True) and billing.missing_requisites():
         lines += ["⚠️ Касса задана, но оплата «Капибары+» закрыта: в оферте нет реквизитов — задай "
