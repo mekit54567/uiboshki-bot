@@ -10,6 +10,7 @@ import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import 'donate.dart';
 import 'plus.dart';
+import 'plus_screen.dart' show PlusLinks;
 
 Future<void> showRoadmapSheet(BuildContext context, Api api) async {
   if (!PlusBonus.allowed) return;
@@ -22,6 +23,16 @@ Future<void> showRoadmapSheet(BuildContext context, Api api) async {
     return;
   }
   if (d['hidden'] != false || !context.mounted) return;
+  final page = d['page_url'];
+  if (d['locked'] == false && page is String && page.isNotEmpty) {
+    // Красивая страница роадмапа (webapp/routes/roadmap_page.py), Никита 20.10
+    var ok = false;
+    try {
+      ok = await PlusLinks.open(Uri.parse(page));
+    } catch (_) {}
+    if (ok) return;
+  }
+  if (!context.mounted) return;
   await appSheet<void>(context, (_) => RoadmapSheet(data: d, api: api));
 }
 

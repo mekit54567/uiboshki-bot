@@ -238,19 +238,57 @@ async def test_roadmap_for_supporters(db, bot, dp, client, robokassa):  # noqa: 
     assert await billing.settle(inv, bot)
     assert "/roadmap" in _to(bot, ME)[-1]                                             # в спасибо — где роадмап
     d = c.get("/api/roadmap", headers=h).json()
-    assert not d["locked"] and d["items"] and set(d["statuses"]) == {"now", "next", "idea", "done"}
+    assert not d["locked"] and d["items"] and set(d["statuses"]) == {"now", "next", "idea", "done", "failed"}
+    assert d["page_url"].startswith(billing.site() + "/roadmap?k=")                  # красивая страница
     order = [i["status"] for i in d["items"]]
     assert order == sorted(order, key=list(roadmap.STATUSES).index)                    # сейчас → дальше → вышло
     await send(dp, bot, "/roadmap", uid=ME)
     assert "Роадмап Капибары" in bot.session.texts()[-1] and "Делаю сейчас" in bot.session.texts()[-1]
+    m = bot.session.named("SendMessage")[-1]
+    assert "/roadmap?k=" in m.reply_markup.inline_keyboard[0][0].url                  # кнопка на страницу
     assert await roadmap.can_see(STAROSTA_ID)                                         # Никите — всегда
 
 
 def test_roadmap_file_is_valid():
     import roadmap
     data = roadmap.load()
-    assert data["updated"] and all(i["title"] and i["about"] for i in data["items"])
+    assert data["updated"] and data["edition"] >= 1 and all(i["title"] and i["about"] for i in data["items"])
+    assert all(i.get("from", 0) < data["edition"] for i in data["items"])         # итоги — только прошлых номеров
     assert len(roadmap.text()) < 4096
+
+
+@pytest.mark.asyncio
+async def test_roadmap_page(db, client, monkeypatch, robokassa):  # noqa: F811
+    """Страница роадмапа (Никита 20.10): по личной ссылке, только поддержавшим;
+    итоги прошлого номера — «Сделано N из M», не вышло — со ссылкой на пост."""
+    import channel_posts
+    import roadmap
+    from webapp.routes import roadmap_page
+    c, _ = client
+    await db.upsert_user(ME, "", "u")
+    assert c.get("/roadmap").status_code == 403 and c.get("/roadmap?k=битый").status_code == 403
+    page = c.get(roadmap.page_link(ME).split(billing.site())[1]).text
+    assert "Поддержать проект" in page and "Сделано" not in page                     # ещё не поддержал
+    inv = parse_qs(urlparse(await billing.create_donation(ME, 50, "https://x")).query)["InvId"][0]
+    await billing.settle(inv, None)
+    page = c.get(roadmap.page_link(ME).split(billing.site())[1]).text
+    assert "Роадмап №" in page and "Спасибо за поддержку" in page and "/site/roadmap.css" in page
+
+    async def fake_published():
+        return {"18-semantic": {"ids": [42]}}
+    monkeypatch.setattr(channel_posts, "published", fake_published)
+    monkeypatch.setattr(channel_posts, "target", lambda slug: "@uiboshki_dev")
+    data = {"edition": 3, "updated": "2026-11-01", "items": [
+        {"status": "done", "from": 2, "title": "А", "about": "а", "post": "18-semantic"},
+        {"status": "failed", "from": 2, "title": "Б<script>", "about": "б", "post": "https://t.me/uiboshki_dev/7"},
+        {"status": "now", "from": 2, "title": "В", "about": "в", "progress": 40},
+        {"status": "done", "title": "старое", "about": "без номера — не в итогах"},
+        {"status": "next", "title": "Г", "about": "г"}]}
+    assert roadmap.score(data) == (1, 3)
+    html = roadmap_page.render(await roadmap.with_links(data))
+    assert "Сделано 1 из 3" in html and "33%" in html and "1 ноября 2026" in html
+    assert "https://t.me/uiboshki_dev/42" in html and "Почему не вышло" in html and "width:40%" in html
+    assert "<script>" not in html and "старое" not in html and "Дальше" in html
 
 
 def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811

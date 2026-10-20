@@ -134,6 +134,7 @@ async function openRoadmap() {
   try { d = await api("/api/roadmap"); }
   catch (e) { showToast("Не вышло: " + e.message); return; }
   if (d.hidden) return;
+  if (!d.locked && d.page_url) { openLink(d.page_url); return; }   // страница роадмапа (roadmap_page.py)
   const box = document.getElementById("roadmap-body");
   const hero = '<div class="sec-hero"><span class="sec-shield nt-bell">' + icon("pin") + '</span><div><h3>Роадмап</h3>' +
     '<p>Что я делаю сейчас и что дальше</p></div></div>';
