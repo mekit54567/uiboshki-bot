@@ -209,3 +209,14 @@ def test_html_pwa_fills_iphone_screen_from_home():
     css = (ROOT / "webapp/static/app-html/css/app.css").read_text(encoding="utf-8")
     assert "#app, .sheet-wrap, .td-cap, .mr-tour, .dl-cheer { bottom: calc(-1 * var(--gap, 0px)); }" in css
     assert "#tabbar { position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap, 0px));" in css
+
+
+def test_iphone_diag_page_served():
+    """Замер экрана iPhone (Никита 20.10, полоса снизу): без манифеста, чтобы
+    «На экран „Домой“» открывал её саму; цифры и три способа до низа экрана."""
+    import webapp.server as server
+    r = TestClient(server.app).get("/app-html/diag.html")
+    assert r.status_code == 200
+    assert 'rel="manifest"' not in r.text and "black-translucent" in r.text
+    for s in ("100lvh", "screen.height", "innerHeight", "safe-area-inset-bottom"):
+        assert s in r.text

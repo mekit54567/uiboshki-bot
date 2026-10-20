@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<!-- Замер экрана iPhone для PWA (Никита 20.10: снизу пустая полоса). Без
+     манифеста: «На экран „Домой“» открывает эту же страницу. Цветные полосы
+     внизу — какой способ достаёт до низа экрана; цифры — что отдаёт iOS. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Замер">
+<title>Замер экрана</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #234; color: #fff; font: 15px/1.4 -apple-system, sans-serif; overflow: hidden; }
+  #box { position: fixed; inset: 0; border: 3px solid #f44; box-sizing: border-box; }
+  #nums { position: absolute; top: 60px; left: 16px; right: 16px; white-space: pre-wrap; font-size: 14px; }
+  .bar { position: fixed; height: 14px; width: 30%; }
+  #a { left: 0; bottom: 0; background: #f44; }
+  #b { left: 35%; top: calc(100lvh - 14px); background: #4c4; }
+  #c { right: 0; background: #fc3; }
+  #sab { position: fixed; left: 0; right: 0; bottom: 0; height: env(safe-area-inset-bottom); background: rgba(255,255,255,.25); }
+</style>
+</head>
+<body>
+<div id="box"></div>
+<div id="sab"></div>
+<div id="nums"></div>
+<div class="bar" id="a"></div><div class="bar" id="b"></div><div class="bar" id="c"></div>
+<script>
+  var de = document.documentElement, c = document.getElementById("c");
+  function sh() { var w = de.clientWidth, h = de.clientHeight, a = screen.width, b = screen.height; return w > h ? Math.min(a, b) : Math.max(a, b); }
+  function draw() {
+    c.style.top = (sh() - 14) + "px";
+    var t = document.createElement("div");
+    t.style.cssText = "position:fixed;top:env(safe-area-inset-top);bottom:env(safe-area-inset-bottom)";
+    document.body.appendChild(t);
+    var r = t.getBoundingClientRect(); t.remove();
+    document.getElementById("nums").textContent =
+      "standalone: " + navigator.standalone +
+      "\nscreen: " + screen.width + "×" + screen.height +
+      "\ninnerHeight: " + innerHeight + "  clientHeight: " + de.clientHeight +
+      "\nvisualViewport: " + (window.visualViewport ? Math.round(visualViewport.height) : "—") +
+      "\nfixed inset:0 высота: " + Math.round(document.getElementById("box").getBoundingClientRect().height) +
+      "\nsafe top: " + Math.round(r.top) + "  safe bottom: " + Math.round(innerHeight - r.bottom) +
+      "\n\nКрасная рамка — fixed inset:0. Полосы внизу:\nкрасная — bottom:0, зелёная — 100lvh, жёлтая — screen.height." +
+      "\nКакая полоса у самого низа экрана — та и нужна.";
+  }
+  draw();
+  addEventListener("resize", draw);
+</script>
+</body>
+</html>
