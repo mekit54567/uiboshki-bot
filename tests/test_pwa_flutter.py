@@ -184,3 +184,15 @@ def test_home_screen_name_is_full(monkeypatch):
     c = TestClient(server.app)
     for path in ("/app", "/app/"):
         assert '<link rel="manifest" href="/manifest.webmanifest">' in c.get(path).text
+
+
+def test_html_capy_line_types_like_app():
+    """Никита 20.10: в HTML-версии фраза капибары появлялась сразу — в
+    приложении она печатается по буквам (widgets/capy.dart, showCapy) и
+    закрывается нажатием, а не сама."""
+    js = (ROOT / "webapp/static/app-html/js/screens/today.js").read_text(encoding="utf-8")
+    css = (ROOT / "webapp/static/app-html/css/app.css").read_text(encoding="utf-8")
+    assert 'class="td-typed"' in js and 'class="td-rest"' in js and "td-caret" in js
+    assert "turn ? 70 : 45" in js and "prefers-reduced-motion" in js
+    assert "setTimeout(() => ov.remove()" not in js
+    assert ".td-rest { color: transparent; }" in css and "@keyframes td-pop" in css
