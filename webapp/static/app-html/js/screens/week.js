@@ -221,6 +221,7 @@ Screens.week = {
     draw();
     fetch();
     screen.reload = () => { if (dataShift === shift) fetch(); };
+    pullRefresh(screen, () => fetch());
   },
   onShow(body, screen) { if (screen.reload) screen.reload(); },
 };

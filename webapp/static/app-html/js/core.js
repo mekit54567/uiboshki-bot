@@ -328,7 +328,10 @@ function notice(title, text, { pose = "", retry = "", retryLabel = "Ещё ра�
     ${retry ? `<button class="btn text" style="width:auto;padding:0;justify-content:flex-start" data-act="${retry}">${esc(retryLabel)}</button>` : ""}</div>
   </div></div>`;
 }
-function spinner() { return '<div class="spinner"></div>'; }
+/** Первая загрузка экрана — капибара со сценой (CapyLoading, js/capy_scenes.js). */
+function spinner() { return typeof capyLoading === "function" ? capyLoading() : smallSpinner(); }
+/** Маленькая крутилка — где в приложении CircularProgressIndicator (поиск). */
+function smallSpinner() { return '<div class="spinner"></div>'; }
 /** Кольцо баллов (ScoreRing). */
 function ring(value, color, inner, size = 64, stroke = 6) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value || 0));

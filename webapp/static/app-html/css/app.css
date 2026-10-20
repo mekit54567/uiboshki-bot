@@ -345,3 +345,34 @@ textarea.field { resize: none; min-height: 96px; }
 .cmp-cell.free { border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
 .cmp-t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: normal; }
 .cmp-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Капибара, пока грузится (capy_refresh.dart) ── */
+.cs-loading { display: flex; flex-direction: column; align-items: center; padding: 48px 0 24px; }
+.cs { position: relative; overflow: hidden; color: var(--text); }
+.cs-wave { position: absolute; left: 0; bottom: 0; animation: cs-wave linear infinite; }
+@keyframes cs-wave { to { transform: translateX(calc(-1 * var(--len))); } }
+.cs-surf { position: absolute; width: 112px; height: 112px; transform-origin: 50% 81%; animation: cs-surf 2.6s ease-in-out infinite; }
+@keyframes cs-surf { 0%, 100% { transform: none; } 25% { transform: translate(8px, -4px) rotate(7deg); }
+  50% { transform: translate(0, 0); } 75% { transform: translate(-8px, -4px) rotate(-7deg); } }
+.cs-spray { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #4F8CFFE6; animation: cs-spray 2.6s linear infinite; }
+@keyframes cs-spray { 0% { opacity: 0; transform: none; } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-22px, -16px) scale(.5); } }
+.cs-dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: cs-dot 1.1s infinite; }
+@keyframes cs-dot { 0% { transform: none; opacity: .5; } 30% { transform: translateY(-6px); opacity: 1; } 60%, 100% { transform: none; opacity: .5; } }
+.cs-glow { position: absolute; width: 80px; height: 80px; border-radius: 50%; animation: cs-glow 2.4s ease-in-out infinite;
+  background: radial-gradient(circle, color-mix(in srgb, var(--warn) 45%, transparent) 0, transparent 65%); }
+@keyframes cs-glow { 0%, 100% { transform: scale(.92); opacity: .6; } 50% { transform: scale(1.06); opacity: 1; } }
+.cs-bounce { animation: cs-bounce .9s ease-in-out infinite; }
+@keyframes cs-bounce { 0%, 100% { transform: none; } 50% { transform: translateY(-20px); } }
+.cs-shadow { position: absolute; bottom: 4px; width: 44px; height: 6px; border-radius: 3px; background: #000; opacity: .4;
+  animation: cs-shadow .9s ease-in-out infinite; }
+@keyframes cs-shadow { 50% { transform: scaleX(.55); opacity: .15; } }
+.cs-mandarin { position: absolute; width: 16px; height: 19px; transform-origin: 50% 100%; animation: cs-mandarin 1.8s ease-in-out infinite; }
+.cs-mandarin b { position: absolute; left: 0; bottom: 0; width: 16px; height: 16px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #FFC36B, #F2994A 60%, #D9772A); }
+.cs-mandarin s { position: absolute; left: 7px; top: 0; width: 7px; height: 5px; background: #7BC67E; border-radius: 0 6px 0 6px; }
+@keyframes cs-mandarin { 0%, 100% { transform: rotate(-11deg); } 50% { transform: rotate(11deg); } }
+.cs-z { position: absolute; color: var(--accent); font-weight: 800; font-family: Onest; animation: cs-z 2.4s linear infinite; opacity: 0; }
+@keyframes cs-z { 0% { opacity: 0; transform: none; } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(16px, -20px); } }
+.cs-pull { position: absolute; z-index: 5; left: 0; right: 0; top: 0; padding-top: 8px; display: flex; justify-content: center;
+  pointer-events: none; opacity: 0; transform: translateY(-64px); transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+@media (prefers-reduced-motion: reduce) { .cs *, .cs { animation: none !important; } }

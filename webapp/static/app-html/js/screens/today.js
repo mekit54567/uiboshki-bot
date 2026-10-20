@@ -257,6 +257,7 @@ Screens.today = {
     refresh();
     const timer = setInterval(draw, 30000);
     screen.reload = refresh;
+    pullRefresh(screen, refresh);
     return () => clearInterval(timer);
   },
   onShow(body, screen) { if (screen.reload) screen.reload(); },

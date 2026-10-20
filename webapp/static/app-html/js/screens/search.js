@@ -53,7 +53,7 @@ window.openSearch = function openSearch() {
       clear.hidden = !q.value;
       if (q.value.trim().length >= 2) {
         if (failed) { out.innerHTML = notice("Не получилось", failed, { pose: "sad", retry: "retry" }); return; }
-        if (busy || !items) { out.innerHTML = spinner(); return; }
+        if (busy || !items) { out.innerHTML = smallSpinner(); return; }
         if (!items.length) {
           out.innerHTML = ready ? notice("Ничего не нашлось", "Проверь, как написано, или попробуй часть фамилии.", { pose: "sad" })
                                 : notice("Справочник ещё собирается", "Первый запуск занимает около получаса — попробуй чуть позже.");
@@ -262,6 +262,7 @@ function targetScreen(body, screen, t) {
   });
   draw();
   load();
+  pullRefresh(screen, load);
 }
 
 // ── «Сравнить неделю» (compare.dart) ──
