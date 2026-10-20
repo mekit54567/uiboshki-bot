@@ -693,7 +693,7 @@ RuStore — «Вход по коду доступа» в приложении, �
   покупка (оферта v3, раздел «Поддержка проекта»). Бот `/roadmap`, Mini App —
   строка под «Поддержать проект», приложение — «Ещё» (`plus/roadmap.dart`),
   `GET /api/roadmap` (до доната — `locked` и ссылка на донат; iOS — `hidden`).
-  Страница — `/roadmap?k=` (5.113, `webapp/routes/roadmap_page.py`, стиль `site/roadmap.css`): номер
+  Страница — `/roadmap?k=` (5.114.4, `webapp/routes/roadmap_page.py`, стиль `site/roadmap.css`): номер
   роадмапа (`edition`), итоги прошлого номера (`from`, done/failed/now) со ссылками на посты канала
   разработки (`post`), «Дальше». Новый номер — поднять `edition`, у обещанных — `from`.
   **Обновлять `roadmap.json` с выпусками**: вышло — в `done`, новое из «Идей в
