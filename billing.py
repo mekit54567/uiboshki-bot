@@ -251,7 +251,7 @@ async def create(uid: int, plan: str, return_url: str) -> str:
             logger.warning("ЮKassa не ответила — платёж через Robokassa")
     inv = await _new_inv_id()
     await add_payment(str(inv), "robokassa", uid, plan, price, days)
-    return robokassa_url(inv, price, title)
+    return robokassa_url(inv, price, title, return_url)
 
 
 def donate_amount(value) -> int:
@@ -282,7 +282,7 @@ async def create_donation(uid: int, amount, return_url: str) -> str:
             logger.warning("ЮKassa не ответила — донат через Robokassa")
     inv = await _new_inv_id()
     await add_donation(str(inv), "robokassa", uid, amount)
-    return robokassa_url(inv, amount, DONATE_TITLE)
+    return robokassa_url(inv, amount, DONATE_TITLE, return_url)
 
 
 async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: str, return_url: str,
@@ -326,12 +326,21 @@ def _yk_client():
     return net.client(timeout=20, auth=httpx.BasicAuth(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY))
 
 
-def robokassa_url(inv: int, price: int, title: str) -> str:
+def robokassa_url(inv: int, price: int, title: str, back: str = "") -> str:
+    """Ссылка на оплату. back — куда вернуть после оплаты (/plus/done или
+    /donate/done с личным ключом): в кабинете Robokassa Success URL один на
+    всё, поэтому свой адрес — SuccessUrl2, отказ — та же страница без /done
+    (FailUrl2). Оба входят в подпись после InvId."""
     from urllib.parse import urlencode
     out_sum = f"{price}.00"
-    sig = hashlib.md5(f"{ROBOKASSA_LOGIN}:{out_sum}:{inv}:{ROBOKASSA_PASS1}".encode()).hexdigest()
+    extra = []
+    if back:
+        extra = [("SuccessUrl2", back), ("SuccessUrl2Method", "GET"),
+                 ("FailUrl2", back.replace("/done", "", 1)), ("FailUrl2Method", "GET")]
+    base = ":".join([ROBOKASSA_LOGIN, out_sum, str(inv)] + [v for _, v in extra] + [ROBOKASSA_PASS1])
+    sig = hashlib.md5(base.encode()).hexdigest()
     q = {"MerchantLogin": ROBOKASSA_LOGIN, "OutSum": out_sum, "InvId": inv, "Description": title,
-         "SignatureValue": sig, "Culture": "ru", "Encoding": "utf-8"}
+         "SignatureValue": sig, "Culture": "ru", "Encoding": "utf-8", **dict(extra)}
     if ROBOKASSA_TEST:
         q["IsTest"] = 1
     return f"{ROBOKASSA_URL}?{urlencode(q)}"
