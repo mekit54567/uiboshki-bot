@@ -384,3 +384,13 @@ textarea.field { resize: none; min-height: 96px; }
 .cs-pull { position: absolute; z-index: 5; left: 0; right: 0; top: 0; padding-top: 8px; display: flex; justify-content: center;
   pointer-events: none; opacity: 0; transform: translateY(-64px); transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .3s; }
 @media (prefers-reduced-motion: reduce) { .cs *, .cs { animation: none !important; } }
+
+/* ── Капибара выглядывает из-за края карточки (CapyPeek) ── */
+.peek { position: absolute; right: var(--m); bottom: 0; overflow: hidden; padding: 0; }
+.peek-rise { position: absolute; left: 0; animation: peek-rise .9s cubic-bezier(.34,1.56,.64,1) both; }
+.peek-rise .capy { transition: transform .52s cubic-bezier(.65,0,.35,1); }
+.peek.turned .peek-rise .capy { transform: perspective(600px) rotateY(180deg); }
+@keyframes peek-rise { from { transform: translateY(72px); } to { transform: none; } }
+.peek-z { position: absolute; left: 44px; top: 28px; color: var(--accent); font-weight: 800; font-family: Onest; opacity: 0;
+  animation: peek-z 2.4s linear 3; }
+@keyframes peek-z { 0% { opacity: 0; transform: none; } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(18px, -26px); } }

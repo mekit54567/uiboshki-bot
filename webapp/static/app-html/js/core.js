@@ -145,6 +145,7 @@ const Api = {
   // у POST, как в приложении, без короткого таймаута: ответ ИИ и конспект идут до минуты
   post(path, body = {}) { return this._req("POST", path, body, 180000); },
   put(path, body = {}) { return this._req("PUT", path, body); },
+  patch(path, body = {}) { return this._req("PATCH", path, body); },
   del(path) { return this._req("DELETE", path); },
   clearCache() {
     try {
@@ -322,6 +323,19 @@ function screenTitle(title, { sub = "", trailing = "", lead = "", size = 34 } = 
 function section(text) { return `<div class="section eyebrow">${esc(text)}</div>`; }
 /** Пусто или ошибка (Notice): pose — капибара, retry — data-act кнопки. */
 function notice(title, text, { pose = "", retry = "", retryLabel = "Ещё раз" } = {}) {
+  // «Пусто, всё хорошо» — капибара выглядывает снизу справа из-за края карточки (CapyPeek)
+  if (pose && pose !== "sad") {
+    const size = 84, shown = size * 0.8, h = msk(now()).h, night = h >= 23 || h < 5;
+    return `<div class="hx"><div class="tile" style="padding:0;position:relative;min-height:${shown + 30}px">
+      <div style="padding:var(--l) calc(${size}px + var(--l)) var(--l) var(--l)">
+        <div class="bd b6" style="--sz:17px">${esc(title)}</div>
+        <div class="bd mut" style="--sz:14px;margin-top:4px">${esc(text)}</div>
+        ${retry ? `<button class="btn text" style="width:auto;padding:0;justify-content:flex-start;margin-top:var(--m)" data-act="${retry}">${esc(retryLabel)}</button>` : ""}</div>
+      <button class="peek" aria-hidden="true" tabindex="-1" style="width:${size + 18}px;height:${shown + 26}px" onclick="tick();this.classList.toggle('turned')">
+        <span class="peek-rise" style="top:26px">${capy(night ? "night" : pose, size, "var(--accent)")}</span>
+        ${night ? '<b class="peek-z" style="font-size:11px">z</b><b class="peek-z" style="font-size:14px;animation-delay:-1.2s">z</b>' : ""}</button>
+    </div></div>`;
+  }
   return `<div class="hx"><div class="tile row" style="align-items:center">
     ${pose ? `<span class="mut">${capy(pose, 72)}</span>` : ""}
     <div class="grow"><div class="bd b6" style="--sz:17px">${esc(title)}</div>

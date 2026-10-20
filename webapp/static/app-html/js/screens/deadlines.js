@@ -226,7 +226,7 @@ function dlEditSheet(d = null) {
         const payload = { subject, due_date: date, due_time: time || "", description: desc.value.trim() };
         try {
           if (!d) await Api.post("/deadlines", payload);
-          else await Api._req("PATCH", `/deadlines/${d.id}`, payload);
+          else await Api.patch(`/deadlines/${d.id}`, payload);
           close(true);
           return;
         } catch (e) {
