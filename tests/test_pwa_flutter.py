@@ -167,3 +167,20 @@ def test_app_defaults_to_html_and_flutter_moved_to_spare(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path / "нет")
     r = c.get("/app-flutter", follow_redirects=False)
     assert r.status_code in (302, 307) and r.headers["location"] == "/app"
+
+
+def test_home_screen_name_is_full(monkeypatch):
+    """Никита 20.10: на экране «Домой» — «Капибара МИРЭА», не просто «Капибара»;
+    манифест — по полному адресу (на /app/ относительный вёл в папку Flutter)."""
+    import json
+    monkeypatch.delenv("PWA_ENGINE", raising=False)
+    static = ROOT / "webapp" / "static"
+    for m in ("manifest.webmanifest", "app-html/manifest.webmanifest"):
+        assert json.loads((static / m).read_text(encoding="utf-8"))["short_name"] == "Капибара МИРЭА"
+    html = (static / "app-html" / "index.html").read_text(encoding="utf-8")
+    for page in (html, WEB_INDEX):
+        assert '<meta name="apple-mobile-web-app-title" content="Капибара МИРЭА">' in page
+    import webapp.server as server
+    c = TestClient(server.app)
+    for path in ("/app", "/app/"):
+        assert '<link rel="manifest" href="/manifest.webmanifest">' in c.get(path).text

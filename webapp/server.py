@@ -306,6 +306,8 @@ def _html_app() -> Response:
         return f'{m.group(1)}="/{rel}?v={_digest(rel)}"'
 
     html = html.replace('href="fonts/', f'href="/{HTML_APP}/fonts/')
+    # общий манифест (start_url /app): с /app/ относительный вёл бы в папку Flutter
+    html = html.replace('href="manifest.webmanifest"', 'href="/manifest.webmanifest"')
     return Response(_HTML_ASSET_RE.sub(versioned, html), media_type="text/html",
                     headers={"Cache-Control": "no-cache"})
 
