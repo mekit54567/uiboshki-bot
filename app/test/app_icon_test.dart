@@ -97,7 +97,7 @@ void main() {
     }
     expect(find.byKey(const Key('look:icon:halloween'), skipOffstage: false), findsNothing);
     // подписочная без подписки: на Android не видна, на iPhone — с замком
-    // (открывается набором ачивок, 5.113)
+    // (открывается набором ачивок, 5.114.1)
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
     expect(find.byKey(const Key('look:icon:crown'), skipOffstage: false), ios ? findsOneWidget : findsNothing);
     await t.scrollUntilVisible(find.byKey(const Key('look:icon:sunset')), -200, scrollable: sheet);
