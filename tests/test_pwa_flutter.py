@@ -218,5 +218,15 @@ def test_iphone_diag_page_served():
     r = TestClient(server.app).get("/app-html/diag.html")
     assert r.status_code == 200
     assert 'rel="manifest"' not in r.text and "black-translucent" in r.text
-    for s in ("100lvh", "screen.height", "innerHeight", "safe-area-inset-bottom"):
+    for s in ("100lvh", "screen.height", "innerHeight", "safe-area-inset-bottom", "?m=doc", "?m=fixed", "html.doc"):
         assert s in r.text
+
+
+def test_iphone_diag3_without_under_clock_mode():
+    """Способ 3 (Никита 20.10, у Купера полосы нет): та же страница замера, но
+    без black-translucent и viewport-fit=cover — ставится на «Домой» отдельно."""
+    import webapp.server as server
+    r = TestClient(server.app).get("/app-html/diag3.html")
+    assert r.status_code == 200 and 'content="Замер 3"' in r.text
+    head = r.text.split("<style>")[0].split("-->", 1)[1]
+    assert "black-translucent" not in head and "viewport-fit" not in head

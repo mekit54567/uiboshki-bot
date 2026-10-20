@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<!-- Способ 3 (Никита 20.10: у Купера полосы нет, а у него нет black-translucent
+     и viewport-fit=cover): та же страница без режима «под часами». Ставится
+     на «Домой» отдельно — iPhone читает эти метки при добавлении.
+     Замер экрана iPhone для PWA (Никита 20.10: снизу пустая полоса). Без
+     манифеста: «На экран „Домой“» открывает эту же страницу. Цветные полосы
+     внизу — какой способ достаёт до низа экрана; цифры — что отдаёт iOS. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Замер 3">
+<title>Замер экрана 3</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #234; color: #fff; font: 15px/1.4 -apple-system, sans-serif; overflow: hidden; }
+  #box { position: fixed; inset: 0; border: 3px solid #f44; box-sizing: border-box; }
+  #nums { position: absolute; top: 60px; left: 16px; right: 16px; white-space: pre-wrap; font-size: 14px; }
+  .bar { position: fixed; height: 14px; width: 30%; }
+  #a { left: 0; bottom: 0; background: #f44; }
+  #b { left: 35%; top: calc(100lvh - 14px); background: #4c4; }
+  #c { right: 0; background: #fc3; }
+  #sab { position: fixed; left: 0; right: 0; bottom: 0; height: env(safe-area-inset-bottom); background: rgba(255,255,255,.25); }
+  #modes { position: absolute; top: 330px; left: 16px; right: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  #modes a { color: #fff; background: #456; padding: 10px 14px; border-radius: 10px; text-decoration: none; }
+  #modes a.on { background: #fc3; color: #000; }
+  #y2 { position: absolute; left: 0; right: 0; height: 14px; background: #fc3; display: none; }
+  /* m=doc — страница выше окна обычным потоком, без overflow:hidden у html/body */
+  html.doc, html.doc body { overflow: visible; height: auto; overscroll-behavior: none; }
+  html.doc body { position: relative; }
+  /* m=fixed — fixed-слои, но без overflow:hidden (он обрезает их по окну) */
+  html.fixed, html.fixed body { overflow: visible; }
+</style>
+</head>
+<body>
+<div id="box"></div>
+<div id="sab"></div>
+<div id="nums"></div>
+<div id="modes"><a href="?m=">как сейчас</a><a href="?m=doc">способ 1</a><a href="?m=fixed">способ 2</a></div>
+<div id="y2"></div>
+<div class="bar" id="a"></div><div class="bar" id="b"></div><div class="bar" id="c"></div>
+<script>
+  var de = document.documentElement, c = document.getElementById("c");
+  // второй замер (Никита 20.10, скрин: окно 873 из 932, ниже iPhone не рисует):
+  // способ 1 — страница выше окна потоком (жёлтая — внизу страницы),
+  // способ 2 — fixed без overflow:hidden (жёлтая — fixed по screen.height)
+  var mode = (location.search.match(/m=(\w+)/) || [])[1] || "";
+  if (mode) de.classList.add(mode);
+  [].forEach.call(document.querySelectorAll("#modes a"), function (a) { if (a.getAttribute("href") === "?m=" + mode) a.className = "on"; });
+  function sh() { var w = de.clientWidth, h = de.clientHeight, a = screen.width, b = screen.height; return w > h ? Math.min(a, b) : Math.max(a, b); }
+  function draw() {
+    c.style.top = (sh() - 14) + "px";
+    var y2 = document.getElementById("y2");
+    if (mode === "doc") {
+      document.body.style.minHeight = sh() + "px";
+      c.style.display = "none";
+      y2.style.display = "block"; y2.style.top = (sh() - 14) + "px";
+    }
+    var t = document.createElement("div");
+    t.style.cssText = "position:fixed;top:env(safe-area-inset-top);bottom:env(safe-area-inset-bottom)";
+    document.body.appendChild(t);
+    var r = t.getBoundingClientRect(); t.remove();
+    document.getElementById("nums").textContent =
+      "standalone: " + navigator.standalone +
+      "\nscreen: " + screen.width + "×" + screen.height +
+      "\ninnerHeight: " + innerHeight + "  clientHeight: " + de.clientHeight +
+      "\nvisualViewport: " + (window.visualViewport ? Math.round(visualViewport.height) : "—") +
+      "\nfixed inset:0 высота: " + Math.round(document.getElementById("box").getBoundingClientRect().height) +
+      "\nsafe top: " + Math.round(r.top) + "  safe bottom: " + Math.round(innerHeight - r.bottom) +
+      "\nспособ: " + (mode || "как сейчас") + "  прокрутка: " + Math.round(scrollY) +
+      "\n\nКрасная рамка — fixed inset:0. Полосы внизу:\nкрасная — bottom:0, зелёная — 100lvh, жёлтая — screen.height." +
+      "\nКакая полоса у самого низа экрана — та и нужна.";
+  }
+  draw();
+  addEventListener("resize", draw);
+  addEventListener("scroll", draw);
+</script>
+</body>
+</html>
