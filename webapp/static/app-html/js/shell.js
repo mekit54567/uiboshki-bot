@@ -63,17 +63,28 @@ const Tabs = {
     if (i === 4) Ach.unlock("more");
   },
   /** В длинном списке (новый дизайн) капсула уезжает вниз, пока читаешь дальше. */
+  /** Как в приложении (shell.dart): только длинный список (больше полутора
+   * экранов) и только когда листает палец или колесо; вниз на 32 px — прячется,
+   * вверх на 24 — возвращается; у верха и низа списка — всегда видна. */
   _watch(s) {
-    let last = 0;
-    s.scroller.addEventListener("scroll", () => {
-      if (!Theme.design2) return;
-      const y = s.scroller.scrollTop, max = s.scroller.scrollHeight - s.scroller.clientHeight;
-      if (s.quietUntil && Date.now() < s.quietUntil) { last = y; return; }  // прокрутила программа, не человек
-      if (y < 40 || y >= max - 4) this.setHidden(false);
-      else if (y > last + 6) this.setHidden(true);
-      else if (y < last - 6) this.setHidden(false);
+    let last = 0, drift = 0, user = 0;
+    const touch = () => { user = Date.now() + 700; };
+    s.addEventListener("touchmove", touch, { passive: true });
+    s.addEventListener("wheel", touch, { passive: true });
+    s.addEventListener("touchend", touch, { passive: true }); // докат после пальца — тоже его
+    s.addEventListener("scroll", (e) => {
+      const sc = e.target;
+      if (!Theme.design2 || !(sc instanceof Element) || sc !== s.scroller) return;
+      const y = sc.scrollTop, max = sc.scrollHeight - sc.clientHeight;
+      const delta = y - last;
       last = y;
-    }, { passive: true });
+      if (max <= 0.5 * sc.clientHeight || y <= 0 || y >= max - 1) { drift = 0; this.setHidden(false); return; }
+      if (Date.now() > user || (s.quietUntil && Date.now() < s.quietUntil)) return; // прокрутила программа, не человек
+      if ((delta > 0) !== (drift > 0)) drift = 0;
+      drift += delta;
+      if (drift > 32) this.setHidden(true);
+      if (drift < -24) this.setHidden(false);
+    }, { passive: true, capture: true });
   },
   setHidden(h) { document.getElementById("tabbar").classList.toggle("hidden", h); },
   setVisible(v) { document.getElementById("tabbar").classList.toggle("off", !v); },
