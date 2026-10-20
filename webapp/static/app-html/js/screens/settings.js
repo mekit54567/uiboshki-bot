@@ -462,7 +462,7 @@ window.openSecurity = function openSecurity() {
             + action("smartphone", `${x.device || "Устройство"}${x.current === true ? " · это" : ""}`, `заходил ${mrSeen(x.last_seen)}`, "Выйти", "revoke", ` data-i="${i}"`, { danger: true })).join("")}
           ${n ? "" : '<div class="bd mut" style="--sz:14px;padding:var(--l)">Входов вне Telegram нет</div>'}</div></div>`;
       if (n > 1) {
-        html += `<div class="hx" style="padding-top:var(--s)"><button class="mr-every" data-act="everywhere">${icon("logout", "", "font-size:18px;color:var(--danger)")}
+        html += `<div class="hx" style="padding-top:var(--xs)"><button class="mr-every" data-act="everywhere">${icon("logout", "", "font-size:18px;color:var(--danger)")}
           <span class="bd b6" style="--sz:15px;color:var(--danger)">Выйти везде</span></button></div>`;
       }
       if (available.length) {
@@ -635,7 +635,7 @@ window.showTour = function showTour() {
       const [ic, title, text] = MR_TOUR[i], last = i === MR_TOUR.length - 1;
       ov.innerHTML = `<div class="mr-hole"></div><div class="mr-tbox"><div class="mr-tcard${animate ? " in" : ""}">
         <div class="row"><span class="mr-ticon">${icon(ic, "o")}</span><span class="grow"></span>
-          ${MR_TOUR.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</div>
+          <span style="display:flex">${MR_TOUR.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</span></div>
         <div class="ttl" style="--sz:26px;margin-top:var(--m)">${esc(title)}</div>
         <div class="bd mut" style="--sz:15px;margin-top:var(--s)">${esc(text)}</div>
         <div class="row" style="justify-content:space-between;margin-top:var(--m)">

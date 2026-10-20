@@ -48,7 +48,7 @@ button.mr-mrow:active { background: color-mix(in srgb, var(--text) 5%, transpare
 .mr-nbox.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .mr-nbox .mi { font-size: 20px; }
 .mr-nrow { margin-top: var(--s); }
-.mr-sw { position: relative; width: 52px; height: 32px; flex: none; border-radius: 999px; background: var(--line); transition: background .2s; }
+.mr-sw { position: relative; width: 52px; height: 32px; flex: none; margin: 8px 4px; border-radius: 999px; background: var(--line); transition: background .2s; }
 .mr-sw::after { content: ""; position: absolute; left: 8px; top: 8px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--muted); transition: transform .2s, width .2s, height .2s, left .2s, top .2s, background .2s; }
 .mr-sw.on { background: var(--accent); }
@@ -56,7 +56,7 @@ button.mr-mrow:active { background: color-mix(in srgb, var(--text) 5%, transpare
 .mr-days { display: flex; gap: var(--xs); }
 .mr-days > * { flex: 1 1 0; min-width: 0; }
 .mr-wrap { display: flex; flex-wrap: wrap; gap: var(--xs); margin-top: var(--xs); }
-.mr-pill { padding: var(--s) 0; border-radius: var(--r-chip); background: var(--line); color: var(--text); font-size: 13px; font-weight: 600;
+.mr-pill { padding: var(--s) 0; border-radius: var(--r-chip); background: var(--line); color: var(--text); font-size: 13px; font-weight: 600; line-height: 17px;
   text-align: center; transition: background .15s, color .15s; }
 .mr-pill.wide { padding: var(--s) var(--m); }
 .mr-pill.dim { background: color-mix(in srgb, var(--line) 50%, transparent); color: var(--muted); }
@@ -118,15 +118,15 @@ button.mr-mrow:active { background: color-mix(in srgb, var(--text) 5%, transpare
 .mr-fcard.on { outline-color: var(--accent); }
 
 /* ── «Безопасность» ── */
-.mr-safe { background: color-mix(in srgb, var(--ok) 12%, var(--card)); gap: var(--m); }
+.mr-safe { background: color-mix(in srgb, var(--ok) 12%, transparent); gap: var(--m); }
 :root[data-dark="1"] .mr-safe { background: color-mix(in srgb, var(--ok) 16%, transparent); }
 .mr-safe-ic { width: 40px; height: 40px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
   background: color-mix(in srgb, var(--ok) 22%, transparent); color: var(--ok); }
 .mr-safe-ic .mi { font-size: 22px; }
 .mr-arow { padding: var(--s) var(--s) var(--s) var(--l); gap: var(--m); }
 .mr-arow > svg { flex: none; }
-.mr-tbtn { flex: none; padding: 10px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--accent); }
-.mr-every { display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; }
+.mr-tbtn { flex: none; padding: 8px 12px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--accent); }
+.mr-every { display: flex; margin: 0 auto; justify-content: center; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; }
 .mr-a { color: #3D7BE0; cursor: pointer; }
 :root[data-dark="1"] .mr-a { color: #8AB4FF; }
 .mr-erase { display: inline-flex; align-items: center; gap: 8px; margin-top: var(--s); padding: 10px 0; }
