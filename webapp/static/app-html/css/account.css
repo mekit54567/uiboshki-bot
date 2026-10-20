@@ -55,7 +55,7 @@ button.ac-link { display: block; }
 .ac-stack { position: relative; height: 36px; flex: none; display: block; }
 .ac-ringed { position: absolute; top: -2px; border-radius: 50%; border: 2px solid var(--card-solid); display: flex; }
 .ac-stack > .ac-badge { position: absolute; left: 0; top: 0; }
-.ac-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--s); }
+.ac-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--s); align-items: start; }
 .ac-tile { padding: var(--m) var(--s); display: flex; flex-direction: column; align-items: center; text-align: center !important; }
 .ac-tile .clamp2 { width: 100%; }
 
