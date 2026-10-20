@@ -184,3 +184,28 @@ def test_home_screen_name_is_full(monkeypatch):
     c = TestClient(server.app)
     for path in ("/app", "/app/"):
         assert '<link rel="manifest" href="/manifest.webmanifest">' in c.get(path).text
+
+
+def test_html_capy_line_types_like_app():
+    """Никита 20.10: в HTML-версии фраза капибары появлялась сразу — в
+    приложении она печатается по буквам (widgets/capy.dart, showCapy) и
+    закрывается нажатием, а не сама."""
+    js = (ROOT / "webapp/static/app-html/js/screens/today.js").read_text(encoding="utf-8")
+    css = (ROOT / "webapp/static/app-html/css/app.css").read_text(encoding="utf-8")
+    assert 'class="td-typed"' in js and 'class="td-rest"' in js and "td-caret" in js
+    assert "turn ? 70 : 45" in js and "prefers-reduced-motion" in js
+    assert "setTimeout(() => ov.remove()" not in js
+    assert ".td-rest { color: transparent; }" in css and "@keyframes td-pop" in css
+
+
+def test_html_pwa_fills_iphone_screen_from_home():
+    """Никита 20.10, скрин: в HTML-версии с экрана «Домой» под меню пустая
+    полоса — iOS отдаёт высоту окна без часов (как у Flutter 17.10, uib-height).
+    --gap опускает низ fixed-слоёв до низа экрана."""
+    html = (ROOT / "webapp/static/app-html/index.html").read_text(encoding="utf-8")
+    js = html.split('<script id="uib-gap">')[1].split("</script>")[0]
+    assert "navigator.standalone !== true" in js and "screen.height" in js and '"--gap"' in js
+    assert html.index('id="uib-gap"') < html.index('href="css/app.css"')
+    css = (ROOT / "webapp/static/app-html/css/app.css").read_text(encoding="utf-8")
+    assert "#app, .sheet-wrap, .td-cap, .mr-tour, .dl-cheer { bottom: calc(-1 * var(--gap, 0px)); }" in css
+    assert "#tabbar { position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap, 0px));" in css

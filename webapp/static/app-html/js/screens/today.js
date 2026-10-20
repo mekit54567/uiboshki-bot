@@ -242,12 +242,25 @@ Screens.today = {
         if (Ach.capyTouched) Ach.capyTouched(new Date());
         if (text.startsWith("Ты нашёл меня")) Ach.unlock("one_of_us");
         if (text.startsWith("Это секретная")) Ach.unlock("secret");
+        // как showCapy в приложении (widgets/capy.dart): выпрыгивает, подпись
+        // печатается по буквам с курсором, ненапечатанное — прозрачным (строка
+        // не прыгает); закрывается нажатием. Сверхредкая — темнее и медленнее
+        const turn = text.startsWith("Ты нашёл меня");
         const ov = document.createElement("div");
-        ov.className = "td-cap";
-        ov.innerHTML = `${capy(poseAt(msk().h), 180)}<div class="ttl" style="--sz:24px;max-width:320px">${esc(text)}</div>`;
-        ov.addEventListener("click", () => ov.remove());
+        ov.className = "td-cap" + (turn ? " turn" : "");
+        ov.innerHTML = `<div class="td-cap-pop">${capy(poseAt(msk().h), 180)}</div><div class="ttl" style="--sz:24px;max-width:320px">` +
+          `<span class="td-typed"></span><i class="td-caret"></i><span class="td-rest">${esc(text)}</span></div>`;
+        const typed = ov.querySelector(".td-typed"), rest = ov.querySelector(".td-rest");
+        let shown = 0, timer = 0;
+        const show = (n) => { shown = n; typed.textContent = text.slice(0, n); rest.textContent = text.slice(n); };
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) show(text.length);
+        else {
+          timer = setTimeout(() => {
+            timer = setInterval(() => { show(shown + 1); if (shown >= text.length) clearInterval(timer); }, turn ? 70 : 45);
+          }, turn ? 3500 : 270); // печатать — когда капибара уже выпрыгнула (или повернулась)
+        }
+        ov.addEventListener("click", () => { clearTimeout(timer); clearInterval(timer); ov.remove(); });
         document.body.appendChild(ov);
-        setTimeout(() => ov.remove(), 2600);
       },
     });
 
