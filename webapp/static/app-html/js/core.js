@@ -142,14 +142,15 @@ const Api = {
       return v === null ? undefined : JSON.parse(v);
     } catch (e) { return undefined; }
   },
-  post(path, body = {}) { return this._req("POST", path, body); },
+  // у POST, как в приложении, без короткого таймаута: ответ ИИ и конспект идут до минуты
+  post(path, body = {}) { return this._req("POST", path, body, 180000); },
   put(path, body = {}) { return this._req("PUT", path, body); },
   del(path) { return this._req("DELETE", path); },
   clearCache() {
     try {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const k = localStorage.key(i);
-        if (k && k.startsWith("uib_cache:")) localStorage.removeItem(k);
+        if (k && (k.startsWith("uib_cache:") || k.startsWith("flutter.uib_cache:"))) localStorage.removeItem(k); // и чаты помощника
       }
     } catch (e) {}
   },

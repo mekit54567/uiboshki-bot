@@ -162,7 +162,7 @@ img { -webkit-user-drag: none; }
 .sheet { position: relative; width: 100%; max-width: 640px; max-height: calc(100% - var(--sat) - 40px); overflow-y: auto;
   background: var(--card-solid); border-radius: 28px 28px 0 0; padding: 0 0 calc(var(--sab) + var(--l));
   animation: sheet-in .3s cubic-bezier(.2,.8,.2,1) both; overscroll-behavior: contain; }
-.sheet .grip { width: 32px; height: 4px; border-radius: 2px; background: var(--muted); opacity: .5; margin: 16px auto 18px; }
+.sheet .grip { width: 32px; height: 4px; border-radius: 2px; background: var(--muted); opacity: .85; margin: 16px auto 18px; }
 .sheet-wrap.out .sheet { animation: sheet-out .22s ease-in both; }
 .sheet-wrap.out .sheet-dim { animation: fade-out .22s both; }
 .sheet .body { padding: 0 var(--xl); }
