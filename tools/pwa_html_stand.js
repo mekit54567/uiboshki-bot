@@ -30,7 +30,26 @@ const extra = {
   'GET /api/calendar/link': { token: 'demo', ics_path: '/ics/demo' },
   'GET /api/sdo/submit-rules': { accepted: ['.pdf', '.docx'], labels: ['Документ PDF', 'Документ Word'], maxfiles: 3, maxbytes: 20971520 },
 };
+// расписание преподавателя или группы на 3 недели — из пар своей группы (как app/robot/lib.js)
+function target(type, id, title, keep) {
+  const weeks = [];
+  for (const monday of ['2026-10-05', '2026-10-12', '2026-10-19']) {
+    const days = [];
+    const m = new Date(monday + 'T12:00:00Z');
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(m.getTime() + i * 864e5).toISOString().slice(0, 10);
+      const day = demo[`GET /api/day?date=${d}`];
+      const lessons = ((day && day.lessons) || []).filter(keep)
+        .map((l) => ({ start: l.start, end: l.end, title: l.title, kind: l.kind, room: l.room, groups: 'УИБО-01-24, УИБО-03-24' }));
+      days.push({ date: d, lessons });
+    }
+    weeks.push({ monday, week: demo[`GET /api/week?start=${monday}`]?.week ?? null, days });
+  }
+  return { type, id, title, pinned: false, today: '2026-10-08', weeks, stale: null };
+}
 function fallback(p) {
+  if (p.startsWith('/api/target/1/')) return target(1, 4927, 'УИБО-02-24', (l) => !/Анализ/.test(l.title));
+  if (p.startsWith('/api/target/')) return target(2, 77, 'Сиганьков А. А.', (l) => l.teacher === 'Сиганьков А. А.');
   if (p === '/api/day') return { lessons: [] };
   if (p === '/api/week') return { week: null, days: [] };
   if (p === '/api/notes') return { items: [] };
