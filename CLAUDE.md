@@ -588,6 +588,17 @@ RuStore — «Вход по коду доступа» в приложении, �
   `webpush.py` без внешних библиотек (RFC 8291 aes128gcm + VAPID на
   `cryptography`), ключ VAPID — `VAPID_PRIVATE_KEY` или производный от
   `BOT_TOKEN`. Пуши своего приложения (FCM/APNs/RuStore) — сюда же.
+  **Пуши своего приложения (5.111, Никита 20.10, 152-ФЗ)** — `app_push.py`:
+  телефон даёт ключ AES-256 при включении (`/api/push/app/subscribe`), сервер
+  шифрует заголовок и текст, FCM/RuStore/APNs видят только шифротекст; ключ в
+  базе (`app_push`) — зашифрован, как входы СДО; Android — приём и расшифровка
+  на Kotlin (`app/android/.../push/`, RuStore — при сборке с `RUSTORE_PROJECT_ID`),
+  iPhone — расширение `KapibaraNotify` (подключение — `docs/app-push.md`).
+  Переменные: `FCM_SERVICE_ACCOUNT`, `RUSTORE_PROJECT_ID`/`RUSTORE_SERVICE_TOKEN`,
+  `APNS_KEY_ID`/`APNS_PRIVATE_KEY`; нет — канал выключен.
+  **Магазины (5.110.1)** — `docs/store/`: ключ Android, подпись iPhone без Mac
+  (секреты `IOS_*`, `ASC_*`, `RunnerStore.entitlements` со входом через Apple),
+  тексты, анкеты, скриншоты (`app/robot/store_shots.js`). РКН — `docs/rkn-uvedomlenie.md`.
   **Дизайн-токены (2 (д))**: `design/tokens.json` — темы «Глубина» и
   «Тетрадь», цвета предметов, шрифты («Книжный»/«Строгий»), размеры,
   радиусы, отступы, движение, вибрация; `python tools/tokens.py` собирает
