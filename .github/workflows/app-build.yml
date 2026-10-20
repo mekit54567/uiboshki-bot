@@ -74,9 +74,20 @@ jobs:
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$PASS" "$ALIAS" "$PASS" > android/key.properties
 
+      # Пуши (docs/app-push.md): без секретов сборка та же, пуши через Google
+      # и RuStore просто выключены.
+      - name: Firebase для пушей
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          fi
+
       - name: Сборка APK и AAB
         env:
           VERSION: ${{ inputs.version }}
+          RUSTORE_PROJECT_ID: ${{ secrets.RUSTORE_PROJECT_ID }}
         run: |
           flutter pub get
           NAME=()

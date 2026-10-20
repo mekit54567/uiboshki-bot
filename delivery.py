@@ -1,9 +1,9 @@
 """
 Слой доставки (этап 2 (г), PLAN.md «Своё приложение»): одна функция на все
 рассылки — утро, напоминание перед парой, дедлайны, новые задания, обзор
-недели. Сейчас доставляет в Telegram и веб-пушем на устройства, где человек
-включил уведомления в PWA (webpush.py); потом сюда же — пуши своего
-приложения (FCM, APNs, RuStore), без правки каждой рассылки.
+недели. Доставляет в Telegram, веб-пушем на устройства, где человек включил
+уведомления в PWA (webpush.py), и пушем своего приложения (app_push.py: FCM,
+RuStore, APNs — сервисы доставки видят только шифротекст).
 """
 
 import logging
@@ -34,16 +34,20 @@ def _body(html: str, title: str | None) -> str:
 
 
 async def push(user_id: int, kind: str, html: str, tab: str | None = None, title: str | None = None) -> int:
-    """Веб-пуш на все устройства человека. → сколько ушло. title — свой
-    заголовок вместо общего по kind (вечерняя сводка: «Завтра: 3 пары с 09:00»)."""
+    """Пуш на все устройства человека: браузеры (веб-пуш) и телефоны (app_push).
+    → сколько ушло. title — свой заголовок вместо общего по kind (вечерняя
+    сводка: «Завтра: 3 пары с 09:00»)."""
+    import app_push
     import webpush
     from database.push import delete_push_sub, get_push_subs
-    subs = await get_push_subs(user_id)
-    if not subs:
-        return 0
     data = {"title": title or TITLES.get(kind, "Капибара"), "body": _body(html, title),
             "url": "/app" + (f"?tab={tab}" if tab else ""), "tag": kind}
     sent = 0
+    try:
+        sent += await app_push.push_user(user_id, {**data, "tab": tab or ""})
+    except Exception as e:
+        logger.info(f"пуш приложения {user_id}: {type(e).__name__}: {e}")
+    subs = await get_push_subs(user_id)
     for sub in subs:
         try:
             code = await webpush.send(sub, data)

@@ -48,7 +48,7 @@ async def test_erase_leaves_nothing(db):
     tables = await _fill_user_tables(db.DATABASE_PATH, ME)
     await _fill_user_tables(db.DATABASE_PATH, OTHER)
     assert {"users", "sessions", "identities", "sdo_sessions", "consents", "events",
-            "sdo_score_history", "push_subs"} <= set(tables)
+            "sdo_score_history", "push_subs", "app_push"} <= set(tables)
 
     personal = await db.add_deadline("Своё", "личное", "2026-10-05", None, ME)
     shared = await db.add_deadline("Общее", "группы", "2026-10-05", None, ME, group_id=5000)   # староста чужой группы

@@ -123,8 +123,10 @@ async def auth_logout(request: Request, everywhere: bool = False, user: dict = C
     if everywhere:
         # и пуши: отозванное устройство продолжало получать тексты уведомлений
         # (сроки, новые баллы) — ревью безопасности 09.10
+        from database.app_push import delete_user_app_pushes
         from database.push import delete_user_push_subs
         await delete_user_push_subs(user["id"])
+        await delete_user_app_pushes(user["id"])
     return {"ok": True, "revoked": n}
 
 
