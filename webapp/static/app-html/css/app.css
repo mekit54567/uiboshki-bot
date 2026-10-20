@@ -83,11 +83,16 @@ img { -webkit-user-drag: none; }
 :root[data-paper="cell"] .screen > .bg::after,
 :root[data-paper="line"] .screen > .bg::after,
 :root[data-paper="dots"] .screen > .bg::after,
-:root[data-paper="grid"] .screen > .bg::after { content: ""; position: absolute; inset: 0; opacity: .07; }
-:root[data-paper="cell"] .screen > .bg::after { background-image: linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px); background-size: 22px 22px; }
-:root[data-paper="line"] .screen > .bg::after { background-image: linear-gradient(var(--text) 1px, transparent 1px); background-size: 100% 28px; }
-:root[data-paper="dots"] .screen > .bg::after { background-image: radial-gradient(var(--text) 1.2px, transparent 1.4px); background-size: 20px 20px; }
-:root[data-paper="grid"] .screen > .bg::after { background-image: linear-gradient(var(--text) 1px, transparent 1px), linear-gradient(90deg, var(--text) 1px, transparent 1px); background-size: 44px 44px; }
+:root[data-paper="grid"] .screen > .bg::after { content: ""; position: absolute; inset: 0; }
+/* узоры бумаги — как PaperPainter: линии 6 %, точки 13 % через 18, миллиметровка 8/40 */
+:root[data-paper="cell"] .screen > .bg::after { background-image: linear-gradient(color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 1px),
+  linear-gradient(90deg, color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 1px); background-size: 22px 22px; }
+:root[data-paper="line"] .screen > .bg::after { background-image: linear-gradient(color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 1px);
+  background-size: 100% 28px; background-position: 0 28px; }
+:root[data-paper="dots"] .screen > .bg::after { background-image: radial-gradient(color-mix(in srgb, var(--text) 13%, transparent) 1px, transparent 1.4px); background-size: 18px 18px; }
+:root[data-paper="grid"] .screen > .bg::after { background-image: linear-gradient(rgba(201,120,75,.13) 1px, transparent 1px), linear-gradient(90deg, rgba(201,120,75,.13) 1px, transparent 1px),
+  linear-gradient(rgba(201,120,75,.07) .6px, transparent .6px), linear-gradient(90deg, rgba(201,120,75,.07) .6px, transparent .6px);
+  background-size: 40px 40px, 40px 40px, 8px 8px, 8px 8px; }
 
 /* переходы между экранами — как MaterialPageRoute на iPhone (слайд справа) */
 .screen.enter { animation: s-in .32s cubic-bezier(.2,.8,.2,1) both; }
@@ -199,10 +204,11 @@ textarea.field { resize: none; min-height: 96px; }
 /* ── Переключатель (Switch) ── */
 .switch { position: relative; width: 52px; height: 32px; flex: none; border-radius: 999px; background: var(--line);
   transition: background .2s; }
-.switch::after { content: ""; position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%;
-  background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+/* выключен — маленький бегунок цвета muted, включён — большой (Switch Material 3) */
+.switch::after { content: ""; position: absolute; left: 8px; top: 8px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--muted); transition: left .2s, top .2s, width .2s, height .2s, background .2s; }
 .switch.on { background: var(--accent); }
-.switch.on::after { transform: translateX(20px); }
+.switch.on::after { left: 24px; top: 4px; width: 24px; height: 24px; background: var(--on-accent); }
 
 /* ── Кольцо баллов (ScoreRing) ── */
 .ring { position: relative; flex: none; display: flex; align-items: center; justify-content: center; }

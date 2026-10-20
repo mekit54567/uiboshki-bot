@@ -118,7 +118,7 @@ async function start() {
     const on = !(m && m.features && m.features.design2 === false);
     if (on !== Theme.design2) { Theme.design2 = on; Prefs.set("uib_design2", on); Theme.apply(); if (Api.token) Tabs.rebuild(); }
   }).catch(() => {});
-  if (Api.token) Tabs.build();
+  if (Api.token) { Tabs.build(); afterStart(); }
   else showLogin();
 }
 function showLogin() {
@@ -127,8 +127,32 @@ function showLogin() {
   Tabs.setVisible(false);
   const s = Nav.make();
   app.appendChild(s);
-  if (Screens.login) Screens.login.mount(s.body, s, () => { Tabs.setVisible(true); Tabs.build(); });
+  if (Screens.login) Screens.login.mount(s.body, s, () => { Tabs.setVisible(true); Tabs.build(); afterStart(); });
 }
+/** После входа (shell.dart: _ensureGroup, _maybeTour): удаление данных,
+ * согласие на ПД, группа новому человеку, приглашение, знакомство. */
+async function afterStart() {
+  let me;
+  try { me = await Api.get("/me"); } catch (e) { return; } // нет сети — экраны сами скажут
+  if (!me) return;
+  if (me.erasing && typeof me.erasing === "object") {
+    await confirmSheet({ title: "Данные удаляются", text: String(me.erasing.text || ""), action: "Понятно", cancel: "Закрыть" });
+    return logout(true);
+  }
+  if (me.consent_needed === true && window.openConsent) {
+    const blocked = me.consent_blocked === true;
+    const ok = await openConsent({ required: blocked });
+    if (ok === false || (blocked && ok !== true)) return logout(true);
+    if (blocked) Tabs.rebuild(); // до согласия API закрыт — экраны загрузить заново
+  }
+  if (me.group == null && window.openGroupPick) {
+    const g = await openGroupPick({ required: true });
+    if (g) Tabs.rebuild();
+  }
+  if (window.sendRef) sendRef().catch(() => {});
+  if (window.maybeTour) await maybeTour();
+}
+
 async function logout(expired = false) {
   if (!expired) { try { await Api.post("/auth/logout"); } catch (e) {} }
   Api.token = null;
