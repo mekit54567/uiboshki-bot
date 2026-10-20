@@ -218,5 +218,5 @@ def test_iphone_diag_page_served():
     r = TestClient(server.app).get("/app-html/diag.html")
     assert r.status_code == 200
     assert 'rel="manifest"' not in r.text and "black-translucent" in r.text
-    for s in ("100lvh", "screen.height", "innerHeight", "safe-area-inset-bottom"):
+    for s in ("100lvh", "screen.height", "innerHeight", "safe-area-inset-bottom", "?m=doc", "?m=fixed", "html.doc"):
         assert s in r.text
