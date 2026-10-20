@@ -42,10 +42,24 @@ void main() {
     AppIcon.premium.value = true;
     expect(AppIcon.choosable.map((x) => x.name), contains('domes'));
     expect(i('domes').isOpen({}), isTrue);
-    // на iPhone подписочных нет совсем — подписка куплена не через Apple
+    // на iPhone подписочные — всем, но за набор ачивок, не за подписку
+    // (подписка куплена не через Apple; Никита 20.10)
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    expect(AppIcon.choosable.map((x) => x.name), isNot(contains('domes')));
+    AppIcon.premium.value = false;
+    expect(AppIcon.choosable.map((x) => x.name), contains('domes'));
     expect(AppIcon.choosable.map((x) => x.name), contains('kremlin'));
+    expect(i('domes').unlock, 'combo');
+    AppIcon.premium.value = true;
+    expect(i('domes').isOpen({}), isFalse); // подписка на iPhone не открывает
+    final combo = {for (final id in AppIcon.iosCombo) id: DateTime(2026)};
+    expect(i('domes').isOpen({...combo}..remove('sdo')), isFalse);
+    expect(i('domes').isOpen(combo), isTrue);
+    expect(
+      i('domes').howToOpen,
+      'Откроется за ачивки «Ни одного «горит»», «Найдено в лекциях», «Сдано из Капибары», '
+      '«Свой вход в СДО» и 2 секретные ранга «Полночь»',
+    );
+    expect(i('domes').howToOpen, isNot(contains('подпис')));
     debugDefaultTargetPlatformOverride = null;
     expect(i('kremlin').howToOpen, 'Откроется, когда соберёшь все ачивки ранга «Рассвет»');
     expect(i('astronaut').howToOpen, 'Откроется ачивкой «Первый вопрос»');
