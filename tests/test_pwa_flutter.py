@@ -131,3 +131,22 @@ def test_iphone_draws_at_2x():
     assert "iPhone|iPod|iPad" in js and 'defineProperty(window, "devicePixelRatio"' in js
     assert "return 2;" in js and "real > 2" in js
     assert WEB_INDEX.index('id="uib-dpr"') < WEB_INDEX.index('src="flutter_bootstrap.js"')
+
+
+def test_html_pwa_has_own_manifest_and_back_swipe_only_from_home_screen():
+    """Никита 20.10: значок с экрана «Домой», добавленный с /app-html/, открывал
+    /app (прежнюю сборку) — у HTML-версии свой манифест; на /app он же даёт общий.
+    Свой свайп «назад» — только с экрана «Домой»: в Safari у края свой жест."""
+    import json
+    import webapp.server as server
+    c = TestClient(server.app)
+    html = (ROOT / "webapp/static/app-html/index.html").read_text(encoding="utf-8")
+    assert 'rel="manifest" href="manifest.webmanifest"' in html     # относительно: /app-html/… или /manifest…
+    m = json.loads(c.get("/app-html/manifest.webmanifest").text)
+    assert m["start_url"] == "/app-html/" and m["id"] == "/app-html/"
+    assert json.loads(c.get("/manifest.webmanifest").text)["start_url"] == "/app"
+    core = (ROOT / "webapp/static/app-html/js/core.js").read_text(encoding="utf-8")
+    assert "if (!STANDALONE) return;" in core
+    assert "history.state && history.state.depth" in core              # не уходить со страницы
+    login = (ROOT / "webapp/static/app-html/js/screens/login.js").read_text(encoding="utf-8")
+    assert 'Api.post("/auth/poll", { code: c }, 6000)' in login       # не висеть на мёртвом соединении

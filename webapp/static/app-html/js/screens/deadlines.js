@@ -437,8 +437,8 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
         tick();
         sending = true; error = null; draw();
         try {
-          const r = await Api.post("/sdo/submit", { deadline_id: deadlineId, cmid, ...(replace ? { replace: true } : {}),
-            files: good().map((f) => ({ name: f.name, data: f.data })) });
+          const r = await Api._req("POST", "/sdo/submit", { deadline_id: deadlineId, cmid, ...(replace ? { replace: true } : {}),
+            files: good().map((f) => ({ name: f.name, data: f.data })) }, 120000);
           try { navigator.vibrate && navigator.vibrate(18); } catch (er) {}
           done = r && typeof r.status === "string" ? r.status : "Отправлено в СДО";
         } catch (e) { error = e.status ? e.message : "Нет интернета — файл не ушёл."; }

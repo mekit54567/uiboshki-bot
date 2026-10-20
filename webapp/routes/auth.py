@@ -174,7 +174,7 @@ async def auth_providers():
 
 
 class OAuthStart(BaseModel):
-    client: str = "web"          # web — PWA в браузере, app — своё приложение
+    client: str = "web"          # web — PWA в браузере, html — PWA на HTML (/app-html/), app — своё приложение
 
 
 async def _oauth_start(provider: str, request: Request, client: str, link_user: int | None) -> dict:
@@ -184,7 +184,7 @@ async def _oauth_start(provider: str, request: Request, client: str, link_user: 
     if not ratelimit.allow("auth_start", _client_ip(request)):
         raise HTTPException(429, "Слишком много попыток — подожди минуту")
     verifier = oauth.new_verifier()
-    state = await new_state(provider, verifier, "", client if client in ("web", "app") else "web", link_user)
+    state = await new_state(provider, verifier, "", client if client in ("web", "html", "app") else "web", link_user)
     return {"url": oauth.authorize_url(provider, state, verifier, _redirect_uri(request, provider))}
 
 
@@ -238,7 +238,8 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
     elif name and not (await get_user(owner) or {}).get("full_name"):
         await upsert_user(owner, "", name)
     token = await create_session(owner, f"{_device(request)} · {oauth.NAMES[provider]}")
-    target = APP_RETURN if st["client"] == "app" else "/app"
+    # PWA на HTML — назад туда же, где начали вход (пока /app — прежняя сборка)
+    target = {"app": APP_RETURN, "html": "/app-html/"}.get(st["client"], "/app")
     return RedirectResponse(f"{target}#token={token}", status_code=303)
 
 

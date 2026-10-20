@@ -142,8 +142,10 @@ const Api = {
       return v === null ? undefined : JSON.parse(v);
     } catch (e) { return undefined; }
   },
-  // у POST, как в приложении, без короткого таймаута: ответ ИИ и конспект идут до минуты
-  post(path, body = {}) { return this._req("POST", path, body, 180000); },
+  // 15 с: на iPhone после возврата из другого приложения запрос может повиснуть
+  // на мёртвом соединении — лучше оборвать и повторить (Никита 20.10: вход и VK
+  // «не нажимались»). Долгие (ответ ИИ, конспект, сдача файла) передают своё время.
+  post(path, body = {}, timeout = 15000) { return this._req("POST", path, body, timeout); },
   put(path, body = {}) { return this._req("PUT", path, body); },
   patch(path, body = {}) { return this._req("PATCH", path, body); },
   del(path) { return this._req("DELETE", path); },
@@ -269,7 +271,9 @@ const Nav = {
   pop(fromHistory = false) {
     const s = this.stack.pop();
     if (!s) return;
-    if (!fromHistory) { this._skip = true; try { history.back(); } catch (e) {} }
+    // назад по истории — только если эту запись добавили мы: иначе history.back()
+    // уводил со страницы (Никита 20.10: после свайпа — чёрный экран)
+    if (!fromHistory && history.state && history.state.depth) { this._skip = true; try { history.back(); } catch (e) {} }
     const under = this.top();
     if (typeof s.cleanup === "function") s.cleanup();
     s.classList.add("leave");
@@ -285,8 +289,12 @@ window.addEventListener("popstate", () => {
   if (Sheet.open.length) { Sheet.closeTop(); return; }
   if (Nav.stack.length) Nav.pop(true);
 });
-// свайп от левого края — «назад», как в приложении на iPhone
+// свайп от левого края — «назад», как в приложении на iPhone. Только с экрана
+// «Домой»: в Safari у края свой жест «назад» — вместе с нашим экран закрывался
+// дважды и уходил со страницы (Никита 20.10)
+const STANDALONE = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
 (() => {
+  if (!STANDALONE) return;
   let x0 = null, y0 = 0, s = null;
   document.addEventListener("touchstart", (e) => {
     const t = e.touches[0];

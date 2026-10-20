@@ -95,7 +95,7 @@ Screens.login = {
   mount(body, screen, onDone) {
     document.body.classList.add("ac-login");
     let poll = 0, code = null, link = null, pick = null, note = null, busy = false;
-    let providers = [], codeLogin = false, gone = false;
+    let providers = [], codeLogin = false, gone = false, busyOauth = null;
 
     body.innerHTML = `<div class="ac-login-page">
       <div class="ac-sp"></div>
@@ -124,7 +124,7 @@ Screens.login = {
         ${pick !== null && busy ? `<div class="ttl" id="login-pick" style="--sz:48px;margin-bottom:var(--m)">${esc(pick)}</div>` : ""}
         <button class="btn primary ac-tg" data-act="tg"${disabled ? " disabled" : ""}>${acBrand("telegram", 24)}<span>${busy ? "Открыть бота ещё раз" : "Войти через Telegram"}</span></button>
         ${providers.map((p) => `<div style="height:var(--s)"></div>
-          <button class="ac-ob ac-prov" data-act="oauth" data-id="${esc(p.id)}">${acBrand(p.id)}<span>Войти через ${esc(p.name)}</span></button>`).join("")}
+          <button class="ac-ob ac-prov" data-act="oauth" data-id="${esc(p.id)}"${busyOauth ? " disabled" : ""}>${acBrand(p.id)}<span>${busyOauth === p.id ? "Открываю…" : `Войти через ${esc(p.name)}`}</span></button>`).join("")}
         <div style="height:var(--m)"></div>
         <div class="bd mut" style="--sz:12px;text-align:center">${esc(AC_UNOFFICIAL)}</div>
         ${codeLogin ? `<div class="ac-center"><button class="ac-tb" data-act="code"><span class="bd mut" style="--sz:14px">Вход по коду доступа</span></button></div>` : ""}
@@ -137,14 +137,19 @@ Screens.login = {
       gone = true;
       clearInterval(poll);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      window.removeEventListener("focus", onVisible);
       document.body.classList.remove("ac-login");
       onDone();
     };
+    let checking = false;
     const check = async () => {
       const c = code;
-      if (c === null) return;
+      if (c === null || checking) return;
+      checking = true;
       try {
-        const r = await Api.post("/auth/poll", { code: c });
+        // коротко: вернулся из Telegram — первый запрос на iPhone может повиснуть
+        const r = await Api.post("/auth/poll", { code: c }, 6000);
         const status = r && r.status;
         if (!status || status === "wait") return;
         if (status === "ok") Api.token = r.token;
@@ -156,17 +161,21 @@ Screens.login = {
         note = status === "denied" ? "Вход отклонён в боте." : "Код устарел — попробуй ещё раз.";
         draw();
       } catch (e) { /* сеть моргнула — спросим ещё раз через 2 с */ }
+      finally { checking = false; }
     };
     // вернулся из Telegram — проверить вход сразу, не ждать таймера
+    // (iPhone останавливает таймеры, пока приложение в фоне)
     const onVisible = () => { if (document.visibilityState === "visible" && code !== null) check(); };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    window.addEventListener("focus", onVisible);
 
     const start = async () => {
       tick();
       busy = true; note = null;
       draw();
       try {
-        const r = await Api.post("/auth/start");
+        const r = await Api.post("/auth/start", {}, 8000);
         code = r.code; link = r.link; pick = typeof r.pick === "number" ? r.pick : null;
         savePending();
         acOpenBot(r.link);
@@ -180,12 +189,15 @@ Screens.login = {
       draw();
     };
     const oauth = async (id) => {
+      if (busyOauth) return;
       tick();
+      busyOauth = id; draw(); // нажатие видно сразу, пока сервер даёт ссылку
       try {
-        const r = await Api.post(`/auth/${id}/start`, { client: "web" });
+        const r = await Api.post(`/auth/${id}/start`, { client: location.pathname.startsWith("/app-html") ? "html" : "web" }, 8000);
         Prefs.set("uib_oauth_at", Date.now());
         location.href = r.url;
-      } catch (e) { note = errorText(e); draw(); }
+      } catch (e) { note = errorText(e); }
+      busyOauth = null; draw();
     };
     const byCode = async () => {
       tick();
@@ -224,7 +236,12 @@ Screens.login = {
       codeLogin = !!(r && r.code === true);
       draw();
     }).catch(() => {});
-    return () => { gone = true; clearInterval(poll); document.removeEventListener("visibilitychange", onVisible); };
+    return () => {
+      gone = true; clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   },
 };
 

@@ -65,6 +65,11 @@ async def test_login_creates_account_without_telegram(db, client, keys):  # noqa
     me2 = client.get("/api/me", headers={"Authorization": f"Bearer {_token(res.headers['location'])}"}).json()
     assert me2["id"] == me["id"]                                             # тот же человек
 
+    # PWA на HTML (/app-html/) — назад туда же, а не в прежнюю сборку на /app (Никита 20.10)
+    state, _ = _start(client, client_kind="html")
+    res = client.get(f"/api/auth/vk/callback?code=good&state={state}", follow_redirects=False)
+    assert res.headers["location"].startswith("/app-html/#token=")
+
     keys.update(subject="vk-2", name="Боря")
     state, _ = _start(client)
     res = client.get(f"/api/auth/vk/callback?code=good&state={state}", follow_redirects=False)
