@@ -1,1 +1,98 @@
-/* Стили экранов: study (см. js/screens). */
+/* «Учёба», экран предмета, цель и «Вход в СДО» (js/screens/study.js, sdo.js). */
+
+/* кольцо баллов растёт при появлении (ScoreRing: 900 мс, easeOutCubic) */
+.st-arc { stroke-dashoffset: var(--o); animation: st-arc .9s cubic-bezier(.33,1,.68,1) both; }
+@keyframes st-arc { from { stroke-dashoffset: var(--c); } to { stroke-dashoffset: var(--o); } }
+.st-in { position: relative; display: flex; align-items: center; justify-content: center; }
+
+.tile.st-card { border-radius: var(--r-card); }
+.btn.st-btn48, .btn.st-btn50 { min-height: 48px; height: 48px; font-size: 14px; font-weight: 500; letter-spacing: .1px; }
+.btn.st-btn50 { min-height: 50px; height: 50px; }
+/* FilledButton без галочки: серый, как в Material */
+.btn.st-btn50:disabled { opacity: 1; background: color-mix(in srgb, var(--text) 12%, transparent); color: color-mix(in srgb, var(--text) 38%, transparent); }
+
+/* статус СДО в шапке (_SdoBadge) */
+.st-badge { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; background: var(--card);
+  border: 1px solid var(--line); font-size: 13px; font-weight: 600; line-height: 1.3; flex: none; }
+.st-badge i { width: 8px; height: 8px; border-radius: 50%; }
+.st-badge:active { filter: brightness(.96); }
+
+/* «Помощник» и «Файлы» (_Door) */
+.st-doors { padding: 0 var(--l) var(--l); gap: var(--s); align-items: stretch; }
+.st-doors > .tile { flex: 1; min-width: 0; }
+.st-doors .mi { display: block; }
+
+/* экран предмета: отметки плашками */
+.st-marks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s); }
+.st-marks > span { padding: 6px 12px; border-radius: 999px; }
+.st-work { padding: var(--m) var(--l); }
+.st-work:disabled, div.st-work { cursor: default; }
+
+/* цель: вердикт, выбор отметки, счёт */
+.st-verdict { padding: 4px 10px; border-radius: 999px; margin-left: var(--s); }
+.st-gcapy { display: inline-flex; cursor: pointer; }
+.st-hop .capy { animation: st-hop 1.1s linear both; transform-origin: 50% 100%; }
+@keyframes st-hop {
+  0% { transform: none; animation-timing-function: ease-out; }
+  30% { transform: translateY(-20%) rotate(-6deg); animation-timing-function: ease-in; }
+  55% { transform: none; animation-timing-function: ease-out; }
+  70% { transform: translateY(-6.4%) rotate(-1.92deg); animation-timing-function: ease-in; }
+  100% { transform: none; }
+}
+.st-sigh .capy { animation: st-sigh .9s cubic-bezier(.33,1,.68,1) both; }
+@keyframes st-sigh { from { opacity: 0; transform: translateY(-12%); } to { opacity: 1; transform: rotate(4deg); } }
+.st-gcapy.sad .capy { transform: rotate(4deg); }
+.st-seg { display: flex; padding: 4px; border-radius: 999px; background: var(--line); }
+.st-seg button { flex: 1; min-width: 0; padding: 8px 0; border-radius: 999px; text-align: center; font-size: 15px; font-weight: 700;
+  color: var(--muted); transition: background-color .24s cubic-bezier(.33,1,.68,1), color .24s; }
+.st-seg button.on { color: #fff; }
+.st-mode { display: inline-flex; gap: 2px; padding: 3px; border-radius: 13px; background: var(--line); }
+.st-mode button { padding: 6px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--muted);
+  transition: background-color .24s cubic-bezier(.33,1,.68,1), color .24s; }
+.st-mode button.on { background: var(--text); color: var(--bg); }
+
+/* посещения лекций квадратиками */
+.st-lecs { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-lec { width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid transparent; }
+
+/* как росли баллы: линия проявляется слева направо, точка — в конце */
+.st-line { height: 90px; width: 100%; }
+.st-line svg { display: block; overflow: visible; }
+.st-reveal { animation: st-reveal .9s cubic-bezier(.33,1,.68,1) both; transform-origin: 0 0; }
+@keyframes st-reveal { from { transform: scaleX(0); } to { transform: none; } }
+.st-dot { animation: fade-in .01s .9s both; }
+
+/* график по неделям (TrendChart) */
+.st-tr-top { height: 20px; white-space: nowrap; overflow: hidden; }
+.st-tr { width: 100%; user-select: none; -webkit-user-select: none; }
+.st-tr svg { display: block; }
+
+/* «Вход в СДО» */
+.st-sdot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.st-step { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-style: normal;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex: none; }
+.st-tbtn { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px; }
+.st-tbtn .mi { font-size: 18px !important; }
+.switch.st-sw { margin: 0 4px; }
+.st-tbtn:disabled { opacity: .38; }
+.st-tbtn:active:not(:disabled) { background: color-mix(in srgb, currentColor 10%, transparent); }
+.st-field { display: flex; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-chip); }
+.st-field:focus-within { border-color: var(--accent); }
+.st-field input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 15px; padding: 14px var(--l);
+  color: var(--text); -webkit-appearance: none; appearance: none; }
+.st-field input::placeholder { color: var(--muted); }
+.st-field button { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; flex: none; }
+
+/* галочка согласия (ConsentCheck) и ссылки на тексты */
+.st-check-row { display: flex; align-items: flex-start; gap: var(--m); padding: var(--s) 0; width: 100%; border-radius: var(--r-chip); }
+.st-box { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--muted); flex: none; display: flex; align-items: center;
+  justify-content: center; color: var(--on-accent); transition: background-color .15s, border-color .15s; font-style: normal; }
+.st-box.on { background: var(--accent); border-color: var(--accent); }
+.st-link { color: #2F6FD6; cursor: pointer; }
+:root[data-dark="1"] .st-link { color: #7FB0FF; }
+.st-bullet { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 7px; flex: none; }
+
+/* «назад» экрана предмета (IconButton в course) */
+.st-back { padding-left: var(--s); }
+.st-back button { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--text); border-radius: 50%; }
+.st-back button:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
