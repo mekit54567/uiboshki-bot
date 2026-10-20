@@ -5,7 +5,7 @@
 //  • данные GET /api/… — сначала сеть (до 5 с), нет сети — последний ответ:
 //    расписание и дедлайны видно и в метро;
 //  • остальное (POST, вход, ИИ) — только сеть.
-const SHELL = "uib-shell-v1", DATA = "uib-data-v1";
+const SHELL = "uib-shell-v2", DATA = "uib-data-v1";
 const OFFLINE_API = /^\/api\/(today|day|week|deadlines|me|homework|notes|files|subjects|notify)\b/;
 
 self.addEventListener("install", e => {
@@ -57,7 +57,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname === "/app" || url.pathname === "/app/" || url.pathname === "/" || url.pathname === "/index.html") {
     e.respondWith(networkFirst(new Request("/app"), SHELL, 4000));
-  } else if (url.pathname.startsWith("/app/")) {
+  } else if (url.pathname.startsWith("/app/") || url.pathname.startsWith("/app-html/fonts/") || url.pathname.startsWith("/img/")) {
     e.respondWith(freshFirst(req, SHELL, 4000));
   } else if (url.search.includes("v=") && /\.(js|css)$/.test(url.pathname) || url.pathname.startsWith("/pwa/")) {
     e.respondWith(caches.open(SHELL).then(c => c.match(req).then(hit => hit || fetch(req).then(resp => {

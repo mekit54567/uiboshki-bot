@@ -99,6 +99,16 @@ const Ach = {
 
 // ── Запуск ──
 async function start() {
+  // вход прежней PWA (до веб-сборки Flutter) — ключ без приставки
+  try {
+    const old = localStorage.getItem("uib_token");
+    if (old && !Api.token) Api.token = old;
+    localStorage.removeItem("uib_token");
+  } catch (e) {}
+  // оболочка без сети и пуши — service worker; в Telegram он не нужен
+  if ("serviceWorker" in navigator && !(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData)) {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+  }
   Theme.apply();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => Theme.apply());
   setInterval(() => { if (Prefs.get("uib_theme") === "sunset") Theme.apply(); }, 60000);

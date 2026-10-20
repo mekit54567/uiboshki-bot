@@ -10,22 +10,35 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB_INDEX = (ROOT / "app" / "web" / "index.html").read_text(encoding="utf-8")
 
 
-def test_app_serves_flutter_build_without_cache(tmp_path, monkeypatch):
+def test_app_serves_flutter_build_only_with_switch(tmp_path, monkeypatch):
+    """С 20.10 /app — HTML-версия; веб-сборка Flutter — только откатом
+    PWA_ENGINE=flutter (и если сборка есть)."""
     import webapp.server as server
     (tmp_path / "index.html").write_text("<base href=\"/app/\">flutter", encoding="utf-8")
     monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path)
     c = TestClient(server.app)
+    assert "flutter" not in c.get("/app").text
+    monkeypatch.setenv("PWA_ENGINE", "flutter")
     for path in ("/app", "/app/"):
         r = c.get(path)
         assert r.status_code == 200 and "flutter" in r.text and r.headers["cache-control"] == "no-cache"
 
 
-def test_app_without_build_falls_back_to_webapp(tmp_path, monkeypatch):
-    """Сборки нет (разработка, тесты) — /app как раньше, прежний WebApp."""
+def test_app_is_html_version_with_versioned_assets(tmp_path, monkeypatch):
+    """PWA на HTML (webapp/static/app-html): файлы — полным адресом с меткой
+    версии, иначе на /app (без своей папки) они не нашлись бы, а после
+    выпуска остались бы старые."""
     import webapp.server as server
-    monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path / "нет")
-    r = TestClient(server.app).get("/app")
-    assert r.status_code == 200 and "js/core.js" in r.text
+    monkeypatch.setenv("PWA_ENGINE", "flutter")
+    monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path / "нет")  # сборки нет — всё равно HTML
+    c = TestClient(server.app)
+    r = c.get("/app")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
+    assert re.search(r'src="/app-html/js/core\.js\?v=\w+"', r.text)
+    assert re.search(r'href="/app-html/css/app\.css\?v=\w+"', r.text)
+    assert 'src="js/' not in r.text and 'href="css/' not in r.text and 'href="fonts/' not in r.text
+    for m in re.findall(r'(?:src|href)="(/app-html/[^"?]+)', r.text):
+        assert c.get(m).status_code == 200, m
 
 
 def test_flutter_assets_are_revalidated():
