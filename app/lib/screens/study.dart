@@ -102,8 +102,8 @@ class StudyScreen extends StatelessWidget {
               Expanded(
                 child: _Door(
                   icon: Icons.auto_awesome_outlined,
-                  title: 'Помощник',
-                  text: 'ИИ по лекциям',
+                  title: 'Kapi ИИ',
+                  text: 'Отвечает по лекциям',
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(api: api))),
                 ),
               ),

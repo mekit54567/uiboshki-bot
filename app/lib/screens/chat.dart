@@ -723,7 +723,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       controller: _scroll,
                       padding: const EdgeInsets.only(bottom: Space.l),
                       children: [
-                        const ScreenTitle(title: 'Помощник'),
+                        const ScreenTitle(title: 'Kapi ИИ'),
                         if (_log.isEmpty) _Intro(left: _left),
                         if (_log.isEmpty)
                           Padding(

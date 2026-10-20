@@ -35,7 +35,7 @@ const SCREENS = [
   }],
   ['5-assistant', async (p) => {
     await L.tap(p, 'Учёба', { wait: 1500 });
-    await L.tap(p, /^Помощник/, { wait: 1500 });
+    await L.tap(p, /^Kapi ИИ/, { wait: 1500 });
     await L.tap(p, /Чем метрика/, { wait: 4000 });
   }],
   ['6-more', async (p) => { await L.tap(p, 'Ещё', { wait: 2000 }); }],

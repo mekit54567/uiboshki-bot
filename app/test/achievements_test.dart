@@ -248,7 +248,7 @@ void main() {
     await t.tap(find.byKey(const Key('ach:where')));
     await settle(t);
     expect(tab, 3);
-    expect(find.text('Нажми «Помощник»'), findsOneWidget); // подсказка плашкой снизу
+    expect(find.text('Нажми «Kapi ИИ»'), findsOneWidget); // подсказка плашкой снизу
     await t.pump(const Duration(seconds: 6));
   });
 

@@ -119,7 +119,7 @@ Screens.study = {
       body.innerHTML = screenTitle("Учёба", { trailing: badge }) + `
         <div class="row st-doors">
           <button class="tile" data-act="chat">${icon("auto_awesome", "o", "color:var(--accent)")}
-            <div class="nm" style="--sz:18px;margin-top:var(--m)">Помощник</div><div class="bd mut" style="--sz:13px;margin-top:2px">ИИ по лекциям</div></button>
+            <div class="nm" style="--sz:18px;margin-top:var(--m)">Kapi ИИ</div><div class="bd mut" style="--sz:13px;margin-top:2px">Отвечает по лекциям</div></button>
           <button class="tile" data-act="files">${icon("folder", "o", "color:var(--accent)")}
             <div class="nm" style="--sz:18px;margin-top:var(--m)">Файлы</div><div class="bd mut" style="--sz:13px;margin-top:2px">лекции, практики</div></button>
         </div>
