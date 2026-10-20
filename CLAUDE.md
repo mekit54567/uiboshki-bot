@@ -575,9 +575,10 @@ RuStore — «Вход по коду доступа» в приложении, �
   `afterStart`: согласие, группа, тур), `capy_scenes.js` (капибара-загрузка
   `spinner()`, `pullRefresh`), экраны — `js/screens/*.js` (по файлу на экран
   Flutter, связь — `window.openX`), стили — `css/app.css` + `css/<экран>.css`.
-  Стенд — `tools/pwa_html_stand.js`. `/app` отдаёт её, когда `PWA_DEFAULT` в
-  `webapp/server.py` = "html" (пока "flutter" — ждём слова Никиты);
-  переменная `PWA_ENGINE=html|flutter` — без выпуска. Новый экран в
+  Стенд — `tools/pwa_html_stand.js`. `/app` отдаёт её (`PWA_DEFAULT = "html"` в
+  `webapp/server.py`, Никита 20.10, v5.112.0); веб-сборка Flutter — запасная,
+  на `/app-flutter` (файлы — из `/app/…`, base href); переменная
+  `PWA_ENGINE=html|flutter` — без выпуска. Новый экран в
   приложении — переносить и сюда.
   **API как контракт (2 (в))**: `/api/v1/…` = `/api/…` (`server.ApiV1`), своё
   приложение и PWA — на v1; `/api/meta` — версия сервера и минимальные версии

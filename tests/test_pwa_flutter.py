@@ -150,3 +150,37 @@ def test_html_pwa_has_own_manifest_and_back_swipe_only_from_home_screen():
     assert "history.state && history.state.depth" in core              # не уходить со страницы
     login = (ROOT / "webapp/static/app-html/js/screens/login.js").read_text(encoding="utf-8")
     assert 'Api.post("/auth/poll", { code: c }, 6000)' in login       # не висеть на мёртвом соединении
+
+
+def test_app_defaults_to_html_and_flutter_moved_to_spare(tmp_path, monkeypatch):
+    """Никита 20.10: /app по умолчанию — HTML, веб-сборка Flutter — запасной
+    адрес /app-flutter; сборки нет — оттуда на /app."""
+    import webapp.server as server
+    monkeypatch.delenv("PWA_ENGINE", raising=False)
+    (tmp_path / "index.html").write_text("<base href=\"/app/\">flutter", encoding="utf-8")
+    monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path)
+    c = TestClient(server.app)
+    assert "flutter" not in c.get("/app").text
+    for path in ("/app-flutter", "/app-flutter/"):
+        r = c.get(path)
+        assert r.status_code == 200 and "flutter" in r.text and r.headers["cache-control"] == "no-cache"
+    monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path / "нет")
+    r = c.get("/app-flutter", follow_redirects=False)
+    assert r.status_code in (302, 307) and r.headers["location"] == "/app"
+
+
+def test_home_screen_name_is_full(monkeypatch):
+    """Никита 20.10: на экране «Домой» — «Капибара МИРЭА», не просто «Капибара»;
+    манифест — по полному адресу (на /app/ относительный вёл в папку Flutter)."""
+    import json
+    monkeypatch.delenv("PWA_ENGINE", raising=False)
+    static = ROOT / "webapp" / "static"
+    for m in ("manifest.webmanifest", "app-html/manifest.webmanifest"):
+        assert json.loads((static / m).read_text(encoding="utf-8"))["short_name"] == "Капибара МИРЭА"
+    html = (static / "app-html" / "index.html").read_text(encoding="utf-8")
+    for page in (html, WEB_INDEX):
+        assert '<meta name="apple-mobile-web-app-title" content="Капибара МИРЭА">' in page
+    import webapp.server as server
+    c = TestClient(server.app)
+    for path in ("/app", "/app/"):
+        assert '<link rel="manifest" href="/manifest.webmanifest">' in c.get(path).text
