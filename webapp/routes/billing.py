@@ -69,7 +69,8 @@ async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default=""))
     if not await roadmap.can_see(user["id"]):
         return {"hidden": False, "locked": True,
                 "donate_url": billing.donate_link(user["id"]) if billing.provider() else "", "min": billing.DONATE_MIN}
-    return {"hidden": False, "locked": False, **roadmap.load()}
+    return {"hidden": False, "locked": False, "page_url": roadmap.page_link(user["id"]),
+            **await roadmap.with_links(roadmap.load())}
 
 
 @router.get("/api/invite")

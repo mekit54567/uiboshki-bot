@@ -255,6 +255,7 @@ window.openRoadmap = async function openRoadmap() {
   try { d = await Api.get("/roadmap"); } catch (e) { toast(errorText(e), "error"); return; }
   if (!d || d.hidden !== false) return;
   const locked = d.locked !== false;
+  if (!locked && d.page_url) { openLink(d.page_url); return; }   // страница роадмапа (roadmap_page.py)
   const statuses = d.statuses && typeof d.statuses === "object" ? d.statuses : {};
   const items = Array.isArray(d.items) ? d.items : [];
   const ic = (st) => (st === "done" ? ["check_circle_outline", ""] : st === "idea" ? ["lightbulb_outline", ""] : ["push_pin", "o"]);

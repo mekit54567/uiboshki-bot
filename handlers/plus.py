@@ -140,7 +140,9 @@ async def cmd_roadmap(message: Message):
     """Роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть."""
     import roadmap
     if await roadmap.can_see(message.from_user.id):
-        await message.answer(roadmap.text(), parse_mode="HTML", disable_web_page_preview=True)
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text="🗺 Открыть роадмап", url=roadmap.page_link(message.from_user.id))]])
+        await message.answer(roadmap.text(), parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
         return
     text, kb = donate_text(message.from_user.id)
     await message.answer("🗺 Роадмап — что я делаю сейчас и что дальше — открывается тем, кто поддержал "
