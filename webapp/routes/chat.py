@@ -91,20 +91,50 @@ async def api_subjects(user: dict = CurrentUser, x_app: str = Header(default="")
             "think": await think.offer(user["id"], x_app)}
 
 
+_HEAD = re.compile(r"^=== (?:\[(\d+)\] )?(.+?) ===$", re.M)
+_CITE = re.compile(r"\[(\d{1,2}(?:\s*[,;–-]\s*\d{1,2})*)\]")
+
+
+def _number_lectures(lectures: str) -> str:
+    """Целые лекции (lecture_picker) — с номерами [n], как куски поиска по
+    смыслу: ИИ ссылается на номер, и под ответом остаются только лекции, на
+    которые он опирался (Никита 20.10: на «погоду глянешь?» — шесть плашек)."""
+    if not lectures or lectures.lstrip().startswith("=== [1]"):
+        return lectures
+    n = 0
+
+    def head(m):
+        nonlocal n
+        n += 1
+        return f"=== [{n}] {m.group(2)} ==="
+    return _HEAD.sub(head, lectures)
+
+
+def cited(answer: str) -> set[int]:
+    """Номера материалов, на которые сослался ИИ: [2], [1, 3], [2–4]."""
+    out = set()
+    for group in _CITE.findall(answer or ""):
+        for part in re.split(r"\s*[,;]\s*", group):
+            ends = [int(x) for x in re.split(r"\s*[–-]\s*", part)]
+            out.update(range(ends[0], min(ends[-1], ends[0] + 20) + 1))
+    return out
+
+
 async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
     """Какие лекции ушли ИИ вместе с вопросом — «📖 по: ЛК3 · ЛК5» под
-    ответом, с переходом к файлу. Заголовки блоков — «файл» (выбран предмет)
-    или «предмет: файл» (get_all_lecture_context)."""
+    ответом, с переходом к файлу. Заголовки блоков — «[n] файл» (выбран
+    предмет) или «[n] предмет: файл» (get_all_lecture_context); n — для
+    отбора процитированных, наружу не уходит."""
     from database import get_files
-    titles = re.findall(r"^=== (.+?) ===$", lectures, re.M)
-    if not titles:
+    heads = _HEAD.findall(lectures)
+    if not heads:
         return []
     by_key = {}
     for f in await get_files():
         by_key.setdefault(((f.get("subject") or "Без предмета"), f["title"]), f)
         by_key.setdefault(("", f["title"]), f)
     out, seen = [], set()
-    for t in titles:
+    for n, t in heads:
         f = by_key.get((subject, t)) if subject else None
         if not f and ": " in t:
             subj, _, title = t.partition(": ")
@@ -112,7 +142,7 @@ async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
         f = f or by_key.get(("", t))
         if f and f["id"] not in seen:
             seen.add(f["id"])
-            out.append({"id": f["id"], "title": f["title"]})
+            out.append({"n": int(n) if n else None, "id": f["id"], "title": f["title"]})
     return out
 
 
@@ -229,6 +259,7 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
                     return {"content": msg, "html": msg, "reasoning": "", "choose": options}
         lectures = await asyncio.to_thread(lecture_picker.pick, all_lectures, query,
                                            lecture_picker.AUTO_BUDGET, lecture_picker.AUTO_MIN_SCORE, True)
+    lectures = _number_lectures(lectures)
     context = await build_group_context(user["id"])
 
     try:
@@ -278,9 +309,18 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         raise HTTPException(status_code=502, detail=f"ИИ сейчас недоступен ({_short_reason(e)}), попробуй чуть позже")
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
-    # ответ без лекций (запасной путь _chat_with_fallback) — источников нет
+    # Под ответом — только материалы, на которые ИИ сослался номером: на
+    # болтовню и вопросы не по учёбе плашек нет. Ответ без лекций (запасной
+    # путь _chat_with_fallback) — источников нет.
     if lectures and not result.pop("no_lectures", False):
-        result["sources"] = sources if sources is not None else await _lecture_sources(lectures, subject)
+        used = cited(result.get("content", ""))
+        if sources is None:     # целые лекции: номер не нужен фронту (страницы нет)
+            sources = [{k: v for k, v in s.items() if k != "n"}
+                       for s in await _lecture_sources(lectures, subject) if s["n"] in used]
+        else:
+            sources = [s for s in sources if s["n"] in used]
+        if sources:
+            result["sources"] = sources
     # кнопка «Подумать ещё» под ответом (подписчикам, не на iPhone); к фото и
     # файлу — нет: модель второго уровня читает только текст
     offer = None if body.attachment else await think.offer(user["id"], x_app)

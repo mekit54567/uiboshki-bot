@@ -185,7 +185,7 @@ async def test_chat_cites_pages_and_page_view(db, embed, monkeypatch):
 
     async def fake_chat(history, subject="", extra_system="", lectures=""):
         seen["lectures"] = lectures
-        return {"content": "Будущие деньги дисконтируют [1].", "reasoning": ""}
+        return {"content": seen.get("answer", "Будущие деньги дисконтируют [1]."), "reasoning": ""}
 
     monkeypatch.setattr(ai_solver, "chat_with_reasoning", fake_chat)
     c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
@@ -194,6 +194,10 @@ async def test_chat_cites_pages_and_page_view(db, embed, monkeypatch):
     res = r.json()
     assert seen["lectures"].startswith("=== [1]") and "[1]" in res["html"]
     assert res["sources"][0]["label"] == "Лекция 5. Инвестиции · стр. 2" and res["sources"][0]["page"] == 2
+    assert [x["n"] for x in res["sources"]] == [1]                          # [2] не процитирован — его нет
+    seen["answer"] = "Давай пообщаемся!"                                    # болтовня — без плашек (Никита 20.10)
+    res = c.post("/api/chat", headers=h, json={"history": [{"role": "user", "content": "как учесть, что прибыль приходит позже"}]}).json()
+    assert "sources" not in res
 
     p = c.get(f"/api/files/{fid}/page/2", headers=h).json()
     assert p["pages"] == 3 and p["kind"] == "стр." and "Дисконтирование" in p["text"] and p["image"]
@@ -256,3 +260,19 @@ async def test_local_model_own_vectors_and_switch_back(db, embed, monkeypatch):
     async with si.open_index() as idx:
         left = (await (await idx.execute("SELECT COUNT(*) FROM emb_rubert_mini_frida")).fetchone())[0]
     assert left == 1
+
+
+def test_cited_numbers():
+    from webapp.routes.chat import cited
+    assert cited("по [1] и [2, 4], ещё [5–6]; [x] [2023 год]") == {1, 2, 4, 5, 6}
+    assert cited("ничего") == set()
+
+
+def test_prompt_honest_and_without_home_group():
+    # «погоду глянешь?» — не выдумывать; группа — из профиля (контекст), не зашитая (Никита 20.10)
+    import ai_solver
+    import config
+    for prompt in (ai_solver.build_system_prompt("Анализ данных"),
+                   ai_solver.lecture_system_prompt("Анализ данных", "=== [1] ЛК1 ===\nтекст")):
+        assert config.GROUP_NAME not in prompt and "погоды" in prompt
+    assert "не ставь номеров" in ai_solver.lecture_system_prompt("", "=== [1] ЛК1 ===\nтекст")

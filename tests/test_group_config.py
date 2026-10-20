@@ -28,11 +28,13 @@ def test_index_page_passes_channel_and_contact(monkeypatch):
 
 
 def test_prompts_use_group(monkeypatch):
+    # группа — из профиля человека (контекст группы), а не GROUP_NAME сервера:
+    # живой тест 20.10 — «полезен вам, студентам УИБО-03-24» человеку другой группы
     import ai_solver
-    monkeypatch.setattr(ai_solver, "GROUP_NAME", "КМБО-01-25")
-    monkeypatch.setattr(ai_solver, "GROUP_PROGRAM", "Прикладная математика")
+    import config
+    monkeypatch.setattr(config, "GROUP_NAME", "КМБО-01-25")
     p = ai_solver.build_system_prompt("Матан")
-    assert "КМБО-01-25" in p and "Прикладная математика" in p and "УИБО" not in p
+    assert "КМБО-01-25" not in p and "УИБО" not in p and "Матан" in p and "контексту группы" in p
 
 
 def test_no_hardcoded_group_in_code():
