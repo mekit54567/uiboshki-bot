@@ -60,8 +60,8 @@
 /* листы: строки действий (ListTile), чипы, плитки выбора, поля */
 .dl-act { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 56px; text-align: left; }
 .dl-act:active, .dl-rrow:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
-.dl-chips { display: flex; flex-wrap: wrap; gap: var(--s); margin-top: var(--s); }
-.dl-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 5px 15px;
+.dl-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: var(--s); }
+.dl-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 6px 15px;
   border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 14px; font-weight: 600;
   color: var(--text); text-align: left; transition: background-color .15s, color .15s; }
 .dl-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -75,8 +75,10 @@
 .dl-field { border-radius: var(--r-chip); padding: var(--m) var(--l); font-size: 15px; }
 input.dl-field { font-size: 16px; font-weight: 600; }
 textarea.dl-field { min-height: 0; line-height: 1.35; }
+.dl-field:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.hw-text { font-size: 16px; }
 .dl-field::placeholder { color: var(--muted); font-weight: 400; }
-.dl-btn50 { min-height: 50px; margin-top: var(--l); }
+.dl-btn50 { min-height: 50px; margin-top: var(--l); font-size: 14px; }
 .dl-ib { width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .dl-ib:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .dl-rem { display: flex; align-items: center; gap: var(--s); padding: 4px 4px 4px var(--l); margin-bottom: var(--s); }
@@ -133,7 +135,7 @@ textarea.dl-field { min-height: 0; line-height: 1.35; }
 /* ДЗ группы и заметки (homework.js) */
 .hw-card { display: flex; align-items: stretch; }
 .hw-bar { width: 3px; border-radius: 2px; margin-right: var(--m); flex: none; }
-.hw-more { align-self: flex-start; margin: -10px -10px 0 0; }
+.hw-more { align-self: flex-start; margin: -4px 0 0 var(--xs); }
 .hw-file { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 10px; margin-top: var(--s);
   border-radius: 999px; border: 1px solid var(--line); font-size: 14px; font-weight: 600; color: var(--text); }
 .hw-note { display: flex; align-items: flex-start; gap: var(--m); }
