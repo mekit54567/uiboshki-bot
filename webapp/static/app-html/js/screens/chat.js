@@ -166,7 +166,7 @@ function openChat() {
     };
     const drawList = () => {
       srcMap = [];
-      let h = screenTitle("Помощник");
+      let h = screenTitle("Kapi ИИ");
       if (!log.length) {
         h += `<div style="padding:0 var(--xl) var(--l)"><div class="bd mut" style="--sz:15px">Отвечает по лекциям твоей группы: объяснит тему, решит задачу, скажет, где в лекции.</div>
           ${left !== null ? `<div class="row" style="gap:6px;margin-top:var(--s)">${icon("chat_bubble_outline", "", `font-size:16px;color:${left > 0 ? "var(--accent)" : "var(--warn)"}`)}

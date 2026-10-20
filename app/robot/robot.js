@@ -128,7 +128,7 @@ async function scenario(name, opts, fn) {
 
   await scenario('Помощник', {}, async (s, p) => {
     await L.tap(p, 'Учёба', { wait: 1500 });
-    await L.tap(p, /^Помощник/, { wait: 1500 });
+    await L.tap(p, /^Kapi ИИ/, { wait: 1500 });
     await L.tap(p, /Чем метрика/, { wait: 3500 });
     check(await L.has(p, /стр\. 3/), 'ответ с источниками');
     await L.tap(p, /стр\. 3/, { wait: 2000 });

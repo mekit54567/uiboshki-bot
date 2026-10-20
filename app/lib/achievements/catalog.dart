@@ -94,7 +94,7 @@ const achievements = [
     'Поменять оформление, тему или иконку',
     AchPlace(4, 'Нажми «Оформление»'),
   ),
-  Achievement('ai', Rank.dawn, 'Первый вопрос', 'Спросить ИИ по лекциям группы', AchPlace(3, 'Нажми «Помощник»')),
+  Achievement('ai', Rank.dawn, 'Первый вопрос', 'Спросить ИИ по лекциям группы', AchPlace(3, 'Нажми «Kapi ИИ»')),
   Achievement(
     'summary',
     Rank.dawn,
