@@ -17,6 +17,7 @@ def test_app_serves_flutter_build_only_with_switch(tmp_path, monkeypatch):
     (tmp_path / "index.html").write_text("<base href=\"/app/\">flutter", encoding="utf-8")
     monkeypatch.setattr(server, "FLUTTER_DIR", tmp_path)
     c = TestClient(server.app)
+    monkeypatch.setenv("PWA_ENGINE", "html")
     assert "flutter" not in c.get("/app").text
     monkeypatch.setenv("PWA_ENGINE", "flutter")
     for path in ("/app", "/app/"):

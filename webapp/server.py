@@ -291,6 +291,7 @@ class _NoCacheStatic(StaticFiles):
 # Никита 19.10: веб-сборка Flutter в Safari тяжёлая, внизу чёрная полоса).
 # Откат без выпуска кода — переменная PWA_ENGINE=flutter (нужна сборка).
 HTML_APP = "app-html"
+PWA_DEFAULT = "flutter"  # пока HTML-версия не готова целиком; потом — "html"
 _HTML_ASSET_RE = re.compile(r'(src|href)="((?:css|js)/[\w./-]+\.(?:css|js))"')
 
 
@@ -312,7 +313,7 @@ def _html_app() -> Response:
 @app.get("/app/", include_in_schema=False)
 async def pwa_page(request: Request):
     index = FLUTTER_DIR / "index.html"
-    if os.environ.get("PWA_ENGINE", "").strip().lower() == "flutter" and index.is_file():
+    if (os.environ.get("PWA_ENGINE") or PWA_DEFAULT).strip().lower() == "flutter" and index.is_file():
         return Response(index.read_bytes(), media_type="text/html", headers={"Cache-Control": "no-cache"})
     return _html_app()
 
