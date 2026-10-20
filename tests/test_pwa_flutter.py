@@ -200,15 +200,20 @@ def test_html_capy_line_types_like_app():
 
 def test_html_pwa_fills_iphone_screen_from_home():
     """Никита 20.10, скрин: в HTML-версии с экрана «Домой» под меню пустая
-    полоса — iOS отдаёт высоту окна без часов (как у Flutter 17.10, uib-height).
-    --gap опускает низ fixed-слоёв до низа экрана."""
+    полоса. Сдвиг fixed-слоёв (--gap, 5.112.1) не помог: ниже окна iOS не
+    рисует. Замер на телефоне (diag.html, способ 1) — html и body без
+    overflow:hidden, body высотой с экран этого телефона."""
     html = (ROOT / "webapp/static/app-html/index.html").read_text(encoding="utf-8")
-    js = html.split('<script id="uib-gap">')[1].split("</script>")[0]
-    assert "navigator.standalone !== true" in js and "screen.height" in js and '"--gap"' in js
-    assert html.index('id="uib-gap"') < html.index('href="css/app.css"')
+    js = html.split('<script id="uib-home">')[1].split("</script>")[0]
+    assert "navigator.standalone !== true" in js and "screen.height" in js
+    assert '"ios-home"' in js and '"--screen-h"' in js and "scrollTo(0, 0)" in js
+    assert "932" not in js and "873" not in js  # не под одну модель iPhone
+    assert html.index('id="uib-home"') < html.index('href="css/app.css"')
     css = (ROOT / "webapp/static/app-html/css/app.css").read_text(encoding="utf-8")
-    assert "#app, .sheet-wrap, .td-cap, .mr-tour, .dl-cheer { bottom: calc(-1 * var(--gap, 0px)); }" in css
-    assert "#tabbar { position: fixed; left: 0; right: 0; bottom: calc(-1 * var(--gap, 0px));" in css
+    assert "html.ios-home, html.ios-home body { overflow: visible; height: auto; }" in css
+    assert "html.ios-home body { min-height: var(--screen-h, 100%); }" in css
+    for f in ("app.css", "account.css"):
+        assert "--gap" not in (ROOT / "webapp/static/app-html/css" / f).read_text(encoding="utf-8")
 
 
 def test_iphone_diag_page_served():

@@ -16,23 +16,25 @@
 <link rel="icon" type="image/png" href="/pwa/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>Капибара — учёба МИРЭА</title>
-<script id="uib-gap">
-// iPhone, с экрана «Домой» (Никита 20.10, скрин: снизу пустая полоса; та же
-// беда была у Flutter 17.10 — app/web/index.html, uib-height): страница
-// заходит под часы (black-translucent), а высоту окна iOS отдаёт без них —
-// fixed-слои до низа окна не достают экрана. --gap — сколько не хватает;
-// app.css опускает на него низ #app, меню, листов и подсказок.
+<script id="uib-home">
+// iPhone, с экрана «Домой» (Никита 20.10, скрин: снизу пустая полоса): страница
+// заходит под часы (black-translucent), а окно iOS отдаёт без них — ниже окна
+// не рисует. Замер на телефоне Никиты (diag.html, способ 1): html и body без
+// overflow:hidden и body высотой с экран — тогда fixed-слои до низа экрана.
+// Высота — screen.height этого телефона, не число под одну модель.
 (function () {
   if (navigator.standalone !== true || !/iPhone|iPod/.test(navigator.userAgent)) return;
   var de = document.documentElement;
+  de.classList.add("ios-home");
   function set() {
-    var h = de.clientHeight, w = de.clientWidth, a = screen.width, b = screen.height;
-    var gap = Math.max(0, (w > h ? Math.min(a, b) : Math.max(a, b)) - h);
-    de.style.setProperty("--gap", gap + "px");
+    var w = de.clientWidth, h = de.clientHeight, a = screen.width, b = screen.height;
+    de.style.setProperty("--screen-h", (w > h ? Math.min(a, b) : Math.max(a, b)) + "px");
   }
   set();
   addEventListener("resize", set);
   addEventListener("orientationchange", set);
+  // body выше окна — сама страница не должна уезжать
+  addEventListener("scroll", function () { if (scrollY) scrollTo(0, 0); }, { passive: true });
 })();
 </script>
 <link rel="stylesheet" href="/tokens.css">
