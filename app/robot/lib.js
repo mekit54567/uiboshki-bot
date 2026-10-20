@@ -77,25 +77,26 @@ function serve() {
 }
 
 /**
- * opts: { dark, size:[w,h], token, toured, mode: 'ok'|'empty'|'error'|'slow', overrides }
+ * opts: { dark, size:[w,h], token, toured, mode: 'ok'|'empty'|'error'|'slow', overrides, scale, prefs }
  */
 async function open(opts = {}) {
   const { srv, url } = await serve();
   const browser = await chromium.launch();
   const [w, h] = opts.size || [390, 844];
   const ctx = await browser.newContext({
-    viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+    viewport: { width: w, height: h }, deviceScaleFactor: opts.scale || 2, isMobile: true, hasTouch: true,
     colorScheme: opts.dark ? 'dark' : 'light', timezoneId: 'Europe/Moscow', locale: 'ru-RU',
   });
   const log = { unknown: new Set(), errors: [], asked: [], bodies: [] };
   const token = opts.token === undefined ? 'demo-token' : opts.token;
-  await ctx.addInitScript(([t, toured]) => {
+  await ctx.addInitScript(([t, toured, prefs]) => {
     if (sessionStorage.getItem('__init')) return;
     sessionStorage.setItem('__init', '1');
     localStorage.clear();
     if (t) localStorage.setItem('flutter.uib_token', JSON.stringify(t));
     if (toured) localStorage.setItem('flutter.uib_toured', 'true');
-  }, [token, opts.toured !== false]);
+    for (const [k, v] of Object.entries(prefs)) localStorage.setItem('flutter.' + k, JSON.stringify(v));
+  }, [token, opts.toured !== false, opts.prefs || {}]);
   const state = { mode: opts.mode || 'ok', overrides: opts.overrides || {} };
   await ctx.route('**/api/v1/**', async (route) => {
     const r = route.request();

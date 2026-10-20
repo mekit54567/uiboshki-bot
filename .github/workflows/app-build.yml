@@ -1,20 +1,41 @@
 name: Сборка приложения
 
-# Установочные файлы приложения (app/): APK для Android и IPA без подписи
-# для iPhone. Скачать — вкладка Actions → запуск → Artifacts. Номер сборки =
-# номер запуска, поэтому новый APK ставится поверх старого (если подпись
-# та же: секреты ANDROID_KEYSTORE — keystore в base64, ANDROID_KEY_ALIAS,
-# ANDROID_KEY_PASSWORD; без них — отладочный ключ раннера, тогда перед
-# обновлением старую версию придётся удалить).
+# Установочные файлы приложения (app/). Скачать — вкладка Actions → запуск →
+# Artifacts. Номер сборки (versionCode / CFBundleVersion) = номер запуска этого
+# workflow, поэтому он сам растёт; версия (versionName) — из app/pubspec.yaml
+# или из поля «Версия» при ручном запуске. Инструкции — docs/store/.
+#
+# Android: APK (его грузим в RuStore) и AAB (на будущее: Google Play или
+# RuStore с подписью через PEPK). Подпись — секреты ANDROID_KEYSTORE (keystore
+# в base64), ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD (docs/store/android-key.md);
+# без них — отладочный ключ раннера: такой файл в магазин не годится.
+#
+# iPhone: без секретов — IPA без подписи для AltStore/Sideloadly, как раньше.
+# С секретами IOS_DIST_CERT_P12, IOS_DIST_CERT_PASSWORD, IOS_PROFILE_APP,
+# IOS_PROFILE_WIDGET (docs/store/ios-signing.md) — подписанная IPA для App
+# Store (в ней «Вход через Apple» и только iPhone, tools/ios_store_signing.py),
+# а при ручном запуске с галочкой «TestFlight» и ключом App Store Connect API
+# (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8) — сразу загрузка в TestFlight.
+# На pull request подписи нет никогда: там только проверка, что всё собирается.
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия для магазинов, например 1.0.1 (пусто — из app/pubspec.yaml)"
+        required: false
+        default: ""
+      testflight:
+        description: "Загрузить iPhone-сборку в TestFlight (нужны секреты App Store)"
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [main]
-    paths: ["app/**", ".github/workflows/app-build.yml"]
+    paths: ["app/**", ".github/workflows/app-build.yml", "tools/ios_store_signing.py"]
   pull_request:
     branches: [main]
-    paths: ["app/**", ".github/workflows/app-build.yml"]
+    paths: ["app/**", ".github/workflows/app-build.yml", "tools/ios_store_signing.py"]
 
 permissions:
   contents: read
@@ -46,33 +67,64 @@ jobs:
           PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE" ]; then
-            echo "::warning::Нет секрета ANDROID_KEYSTORE — APK подписан отладочным ключом"
+            echo "::warning::Нет секрета ANDROID_KEYSTORE — подписано отладочным ключом, в RuStore такое не грузить"
             exit 0
           fi
           echo "$KEYSTORE" | base64 -d > android/app/upload.jks
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$PASS" "$ALIAS" "$PASS" > android/key.properties
 
-      - name: Сборка APK
+      - name: Сборка APK и AAB
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           flutter pub get
-          flutter build apk --release --build-number=${{ github.run_number }}
+          NAME=()
+          if [ -n "$VERSION" ]; then NAME=(--build-name="$VERSION"); fi
+          flutter build apk --release --build-number=${{ github.run_number }} "${NAME[@]}"
+          flutter build appbundle --release --build-number=${{ github.run_number }} "${NAME[@]}"
           mv build/app/outputs/flutter-apk/app-release.apk kapibara-${{ github.run_number }}.apk
+          mv build/app/outputs/bundle/release/app-release.aab kapibara-${{ github.run_number }}.aab
+
+      # Что увидит магазин: версия, minSdk/targetSdk, разрешения и отпечаток
+      # ключа (его же покажет RuStore). Итог — на странице запуска (Summary).
+      - name: Проверка подписи и разрешений
+        continue-on-error: true
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APK=kapibara-${{ github.run_number }}.apk
+          "$BT/apksigner" verify --print-certs "$APK" > sig.txt
+          "$BT/aapt2" dump badging "$APK" \
+            | grep -E "^(package|sdkVersion|targetSdkVersion|uses-permission|application-label):" > info.txt || true
+          cat info.txt sig.txt
+          {
+            echo "### Android, сборка ${{ github.run_number }}"
+            echo '```'
+            cat info.txt
+            grep -E "certificate DN|SHA-256" sig.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "CN=Android Debug" sig.txt; then
+            echo "::warning::APK подписан отладочным ключом — в RuStore не грузить (docs/store/android-key.md)"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: kapibara-android-${{ github.run_number }}
-          path: app/kapibara-${{ github.run_number }}.apk
+          path: |
+            app/kapibara-${{ github.run_number }}.apk
+            app/kapibara-${{ github.run_number }}.aab
           retention-days: 30
 
-  # Без аккаунта разработчика Apple подписать нечем: IPA ставится через
-  # Sideloadly/AltStore со своим Apple ID (на 7 дней). Заодно проверка, что
-  # приложение собирается под iOS.
   ios:
     runs-on: macos-latest
     defaults:
       run:
         working-directory: app
+    env:
+      # подписываем для App Store только вне pull request и только с секретами
+      STORE: ${{ github.event_name != 'pull_request' && secrets.IOS_DIST_CERT_P12 != '' && secrets.IOS_PROFILE_APP != '' && secrets.IOS_PROFILE_WIDGET != '' }}
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,10 +134,16 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Сборка IPA без подписи
+      # Без аккаунта разработчика Apple подписать нечем: IPA ставится через
+      # Sideloadly/AltStore со своим Apple ID (на 7 дней). Заодно проверка, что
+      # приложение собирается под iOS.
+      - name: Сборка IPA без подписи (AltStore)
+        if: env.STORE != 'true'
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+          NAME=()
+          if [ -n "$VERSION" ]; then NAME=(--build-name="$VERSION"); fi
+          flutter build ios --release --no-codesign --build-number=${{ github.run_number }} "${NAME[@]}"
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
           # --no-codesign не вшивает entitlements: без них AltStore не создаёт
@@ -95,8 +153,118 @@ jobs:
           codesign --force --sign - --entitlements ios/Runner/Runner.entitlements Payload/Runner.app
           zip -qr kapibara-${{ github.run_number }}.ipa Payload
 
+      - name: Сертификат и профили App Store
+        if: env.STORE == 'true'
+        env:
+          CERT: ${{ secrets.IOS_DIST_CERT_P12 }}
+          CERT_PASS: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          PROF_APP: ${{ secrets.IOS_PROFILE_APP }}
+          PROF_WIDGET: ${{ secrets.IOS_PROFILE_WIDGET }}
+        run: |
+          KC="$RUNNER_TEMP/store.keychain-db"
+          KP=$(openssl rand -hex 16)
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASS" -A -t cert -f pkcs12 -k "$KC"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KP" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          if ! security find-identity -v -p codesigning "$KC" | grep -q "Apple Distribution"; then
+            echo "::error::В IOS_DIST_CERT_P12 нет сертификата «Apple Distribution» с ключом (или неверный IOS_DIST_CERT_PASSWORD)"
+            exit 1
+          fi
+
+          info() { /usr/libexec/PlistBuddy -c "Print :$2" "$RUNNER_TEMP/$1.plist" 2>/dev/null; }
+          for d in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$d"
+          done
+          for W in APP WIDGET; do
+            V="PROF_$W"
+            echo "${!V}" | base64 --decode > "$RUNNER_TEMP/$W.mobileprovision"
+            security cms -D -i "$RUNNER_TEMP/$W.mobileprovision" > "$RUNNER_TEMP/$W.plist"
+            UUID=$(info "$W" UUID)
+            cp "$RUNNER_TEMP/$W.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+            cp "$RUNNER_TEMP/$W.mobileprovision" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$UUID.mobileprovision"
+            if info "$W" ProvisionedDevices > /dev/null; then
+              echo "::error::IOS_PROFILE_$W — профиль для разработки (Development/Ad Hoc), нужен «App Store Connect»"
+              exit 1
+            fi
+          done
+          TEAM=$(info APP TeamIdentifier:0)
+          [ "$(info APP Entitlements:application-identifier)" = "$TEAM.ru.uiboshki.app" ] \
+            || { echo "::error::IOS_PROFILE_APP — профиль не для App ID ru.uiboshki.app"; exit 1; }
+          [ "$(info WIDGET Entitlements:application-identifier)" = "$TEAM.ru.uiboshki.app.KapibaraWidget" ] \
+            || { echo "::error::IOS_PROFILE_WIDGET — профиль не для App ID ru.uiboshki.app.KapibaraWidget"; exit 1; }
+          info APP Entitlements:com.apple.developer.applesignin > /dev/null \
+            || { echo "::error::У App ID ru.uiboshki.app не включён Sign In with Apple — включи и пересоздай профиль"; exit 1; }
+          for W in APP WIDGET; do
+            info "$W" Entitlements:com.apple.security.application-groups | grep -q group.ru.uiboshki.app \
+              || { echo "::error::IOS_PROFILE_$W без App Group group.ru.uiboshki.app — включи App Groups у App ID и пересоздай профиль"; exit 1; }
+          done
+          {
+            echo "TEAM=$TEAM"
+            echo "APP_PROFILE=$(info APP Name)"
+            echo "WIDGET_PROFILE=$(info WIDGET Name)"
+            echo "KC=$KC"
+          } >> "$GITHUB_ENV"
+
+      - name: Сборка IPA для App Store
+        if: env.STORE == 'true'
+        run: |
+          python3 ../tools/ios_store_signing.py ios/Runner.xcodeproj/project.pbxproj \
+            --team "$TEAM" --app-profile "$APP_PROFILE" --widget-profile "$WIDGET_PROFILE"
+          python3 - <<'PY'
+          import os, plistlib
+          plistlib.dump({
+              "method": "app-store-connect",
+              "destination": "export",
+              "signingStyle": "manual",
+              "teamID": os.environ["TEAM"],
+              "provisioningProfiles": {
+                  "ru.uiboshki.app": os.environ["APP_PROFILE"],
+                  "ru.uiboshki.app.KapibaraWidget": os.environ["WIDGET_PROFILE"],
+              },
+              "uploadSymbols": True,
+              "manageAppVersionAndBuildNumber": False,
+          }, open(os.path.join(os.environ["RUNNER_TEMP"], "ExportOptions.plist"), "wb"))
+          PY
+          flutter pub get
+          NAME=()
+          if [ -n "$VERSION" ]; then NAME=(--build-name="$VERSION"); fi
+          flutter build ipa --release --build-number=${{ github.run_number }} "${NAME[@]}" \
+            --export-options-plist="$RUNNER_TEMP/ExportOptions.plist"
+          mv build/ios/ipa/*.ipa kapibara-${{ github.run_number }}-appstore.ipa
+          echo "### iPhone для App Store: сборка ${{ github.run_number }}, команда $TEAM" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Загрузка в TestFlight
+        if: env.STORE == 'true' && inputs.testflight
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          KEY: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$KEY" ]; then
+            echo "::warning::Нет секретов ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8 — IPA не загружена, она в Artifacts"
+            exit 0
+          fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$KEY" > ~/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8
+          xcrun altool --upload-app -t ios -f kapibara-${{ github.run_number }}-appstore.ipa \
+            --apiKey "$KEY_ID" --apiIssuer "$ISSUER"
+          rm -f ~/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8
+          echo "Загружено в App Store Connect → TestFlight (обработка — 5–30 минут)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Убрать ключи с раннера
+        if: always() && env.STORE == 'true'
+        run: |
+          [ -n "$KC" ] && security delete-keychain "$KC" || true
+          rm -f "$RUNNER_TEMP"/*.mobileprovision "$RUNNER_TEMP"/*.plist
+          rm -rf "$HOME/Library/MobileDevice/Provisioning Profiles" ~/.appstoreconnect
+
       - uses: actions/upload-artifact@v4
         with:
           name: kapibara-ios-${{ github.run_number }}
-          path: app/kapibara-${{ github.run_number }}.ipa
+          path: app/kapibara-${{ github.run_number }}*.ipa
           retention-days: 30
