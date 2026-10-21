@@ -27,25 +27,31 @@ logger = logging.getLogger(__name__)
 # поручению — в политике и согласии. Сменился хостинг — сменился получатель,
 # поэтому у каждого свои версии согласия (VERSION — по ней спрашивают заново)
 # и политики. 19.10: переезд с Amvera на Timeweb Cloud (Amvera зависала на
-# запуске контейнера); юрлицо Timeweb — из договора, HOSTING_ORG.
+# запуске контейнера). org — юрлицо с адресом, как в уведомлении в РКН (22.10: в
+# HOSTING_ORG на сервере стоял не тот адрес — теперь он только для хостинга без org);
+# dc — где дата-центр (Timeweb — ЦОД в Москве, подтвердила поддержка).
 HOSTS = {
     "amvera": {"version": "2", "date": "16.10.2026",       # 16.10: Amvera и «Капибара+»
                "policy": "2.1", "policy_date": "18.10.2026",  # 18.10: «Поддержка проекта»
                "name": "Amvera", "org": "ООО «Амвера» (ИНН 9724135016, Москва)",
+               "dc": "в России (перечень — на сайте Amvera)",
                "basis": "договор поручения Amvera от 14.07.2026", "role": "processor"},
     # 20.10: комментарии к парам, оценки преподавателей, пуши приложения (RuStore) — к выходу в магазины
     # 20.10 (поддержка Timeweb): поручений на обработку ПД не подписывают — только сдают
     # сервер, оператор один; политика 4.1, согласие то же (получателей стало меньше);
-    # 4.2 — копия базы в Telegram зашифрована (BACKUP_KEY)
-    "timeweb": {"version": "4", "date": "20.10.2026", "policy": "4.2", "policy_date": "20.10.2026",
-                "name": "Timeweb Cloud", "org": "ООО «ТАЙМВЭБ.КЛАУД»",
+    # 4.2 — копия базы в Telegram зашифрована (BACKUP_KEY); 4.3 — юрадрес Timeweb и ЦОД в Москве
+    "timeweb": {"version": "4", "date": "20.10.2026", "policy": "4.3", "policy_date": "22.10.2026",
+                "name": "Timeweb Cloud",
+                "org": "ООО «ТАЙМВЭБ.КЛАУД» (ОГРН 1227800052215, ИНН 7810945525; Республика "
+                       "Татарстан, г. Иннополис, ул. Университетская, д. 7, оф. 605)",
+                "dc": "в Москве (ЦОД IXcellerate, ул. Подольских Курсантов, д. 15Б)",
                 "basis": "договор с Timeweb Cloud (оферта)", "role": "infra"},
 }
 
 
 def _host() -> dict:
     h = dict(HOSTS.get(os.getenv("HOSTING", "").strip().lower()) or HOSTS["amvera"])
-    h["org"] = os.getenv("HOSTING_ORG", "").strip() or h["org"] or h["name"]
+    h["org"] = h["org"] or os.getenv("HOSTING_ORG", "").strip() or h["name"]
     return h
 
 
@@ -152,7 +158,7 @@ def operator_missing() -> list[str]:
 
 
 def hosting_texts() -> dict:
-    """Хостинг для legal_texts: {HOST_NAME}, {HOST_ORG}, {HOST_BASIS}, {HOST_ROLE}."""
+    """Хостинг для legal_texts: {HOST_NAME}, {HOST_ORG}, {HOST_BASIS}, {HOST_ROLE}, {HOST_DC}."""
     if HOST.get("role") == "infra":     # только сдаёт сервер, данные не обрабатывает
         role = (f"{HOST['org']} — облачная платформа, у которой оператор арендует сервер "
                 "для сервиса и базы; поручения на обработку персональных данных не получает и "
@@ -165,7 +171,7 @@ def hosting_texts() -> dict:
                 "резервные копии, передача по сети. Содержимое не просматривает, кроме устранения "
                 "аварий, обращений оператора в поддержку и запросов уполномоченных органов.")
     return {"HOST_NAME": HOST["name"], "HOST_ORG": HOST["org"], "HOST_BASIS": HOST["basis"],
-            "HOST_ROLE": role}
+            "HOST_ROLE": role, "HOST_DC": HOST.get("dc") or "в России"}
 
 _seen: dict[int, str] = {}     # id → день последней отметки (пишем раз в день)
 _given: set[tuple[int, str, str]] = set()   # (id, вид, версия) — уже дал, в базу не ходим
