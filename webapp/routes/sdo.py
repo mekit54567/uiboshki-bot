@@ -193,9 +193,12 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     logger.info(f"СДО: {user['id']} сдал файл в задание {cmid}")
     import sdo_grades
     sdo_grades.forget(user["id"])    # статусы и баллы — заново
+    import sdo_done
+    # приложение рисует «Сдано» только для submitted; черновик и непонятный
+    # ответ СДО — другим экраном (аудит 21.10, R5)
+    result = dict(result, state=sdo_done.submit_state(result.get("status")))
     try:
-        import sdo_done              # ушло на проверку — дедлайн у себя сданным (черновик — нет)
-        if sdo_done.is_submitted(result.get("status")):
+        if result["state"] == "submitted":   # ушло на проверку — дедлайн у себя сданным (черновик — нет)
             await sdo_done.mark(user["id"], [cmid])
     except Exception as e:
         logger.info(f"отметка «сдал» после сдачи: {e}")

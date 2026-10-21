@@ -161,6 +161,7 @@ async def test_webapp_connect_and_submit(db, moodle, monkeypatch):
 
     res = c.post("/api/sdo/submit", json=body, headers=h)
     assert res.status_code == 200 and res.json()["status"] == "Отправлено для оценивания"
+    assert res.json()["state"] == "submitted"
     assert await db.is_deadline_done(did, 222)              # сдал через бота — дедлайн у себя отмечен сам
 
     moodle.logged_in = False                                                     # СДО разлогинил
@@ -362,3 +363,30 @@ async def test_submit_timeout_is_502_not_500(db, moodle, monkeypatch):
     monkeypatch.setattr(sdo_submit, "submit_file", boom)
     res = c.post("/api/sdo/submit", json=body, headers=h)
     assert res.status_code == 502 and "проверь в СДО" in res.json()["detail"]
+
+
+@pytest.mark.parametrize("status, state, done", [
+    ("Отправлено для оценивания", "submitted", True),
+    ("Черновик (не отправлено)", "draft", False),
+    ("", "unknown", False),                              # 200 со странной страницей — не «Сдано»
+    ("Нет попытки", "unknown", False),
+])
+@pytest.mark.asyncio
+async def test_submit_state_for_app(db, monkeypatch, status, state, done):
+    """«Сдано» в приложении — только когда СДО подтвердил отправку; черновик и
+    непонятный ответ — свой state, дедлайн не отмечается (аудит 21.10, R5)."""
+    from fastapi.testclient import TestClient
+    import webapp.server as server
+    from tests.test_webapp_home import BOT_TOKEN, _make_init_data
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    did = await db.add_deadline("Практическая работа №3", ASSIGN, "2026-10-05", None, 0, external_id="sdo:1")
+    await db.save_sdo_session(222, sdo_accounts.encrypt(COOKIE))
+
+    async def fake_submit(cookie, cmid, **kw):
+        return {"status": status, "url": "u"}
+    monkeypatch.setattr(sdo_submit, "submit_file", fake_submit)
+    c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
+    body = {"deadline_id": did, "name": "work.pdf", "data": base64.b64encode(b"%PDF-work").decode()}
+    res = c.post("/api/v1/sdo/submit", json=body, headers=h)
+    assert res.status_code == 200 and res.json()["state"] == state
+    assert await db.is_deadline_done(did, 222) is done

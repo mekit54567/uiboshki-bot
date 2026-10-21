@@ -38,7 +38,7 @@ DEFAULTS = {
     "/api/day": {"lessons": []},
     "/api/week": {"week": None, "days": []},
     "/api/sdo/submit-rules": {"accepted": [], "labels": [], "maxfiles": 3, "maxbytes": 10485760},
-    "/api/sdo/submit": {"status": "Отправлено для оценивания"},
+    "/api/sdo/submit": {"status": "Отправлено для оценивания", "state": "submitted"},
     "/api/groups/search": {"items": [{"id": 4928, "name": "УИБО-03-24"}]},
     "/api/me/group": {"group": {"id": 4928, "name": "УИБО-03-24", "own": True}},
 }

@@ -32,6 +32,18 @@ def is_submitted(status: str | None) -> bool:
     return "для оценивания" in low or "отправлен" in low or "submitted" in low
 
 
+def submit_state(status: str | None) -> str:
+    """Что показать после сдачи (аудит 21.10, R5): submitted — ушло на проверку,
+    draft — файлы лежат черновиком, unknown — СДО не сказал ясно. «Сдано» —
+    только для submitted."""
+    if is_submitted(status):
+        return "submitted"
+    low = (status or "").lower()
+    if "черновик" in low or "draft" in low or "не отправ" in low or "not submitted" in low:
+        return "draft"
+    return "unknown"
+
+
 async def mark(user_id: int, cmids) -> int:
     """Отметить сданными дедлайны с этими заданиями (cmid). → сколько отмечено."""
     from database import get_active_deadlines, mark_deadline_done
