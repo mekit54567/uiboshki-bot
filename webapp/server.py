@@ -70,6 +70,15 @@ BODY_LIMITS = (("/api/sdo/submit", 90 * 1024 * 1024), ("/api/chat", 16 * 1024 * 
 BODY_LIMIT_DEFAULT = 1024 * 1024
 
 
+def body_limit(path: str) -> int:
+    """Предел тела для пути. /api/v1/… — как /api/…: проверка по
+    Content-Length стоит снаружи ApiV1 и видит путь ещё с /v1 — без этого
+    приложение и PWA упирались в общий 1 МБ при сдаче и фото в чат (аудит 21.10)."""
+    if path.startswith("/api/v1/"):
+        path = "/api/" + path[8:]
+    return next((n for p, n in BODY_LIMITS if path.startswith(p)), BODY_LIMIT_DEFAULT)
+
+
 class BodyLimit:
     """Предел тела запроса по факту прочитанных байт. Заголовка Content-Length
     при Transfer-Encoding: chunked нет — проверка по нему пропускала 50 МБ
@@ -83,7 +92,7 @@ class BodyLimit:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         from starlette.exceptions import HTTPException as StarletteHTTPException
-        limit = next((n for p, n in BODY_LIMITS if scope["path"].startswith(p)), BODY_LIMIT_DEFAULT)
+        limit = body_limit(scope["path"])
         got = 0
 
         async def limited():
@@ -133,8 +142,7 @@ async def security_headers(request: Request, call_next):
     from fastapi.responses import JSONResponse
     length = request.headers.get("content-length")
     if length and length.isdigit():
-        limit = next((n for p, n in BODY_LIMITS if request.url.path.startswith(p)), BODY_LIMIT_DEFAULT)
-        if int(length) > limit:
+        if int(length) > body_limit(request.url.path):
             return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
     started = time.monotonic()
     import timing
