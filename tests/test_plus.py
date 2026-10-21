@@ -495,9 +495,11 @@ def test_offer_contractor_has_npd_status(monkeypatch):
     assert "плательщик налога" not in consent
 
 
-def test_public_plus_page_for_robokassa(client, robokassa):  # noqa: F811
+def test_public_plus_page_for_robokassa(client, robokassa, monkeypatch):  # noqa: F811
     """Robokassa 21.10: на сайте — описание, цены, заказ, оплата, оказание
     услуги, отказ и возврат по шагам, ФИО и ИНН, контакты, политика."""
+    import privacy
+    monkeypatch.setattr(privacy, "CONTACT", "Telegram @Partykq или почта a@b.ru")
     c, _ = client
     r = c.get("/plus")
     assert r.status_code == 200
@@ -506,5 +508,6 @@ def test_public_plus_page_for_robokassa(client, robokassa):  # noqa: F811
                  "Отказ и возврат", "без вычета комиссий", "Иванов Никита", "ИНН 123456789012",
                  "@Partykq", 'href="/privacy"', 'href="/offer"'):
         assert part in page, part
+    assert page.count("a@b.ru") == 2      # по разу в «Отказ и возврат» и «Исполнитель» — не дважды подряд (21.10)
     about = c.get("/about").text
     assert "ИНН 123456789012" in about and 'href="/plus"' in about and "__CONTRACTOR__" not in about

@@ -206,8 +206,7 @@ async def _public() -> HTMLResponse:
         for p in billing.PLANS.values())
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
     bot = f"https://t.me/{escape(config.BOT_USERNAME)}?start=plus"
-    contact = escape(privacy.CONTACT)
-    email = f' или на почту <a href="mailto:{escape(privacy.EMAIL)}">{escape(privacy.EMAIL)}</a>' if privacy.EMAIL else ""
+    contact = escape(privacy.CONTACT)          # уже с почтой, если она задана
     stars = (" В боте Telegram можно оплатить и звёздами Telegram (Stars) — цена в звёздах выше, в неё входит "
              "комиссия Telegram." if billing.stars_on() else "")
     return _page(
@@ -236,7 +235,7 @@ async def _public() -> HTMLResponse:
         '<h2>Отказ и возврат</h2>'
         '<p>Отказаться можно до оплаты — просто не оплачивать: заказ без оплаты ни к чему не обязывает. '
         'После оплаты — в любой момент срока:</p><ol>'
-        f'<li>Напиши {contact}{email}: «Хочу вернуть деньги за Капибару+» и дату оплаты '
+        f'<li>Напиши {contact}: «Хочу вернуть деньги за Капибару+» и дату оплаты '
         '(или номер платежа из чека).</li>'
         '<li>Ответим и рассмотрим заявку в течение 10 рабочих дней.</li>'
         '<li>В течение 14 дней после оплаты, если функциями «Капибара+» не пользовался, — возвращаем всю '
@@ -245,7 +244,7 @@ async def _public() -> HTMLResponse:
         '1–10 рабочих дней после решения — срок зачисления зависит от банка. Сумма возвращается без '
         'вычета комиссий платёжного сервиса и банка. Подписка при возврате отключается.</li></ol>'
         '<h2>Исполнитель и контакты</h2>'
-        f'<p>{escape(privacy.contractor())}.<br>Связь: {contact}{email}.</p>'
+        f'<p>{escape(privacy.contractor())}.<br>Связь: {contact}.</p>'
         '<p><a href="/offer">Оферта</a> · <a href="/privacy">Политика обработки персональных данных</a> · '
         f'<a href="{bot}">Открыть бота</a> · <a href="/app">Открыть приложение</a></p>',
         title="Капибара+ — тарифы и условия")
