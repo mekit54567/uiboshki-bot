@@ -217,7 +217,7 @@ async def test_erase_removes_grants(db, bot, monkeypatch):  # noqa: F811
 async def test_plus_for_unlimited_has_no_prices_or_pay(db, bot, monkeypatch):  # noqa: F811
     # робот 18.10: у безлимита /plus показывал цены и «Оплатить на сайте»
     from handlers.plus import plus_text
-    monkeypatch.setattr(billing, "provider", lambda configured_only=False: "yookassa")
+    monkeypatch.setattr(billing, "provider", lambda configured_only=False, uid=None: "yookassa")
     await db.upsert_user(ME, "vasya", "Вася")
     text, kb = await plus_text(ME)
     assert "₽" in text and any("Оплатить" in b.text for row in kb.inline_keyboard for b in row)

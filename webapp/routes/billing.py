@@ -53,7 +53,7 @@ async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
     import billing
     if x_app == "ios":
         return {"hidden": True}
-    return {"hidden": False, "url": billing.donate_link(user["id"]) if billing.provider() else "",
+    return {"hidden": False, "url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "",
             "amounts": list(billing.DONATE_AMOUNTS), "min": billing.DONATE_MIN, "max": billing.DONATE_MAX,
             "note": DONATE_NOTE, "offer_url": f"{billing.site()}/offer"}
 
@@ -68,7 +68,7 @@ async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default=""))
         return {"hidden": True}
     if not await roadmap.can_see(user["id"]):
         return {"hidden": False, "locked": True,
-                "donate_url": billing.donate_link(user["id"]) if billing.provider() else "", "min": billing.DONATE_MIN}
+                "donate_url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "", "min": billing.DONATE_MIN}
     return {"hidden": False, "locked": False, "page_url": roadmap.page_link(user["id"]),
             **await roadmap.with_links(roadmap.load())}
 
@@ -313,7 +313,7 @@ async def donate_page(k: str = ""):
             'Деньги идут на сервер, ИИ и время на новые функции.</p>')
     note = (f'<p class="state"><b>{DONATE_NOTE}</b> Расписание, дедлайны, баллы и файлы остаются '
             'бесплатными, «Капибара+» — отдельно, дней подписки донат не даёт.</p>')
-    if not billing.provider():
+    if not billing.provider(uid=uid):
         return _donate_page(lead + note + '<p class="state">Поддержать можно будет совсем скоро — оплата ещё '
                                           'подключается.</p>')
     return _donate_page(
@@ -420,5 +420,9 @@ async def robokassa_hook(request: Request):
     if not enough:
         logger.warning(f"Robokassa: платёж {inv} не наш или сумма {out_sum} не та")
         raise HTTPException(400, "bad payment")
+    if (q.get("IsTest") == "1" or billing.test_mode()) and not config.is_starosta(pay["payer_id"] or 0):
+        # тестовый платёж (денег нет) засчитывается только Никите — 21.10
+        logger.warning(f"Robokassa: тестовый платёж {inv} не от Никиты — не засчитан")
+        raise HTTPException(400, "test payment")
     await billing.settle(inv, deps.tg_bot() if deps.BOT_TOKEN else None)
     return PlainTextResponse(f"OK{inv}")

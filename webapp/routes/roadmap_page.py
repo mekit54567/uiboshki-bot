@@ -112,7 +112,7 @@ async def roadmap_page(k: str = ""):
                        f'<a class="btn" href="https://t.me/{escape(config.BOT_USERNAME)}?start=roadmap">Открыть бота</a></p>',
                      status=403)
     if not await roadmap.can_see(uid):
-        url = billing.donate_link(uid) if billing.provider() else ""
+        url = billing.donate_link(uid) if billing.provider(uid=uid) else ""
         btn = (f'<a class="btn" href="{escape(url)}">Поддержать проект</a>' if url
                else '<span class="note">Поддержать можно будет совсем скоро — оплата ещё подключается.</span>')
         return _page(_head("Роадмап", "Что я делаю сейчас и что дальше")

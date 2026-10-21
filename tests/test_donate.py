@@ -302,3 +302,33 @@ def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811
     assert q["SignatureValue"] == want.hexdigest()
     plain = {k: v[0] for k, v in parse_qs(urlparse(billing.robokassa_url(7, 300, "x")).query).items()}
     assert "SuccessUrl2" not in plain and plain["SignatureValue"] == hashlib.md5(b"shop:300.00:7:p1").hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_robokassa_test_mode_only_for_nikita(db, bot, client, monkeypatch, robokassa):  # noqa: F811
+    """21.10: тестовый режим Robokassa (ROBOKASSA_TEST=1) реально давал «Капибару+» —
+    любой мог набрать её бесплатно. Теперь касса в тесте открыта только Никите,
+    а тестовое уведомление за чужой платёж сервер не засчитывает."""
+    c, _ = client
+    monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
+    monkeypatch.setattr(billing, "ROBOKASSA_TEST", True)
+    await db.upsert_user(ME, "", "u")
+    assert billing.provider(uid=ME) == "" and billing.provider(uid=STAROSTA_ID) == "robokassa"
+    assert not (await billing.status(ME))["provider"]
+    with pytest.raises(billing.PayError):
+        await billing.create(ME, "month", "https://x")
+    with pytest.raises(billing.PayError):
+        await billing.create_donation(ME, 100, "https://x")
+    assert "оплата ещё подключается" in c.get(f"/donate?k={billing.make_key(ME)}").text
+    assert (await billing.create(STAROSTA_ID, "month", "https://x")).startswith(billing.ROBOKASSA_URL)
+
+    # платёж, созданный до теста (или подделанный), тестовым уведомлением не засчитывается
+    monkeypatch.setattr(billing, "ROBOKASSA_TEST", False)
+    inv = parse_qs(urlparse(await billing.create(ME, "month", "https://x")).query)["InvId"][0]
+    out_sum = (await billing._payment(inv))["amount"]
+    out_sum = f"{out_sum}.00"
+    sig = hashlib.md5(f"{out_sum}:{inv}:p2".encode()).hexdigest()
+    r = c.post("/api/billing/robokassa", data={"OutSum": out_sum, "InvId": inv, "SignatureValue": sig, "IsTest": "1"})
+    assert r.status_code == 400 and not (await billing.status(ME))["active"]
+    r = c.post("/api/billing/robokassa", data={"OutSum": out_sum, "InvId": inv, "SignatureValue": sig})
+    assert r.text == f"OK{inv}" and (await billing.status(ME))["active"]          # боевой — как раньше
