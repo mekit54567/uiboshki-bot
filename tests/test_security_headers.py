@@ -33,6 +33,28 @@ def test_body_limits(client):
     assert r.status_code != 413
 
 
+@pytest.mark.parametrize("path", ["/api/v1/sdo/submit", "/api/v1/chat"])
+def test_body_limits_api_v1(client, path):
+    """Приложение и PWA ходят по /api/v1: файл больше 1 МБ — не 413 (аудит 21.10, R1)."""
+    c, h = client
+    big = "x" * (2 * 1024 * 1024)
+    r = c.post(path, content='{"files": "' + big + '"}', headers={**h, "Content-Type": "application/json"})
+    assert r.status_code != 413
+    # настоящее превышение и на /api/v1 — 413
+    huge = "x" * (17 * 1024 * 1024)
+    r = c.post("/api/v1/chat", content='{"text": "' + huge + '"}', headers={**h, "Content-Type": "application/json"})
+    assert r.status_code == 413
+    r = c.post("/api/v1/deadlines", content='{"subject": "' + big + '"}', headers={**h, "Content-Type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_body_limit_paths():
+    from webapp.server import body_limit, BODY_LIMIT_DEFAULT
+    assert body_limit("/api/v1/sdo/submit") == body_limit("/api/sdo/submit") > BODY_LIMIT_DEFAULT
+    assert body_limit("/api/v1/chat") == body_limit("/api/chat") > BODY_LIMIT_DEFAULT
+    assert body_limit("/api/v1/me") == BODY_LIMIT_DEFAULT
+
+
 def test_deadline_rate_limit(client):
     c, h = client
     codes = [c.post("/api/deadlines", json={"subject": f"д{i}", "due_date": "2099-01-01"}, headers=h).status_code
