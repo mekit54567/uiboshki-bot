@@ -61,6 +61,7 @@ Api fakeApi({
         ],
       },
       '/api/auth/vk/start' => {'url': 'https://id.vk.com/authorize?state=s1'},
+      '/api/auth/exchange' => {'token': 'tok-xyz'},
       '/api/auth/review' => {'status': 'ok', 'token': 'rv.demo'},
       '/api/auth/apple' => {'status': 'ok', 'token': 'apple-tok'},
       '/api/sdo/submit-rules' => {

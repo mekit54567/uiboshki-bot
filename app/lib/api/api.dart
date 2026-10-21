@@ -1,7 +1,9 @@
 // Клиент API бота (/api/v1, этап 2): вход через бота, токен сессии устройства.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +42,10 @@ String errorText(Object e) {
   if (e is FormatException) return ApiError.server(200).message;
   return 'Что-то пошло не так — попробуй ещё раз.';
 }
+
+/// PKCE S256: base64url(SHA-256(verifier)) без «=» — как oauth._challenge на сервере.
+String oauthChallenge(String verifier) =>
+    base64Url.encode(sha256.convert(utf8.encode(verifier)).bytes).replaceAll('=', '');
 
 class Api {
   /// Адрес сервера; пустой — тот же сайт (сборка web со стенда).
@@ -262,16 +268,40 @@ class Api {
     await saveToken(r['token'] as String);
   }
 
-  /// Ссылка на вход у провайдера; вернётся он на ru.uiboshki.app://auth#token=…
-  /// (client 'web' — PWA: на /app#token=…).
-  Future<String> startOAuth(String provider, {String client = 'app'}) async =>
-      (await post('/auth/$provider/start', {'client': client}))['url'] as String;
+  /// Секрет начатого входа VK/Яндекс: сервер знает только его SHA-256, и в
+  /// ru.uiboshki.app://auth вернёт одноразовый код, а не токен — чужое
+  /// приложение с той же схемой код перехватит, но не обменяет (аудит 21.10, R8).
+  String? _oauthVerifier;
 
-  /// Адрес возврата → токен (сохраняется); null — токена нет.
+  /// Ссылка на вход у провайдера; вернётся он на ru.uiboshki.app://auth#code=…
+  /// (client 'web' — PWA: на /app#token=…).
+  Future<String> startOAuth(String provider, {String client = 'app'}) async {
+    final body = <String, Object?>{'client': client};
+    if (client == 'app') {
+      final rnd = math.Random.secure();
+      final verifier = base64Url.encode(List.generate(48, (_) => rnd.nextInt(256))).replaceAll('=', '');
+      _oauthVerifier = verifier;
+      body['challenge'] = oauthChallenge(verifier);
+    }
+    return (await post('/auth/$provider/start', body))['url'] as String;
+  }
+
+  /// Адрес возврата → токен (сохраняется); null — токена нет. #code= — обмен
+  /// кода на токен по секрету; #token= — сервер старше этой версии.
   Future<String?> finishOAuth(String callbackUrl) async {
     final frag = Uri.parse(callbackUrl).fragment;
-    if (!frag.startsWith('token=')) return null;
-    final token = Uri.decodeComponent(frag.substring(6));
+    String token;
+    if (frag.startsWith('code=')) {
+      final verifier = _oauthVerifier;
+      _oauthVerifier = null;
+      if (verifier == null) return null;
+      final r = await post('/auth/exchange', {'code': Uri.decodeComponent(frag.substring(5)), 'verifier': verifier});
+      token = r['token'] as String;
+    } else if (frag.startsWith('token=')) {
+      token = Uri.decodeComponent(frag.substring(6));
+    } else {
+      return null;
+    }
     await saveToken(token);
     return token;
   }

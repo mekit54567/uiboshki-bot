@@ -11,6 +11,8 @@ PWA и будущее нативное приложение. Telegram в Рос�
 «Ещё → Устройства»: список входов, выйти на одном или везде.
 """
 
+import re
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -177,22 +179,33 @@ async def auth_providers():
 
 class OAuthStart(BaseModel):
     client: str = "web"          # web — PWA в браузере, html — PWA на HTML (/app-html/), app — своё приложение
+    # своё приложение: S256 от секрета, который знает только оно (аудит 21.10, R8).
+    # Тогда в ru.uiboshki.app://auth уходит не токен, а одноразовый код — чужое
+    # приложение с той же схемой его перехватит, но без секрета не обменяет.
+    challenge: str = ""
 
 
-async def _oauth_start(provider: str, request: Request, client: str, link_user: int | None) -> dict:
+CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
+
+
+async def _oauth_start(provider: str, request: Request, client: str, link_user: int | None,
+                       challenge: str = "") -> dict:
     import oauth
     import ratelimit
     from database.identities import new_state
     if not ratelimit.allow("auth_start", _client_ip(request)):
         raise HTTPException(429, "Слишком много попыток — подожди минуту")
     verifier = oauth.new_verifier()
-    state = await new_state(provider, verifier, "", client if client in ("web", "html", "app") else "web", link_user)
+    if challenge and not CHALLENGE_RE.match(challenge):
+        raise HTTPException(400, "Неверный challenge")
+    state = await new_state(provider, verifier, challenge, client if client in ("web", "html", "app") else "web",
+                            link_user)
     return {"url": oauth.authorize_url(provider, state, verifier, _redirect_uri(request, provider))}
 
 
 @router.post("/api/auth/{provider}/start")
 async def auth_oauth_start(provider: str, body: OAuthStart, request: Request):
-    return await _oauth_start(_provider(provider), request, body.client, None)
+    return await _oauth_start(_provider(provider), request, body.client, None, body.challenge)
 
 
 @router.post("/api/auth/{provider}/link")
@@ -239,10 +252,40 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
         await link(provider, subject, owner, name)
     elif name and not (await get_user(owner) or {}).get("full_name"):
         await upsert_user(owner, "", name)
-    token = await create_session(owner, f"{_device(request)} · {oauth.NAMES[provider]}")
+    device = f"{_device(request)} · {oauth.NAMES[provider]}"
+    if st["client"] == "app" and st["code"]:
+        # приложение с секретом: в ссылку — одноразовый код, токен — по /api/auth/exchange
+        handoff = await new_state(provider, device, st["code"], "handoff", owner)
+        return RedirectResponse(f"{APP_RETURN}#code={handoff}", status_code=303)
+    token = await create_session(owner, device)
     # PWA на HTML — назад туда же, где начали вход (пока /app — прежняя сборка)
     target = {"app": APP_RETURN, "html": "/app-html/"}.get(st["client"], "/app")
     return RedirectResponse(f"{target}#token={token}", status_code=303)
+
+
+class OAuthExchange(BaseModel):
+    code: str
+    verifier: str
+
+
+@router.post("/api/auth/exchange")
+async def auth_oauth_exchange(body: OAuthExchange, request: Request):
+    """Одноразовый код из ru.uiboshki.app://auth#code=… + секрет приложения →
+    токен сессии (как PKCE, RFC 7636/8252). Код живёт 10 минут и сгорает
+    после первой попытки — верной или нет."""
+    import hmac
+
+    import oauth
+    import ratelimit
+    from database.identities import take_state
+    from database.sessions import create_session
+    if not ratelimit.allow("auth_start", _client_ip(request)):
+        raise HTTPException(429, "Слишком много попыток — подожди минуту")
+    st = await take_state(body.code[:64])
+    if (not st or st["client"] != "handoff" or not st["link_user"]
+            or not hmac.compare_digest(oauth._challenge(body.verifier[:200]), st["code"] or "")):
+        raise HTTPException(400, "Вход не подтверждён — начни ещё раз")
+    return {"token": await create_session(st["link_user"], st["verifier"])}
 
 
 @router.post("/api/auth/{provider}/confirm")

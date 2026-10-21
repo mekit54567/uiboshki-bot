@@ -133,3 +133,33 @@ def test_cancel_and_stale(db, client, keys):  # noqa: F811
     state, _ = _start(client)
     assert "отменён" in client.get(f"/api/auth/vk/callback?error=access_denied&state={state}").text
     assert client.get("/api/auth/vk/callback?code=good&state=чужой").status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_app_gets_one_time_code_not_token(db, client, keys):  # noqa: F811
+    """Своё приложение с challenge: в ru.uiboshki.app://auth — одноразовый код,
+    токен — только в обмен на секрет приложения (аудит 21.10, R8, RFC 8252)."""
+    verifier = oauth.new_verifier()
+    res = client.post("/api/auth/vk/start", json={"client": "app", "challenge": oauth._challenge(verifier)})
+    state = parse_qs(urlsplit(res.json()["url"]).query)["state"][0]
+    res = client.get(f"/api/auth/vk/callback?code=good&state={state}", follow_redirects=False)
+    loc = res.headers["location"]
+    assert loc.startswith("ru.uiboshki.app://auth#code=") and "token" not in loc
+    code = loc.split("#code=", 1)[1]
+    # перехватчик ссылки без секрета — мимо, и код сгорел
+    assert client.post("/api/auth/exchange", json={"code": code, "verifier": "чужой"}).status_code == 400
+    assert client.post("/api/auth/exchange", json={"code": code, "verifier": verifier}).status_code == 400
+
+    res = client.post("/api/v1/auth/vk/start", json={"client": "app", "challenge": oauth._challenge(verifier)})
+    state = parse_qs(urlsplit(res.json()["url"]).query)["state"][0]
+    code = client.get(f"/api/auth/vk/callback?code=good&state={state}",
+                      follow_redirects=False).headers["location"].split("#code=", 1)[1]
+    r = client.post("/api/v1/auth/exchange", json={"code": code, "verifier": verifier})
+    assert r.status_code == 200
+    me = client.get("/api/me", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()
+    assert me["first_name"] == "Аня"
+    assert client.post("/api/auth/exchange", json={"code": code, "verifier": verifier}).status_code == 400  # один раз
+    # код входа — не код обмена: state начатого входа на обмен не годится
+    state, _ = _start(client, client_kind="app")
+    assert client.post("/api/auth/exchange", json={"code": state, "verifier": verifier}).status_code == 400
+    assert client.post("/api/auth/vk/start", json={"client": "app", "challenge": "коротко"}).status_code == 400
