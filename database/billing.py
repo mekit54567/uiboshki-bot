@@ -20,6 +20,19 @@ async def add_payment(pid: str, provider: str, payer_id: int, plan: str, amount:
         await db.commit()
 
 
+async def set_payment_stars(pid: str, stars: int):
+    async with connect() as db:
+        await db.execute("UPDATE payments SET stars = ? WHERE id = ?", (stars, pid))
+        await db.commit()
+
+
+async def set_payment_charge(pid: str, charge_id: str):
+    """Номер списания Telegram Stars — по нему делается возврат."""
+    async with connect() as db:
+        await db.execute("UPDATE payments SET charge_id = ? WHERE id = ?", (charge_id, pid))
+        await db.commit()
+
+
 async def get_payment(pid: str) -> dict | None:
     async with connect() as db:
         db.row_factory = aiosqlite.Row

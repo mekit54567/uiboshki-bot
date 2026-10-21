@@ -2,8 +2,9 @@
 
 Покупка — только на сайте: бот, Mini App, PWA и Android-приложение
 открывают /plus по личной ссылке (подписана, вход не нужен); в iOS-сборке
-подписки не видно вовсе (правила App Store вне США, 3.1.1 и 3.1.3). В Telegram счёт не выставляем: цифровое
-внутри бота — только Stars (правила Telegram), а Stars Никита не хочет.
+подписки не видно вовсе (правила App Store вне США, 3.1.1 и 3.1.3). В самом
+боте — ещё и счёт в звёздах Telegram (Stars: цифровое внутри Telegram — только
+они), дороже рублей на STARS_MARKUP (Никита 21.10: +55 % — комиссия Telegram).
 
 Касса — та, ключи которой заданы: ЮKassa (YOOKASSA_SHOP_ID +
 YOOKASSA_SECRET_KEY) или Robokassa (ROBOKASSA_LOGIN + ROBOKASSA_PASS1 +
@@ -57,6 +58,9 @@ DONATE_AMOUNTS = (100, 300, 500)      # «Поддержать проект»: �
 DONATE_MIN = 50
 DONATE_MAX = 15000
 DONATE_TITLE = "Добровольная поддержка проекта «Капибара»"   # позиция в кассе и в чеке «Мой налог»
+
+STARS_RUB = float(os.getenv("STARS_RUB", "1.8") or 0)       # сколько ₽ платят за звезду; 0 — без Stars
+STARS_MARKUP = float(os.getenv("STARS_MARKUP", "1.55") or 1)  # в звёздах дороже рублей (комиссия Telegram)
 
 LINK_TTL = 24 * 3600                  # личная ссылка на /plus живёт сутки
 YOOKASSA_API = "https://api.yookassa.ru/v3"
@@ -252,6 +256,61 @@ async def create(uid: int, plan: str, return_url: str) -> str:
     inv = await _new_inv_id()
     await add_payment(str(inv), "robokassa", uid, plan, price, days)
     return robokassa_url(inv, price, title, return_url)
+
+
+def stars_on() -> bool:
+    """Оплата звёздами в боте: курс задан и есть реквизиты исполнителя (как у кассы)."""
+    return STARS_RUB > 0 and not missing_requisites()
+
+
+def stars_price(rub: int) -> int:
+    """Цена в звёздах: рубли × STARS_MARKUP по курсу STARS_RUB, вверх до целой звезды."""
+    import math
+    return max(1, math.ceil(round(rub * STARS_MARKUP / STARS_RUB, 6)))
+
+
+async def stars_invoice(uid: int, plan: str) -> dict:
+    """Платёж звёздами: запись в payments (provider stars, amount — цена в
+    рублях, по ней же метка Early Supporter) → поля счёта Telegram."""
+    from database.billing import add_payment, set_payment_stars
+    if not stars_on():
+        raise PayError("оплата звёздами выключена")
+    if plan not in PLANS:
+        raise PayError("нет такого тарифа")
+    price = next(p["price"] for p in await prices(uid) if p["plan"] == plan)
+    days = PLANS[plan]["days"]
+    stars = stars_price(price)
+    pid = f"stars-{uuid.uuid4().hex}"
+    await add_payment(pid, "stars", uid, plan, price, days)
+    await set_payment_stars(pid, stars)
+    return {"payload": pid, "stars": stars, "days": days,
+            "title": f"Капибара+ · {PLANS[plan]['title'].lower()}",
+            "description": f"Подписка «Капибара+» на {days} дней (июль и август не считаются). "
+                           "Без автосписаний."}
+
+
+async def stars_check(pid: str, uid: int, total: int, currency: str) -> str:
+    """Перед списанием (pre_checkout_query): '' — можно, иначе причина."""
+    from database.billing import get_payment
+    pay = await get_payment(pid)
+    if not pay or pay["provider"] != "stars" or pay["payer_id"] != uid:
+        return "Счёт не найден — открой /plus заново."
+    if pay["status"] != "pending":
+        return "Этот счёт уже оплачен — открой /plus заново."
+    if currency != "XTR" or total != pay["stars"]:
+        return "Цена изменилась — открой /plus заново."
+    return ""
+
+
+async def stars_paid(pid: str, uid: int, charge_id: str, bot=None) -> bool:
+    """Telegram списал звёзды: запомнить номер списания и продлить подписку."""
+    from database.billing import get_payment, set_payment_charge
+    pay = await get_payment(pid)
+    if not pay or pay["provider"] != "stars" or pay["payer_id"] != uid:
+        logger.warning(f"Stars: оплата {pid} не найдена или чужая ({uid})")
+        return False
+    await set_payment_charge(pid, charge_id)
+    return await paid(pid, bot)
 
 
 def donate_amount(value) -> int:

@@ -683,6 +683,13 @@ async def init_db():
                 paid_at    TEXT
             )
         """)
+        # Оплата звёздами Telegram (billing.stars_…, 5.115): сколько звёзд и
+        # номер списания Telegram — для возврата (refundStarPayment).
+        for col in ("stars INTEGER", "charge_id TEXT"):
+            try:
+                await db.execute(f"ALTER TABLE payments ADD COLUMN {col}")
+            except Exception:
+                pass  # колонка уже есть
         # «Поддержать проект» (billing.donate…): добровольные платежи — не
         # подписка, дней не дают; как и payments, после «удалить мои данные»
         # остаются без человека (payer_id NULL) — налоговый учёт.
