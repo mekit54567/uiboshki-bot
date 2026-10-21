@@ -362,7 +362,7 @@ function dlReadFile(file) {
  *  replace — «Редактировать ответ». → true — сдано. */
 function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
   return Sheet.show(`<div class="dl-sub"></div>`, (body, close) => {
-    let rules = null, error = null, done = null, sending = false;
+    let rules = null, error = null, done = null, doneState = "submitted", sending = false;
     const files = [];   // {f, why}
     const d2 = Theme.design2;
     const good = () => files.filter((e) => !e.why).map((e) => e.f);
@@ -382,11 +382,18 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
     const draw = () => {
       const box = body.querySelector(".dl-sub");
       if (done != null) {
-        box.innerHTML = `<div class="dl-donebox"><div class="dl-hop">${capy("joy", 104, "var(--ok)")}
-          <span class="dl-hopcheck">${icon("check", "", "font-size:22px")}</span></div>
-          <div class="ttl" style="--sz:28px;margin-top:var(--l)">Сдано</div>
-          <div class="bd mut" style="--sz:14px;margin-top:var(--s);text-align:center">${esc(done)}</div>
-          <button class="btn dl-okbtn" data-act="close">Отлично</button></div>`;
+        // «Сдано» — только когда СДО подтвердил отправку (аудит 21.10, R5), как в приложении
+        const ok = doneState === "submitted", draft = doneState === "draft";
+        const col = ok ? "var(--ok)" : draft ? "var(--warn)" : "var(--accent)";
+        const ttl = ok ? "Сдано" : draft ? "Сохранено черновиком" : "Файл в СДО";
+        const hint = ok ? done : draft
+          ? `На проверку ещё не отправлено — открой задание в СДО и нажми «Отправить». Статус: ${done}`
+          : `СДО не подтвердил сдачу — загляни в задание, чтобы убедиться.${done ? ` Статус: ${done}` : ""}`;
+        box.innerHTML = `<div class="dl-donebox"><div class="dl-hop">${capy("joy", 104, col)}
+          <span class="dl-hopcheck" style="background:${col}">${icon(ok ? "check" : "priority_high", "", "font-size:22px")}</span></div>
+          <div class="ttl" style="--sz:28px;margin-top:var(--l);text-align:center">${ttl}</div>
+          <div class="bd mut" style="--sz:14px;margin-top:var(--s);text-align:center">${esc(hint)}</div>
+          <button class="btn dl-okbtn" data-act="close" style="background:${col}">${ok ? "Отлично" : "Понятно"}</button></div>`;
         return;
       }
       const n = good().length;
@@ -441,7 +448,8 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
             files: good().map((f) => ({ name: f.name, data: f.data })) }, 120000);
           try { navigator.vibrate && navigator.vibrate(18); } catch (er) {}
           done = r && typeof r.status === "string" ? r.status : "Отправлено в СДО";
-        } catch (e) { error = e.status ? e.message : "Нет интернета — файл не ушёл."; }
+          doneState = r && typeof r.state === "string" ? r.state : "submitted";
+        } catch (e) { error = e.status ? e.message : "Связь оборвалась — не знаем, дошёл ли файл. Проверь задание в СДО, прежде чем сдавать снова."; }
         sending = false; draw();
       },
     });

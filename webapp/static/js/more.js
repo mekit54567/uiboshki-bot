@@ -397,7 +397,11 @@ function renderSubmit(state, info) {
   const files = submitting.files, n = files.length, lim = submitting.limit;
   const names = files.map(f => f.name).join(", ");
   if (state === "done") {
-    box.innerHTML = '<div class="sub-done"><div class="big">' + icon("checkCircle", "xl ok") + '</div><h3>Отправлено</h3>' +
+    // «Отправлено» — только когда СДО подтвердил (аудит 21.10, R5); старый сервер без state — как раньше
+    const st = (info && info.state) || "submitted";
+    const head = st === "submitted" ? "Отправлено" : st === "draft" ? "Сохранено черновиком — нажми «Отправить» в СДО"
+      : "СДО не подтвердил сдачу — проверь задание";
+    box.innerHTML = '<div class="sub-done"><div class="big">' + icon(st === "submitted" ? "checkCircle" : "warning", "xl" + (st === "submitted" ? " ok" : "")) + '</div><h3>' + head + '</h3>' +
       '<p class="sheet-hint">' + escapeHtml(submitting.item.subject) + ' · ' + escapeHtml(names) +
       (info && info.status ? '<br>Статус в СДО: «' + escapeHtml(info.status) + '»' : '') + '</p>' +
       '<button class="primary" onclick="openLink(' + escapeHtml(JSON.stringify(submitting.item.description)) + ')">Открыть в СДО</button>' +
@@ -467,7 +471,8 @@ async function sendSubmission() {
       files: s.files.map(f => ({ name: f.name, data: f.data })) }) });
     haptic("success");
     if (submitting === s) renderSubmit("done", res);
-    else showToast("✓ «" + s.item.subject + "» сдано");
+    else showToast((res && res.state && res.state !== "submitted" ? "⚠️ «" + s.item.subject + "»: проверь статус в СДО"
+      : "✓ «" + s.item.subject + "» сдано"));
     if (s.item.cmid && typeof refreshTk === "function") refreshTk();
   } catch (e) {
     if (submitting === s) { renderSubmit(); showToast("⚠️ " + e.message); }

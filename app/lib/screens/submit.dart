@@ -121,6 +121,8 @@ class SubmitSheet extends StatefulWidget {
 class _SubmitSheetState extends State<SubmitSheet> {
   SubmitRules? _rules;
   String? _error, _done;
+  // submitted / draft / unknown (сервер, sdo_done.submit_state); старый сервер без state — как раньше
+  String _state = 'submitted';
   // why — почему задание не примет (только в новом дизайне: плохой файл
   // остаётся в списке с причиной, а не отбрасывается молча).
   final _files = <({Picked f, String? why})>[];
@@ -199,11 +201,20 @@ class _SubmitSheetState extends State<SubmitSheet> {
         ],
       });
       HapticFeedback.mediumImpact();
-      setState(() => _done = (r is Map && r['status'] is String) ? r['status'] as String : 'Отправлено в СДО');
+      if (!mounted) return;
+      setState(() {
+        _done = (r is Map && r['status'] is String) ? r['status'] as String : 'Отправлено в СДО';
+        _state = (r is Map && r['state'] is String) ? r['state'] as String : 'submitted';
+      });
     } on ApiError catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = isOffline(e) ? 'Нет интернета — файл не ушёл.' : errorText(e));
+      // связь могла оборваться уже после сдачи — не пишем «не ушёл» наугад
+      if (mounted) {
+        setState(() => _error = isOffline(e)
+            ? 'Связь оборвалась — не знаем, дошёл ли файл. Проверь задание в СДО, прежде чем сдавать снова.'
+            : errorText(e));
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -224,7 +235,7 @@ class _SubmitSheetState extends State<SubmitSheet> {
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
           child: _done != null
-              ? _Done(status: _done!, onClose: () => Navigator.pop(context, true))
+              ? _Done(status: _done!, state: _state, onClose: () => Navigator.pop(context, true))
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,16 +387,26 @@ class _SubmitSheetState extends State<SubmitSheet> {
   );
 }
 
-/// Сдал — капибара радуется: подпрыгивает, рядом зелёная галочка.
+/// Сдал — капибара радуется: подпрыгивает, рядом зелёная галочка. Зелёное
+/// «Сдано» — только когда СДО подтвердил отправку; черновик и непонятный
+/// ответ — свой заголовок и цвет (аудит 21.10, R5).
 class _Done extends StatelessWidget {
-  final String status;
+  final String status, state;
   final VoidCallback onClose;
-  const _Done({required this.status, required this.onClose});
+  const _Done({required this.status, this.state = 'submitted', required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
+    final ok = state == 'submitted';
+    final color = ok ? p.ok : (state == 'draft' ? p.warn : p.accent);
+    final title = ok ? 'Сдано' : (state == 'draft' ? 'Сохранено черновиком' : 'Файл в СДО');
+    final hint = ok
+        ? status
+        : state == 'draft'
+        ? 'На проверку ещё не отправлено — открой задание в СДО и нажми «Отправить». Статус: $status'
+        : 'СДО не подтвердил сдачу — загляни в задание, чтобы убедиться.${status.isEmpty ? '' : ' Статус: $status'}';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -399,7 +420,7 @@ class _Done extends StatelessWidget {
             height: 112,
             child: Stack(
               children: [
-                CapyHop(size: 104, color: p.ok),
+                CapyHop(size: 104, color: color),
                 Positioned(
                   right: 0,
                   bottom: 0,
@@ -407,11 +428,12 @@ class _Done extends StatelessWidget {
                     width: 38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: p.ok,
+                      color: color,
                       shape: BoxShape.circle,
                       border: Border.all(color: p.cardSolid, width: 3),
                     ),
-                    child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
+                    child: Icon(ok ? Icons.check_rounded : Icons.priority_high_rounded,
+                        color: state == 'unknown' ? p.onAccent : Colors.white, size: 22),
                   ),
                 ),
               ],
@@ -419,10 +441,10 @@ class _Done extends StatelessWidget {
           ),
         ),
         const SizedBox(height: Space.l),
-        Text('Сдано', style: s.title(28)),
+        Text(title, textAlign: TextAlign.center, style: s.title(28)),
         const SizedBox(height: Space.s),
         Text(
-          status,
+          hint,
           textAlign: TextAlign.center,
           style: s.body(14, color: p.muted),
         ),
@@ -431,12 +453,12 @@ class _Done extends StatelessWidget {
           width: double.infinity,
           child: FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: p.ok,
-              foregroundColor: Colors.white,
+              backgroundColor: color,
+              foregroundColor: state == 'unknown' ? p.onAccent : Colors.white,
               shape: const StadiumBorder(),
             ),
             onPressed: onClose,
-            child: const Text('Отлично'),
+            child: Text(ok ? 'Отлично' : 'Понятно'),
           ),
         ),
       ],

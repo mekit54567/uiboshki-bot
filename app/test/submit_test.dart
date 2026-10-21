@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/screens/submit.dart';
 import 'package:uiboshki/theme/app_theme.dart';
 
@@ -68,5 +69,87 @@ void main() {
     ]);
     expect(find.text('Сдано'), findsOneWidget);
     expect(find.text('Отправлено для оценивания'), findsOneWidget);
+  });
+
+  // «Сдано» — только когда СДО подтвердил отправку (аудит 21.10, R5)
+  Future<void> sendZip(WidgetTester t, Api api) async {
+    Future<List<Picked>> pick(List<String> accepted) async => [
+      (name: 'отчёт.zip', bytes: Uint8List.fromList([3, 4, 5])),
+    ];
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SubmitSheet(api: api, title: 'Практика 3', deadlineId: 7, pick: pick),
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('Выбрать файл'));
+    await settle(t);
+    await t.tap(find.text('Сдать'));
+    await settle(t);
+  }
+
+  testWidgets('черновик в СДО — не «Сдано»', (t) async {
+    phone(t);
+    await sendZip(
+      t,
+      fakeApi(
+        overrides: {
+          'POST /api/sdo/submit': {'status': 'Черновик (не отправлено)', 'state': 'draft'},
+        },
+      ),
+    );
+    expect(find.text('Сдано'), findsNothing);
+    expect(find.text('Сохранено черновиком'), findsOneWidget);
+    expect(find.textContaining('нажми «Отправить»'), findsOneWidget);
+  });
+
+  testWidgets('непонятный ответ СДО — не «Сдано»', (t) async {
+    phone(t);
+    await sendZip(
+      t,
+      fakeApi(
+        overrides: {
+          'POST /api/sdo/submit': {'status': '', 'state': 'unknown'},
+        },
+      ),
+    );
+    expect(find.text('Сдано'), findsNothing);
+    expect(find.text('Файл в СДО'), findsOneWidget);
+    expect(find.textContaining('не подтвердил'), findsOneWidget);
+  });
+
+  testWidgets('связь оборвалась во время сдачи — не «файл не ушёл»', (t) async {
+    phone(t);
+    var off = false;
+    final api = fakeApi(offline: () => off);
+    Future<List<Picked>> pick(List<String> accepted) async => [
+      (name: 'отчёт.zip', bytes: Uint8List.fromList([3, 4, 5])),
+    ];
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SubmitSheet(api: api, title: 'Практика 3', deadlineId: 7, pick: pick),
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('Выбрать файл'));
+    await settle(t);
+    off = true;
+    await t.tap(find.text('Сдать'));
+    await settle(t);
+    expect(find.text('Сдано'), findsNothing);
+    expect(find.textContaining('не ушёл'), findsNothing);
+    expect(find.textContaining('не знаем, дошёл ли файл'), findsOneWidget);
   });
 }

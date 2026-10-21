@@ -69,7 +69,7 @@ Api fakeApi({
         'maxfiles': 2,
         'maxbytes': 10485760,
       },
-      '/api/sdo/submit' => {'status': 'Отправлено для оценивания'},
+      '/api/sdo/submit' => {'status': 'Отправлено для оценивания', 'state': 'submitted'},
       '/api/groups/search' => {
         'items': [
           {'id': 5001, 'name': 'УИБО-01-24'},
