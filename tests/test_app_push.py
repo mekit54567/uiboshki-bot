@@ -313,3 +313,42 @@ async def test_logout_everywhere_and_erase_request(db, monkeypatch):
     from database.privacy import request_erase
     await request_erase(uid, "2099-01-01")
     assert await get_app_pushes(uid) == []                                # сразу, не через 7 дней
+
+
+@pytest.mark.asyncio
+async def test_revoked_device_gets_no_pushes(db, monkeypatch):
+    """Два телефона, в «Безопасности» убрали один — пуши (приложения и веб)
+    идут только на оставшийся; истёкшая сессия — тоже без пушей (аудит 21.10, R3)."""
+    from database._conn import connect
+    from database.app_push import get_app_pushes
+    from database.push import get_push_subs
+    from database.sessions import create_session, list_sessions
+    c, _ = _client(monkeypatch)
+    uid = 222
+    old = {"Authorization": "Bearer " + await create_session(uid, "старый телефон")}
+    new = {"Authorization": "Bearer " + await create_session(uid, "новый телефон")}
+    for i, h in enumerate((old, new)):
+        r = c.post("/api/v1/push/app/subscribe", json={"platform": "fcm", "token": f"fcm-token-{i}-1234567890",
+                                                       "key": KEY_B64}, headers=h)
+        assert r.status_code == 200
+        r = c.post("/api/v1/push/subscribe", json={"endpoint": f"https://fcm.googleapis.com/fcm/send/x{i}",
+                                                   "keys": {"p256dh": "p", "auth": "a"}}, headers=h)
+        assert r.status_code == 200
+    await _register(uid, "rustore", "rustore-token-telegram-1234")      # без сессии (как из Mini App) — остаётся
+    assert len(await get_app_pushes(uid)) == 3 and len(await get_push_subs(uid)) == 2
+
+    old_id = next(s["id"] for s in await list_sessions(uid) if s["device"] == "старый телефон")
+    assert c.delete(f"/api/v1/auth/sessions/{old_id}", headers=new).status_code == 200
+    assert sorted(r["token"] for r in await get_app_pushes(uid)) == ["fcm-token-1-1234567890",
+                                                                     "rustore-token-telegram-1234"]
+    assert [s["endpoint"] for s in await get_push_subs(uid)] == ["https://fcm.googleapis.com/fcm/send/x1"]
+    async with connect() as conn:                                   # записи и в базе не осталось
+        assert (await (await conn.execute("SELECT COUNT(*) FROM app_push WHERE token = 'fcm-token-0-1234567890'"))
+                .fetchone())[0] == 0
+
+    # сессия истекла сама — отправка её подписки пропускает
+    async with connect() as conn:
+        await conn.execute("UPDATE sessions SET expires_at = '2000-01-01 00:00:00' WHERE user_id = ?", (uid,))
+        await conn.commit()
+    assert [r["token"] for r in await get_app_pushes(uid)] == ["rustore-token-telegram-1234"]
+    assert await get_push_subs(uid) == []

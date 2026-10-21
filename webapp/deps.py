@@ -20,14 +20,15 @@ async def _session_user(request: Request) -> dict | None:
     if not auth.lower().startswith("bearer "):
         return None
     from database import get_user
-    from database.sessions import session_user
-    uid = await session_user(auth[7:].strip())
-    if not uid:
+    from database.sessions import session_lookup
+    found = await session_lookup(auth[7:].strip())
+    if not found:
         raise HTTPException(status_code=401, detail="сессия закончилась — войди заново")
+    sid, uid = found
     row = await get_user(uid) or {}
     first, _, last = (row.get("full_name") or "").partition(" ")
     return {"id": uid, "first_name": first, "last_name": last, "username": row.get("username") or "",
-            "via": "session"}
+            "via": "session", "session_id": sid}
 
 
 # Что можно до согласия на обработку данных (privacy.blocked): лист согласия

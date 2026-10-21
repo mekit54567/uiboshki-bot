@@ -86,6 +86,12 @@ async def create_session(user_id: int, device: str) -> str:
 
 async def session_user(token: str) -> int | None:
     """Чей токен (и продлить сессию); None — нет, отозван или истёк."""
+    found = await session_lookup(token)
+    return found[1] if found else None
+
+
+async def session_lookup(token: str) -> tuple[int, int] | None:
+    """(id сессии, user_id) по токену (и продлить сессию); None — нет, отозван или истёк."""
     if not token:
         return None
     h = token_hash(token)
@@ -97,7 +103,7 @@ async def session_user(token: str) -> int | None:
     if row[3] < _ts(_now() - timedelta(minutes=10)) and row[0] not in _prolonging:
         _prolonging.add(row[0])                                   # продлеваем не чаще раза в 10 минут,
         await write_later(_prolong(row[0]))                       # и запрос этого не ждёт
-    return row[1]
+    return row[0], row[1]
 
 
 _prolonging: set[int] = set()       # пачка запросов разом — одно продление
@@ -131,5 +137,21 @@ async def revoke_session(user_id: int, session_id: int | None = None, token: str
         sql, args = sql + " AND token_hash = ?", args + [token_hash(token)]
     async with connect() as db:
         cur = await db.execute(sql, args)
+        # пуши отозванных устройств — тоже: ключ расшифровки у телефона остаётся,
+        # пока там не открыли приложение (аудит 21.10, R3)
+        for table in ("push_subs", "app_push"):
+            await db.execute(f"DELETE FROM {table} WHERE user_id = ? AND session_id IN "
+                             "(SELECT id FROM sessions WHERE user_id = ? AND revoked = 1)", (user_id, user_id))
         await db.commit()
         return cur.rowcount
+
+
+# Подписка на пуш живёт, пока жива её сессия (NULL — Mini App в Telegram или
+# подписка старше колонки session_id). Отправка проверяет это ещё раз: сессия
+# могла истечь сама.
+LIVE_SESSION_SQL = ("(session_id IS NULL OR session_id IN "
+                    "(SELECT id FROM sessions WHERE revoked = 0 AND expires_at >= ?))")
+
+
+def live_now() -> str:
+    return _ts(_now())
