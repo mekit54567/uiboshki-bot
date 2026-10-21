@@ -276,7 +276,7 @@ async def api_week(start: str, user: dict = CurrentUser):
 # собирается — пробуем официальный, иначе честно говорим «ещё собирается».
 
 @router.get("/api/search")
-async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
+async def api_search(q: str = "", type: int = 0, subject: str = "", user: dict = CurrentUser):
     import schedule_index
     from mirea_schedule_api import _official_search
     types = (type,) if type in schedule_index.TYPES else schedule_index.TYPES
@@ -288,9 +288,11 @@ async def api_search(q: str = "", type: int = 0, user: dict = CurrentUser):
     if items:
         from mirea_schedule_api import add_hints_for_namesakes
         hinted = await add_hints_for_namesakes(
-            [{"id": i["id"], "fullTitle": i["title"], "scheduleTarget": i["type"]} for i in items])
+            [{"id": i["id"], "fullTitle": i["title"], "scheduleTarget": i["type"]} for i in items],
+            subject=subject[:200])
         items = [{"type": h["scheduleTarget"], "id": h["id"], "title": h["fullTitle"],
-                  **({"hint": h["hint"]} if h.get("hint") else {})} for h in hinted]
+                  **({"hint": h["hint"]} if h.get("hint") else {}),
+                  **({"match": True} if h.get("match") else {})} for h in hinted]
     if not items and not ready:
         for t in types:
             try:

@@ -150,7 +150,14 @@ function openChat() {
       const cite = (n) => (cites[n] ? `<span class="ch-cite" role="button" aria-label="Источник ${n}" data-act="src" data-k="${srcRef(cites[n])}">${n}</span>` : null);
       const text = m.html ? flTgHtml(m.html, { cite }) : Object.keys(cites).length ? flCiteText(m.content, cite) : esc(m.content);
       let h = `<div class="bd tg${m.error ? " ch-err" : ""}" style="--sz:15px">${text}</div>`;
-      if (m.choose.length) {
+      // ошибка последним сообщением — «Повторить» (тот же вопрос ещё раз)
+      if (m.error && mi === log.length - 1 && !waiting) {
+        h += `<div class="ch-chips" style="padding:var(--s) 0 0"><button class="ch-chip pick" data-act="retry">${icon("refresh", "", "font-size:16px;color:var(--accent)")}<span>Повторить</span></button></div>`;
+      }
+      // выбрали предмет — список сворачивается в одну строку (Никита 21.10)
+      if (m.chosen) {
+        h += `<div class="ch-chosen bd" style="--sz:14px;font-weight:600;padding:var(--s) 0 0">${icon("check_circle", "", "font-size:18px;color:var(--accent)")} ${esc(m.chosen)}</div>`;
+      } else if (m.choose.length) {
         h += `<div class="ch-chips" style="padding:var(--s) 0 0">${m.choose.map((c, i) =>
           `<button class="ch-chip pick" data-act="choose" data-m="${mi}" data-k="${i}">${esc(c)}</button>`).join("")}</div>`;
       }
@@ -270,6 +277,8 @@ function openChat() {
         Ach.unlock("ai");
         takeThink(r);
         if (typeof r.file_text === "string") entry.fileText = r.file_text;
+        // «завтра МБП …» — сервер узнал предмет по сокращению: переключаем шапку
+        if (typeof r.subject === "string" && r.subject && l === log) { subject = r.subject; drawTop(); }
         answer = answerOf(r, true);
         if (answer.choose.length) chooseAtt = a;   // выберет предмет — вложение уйдёт ещё раз
         else entry.deep = false;
@@ -440,10 +449,19 @@ function openChat() {
       newchat: newChat,
       subject: pickSubject,
       suggest: (b) => { input.value = CH_SUGGEST[+b.dataset.k]; send(); },
+      retry: () => {
+        if (waiting || !log.length || !log[log.length - 1].error) return;
+        tick();
+        log.pop();
+        const lastQ = [...log].reverse().find((x) => x.role === "user");
+        if (lastQ) send(lastQ.content, null); else draw();
+      },
       choose: (b) => {
+        if (waiting) return;
         tick();
         const m = log[+b.dataset.m], subj = m.choose[+b.dataset.k];
         subject = subj;
+        m.chosen = subj;
         const lastQ = [...log].reverse().find((x) => x.role === "user");
         send(lastQ.content, chooseAtt);
       },

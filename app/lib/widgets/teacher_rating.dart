@@ -114,30 +114,52 @@ class _TeacherRatingLineState extends State<TeacherRatingLine> {
         ? '${_num(avg)} · $n ${plural(n, 'оценка', 'оценки', 'оценок')}'
         : mine != null
         ? 'твоя — $mine · среднее покажем от ${r['show_min'] ?? 3} оценок'
-        : 'оцени первым';
+        : 'пока без оценок';
+    // Кнопкой во всю строку, а не мелкими капибарами: в них было не попасть
+    // (Никита 21.10: «сам первые разы не понимал, как на это попасть»)
+    final action = !can ? null : (mine != null ? 'Изменить' : 'Оценить');
     return Semantics(
       button: can,
       label: 'Оценка преподавателя: $note',
-      child: InkWell(
-        key: const Key('teacher:rating'),
-        onTap: can ? _rate : null,
-        borderRadius: BorderRadius.circular(Radii.chip),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: ExcludeSemantics(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RatingRow(value: avg ?? (mine ?? 0).toDouble(), color: avg == null && mine == null ? p.muted : p.text),
-                const SizedBox(width: Space.s),
-                Flexible(
-                  child: Text(
-                    note,
-                    style: s.body(13, color: p.muted, weight: avg != null ? FontWeight.w600 : FontWeight.w400),
-                    overflow: TextOverflow.ellipsis,
+      child: Padding(
+        padding: const EdgeInsets.only(top: Space.s),
+        child: Material(
+          color: can ? p.accent.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(Radii.chip),
+          child: InkWell(
+            key: const Key('teacher:rating'),
+            onTap: can ? _rate : null,
+            borderRadius: BorderRadius.circular(Radii.chip),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: can ? Space.m : 0, vertical: 6),
+                child: ExcludeSemantics(
+                  child: Row(
+                    children: [
+                      RatingRow(
+                        value: avg ?? (mine ?? 0).toDouble(),
+                        color: avg == null && mine == null ? p.muted : p.text,
+                      ),
+                      const SizedBox(width: Space.s),
+                      Expanded(
+                        child: Text(
+                          note,
+                          style: s.body(13, color: p.muted, weight: avg != null ? FontWeight.w600 : FontWeight.w400),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (action != null) ...[
+                        const SizedBox(width: Space.s),
+                        Text(
+                          action,
+                          style: s.body(14, color: p.accent, weight: FontWeight.w600),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),

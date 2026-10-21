@@ -15,6 +15,7 @@ import aiosqlite
 import database
 from database import _conn
 from config import GROUP_NAME
+from lecture_day import NIGHT_UNTIL
 from utils import TZ, today_msk
 
 logger = logging.getLogger(__name__)
@@ -55,11 +56,35 @@ async def _schedule_lines(days: int = 2, user_id: int | None = None) -> list[str
         logger.info(f"group_context: расписание недоступно: {e}")
         return []
     today = today_msk()
+    night = datetime.now(TZ).hour < NIGHT_UNTIL
     out = []
     for i in range(days):
         d = today + timedelta(days=i)
-        label = "Сегодня" if i == 0 else "Завтра"
-        out.append(f"{label}: " + _plain(format_day(parse_events_for_date(raw, d), d, compact=True, extra="teacher")))
+        label = ("Сегодня (после сна — «завтра» для студента)" if night else "Сегодня") if i == 0 else "Завтра"
+        events = parse_events_for_date(raw, d)
+        out.append(f"{label}: " + _plain(format_day(events, d, compact=True, extra="teacher")))
+        out += _lecture_numbers(raw, events, d)
+    return out
+
+
+def _lecture_numbers(raw: bytes, events: list[dict], day: date) -> list[str]:
+    """«Моделирование бизнес-процессов (лк) — лекция №5 семестра»: какая по
+    счёту лекция предмета (Никита 21.10: «можно посмотреть, какая она по
+    счёту, по расписанию»)."""
+    import attendance
+    from schedule_format import _split_kind
+    out, seen = [], set()
+    for e in events:
+        title, _, short = _split_kind(e.get("summary", ""))
+        if short != "лк" or title in seen:
+            continue
+        seen.add(title)
+        try:
+            dates = attendance.lecture_dates(raw, title, day)
+        except Exception:
+            continue
+        if day in dates:
+            out.append(f"  {title} (лк) {day:%d.%m} — лекция №{dates.index(day) + 1} по этому предмету в семестре")
     return out
 
 
@@ -74,6 +99,12 @@ async def build_group_context(user_id: int, deadline_days: int = 21) -> str:
         f"Сегодня {today.strftime('%d.%m.%Y')}, {WEEKDAYS[today.weekday()]}, "
         f"{datetime.now(TZ).strftime('%H:%M')} по Москве.",
     ]
+    if datetime.now(TZ).hour < NIGHT_UNTIL:
+        # 01:00 четверга: «что завтра на лекции» — это про четверг, человек ещё
+        # не ложился (Никита 21.10: помощник ответил про пятницу)
+        lines.append(f"Сейчас ночь: «завтра» в вопросе студента почти наверняка значит наступивший день — "
+                     f"{WEEKDAYS[today.weekday()]} {today.strftime('%d.%m')} (он ещё не спал). Отвечай про этот день "
+                     "и не поправляй студента.")
     lines += await _schedule_lines(user_id=user_id)
 
     try:

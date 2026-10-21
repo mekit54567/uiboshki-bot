@@ -78,6 +78,7 @@ void snack(BuildContext context, String text, {ToastKind kind = ToastKind.info})
     showToast(context, text, kind: kind);
 
 Future<T?> _sheet<T>(BuildContext context, Widget child) => showModalBottomSheet<T>(
+  useSafeArea: true,
   context: context,
   backgroundColor: AppStyle.of(context).p.cardSolid,
   showDragHandle: true,

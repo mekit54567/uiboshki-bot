@@ -281,6 +281,7 @@ textarea.field { resize: none; min-height: 96px; }
 
 /* ── «Пара» (screens/lesson.js) ── */
 .ls-rate { display: inline-flex; align-items: center; gap: var(--s); padding: 3px 0; max-width: 100%; cursor: pointer; }
+.ls-rate.can { display: flex; margin-top: var(--s); min-height: 44px; padding: 6px var(--m); border-radius: var(--r-chip, 14px); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .ls-rrow { display: inline-flex; gap: 2px; flex: none; }
 .ls-choice { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--xs); padding: var(--s) 0;
   border-radius: calc(var(--r-tile) - 4px); transition: background .18s; }

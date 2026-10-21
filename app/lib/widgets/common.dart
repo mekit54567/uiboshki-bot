@@ -713,6 +713,7 @@ class _AppToastState extends State<AppToast> with SingleTickerProviderStateMixin
 
 /// Лист снизу в дизайне приложения (как «Тема и шрифт»).
 Future<T?> appSheet<T>(BuildContext context, WidgetBuilder builder) => showModalBottomSheet<T>(
+  useSafeArea: true,
   context: context,
   backgroundColor: AppStyle.of(context).p.cardSolid,
   showDragHandle: true,

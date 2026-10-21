@@ -812,6 +812,7 @@ Future<void> showDaySummarySheet(
 }) {
   final s = AppStyle.of(context);
   return showModalBottomSheet<void>(
+    useSafeArea: true,
     context: context,
     backgroundColor: s.p.cardSolid,
     showDragHandle: true,

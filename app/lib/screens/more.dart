@@ -1217,6 +1217,7 @@ Future<void> showLinksSheet(
   final s = AppStyle.of(context);
   final p = s.p;
   return showModalBottomSheet<void>(
+    useSafeArea: true,
     context: context,
     backgroundColor: p.cardSolid,
     showDragHandle: true,
