@@ -48,6 +48,37 @@ void main() {
     expect(api.token, 'tok-123');
   });
 
+  test('PKCE S256 — как oauth._challenge на сервере', () {
+    expect(oauthChallenge('dBjftJeZ4CVP-mB92K27uhbUlU2Lhl-k-Re1sk1J3Fh0'), 'hdFJKKOHi8U7eslft4FF6s21oRFm_67h1CS8RR_MyQw');
+  });
+
+  testWidgets('вход через VK: в адресе возврата одноразовый код, токен — в обмен на секрет', (t) async {
+    // аудит 21.10, R8: перехваченная ссылка ru.uiboshki.app://auth без секрета бесполезна
+    phone(t);
+    final bodies = <String, Object?>{};
+    final api = fakeApi(token: null, bodies: bodies);
+    Future<String> webAuth(String url) async => 'ru.uiboshki.app://auth#code=c-1';
+
+    await t.pumpWidget(
+      AppStyle(
+        p: Palette.depth,
+        font: FontChoice.book,
+        child: MaterialApp(
+          home: LoginScreen(api: api, onDone: () {}, webAuth: webAuth),
+        ),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.text('Войти через VK ID'));
+    await settle(t);
+    final start = bodies['POST /api/auth/vk/start'] as Map;
+    final swap = bodies['POST /api/auth/exchange'] as Map;
+    expect(start['client'], 'app');
+    expect(swap['code'], 'c-1');
+    expect(oauthChallenge(swap['verifier'] as String), start['challenge']);
+    expect(api.token, 'tok-xyz');
+  });
+
   testWidgets('вход по коду для проверяющих: кнопка только когда сервер её даёт', (t) async {
     phone(t);
     Future<void> open(Api api) async {

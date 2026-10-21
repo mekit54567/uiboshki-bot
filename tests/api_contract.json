@@ -65,6 +65,7 @@
  "PATCH /api/files/{file_id}",
  "POST /api/achievements",
  "POST /api/auth/apple",
+ "POST /api/auth/exchange",
  "POST /api/auth/logout",
  "POST /api/auth/poll",
  "POST /api/auth/review",
