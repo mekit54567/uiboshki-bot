@@ -1,5 +1,6 @@
-"""«Капибара+» в боте: /plus — статус и кнопка «Оплатить на сайте» (счёт в
-Telegram не выставляем: цифровое внутри бота — только Stars), /invite —
+"""«Капибара+» в боте: /plus — статус, кнопка «Оплатить на сайте» и счёт в
+звёздах Telegram (Stars: цифровое внутри Telegram — только они; дороже
+рублей, billing.stars_price), /invite —
 готовое сообщение для друга с личной ссылкой, /donate — «Поддержать
 проект» (донат на сайте, не подписка), /grant — ручные выдачи
 Никиты (plus_grant.py). В инлайне «@бот share» —
@@ -7,7 +8,8 @@ Telegram не выставляем: цифровое внутри бота — �
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message,
+                           PreCheckoutQuery)
 
 router = Router()
 
@@ -44,10 +46,15 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     lines += [f"🎁 Позови друга — /invite. {referrals.invite_line(inv)} Пришло по твоей ссылке: {inv['came']}.",
               "🏅 Закрыл ранг ачивок в приложении — тоже дни подписки (Ещё → Ачивки)."]
     rows = []
+    stars = billing.stars_on() and not st["unlimited"]
     if st["provider"] and not st["unlimited"]:
         rows.append([InlineKeyboardButton(text="💳 Оплатить на сайте", url=billing.pay_link(uid))])
-    elif not st["unlimited"]:
+    elif not st["unlimited"] and not stars:
         lines.append("\nОплата скоро заработает.")
+    if stars:
+        lines.append("\n⭐ Или звёздами Telegram прямо здесь — они дороже рублей: в цену входит комиссия Telegram.")
+        rows.append([InlineKeyboardButton(text=f"⭐ {p['title']} · {billing.stars_price(p['price'])} ⭐",
+                                          callback_data=f"plus:stars:{p['plan']}") for p in st["prices"]])
     rows.append([InlineKeyboardButton(text="🎁 Позвать друга", callback_data="plus:invite")])
     rows.append([InlineKeyboardButton(text="💛 Поддержать проект", callback_data="plus:donate")])
     if config.is_starosta(uid):
@@ -286,3 +293,34 @@ async def cmd_invite(message: Message):
 async def invite_button(callback: CallbackQuery):
     await callback.answer()
     await send_invite(callback.message, callback.from_user.id)
+
+
+# ── Оплата звёздами (Stars) ──────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("plus:stars:"))
+async def cb_stars(cb: CallbackQuery):
+    import billing
+    try:
+        inv = await billing.stars_invoice(cb.from_user.id, cb.data.split(":", 2)[2])
+    except billing.PayError as e:
+        await cb.answer(str(e), show_alert=True)
+        return
+    await cb.message.answer_invoice(title=inv["title"], description=inv["description"], payload=inv["payload"],
+                                    currency="XTR", prices=[LabeledPrice(label=inv["title"], amount=inv["stars"])])
+    await cb.answer()
+
+
+@router.pre_checkout_query()
+async def stars_pre_checkout(q: PreCheckoutQuery):
+    import billing
+    err = await billing.stars_check(q.invoice_payload, q.from_user.id, q.total_amount, q.currency)
+    await q.answer(ok=not err, error_message=err or None)
+
+
+@router.message(F.successful_payment)
+async def stars_done(message: Message):
+    import billing
+    sp = message.successful_payment
+    if sp.currency != "XTR":
+        return
+    await billing.stars_paid(sp.invoice_payload, message.from_user.id, sp.telegram_payment_charge_id, message.bot)
