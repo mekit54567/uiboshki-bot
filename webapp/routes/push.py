@@ -34,7 +34,8 @@ async def push_subscribe(body: PushSub, request: Request, user: dict = CurrentUs
     from webapp.routes.auth import _device
     if not push_host_ok(body.endpoint) or len(body.endpoint) > 1000:
         raise HTTPException(400, "не похоже на подписку браузера")
-    await save_push_sub(user["id"], body.endpoint, body.keys.p256dh[:200], body.keys.auth[:100], _device(request))
+    await save_push_sub(user["id"], body.endpoint, body.keys.p256dh[:200], body.keys.auth[:100], _device(request),
+                        session_id=user.get("session_id"))
     return {"ok": True}
 
 
@@ -99,7 +100,8 @@ async def app_push_subscribe(body: AppPushSub, request: Request, user: dict = Cu
     if key is None:
         raise HTTPException(400, "ключ — 32 байта в base64")
     await save_app_push(user["id"], body.platform, body.token,
-                        sdo_accounts.encrypt(base64.b64encode(key).decode()), _device(request))
+                        sdo_accounts.encrypt(base64.b64encode(key).decode()), _device(request),
+                        session_id=user.get("session_id"))
     return {"ok": True, "enabled": app_push.enabled(body.platform)}
 
 

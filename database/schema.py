@@ -193,6 +193,14 @@ async def init_db():
             )
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_app_push_user ON app_push(user_id)")
+        # Пуш — от какой сессии устройства (вход без Telegram): отозвали её в
+        # «Безопасности» — пуши туда больше не идут (аудит 21.10, R3). NULL —
+        # Mini App в Telegram или подписка до этой колонки.
+        for table in ("push_subs", "app_push"):
+            try:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN session_id INTEGER")
+            except Exception:
+                pass  # колонка уже есть
         # Подписка (ИИ сверх базы): до какой даты; source — откуда (вручную
         # старостой, оплата — потом)
         await db.execute("""

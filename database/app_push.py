@@ -10,15 +10,17 @@ MAX_DEVICES = 5
 PLATFORMS = ("fcm", "rustore", "apns")
 
 
-async def save_app_push(user_id: int, platform: str, token: str, key_enc: str, device: str = ""):
+async def save_app_push(user_id: int, platform: str, token: str, key_enc: str, device: str = "",
+                        session_id: int | None = None):
     """Новое устройство или новый ключ/владелец у старого токена (вышел и вошёл
     другим аккаунтом — токен тот же, человек другой)."""
     async with connect() as db:
         await db.execute(
-            "INSERT INTO app_push (user_id, platform, token, key_enc, device) VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO app_push (user_id, platform, token, key_enc, device, session_id) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(platform, token) DO UPDATE SET user_id = excluded.user_id, "
-            "key_enc = excluded.key_enc, device = excluded.device, created_at = datetime('now')",
-            (user_id, platform, token, key_enc, device[:120]))
+            "key_enc = excluded.key_enc, device = excluded.device, session_id = excluded.session_id, "
+            "created_at = datetime('now')",
+            (user_id, platform, token, key_enc, device[:120], session_id))
         # не больше MAX_DEVICES на человека — старые вытесняются (как push_subs)
         await db.execute(
             "DELETE FROM app_push WHERE user_id = ? AND id NOT IN "
@@ -28,10 +30,12 @@ async def save_app_push(user_id: int, platform: str, token: str, key_enc: str, d
 
 
 async def get_app_pushes(user_id: int) -> list[dict]:
+    """Устройства человека — только с живой сессией (sessions.LIVE_SESSION_SQL)."""
+    from database.sessions import LIVE_SESSION_SQL, live_now
     async with connect() as db:
         db.row_factory = aiosqlite.Row
-        rows = await (await db.execute("SELECT * FROM app_push WHERE user_id = ? ORDER BY id",
-                                       (user_id,))).fetchall()
+        rows = await (await db.execute(f"SELECT * FROM app_push WHERE user_id = ? AND {LIVE_SESSION_SQL} ORDER BY id",
+                                       (user_id, live_now()))).fetchall()
         return [dict(r) for r in rows]
 
 
