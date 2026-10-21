@@ -19,11 +19,11 @@
 
 Всё с нашей стороны готово: сборка, тексты, скриншоты — `docs/store/rustore.md`.
 
-- [ ] Ключ подписи Android на своём компьютере и три секрета в GitHub —
+- [x] Ключ подписи Android на своём компьютере и три секрета в GitHub —
       пошагово в `docs/store/android-key.md`. Ключ хранить в двух местах:
       потеряешь — обновления в RuStore не выпустить.
 - [ ] Аккаунт разработчика RuStore, карточка приложения по `docs/store/rustore.md`.
-- [ ] GitHub → Actions → сборка приложения → Run workflow → скачать APK →
+- [x] GitHub → Actions → сборка приложения → Run workflow → скачать APK →
       потыкать на телефоне → загрузить в RuStore.
 
 ## 2. App Store
