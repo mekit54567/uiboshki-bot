@@ -115,7 +115,7 @@ def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
              "<b>Это не подписка — просто спасибо.</b> Всё бесплатное остаётся бесплатным, "
              "«Капибара+» — отдельно (/plus). А в ответ откроется роадмап — что я делаю сейчас "
              "и что дальше (/roadmap).", ""]
-    if not billing.provider():
+    if not billing.provider(uid=uid):
         lines.append("Поддержать можно будет совсем скоро — оплата ещё подключается.")
         return "\n".join(lines), None
     lines.append(f"Сумма — на выбор: {amounts} или своя (от {billing.DONATE_MIN} ₽). Разово, без автосписаний; "

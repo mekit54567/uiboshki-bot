@@ -68,14 +68,28 @@ def _kassas() -> list[str]:
             (["robokassa"] if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2 else []))
 
 
-def provider(configured_only: bool = False) -> str:
+def provider(configured_only: bool = False, uid: int | None = None) -> str:
     """Какая касса подключена: 'yookassa', 'robokassa' или ''. Пока нет
     реквизитов исполнителя (PD_FIO, PD_INN, PD_EMAIL) — оферта без них, для
-    самозанятого так нельзя: оплата закрыта (configured_only — какая задана)."""
+    самозанятого так нельзя: оплата закрыта (configured_only — какая задана).
+    uid — для кого: в тестовом режиме Robokassa касса открыта только Никите."""
     kind = (_kassas() or [""])[0]
     if configured_only or not kind:
         return kind
-    return "" if missing_requisites() else kind
+    if missing_requisites() or (uid is not None and test_only(uid)):
+        return ""
+    return kind
+
+
+def test_mode() -> bool:
+    """Robokassa в тестовом режиме (ROBOKASSA_TEST=1) — деньги не списываются."""
+    return ROBOKASSA_TEST and (_kassas() or [""])[0] == "robokassa"
+
+
+def test_only(uid: int | None) -> bool:
+    """Тестовая оплата — только Никите (21.10: иначе любой набрал бы «Капибару+»
+    бесплатно); остальным пока «оплата скоро»."""
+    return test_mode() and not (uid and config.is_starosta(uid))
 
 
 def missing_requisites() -> list[str]:
@@ -182,7 +196,7 @@ async def status(uid: int) -> dict:
     return {"active": bool(until) or bool(unl), "until": until, "paid_until": paid_until, "gift": gift,
             "unlimited": bool(unl), "unlimited_until": unl and unl["until"],
             "founder": bool(sub and sub["founder"]), "early": await early(),
-            "prices": await prices(uid), "provider": provider()}
+            "prices": await prices(uid), "provider": provider(uid=uid)}
 
 
 async def founder_price_for(uid: int) -> bool:
@@ -234,7 +248,7 @@ class PayError(Exception):
 async def create(uid: int, plan: str, return_url: str) -> str:
     """Создать платёж и вернуть адрес страницы кассы."""
     from database.billing import add_payment
-    kind = provider()
+    kind = provider(uid=uid)
     if not kind:
         raise PayError("оплата ещё не подключена")
     if plan not in PLANS:
@@ -269,7 +283,7 @@ async def create_donation(uid: int, amount, return_url: str) -> str:
     """Донат «Поддержать проект»: платёж в кассе → адрес её страницы. Та же
     касса и те же условия, что у подписки (без реквизитов — закрыто)."""
     from database.billing import add_donation
-    kind = provider()
+    kind = provider(uid=uid)
     if not kind:
         raise PayError("оплата ещё не подключена")
     amount = donate_amount(amount)
