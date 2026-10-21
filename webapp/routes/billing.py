@@ -144,6 +144,7 @@ button s{{color:var(--secondary);font-size:14px;margin-right:6px;white-space:now
 button .pr{{flex:none;white-space:nowrap}}
 .tag{{display:inline-block;white-space:nowrap;font-size:12px;background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;margin-left:6px}}
 .small{{color:var(--secondary);font-size:13px}}
+h2{{font-size:18px;margin:26px 0 8px}} ol{{padding-left:20px;margin:0 0 12px}} ol li{{margin:0 0 6px}}
 a{{color:var(--link)}}
 .own{{display:grid;grid-template-columns:1fr auto;gap:10px}}
 .own input{{font:inherit;min-width:0;padding:14px 16px;border-radius:14px;border:1px solid var(--line);
@@ -192,9 +193,69 @@ def _plans_form(key: str, st: dict) -> str:
             + "".join(rows) + "</form>")
 
 
+async def _public() -> HTMLResponse:
+    """/plus без личной ссылки — открытая страница: что продаётся, цены, как
+    заказать, оплатить, получить и вернуть, реквизиты и контакты (требования
+    Robokassa к сайту магазина, 21.10). Купить — всё так же по личной ссылке."""
+    import billing
+    import privacy
+    early = await billing.early()
+    rows = "".join(
+        f"<li>{escape(p['title'])} ({p['days']} дней) — <b>{p['early'] if early else p['price']}&nbsp;₽</b>"
+        + (f" (цена первых пользователей; полная — {p['price']}&nbsp;₽)" if early else "") + "</li>"
+        for p in billing.PLANS.values())
+    perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
+    bot = f"https://t.me/{escape(config.BOT_USERNAME)}?start=plus"
+    contact = escape(privacy.CONTACT)
+    email = f' или на почту <a href="mailto:{escape(privacy.EMAIL)}">{escape(privacy.EMAIL)}</a>' if privacy.EMAIL else ""
+    stars = (" В боте Telegram можно оплатить и звёздами Telegram (Stars) — цена в звёздах выше, в неё входит "
+             "комиссия Telegram." if billing.stars_on() else "")
+    return _page(
+        '<p class="lead">«Капибара+» — подписка на дополнительные функции сервиса «Капибара», помощника '
+        'студентов РТУ МИРЭА (бот в Telegram, сайт и приложение uiboshki.ru/app, приложение для Android и iPhone). '
+        'Услуга цифровая: доступ к функциям на оплаченный срок.</p>'
+        f'<h2>Что входит</h2><ul class="perks">{perks}</ul>'
+        '<p class="small">Расписание, дедлайны, баллы СДО, файлы и напоминания бесплатны и от подписки не зависят.</p>'
+        f'<h2>Цены</h2><ul class="perks">{rows}</ul>'
+        '<p class="small">В рублях, НДС не облагается (налог на профессиональный доход). Без автосписаний: '
+        'каждый срок оплачивается отдельно. Июль и август в срок не считаются — дни переносятся на сентябрь.</p>'
+        '<h2>Как заказать</h2><ol>'
+        f'<li>Открой бота <a href="{bot}">@{escape(config.BOT_USERNAME)}</a> и отправь /plus или в приложении — '
+        '«Ещё → Капибара+».</li>'
+        '<li>Нажми «Оплатить на сайте»: откроется эта страница с тарифами по твоей личной ссылке '
+        '(она привязана к твоему аккаунту и действует сутки).</li>'
+        '<li>Выбери тариф и оплати на странице платёжного сервиса.</li></ol>'
+        '<h2>Оплата</h2>'
+        '<p>Банковской картой или через СБП на защищённой странице платёжного сервиса Robokassa (ООО «Робокасса»). '
+        'Данные карты вводятся только там, исполнитель их не получает. Чек приходит из ФНС («Мой налог») '
+        f'на почту, указанную при оплате.{stars}</p>'
+        '<h2>Как предоставляется услуга</h2>'
+        '<p>Сразу после оплаты, автоматически: подписка включается на аккаунте, бот присылает сообщение '
+        '«Оплата прошла» с датой окончания. Доставки нет — функции открываются в боте и приложении на '
+        'всех устройствах, где ты входишь в свой аккаунт. Если подписка уже действует, дни добавляются к ней.</p>'
+        '<h2>Отказ и возврат</h2>'
+        '<p>Отказаться можно до оплаты — просто не оплачивать: заказ без оплаты ни к чему не обязывает. '
+        'После оплаты — в любой момент срока:</p><ol>'
+        f'<li>Напиши {contact}{email}: «Хочу вернуть деньги за Капибару+» и дату оплаты '
+        '(или номер платежа из чека).</li>'
+        '<li>Ответим и рассмотрим заявку в течение 10 рабочих дней.</li>'
+        '<li>В течение 14 дней после оплаты, если функциями «Капибара+» не пользовался, — возвращаем всю '
+        'сумму. Позже или если пользовался — за неиспользованные дни пропорционально.</li>'
+        '<li>Деньги возвращаются тем же способом, которым оплачено (на ту же карту или счёт), обычно за '
+        '1–10 рабочих дней после решения — срок зачисления зависит от банка. Сумма возвращается без '
+        'вычета комиссий платёжного сервиса и банка. Подписка при возврате отключается.</li></ol>'
+        '<h2>Исполнитель и контакты</h2>'
+        f'<p>{escape(privacy.contractor())}.<br>Связь: {contact}{email}.</p>'
+        '<p><a href="/offer">Оферта</a> · <a href="/privacy">Политика обработки персональных данных</a> · '
+        f'<a href="{bot}">Открыть бота</a> · <a href="/app">Открыть приложение</a></p>',
+        title="Капибара+ — тарифы и условия")
+
+
 @router.get("/plus", response_class=HTMLResponse)
 async def plus_page(k: str = ""):
     import billing
+    if not k:
+        return await _public()
     uid = billing.read_key(k)
     if not uid:
         return _no_key()
