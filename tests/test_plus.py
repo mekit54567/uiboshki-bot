@@ -126,7 +126,7 @@ async def _payments(db):
 async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # noqa: F811
     c, _ = client
     await db.upsert_user(ME, "", "u")
-    assert c.get("/plus").status_code == 403
+    assert c.get("/plus?k=мусор").status_code == 403
     key = billing.make_key(ME)
     page = c.get(f"/plus?k={key}").text
     assert "149&nbsp;₽" in page and "/offer" in page
@@ -493,3 +493,18 @@ def test_offer_contractor_has_npd_status(monkeypatch):
         assert (fio or "Никита") in offer and (not inn or f"ИНН {inn}" in offer)
     consent = json.dumps(legal_texts.doc("consent"), ensure_ascii=False)
     assert "плательщик налога" not in consent
+
+
+def test_public_plus_page_for_robokassa(client, robokassa):  # noqa: F811
+    """Robokassa 21.10: на сайте — описание, цены, заказ, оплата, оказание
+    услуги, отказ и возврат по шагам, ФИО и ИНН, контакты, политика."""
+    c, _ = client
+    r = c.get("/plus")
+    assert r.status_code == 200
+    page = r.text
+    for part in ("Что входит", "149&nbsp;₽", "Как заказать", "Оплата", "Как предоставляется услуга",
+                 "Отказ и возврат", "без вычета комиссий", "Иванов Никита", "ИНН 123456789012",
+                 "@Partykq", 'href="/privacy"', 'href="/offer"'):
+        assert part in page, part
+    about = c.get("/about").text
+    assert "ИНН 123456789012" in about and 'href="/plus"' in about and "__CONTRACTOR__" not in about

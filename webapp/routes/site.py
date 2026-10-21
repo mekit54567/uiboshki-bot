@@ -78,8 +78,11 @@ async def about_page(request: Request):
     from webapp.server import _digest
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     import config
+    import privacy
+    from html import escape
     html = ((_site_dir() / "index.html").read_text(encoding="utf-8")
             .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
+            .replace("__CONTRACTOR__", escape(privacy.contractor()))
             .replace("__OGV__", _digest("site/og.jpg")))
     # стили и скрипт сайта — по ссылке с хэшем: после обновления браузер не
     # склеит новую страницу со старым site.js (и кэширует их надолго)
