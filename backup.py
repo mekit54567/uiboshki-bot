@@ -34,6 +34,9 @@ from utils import TZ
 logger = logging.getLogger(__name__)
 
 MAX_SEND_BYTES = 48 * 1024 * 1024   # sendDocument бота — до 50 МБ
+SEND_TRIES = 3                      # отправка копии: попыток,
+SEND_PAUSE = 30                     # пауза перед повтором (сек, растёт),
+SEND_TIMEOUT = 180                  # ожидание одной отправки (сек; 4–5 МБ через VPN)
 MAGIC = b"UIBK1\n"                 # начало зашифрованной копии: версия формата, потом nonce и шифротекст
 
 
@@ -127,10 +130,30 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
     else:
         caption = (f"💾 Копия базы ({size_mb:.1f} МБ). Храни — это все файлы, дедлайны и заметки.\n"
                    "⚠️ Не зашифрована: задай BACKUP_KEY на сервере.\nВосстановить: /restore.")
-    await bot.send_document(
-        chat_id, BufferedInputFile(data, filename=name), disable_notification=silent, caption=caption)
-    await health.note("backup", True, f"{size_mb:.1f} МБ")
-    return True
+    # 22.10: в 04:40 отправка упала и копия молча не пришла — файл идёт в
+    # Telegram через VPN, бывает сбой сети. Пробуем ещё, ждём дольше обычного,
+    # а не вышло — пишем старосте, почему.
+    err = None
+    for attempt in range(SEND_TRIES):
+        if attempt:
+            await asyncio.sleep(SEND_PAUSE * attempt)
+        try:
+            await bot.send_document(chat_id, BufferedInputFile(data, filename=name), disable_notification=silent,
+                                    caption=caption, request_timeout=SEND_TIMEOUT)
+        except Exception as e:
+            err = e
+            logger.warning(f"backup: отправка {attempt + 1}/{SEND_TRIES} не прошла: {type(e).__name__}: {e}")
+            continue
+        await health.note("backup", True, f"{size_mb:.1f} МБ")
+        return True
+    why = f"{type(err).__name__}: {str(err)[:200]}"
+    await health.note("backup", False, f"не отправилась: {why}")
+    try:
+        await bot.send_message(chat_id, f"⚠️ Копия базы ({size_mb:.1f} МБ) не отправилась с {SEND_TRIES} попыток: "
+                                        f"{why}\nПопробуй /backup руками.")
+    except Exception:
+        logger.exception("backup: не смог сообщить старосте")
+    return False
 
 
 # ── Восстановление (/restore) ───────────────────────────────────────────────
