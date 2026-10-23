@@ -3,15 +3,20 @@
 его версия ниже min_client — экран «Обнови приложение» (в магазинах версии
 обновляются не мгновенно, как сайт). Без входа."""
 
+import json
 import os
 import re
+import time
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import APIRouter
 
 router = APIRouter()
 
 API_VERSION = 1
+BUILD_INFO = Path(__file__).resolve().parents[2] / "build-info.json"   # пишет deploy/timeweb/update.sh
+STARTED = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
 @lru_cache(maxsize=1)
@@ -26,6 +31,20 @@ def server_version() -> str:
     return max(found, key=lambda v: tuple(int(x) for x in v.split(".")), default="")
 
 
+@lru_cache(maxsize=1)
+def build_info() -> dict:
+    """Какая сборка работает (Никита 23.10: версия теперь раз в ~10 PR, а
+    видеть, что сервер обновился, нужно после каждого мержа): короткий хеш
+    коммита, номер последнего смерженного PR, когда собрано и запущено."""
+    info = {"commit": "", "commit_time": "", "pr": None, "built": ""}
+    try:
+        data = json.loads(BUILD_INFO.read_text(encoding="utf-8"))
+        info.update({k: data[k] for k in info if k in data})
+    except (OSError, ValueError):
+        pass
+    return {**info, "started": STARTED}
+
+
 def _min(platform: str) -> str:
     return os.getenv(f"APP_MIN_{platform.upper()}", "0.0.0")
 
@@ -37,6 +56,7 @@ async def api_meta():
     return {
         "api": API_VERSION,
         "server": server_version(),
+        "build": build_info(),       # commit, pr, built, started — обновилось ли после мержа
         "min_client": {p: _min(p) for p in ("web", "android", "ios")},
         "login": ["telegram", *oauth.available()],   # VK/Яндекс — когда есть ключи
         # design2 — новый дизайн приложения (5.79, «Оформление»): DESIGN2=0 —
