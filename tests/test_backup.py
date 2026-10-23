@@ -101,3 +101,45 @@ async def test_status_warns_unencrypted_backup(db, monkeypatch):
     assert "задай BACKUP_KEY" in await health.report()
     monkeypatch.setenv("BACKUP_KEY", "k" * 40)
     assert "BACKUP_KEY" not in await health.report()
+
+
+class _FlakySession(_Session):
+    """Первые fails отправок файла падают сетью, как 22.10 в 04:40."""
+
+    def __init__(self, fails, *a, **kw):
+        super().__init__(*a, **kw)
+        self.fails, self.messages = fails, []
+
+    async def make_request(self, bot, method, timeout=None):
+        from aiogram.exceptions import TelegramNetworkError
+        name = type(method).__name__
+        if name == "SendDocument" and self.fails:
+            self.fails -= 1
+            raise TelegramNetworkError(method, "Request timeout error")
+        if name == "SendMessage":
+            self.messages.append(method.text)
+        return await super().make_request(bot, method, timeout)
+
+
+@pytest.mark.asyncio
+async def test_backup_retries_send(db, monkeypatch):
+    import backup
+    import health
+    monkeypatch.setattr(backup, "SEND_PAUSE", 0)
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_FlakySession(2))
+    assert await backup.send_backup(bot, STAROSTA_ID)
+    assert len(bot.session.payloads) == 1 and not bot.session.messages
+    assert (await health._get("backup"))["ok"]
+
+
+@pytest.mark.asyncio
+async def test_backup_send_failure_is_reported(db, monkeypatch):
+    """Все попытки упали — староста получает сообщение с причиной, /status — отметку."""
+    import backup
+    import health
+    monkeypatch.setattr(backup, "SEND_PAUSE", 0)
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_FlakySession(99))
+    assert not await backup.send_backup(bot, STAROSTA_ID)
+    assert bot.session.messages and "не отправилась" in bot.session.messages[0]
+    assert "TelegramNetworkError" in bot.session.messages[0]
+    assert not (await health._get("backup"))["ok"]
