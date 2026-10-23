@@ -669,6 +669,18 @@ async def init_db():
                 PRIMARY KEY (user_id, deadline_id, kind, at)
             )
         """)
+        # Напоминания перед парой (scheduler.check_lesson_reminders): что кому
+        # уже ушло — в базе, а не только в памяти: 23.10 бот перезапустился
+        # после мержа в 16:09 и прислал «через 10 мин пара» второй раз.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS lesson_reminders_sent (
+                user_id  INTEGER NOT NULL,
+                day      TEXT NOT NULL,
+                at       TEXT NOT NULL,
+                minutes  INTEGER NOT NULL,
+                PRIMARY KEY (user_id, day, at, minutes)
+            )
+        """)
         # Подписка «Капибара+» (billing.py): оплаты — по налоговым правилам
         # хранятся и после «удалить мои данные», без человека (payer_id NULL);
         # бонусы (ранг ачивок, «пригласи друга») — по разу; кто кого пригласил

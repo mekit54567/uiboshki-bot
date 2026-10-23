@@ -75,3 +75,23 @@ async def unpin_target(user_id: int, target_type: int, target_id: int):
         await db.execute("DELETE FROM pinned_targets WHERE user_id=? AND target_type=? AND target_id=?",
                          (user_id, target_type, target_id))
         await db.commit()
+
+
+# ── Напоминания перед парой: что уже ушло ────────────────────────────────────
+
+async def mark_lesson_reminder(user_id: int, day: str, at: str, minutes: int) -> bool:
+    """Отметить «ушло»; True — только в первый раз. Отметка в базе переживает
+    перезапуск бота (иначе после деплоя напоминание приходило дважды)."""
+    async with connect() as db:
+        cur = await db.execute(
+            "INSERT OR IGNORE INTO lesson_reminders_sent (user_id, day, at, minutes) VALUES (?, ?, ?, ?)",
+            (user_id, day, at, minutes))
+        await db.commit()
+        return cur.rowcount == 1
+
+
+async def purge_lesson_reminders(before: str):
+    """Отметки за дни раньше before («ГГГГ-ММ-ДД») больше не нужны."""
+    async with connect() as db:
+        await db.execute("DELETE FROM lesson_reminders_sent WHERE day < ?", (before,))
+        await db.commit()

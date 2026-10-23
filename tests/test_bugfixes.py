@@ -191,6 +191,66 @@ async def test_lesson_reminder_dedupe_resets_next_day(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_lesson_reminder_not_repeated_after_restart(db, monkeypatch):
+    """23.10: мерж в 16:07 → сервер перезапустил бота в 16:09, и «через 10 мин
+    пара» пришло дважды (16:09 старым процессом, 16:10 новым): отметка
+    «уже напомнил» жила только в памяти."""
+    from datetime import datetime, timedelta
+    import scheduler
+
+    fake_now = {"value": datetime(2099, 1, 10, 16, 9, 0, 300000, tzinfo=scheduler.TZ)}
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fake_now["value"]
+
+    def fake_events(raw, day):
+        start = datetime(day.year, day.month, day.day, 16, 20, tzinfo=scheduler.TZ)
+        return [{"summary": "Моделирование", "location": "Б-304", "time": "16:20–17:50",
+                 "time_start": start, "time_end": start + timedelta(minutes=90)}]
+
+    async def fake_raw():
+        return b""
+
+    async def fake_users():
+        return [{"user_id": USER.id, "notify": '{"remind_first": 10}'}]
+
+    async def no_answers():
+        return {}
+
+    sent = []
+
+    class FakeBot:
+        async def send_message(self, uid, text, **kwargs):
+            sent.append((uid, text))
+
+    monkeypatch.setattr(scheduler, "datetime", FakeDatetime)
+    monkeypatch.setattr(scheduler, "fetch_schedule_raw", fake_raw)
+    monkeypatch.setattr(scheduler, "parse_events_for_date", fake_events)
+    import database
+    monkeypatch.setattr(database, "get_reminder_users", fake_users)
+    monkeypatch.setattr(database, "get_all_optional_answers", no_answers)
+    monkeypatch.setattr(scheduler, "_sent_reminders", set())
+
+    await scheduler.check_lesson_reminders(FakeBot())
+    assert len(sent) == 1
+
+    # Перезапуск: память пустая, следующая минута — снова в окне ±60 с.
+    monkeypatch.setattr(scheduler, "_sent_reminders", set())
+    fake_now["value"] = datetime(2099, 1, 10, 16, 10, 0, 200000, tzinfo=scheduler.TZ)
+    await scheduler.check_lesson_reminders(FakeBot())
+    assert len(sent) == 1
+
+    # Отметки за прошлые дни чистятся, сегодняшние — нет.
+    from database.schedule import purge_lesson_reminders, mark_lesson_reminder
+    await purge_lesson_reminders("2099-01-10")
+    assert not await mark_lesson_reminder(USER.id, "2099-01-10", "16:20", 10)
+    await purge_lesson_reminders("2099-01-11")
+    assert await mark_lesson_reminder(USER.id, "2099-01-10", "16:20", 10)
+
+
+@pytest.mark.asyncio
 async def test_no_reminder_for_self_study(monkeypatch):
     """Производственная практика «СР» на удалёнке — без фиксированного
     времени, напоминать «через 15 мин пара» не нужно (просьба владельца)."""
