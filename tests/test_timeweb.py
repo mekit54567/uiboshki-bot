@@ -119,3 +119,23 @@ async def test_s3_restore_puts_backup_into_empty_db(db, tmp_path, monkeypatch):
         lambda r: httpx.Response(404))}))
     with pytest.raises(SystemExit, match="HTTP 404"):
         await s3_restore.restore("daily/x.db.gz")
+
+
+def test_update_writes_build_info(tmp_path):
+    """update.sh после reset пишет build-info.json (коммит, PR, время) —
+    его показывает /api/meta: видно, что сервер обновился после мержа."""
+    import json
+    update = (DIR / "update.sh").read_text()
+    assert update.index('git reset -q --hard "$NEW"') < update.index("build-info.json") < update.index("up -d --build")
+    lines = update.splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("PR=$("))
+    end = next(i for i, ln in enumerate(lines) if "> build-info.json" in ln)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "Merge pull request #261 from a/b"],
+                   cwd=tmp_path, check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "CHANGELOG: собраны записи"],
+                   cwd=tmp_path, check=True)
+    subprocess.run(["sh", "-c", "\n".join(lines[start:end + 1])], cwd=tmp_path, check=True)
+    info = json.loads((tmp_path / "build-info.json").read_text())
+    assert info["pr"] == 261 and len(info["commit"]) == 7 and info["built"].endswith("Z")

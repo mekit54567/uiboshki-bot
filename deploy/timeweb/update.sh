@@ -22,6 +22,12 @@ if [ "$NEW" = "$(cat "$DONE" 2>/dev/null)" ] && [ "${1:-}" != "--force" ]; then
     exit 0
 fi
 git reset -q --hard "$NEW"
+# что за сборка — для /api/meta (Никита 23.10: версия теперь раз в ~10 PR,
+# а видеть, что сервер обновился, хочется после каждого мержа)
+PR=$(git log -1 --grep='^Merge pull request #' --format=%s | sed -n 's/^Merge pull request #\([0-9]*\).*/\1/p')
+printf '{"commit": "%s", "commit_time": "%s", "pr": %s, "built": "%s"}\n' \
+    "$(git rev-parse --short=7 HEAD)" "$(git log -1 --format=%cI)" "${PR:-null}" \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > build-info.json
 # команда kap — копия в /usr/local/bin (setup.sh): новые подкоманды приходят с обновлением
 install -m 755 deploy/timeweb/kap /usr/local/bin/kap 2>/dev/null || true
 docker compose -f deploy/timeweb/docker-compose.yml up -d --build --remove-orphans

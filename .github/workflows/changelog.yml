@@ -1,7 +1,8 @@
 name: CHANGELOG
 
-# Записи версий лежат в changelog.d/<версия>.md — каждый PR добавляет свой
-# файл, поэтому параллельные PR не конфликтуют в CHANGELOG.md (владелец 11.10).
+# Записи версий лежат в changelog.d/<версия>.md — их добавляет релизный PR
+# (с 23.10 раз в ~10 PR, tools/changelog.py release); заметки обычных PR без
+# версии — в changelog.d/next/, их этот запуск не трогает.
 # После мержа в main этот запуск переносит их в CHANGELOG.md и удаляет файлы
 # (python tools/changelog.py collect). Коммит от github-actions не запускает
 # другие проверки; версию сервера и проверки имён это не меняет — они и так
@@ -10,7 +11,7 @@ name: CHANGELOG
 on:
   push:
     branches: [main]
-    paths: ["changelog.d/**"]
+    paths: ["changelog.d/*.md"]     # только записи версий, не заметки next/
   workflow_dispatch:
 
 permissions:
