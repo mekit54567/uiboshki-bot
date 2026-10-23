@@ -55,8 +55,13 @@ async function networkFirst(req, cacheName, ms) {
 self.addEventListener("fetch", e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin) return;
-  if (url.pathname === "/app" || url.pathname === "/app/" || url.pathname === "/" || url.pathname === "/index.html") {
+  if (url.pathname === "/app" || url.pathname === "/app/") {
     e.respondWith(networkFirst(new Request("/app"), SHELL, 4000));
+  } else if (url.pathname === "/" || url.pathname === "/index.html") {
+    // корень — с сервера: без входа core.js уводит на сайт /about, со входом — в /app.
+    // Раньше тут сразу отдавалось /app, и гость, хоть раз открывший приложение
+    // (проверяющий Robokassa 23.10), вместо сайта видел экран входа. Без сети — /app из кэша.
+    e.respondWith(fetch(req).catch(() => caches.match("/app").then(hit => hit || Response.error())));
   } else if (url.pathname.startsWith("/app/") || url.pathname.startsWith("/app-html/fonts/") || url.pathname.startsWith("/img/")) {
     e.respondWith(freshFirst(req, SHELL, 4000));
   } else if (url.search.includes("v=") && /\.(js|css)$/.test(url.pathname) || url.pathname.startsWith("/pwa/")) {

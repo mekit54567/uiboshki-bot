@@ -235,3 +235,20 @@ def test_iphone_diag3_without_under_clock_mode():
     assert r.status_code == 200 and 'content="Замер 3"' in r.text
     head = r.text.split("<style>")[0].split("-->", 1)[1]
     assert "black-translucent" not in head and "viewport-fit" not in head
+
+
+def test_sw_root_is_not_app_shell():
+    """23.10: sw.js не подменяет корень на /app — гостю (проверяющий Robokassa,
+    раньше открывал приложение) нужен сайт, редирект решает core.js."""
+    sw = (ROOT / "webapp" / "static" / "sw.js").read_text(encoding="utf-8")
+    line = next(ln for ln in sw.splitlines() if 'networkFirst(new Request("/app")' in ln)
+    before = sw[:sw.index(line)].splitlines()[-1]
+    assert 'url.pathname === "/"' not in before
+    assert 'url.pathname === "/" || url.pathname === "/index.html"' in sw and "fetch(req).catch(" in sw
+
+
+def test_html_login_links_to_site_and_terms():
+    """Экран входа PWA — ссылки на сайт, /plus, оферту и политику (Robokassa 23.10)."""
+    js = (ROOT / "webapp" / "static" / "app-html" / "js" / "screens" / "login.js").read_text(encoding="utf-8")
+    for href in ('href="/about"', 'href="/plus"', 'href="/offer"', 'href="/privacy"'):
+        assert href in js

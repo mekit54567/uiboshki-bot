@@ -129,7 +129,8 @@ Screens.login = {
         <div class="bd mut" style="--sz:12px;text-align:center">${esc(AC_UNOFFICIAL)}</div>
         ${codeLogin ? `<div class="ac-center"><button class="ac-tb" data-act="code"><span class="bd mut" style="--sz:14px">Вход по коду доступа</span></button></div>` : ""}
         <div style="height:var(--s)"></div>
-        <div class="ac-center"><button class="ac-tb" data-act="guest"><span class="bd b6" style="--sz:15px">Расписание без входа</span></button></div>`;
+        <div class="ac-center"><button class="ac-tb" data-act="guest"><span class="bd b6" style="--sz:15px">Расписание без входа</span></button></div>
+        <div class="bd mut" style="--sz:12px;text-align:center;margin-top:var(--s)"><a href="/about" style="color:inherit">О проекте</a> · <a href="/plus" style="color:inherit">Капибара+ и оплата</a> · <a href="/offer" style="color:inherit">Оферта</a> · <a href="/privacy" style="color:inherit">Политика</a></div>`;
     };
 
     const finish = () => {
