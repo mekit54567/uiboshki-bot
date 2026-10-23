@@ -177,7 +177,7 @@ void main() {
     expect(find.text('4,5 · 13 оценок'), findsOneWidget);
   });
 
-  testWidgets('мало оценок — «оцени первым»; нельзя и мало — строки нет', (t) async {
+  testWidgets('мало оценок — «пока без оценок» и «Оценить»; нельзя и мало — строки нет', (t) async {
     phone(t);
     await _open(
       t,
@@ -188,7 +188,7 @@ void main() {
         },
       ),
     );
-    expect(find.text('оцени первым'), findsOneWidget);
+    expect(find.text('пока без оценок'), findsOneWidget);
     await t.pumpWidget(const SizedBox()); // новый экран, а не тот же State
     await _open(
       t,
