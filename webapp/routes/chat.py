@@ -23,6 +23,9 @@ def _short_reason(e: Exception) -> str:
     return text[:160]
 
 
+BUSY_TEXT = "Не получилось ответить — ИИ сейчас перегружен. Нажми «Повторить» через минуту."
+
+
 async def _chat_with_fallback(history: list, subject: str, context: str, lectures: str) -> dict:
     """С лекциями запрос уходит в Gemini с большим контекстом — если он не
     прошёл (живой тест: «Дебет и кредит — что это?» без предмета → «ИИ
@@ -36,7 +39,7 @@ async def _chat_with_fallback(history: list, subject: str, context: str, lecture
             raise
         logger.warning(f"webapp chat: с лекциями не вышло ({e!r}) — отвечаю без них")
         result = await chat_with_reasoning(history, subject=subject, extra_system=context, lectures="")
-        result["content"] = (result.get("content") or "") + f"\n\n_(ответ без лекций: {_short_reason(e)})_"
+        result["content"] = (result.get("content") or "") + "\n\n_(ответил без лекций — с ними сейчас не получилось)_"
         result["no_lectures"] = True
         return result
 
@@ -110,6 +113,11 @@ def _number_lectures(lectures: str) -> str:
     return _HEAD.sub(head, lectures)
 
 
+def _natural(text: str) -> list:
+    """«Лекция 10» после «Лекция 9»: числа в названии сравниваются как числа."""
+    return [(0, int(x), "") if x.isdigit() else (1, 0, x.lower()) for x in re.split(r"(\d+)", text) if x]
+
+
 def cited(answer: str) -> set[int]:
     """Номера материалов, на которые сослался ИИ: [2], [1, 3]. Диапазон
     «[1–10]» — не ссылка: так ИИ говорит о материалах вообще («в [1–10] этого
@@ -144,6 +152,35 @@ async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
             seen.add(f["id"])
             out.append({"n": int(n) if n else None, "id": f["id"], "title": f["title"]})
     return out
+
+
+async def _lecture_of_day(user_id: int, subject: str, text: str, query: str) -> tuple[str, str]:
+    """(тексты лекции, строка для ИИ) — вопрос про лекцию конкретного дня
+    («завтра», «сегодня на первой паре», «что будет на лекции») по предмету.
+    Не про лекцию дня — ("", "")."""
+    from datetime import datetime
+    import attendance
+    import lecture_day
+    import lecture_picker
+    from database import get_subject_lecture_context
+    from schedule_parser import raw_for_user
+    from utils import TZ
+    if not lecture_day.asks_about_lecture(text):
+        return "", ""
+    now = datetime.now(TZ)
+    raw = await raw_for_user(user_id)
+    found = lecture_day.lecture_on(attendance.lecture_dates(raw, subject, now.date()), text, now)
+    if not found:
+        return "", ""
+    day, n = found
+    when = f"{day:%d.%m}, {'сегодня' if day == now.date() else 'по расписанию'}"
+    block = lecture_day.numbered_blocks(await get_subject_lecture_context(subject), n)
+    if not block:
+        return "", (f"Вопрос — про лекцию №{n} по предмету «{subject}» ({when}). Файла этой лекции "
+                    "в материалах нет: так и скажи и предположи темы по соседним лекциям, не пересказывай весь курс.")
+    return (lecture_picker.pick(block, query),
+            f"Вопрос — про лекцию №{n} по предмету «{subject}» ({when}). Материал ниже — эта лекция: "
+            "отвечай по ней, а не обзором всего курса.")
 
 
 async def _chat_file_request(text: str) -> dict | None:
@@ -209,6 +246,14 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     if not history:
         raise HTTPException(status_code=400, detail="пустая история")
     subject = body.subject.strip()
+    with_text = await get_subjects_with_lecture_text()
+    picked_subject = ""
+    if not subject and history[-1]["role"] == "user":
+        # «завтра МБП, что на лекции?» — предмет по сокращению, без списка
+        # «по какому предмету?» (фронт переключит предмет в шапке)
+        import lecture_picker as _lp
+        picked_subject = _lp.subject_by_abbrev(history[-1]["content"], with_text) or ""
+        subject = picked_subject
     # Лекции — только подходящие к вопросу (lecture_picker): после выгрузки
     # СДО их у предмета сотни тысяч символов. Без выбранного предмета — из
     # всех предметов, но только при явном совпадении с вопросом.
@@ -228,11 +273,22 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
             return found
     lectures, sources = "", None
     searched = False        # поиск по смыслу отработал: пусто — значит, вопрос не про лекции
-    with_text = await get_subjects_with_lecture_text()
-    # Сначала — поиск по смыслу (semantic_search): куски лекций с номером
+    # «что будет на лекции завтра / на первой паре?» с известным предметом —
+    # какая это лекция по счёту по расписанию и её файл «Лекция N», а не обзор
+    # всего курса и случайные куски (Никита 21.10)
+    lecture_note = ""
+    if subject and subject in with_text and not body.attachment and last:
+        try:
+            lectures, lecture_note = await _lecture_of_day(user["id"], subject, last, query)
+        except Exception as e:
+            logger.info(f"лекция дня: {type(e).__name__}: {e}")
+            lectures, lecture_note = "", ""
+    # Потом — поиск по смыслу (semantic_search): куски лекций с номером
     # страницы/слайда. «Объясни 3 лекцию» (номер лекции, а не смысл) и пустой
     # индекс (сразу после деплоя) — по-старому, целыми лекциями.
-    if query.strip() and (not subject or subject in with_text) and not lecture_picker.wants_course(query):
+    if lectures:
+        pass
+    elif query.strip() and (not subject or subject in with_text) and not lecture_picker.wants_course(query):
         try:
             import semantic_search
             if await semantic_search.ready():
@@ -267,6 +323,8 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
                                            lecture_picker.AUTO_BUDGET, lecture_picker.AUTO_MIN_SCORE, True)
     lectures = _number_lectures(lectures)
     context = await build_group_context(user["id"])
+    if lecture_note:
+        context += "\n" + lecture_note
 
     try:
         if deep:
@@ -311,8 +369,10 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"webapp chat failed: {e!r}")
-        raise HTTPException(status_code=502, detail=f"ИИ сейчас недоступен ({_short_reason(e)}), попробуй чуть позже")
+        # причина (какая модель, код) — в лог для /status; человеку — без
+        # названий провайдеров и кодов (Никита 21.10: «причём тут Gemini?»)
+        logger.warning(f"webapp chat failed: {_short_reason(e)} ({e!r})")
+        raise HTTPException(status_code=502, detail=BUSY_TEXT)
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
     # Под ответом — только материалы, на которые ИИ сослался номером: на
@@ -326,10 +386,15 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         else:
             sources = [s for s in sources if s["n"] in used]
         if sources:
+            # чипы по порядку: «Лекция 2, Лекция 3 · стр. 28, Лекция 3 · стр. 37»,
+            # а не в порядке релевантности (Никита 21.10: «почему 2, 4?»)
+            sources.sort(key=lambda s: (_natural(str(s.get("title") or "")), s.get("page") or 0))
             result["sources"] = sources
     # кнопка «Подумать ещё» под ответом (подписчикам, не на iPhone); к фото и
     # файлу — нет: модель второго уровня читает только текст
     offer = None if body.attachment else await think.offer(user["id"], x_app)
     if offer:
         result["think"] = offer
+    if picked_subject:
+        result["subject"] = picked_subject
     return result

@@ -219,7 +219,7 @@ class _LessonScreenState extends State<LessonScreen> {
                           text: 'все пары преподавателя',
                           // оценка в капибарах (вариант А, 19.10) — своей группе
                           extra: widget.own ? TeacherRatingLine(api: api, name: lesson.teacher) : null,
-                          onTap: () => openTarget(context, api, lesson.teacher, 2),
+                          onTap: () => openTarget(context, api, lesson.teacher, 2, subject: lesson.title),
                         ),
                       ],
                       if (groups.length <= 1)
@@ -407,12 +407,15 @@ class _CourseStrip extends StatelessWidget {
 
 /// Расписание группы, преподавателя или аудитории: найти в справочнике МИРЭА
 /// (тип 1 — группа, 2 — преподаватель, 3 — аудитория) и открыть (search.dart).
-Future<void> openTarget(BuildContext context, Api api, String query, int type) async {
+/// [subject] — предмет пары, с которой пришли: однофамилец, который его ведёт
+/// (`match` от сервера), открывается сразу, без выбора (Никита 21.10).
+Future<void> openTarget(BuildContext context, Api api, String query, int type, {String subject = ''}) async {
   final s = AppStyle.of(context);
   final toast = Overlay.of(context, rootOverlay: true);
   List items;
   try {
-    items = (await api.get('/search?q=${Uri.encodeQueryComponent(query)}&type=$type'))['items'] as List;
+    final subj = subject.isEmpty ? '' : '&subject=${Uri.encodeQueryComponent(subject)}';
+    items = (await api.get('/search?q=${Uri.encodeQueryComponent(query)}&type=$type$subj'))['items'] as List;
   } catch (_) {
     toastOn(toast, 'Расписание МИРЭА сейчас не отвечает', kind: ToastKind.error);
     return;
@@ -422,9 +425,16 @@ Future<void> openTarget(BuildContext context, Api api, String query, int type) a
     return;
   }
   Map pick = items.first;
-  if (items.length > 1 && context.mounted) {
+  final match = [
+    for (final it in items)
+      if (it is Map && it['match'] == true) it,
+  ];
+  if (match.length == 1) {
+    pick = match.first;
+  } else if (items.length > 1 && context.mounted) {
     // однофамильцы: «Морозов В. А.» бывает трижды — подсказка у каждого
     final chosen = await showModalBottomSheet<Map>(
+      useSafeArea: true,
       context: context,
       backgroundColor: s.p.cardSolid,
       showDragHandle: true,

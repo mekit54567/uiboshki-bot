@@ -152,7 +152,9 @@ async def _generate(contents: list[dict], system_instruction: str | None = None,
             if e.blocked:                           # страна сервера (Россия без прокси) — сразу запасная
                 limited = e
                 break
-            if e.status == 429 or (model != GEMINI_MODEL and e.status == 404):
+            # 503 «перегружен» у одной модели — тоже к следующей (Никита
+            # 21.10: ответ упал на первой же модели с HTTP 503)
+            if e.status == 429 or (e.status or 0) >= 500 or (model != GEMINI_MODEL and e.status == 404):
                 if limited is None or (e.status == 429 and limited.status != 429):
                     limited = e                     # лимит важнее «запасной нет»
                 if i + 1 < len(models):

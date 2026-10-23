@@ -22,6 +22,8 @@ if [ "$NEW" = "$(cat "$DONE" 2>/dev/null)" ] && [ "${1:-}" != "--force" ]; then
     exit 0
 fi
 git reset -q --hard "$NEW"
+# команда kap — копия в /usr/local/bin (setup.sh): новые подкоманды приходят с обновлением
+install -m 755 deploy/timeweb/kap /usr/local/bin/kap 2>/dev/null || true
 docker compose -f deploy/timeweb/docker-compose.yml up -d --build --remove-orphans
 echo "$NEW" > "$DONE"
 docker image prune -f >/dev/null

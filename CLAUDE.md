@@ -164,7 +164,7 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
 того же Dockerfile + Caddy (HTTPS www.uiboshki.ru сам; по IP — только
 `/api/meta`), автообновление — systemd-таймер раз в минуту тянет ветку из
 `/opt/kapibara/branch` (`deploy`), секретов в GitHub нет. На сервере —
-команда `kap` (start/stop/logs/restart/update/restore/env). База — `kap
+команда `kap` (start/stop/logs/restart/update/restore/env/check; `kap check` — какие переменные работают, `tools/env_check.py`, 5.117.4). База — `kap
 restore` из S3-копии (`tools/s3_restore.py`) или `/restore` в боте. VPN —
 `XRAY_CONFIG` (Gemini Россию не пускает, прокси Amvera тут нет). Политика
 называет хостинг из `HOSTING` (`privacy.HOSTS`, на Timeweb — согласие v3,

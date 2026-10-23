@@ -7,6 +7,7 @@
 #   kap update   — пересобрать из GitHub прямо сейчас
 #   kap restore  — забрать базу из S3-копии (только пока бот остановлен)
 #   kap env      — открыть переменные (/opt/kapibara/.env)
+#   kap check    — проверить переменные: что работает ✅, что нет ❌ (tools/env_check.py)
 set -eu
 cd /opt/kapibara/app
 DC="docker compose -f deploy/timeweb/docker-compose.yml"
@@ -18,5 +19,20 @@ case "${1:-}" in
     update)  sh deploy/timeweb/update.sh --force ;;
     restore) shift; $DC run --rm --no-deps bot python tools/s3_restore.py "$@" ;;
     env)     ${EDITOR:-nano} /opt/kapibara/.env ;;
-    *)       sed -n '2,10p' "$0" ;;
+    check)
+        # Проверяем внутри работающего бота: те же переменные и тот же VPN (Xray).
+        ID=$($DC ps -q bot)
+        if [ -z "$ID" ]; then echo "Бот не запущен — сначала kap start"; exit 1; fi
+        STARTED=$(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$ID")" +%s)
+        if [ "$(stat -c %Y /opt/kapibara/.env)" -gt "$STARTED" ]; then
+            echo "⚠️  .env поправлен после запуска бота — проверю то, с чем бот работает сейчас."
+            echo "   Чтобы проверить новое: kap restart, подожди полминуты, потом kap check."
+        fi
+        NAMES=$(sed -n 's/^[[:space:]]*\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/\1/p' /opt/kapibara/.env | tr '\n' ' ')
+        $DC exec -T -e KAP_ENV_NAMES="$NAMES" bot sh -c '
+            if [ -n "$XRAY_CONFIG" ] && [ -z "$OUT_PROXY" ] && python -c "import socket; socket.create_connection((\"127.0.0.1\", 10809), 1)" 2>/dev/null; then
+                export OUT_PROXY=http://127.0.0.1:10809
+            fi
+            exec python -m tools.env_check' ;;
+    *)       sed -n '2,11p' "$0" ;;
 esac

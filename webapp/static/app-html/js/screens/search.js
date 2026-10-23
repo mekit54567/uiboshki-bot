@@ -109,14 +109,18 @@ window.openSearch = function openSearch() {
 };
 
 /** Найти в справочнике МИРЭА и открыть (lesson.dart: openTarget). type: 1 — группа, 2 — преподаватель, 3 — аудитория. */
-window.openTarget = async function openTarget(query, type) {
+window.openTarget = async function openTarget(query, type, subject = "") {
   let items;
   try {
-    items = (await Api.get(`/search?q=${encodeURIComponent(query)}&type=${type}`)).items || [];
+    const subj = subject ? `&subject=${encodeURIComponent(subject)}` : "";
+    items = (await Api.get(`/search?q=${encodeURIComponent(query)}&type=${type}${subj}`)).items || [];
   } catch (e) { toast("Расписание МИРЭА сейчас не отвечает", "error"); return; }
   if (!items.length) { toast(`«${query}» в расписании МИРЭА не нашёл`); return; }
   let pick = items[0];
-  if (items.length > 1) {
+  // с экрана пары: однофамилец, который ведёт этот предмет, — сразу он
+  const match = items.filter((it) => it.match);
+  if (match.length === 1) pick = match[0];
+  else if (items.length > 1) {
     // однофамильцы: «Морозов В. А.» бывает трижды — подсказка у каждого
     const list = items.slice(0, 8);
     pick = await Sheet.show(list.map((it, i) => `<button class="sr-pick" data-act="pick" data-k="${i}">

@@ -108,14 +108,16 @@ async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
     data = client.post("/api/chat", json={"history": [{"role": "user", "content": "Дебет и кредит счёта — что это?"}]},
                        headers=headers).json()
     assert calls == [True, False]
-    assert "левая сторона" in data["content"] and "ответ без лекций: Gemini не ответил вовремя" in data["content"]
+    assert "левая сторона" in data["content"] and "ответил без лекций" in data["content"] and "Gemini" not in data["content"]
 
     async def down(*a, **kw):
         raise GeminiError("Gemini: лимит запросов исчерпан")
 
     monkeypatch.setattr("ai_solver.chat_with_reasoning", down)
     resp = client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет"}]}, headers=headers)
-    assert resp.status_code == 502 and "лимит запросов исчерпан" in resp.json()["detail"]
+    # без названия провайдера и кода — «Повторить» (Никита 21.10: «причём тут Gemini?»)
+    detail = resp.json()["detail"]
+    assert resp.status_code == 502 and "Gemini" not in detail and "Повторить" in detail
 
 
 def test_typo_in_question_still_finds_lecture():

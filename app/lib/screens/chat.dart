@@ -45,6 +45,10 @@ class ChatMsg {
   /// Вопрос ушёл с включённым «Подумать» (think_first); не хранится.
   bool deep = false;
 
+  /// «По какому предмету?»: что выбрали — список сворачивается в одну строку
+  /// (Никита 21.10: огромный список висел в переписке и после выбора).
+  String? chosen;
+
   ChatMsg(
     this.role,
     this.content, {
@@ -489,6 +493,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _takeThink(r);
       if (r['file_text'] is String) entry.fileText = r['file_text'];
       final choose = [for (final c in (r['choose'] as List? ?? [])) '$c'];
+      // «завтра МБП …» — сервер узнал предмет по сокращению: переключаем шапку
+      if (r['subject'] is String && '${r['subject']}'.isNotEmpty && identical(log, _log)) {
+        _subject = '${r['subject']}';
+      }
       answer = ChatMsg(
         'assistant',
         r['content'] ?? '',
@@ -512,6 +520,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       answer = ChatMsg('assistant', errorText(e), error: true);
     }
     await _deliver(log, id, answer);
+  }
+
+  /// «Повторить» под ошибкой: тот же вопрос ещё раз, ошибка уходит из
+  /// переписки. Раньше человек писал «?», а ИИ видел пустой вопрос (Никита 21.10).
+  void _retry() {
+    if (_waiting || _log.isEmpty || !_log.last.error) return;
+    final q = _log.lastWhere((m) => m.role == 'user', orElse: () => ChatMsg('user', ''));
+    if (q.content.isEmpty) return;
+    setState(() => _log.removeLast());
+    _send(again: q.content);
   }
 
   /// Сервер прислал, сколько «Подумать» осталось, — переключатель и чип под ответом.
@@ -630,6 +648,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _pickSubject() async {
     final s = AppStyle.of(context);
     final picked = await showModalBottomSheet<String>(
+      useSafeArea: true,
       context: context,
       backgroundColor: s.p.cardSolid,
       showDragHandle: true,
@@ -755,8 +774,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           _Bubble(
                             m: m,
                             api: widget.api,
+                            onRetry: m.error && identical(m, _log.last) && !_waiting ? _retry : null,
                             onChoose: (subj) {
-                              setState(() => _subject = subj);
+                              if (_waiting) return;
+                              setState(() {
+                                _subject = subj;
+                                m.chosen = subj;
+                              });
                               final lastQ = _log.lastWhere((x) => x.role == 'user');
                               _send(again: lastQ.content, againAtt: _chooseAtt);
                             },
@@ -1059,7 +1083,8 @@ class _Bubble extends StatelessWidget {
   final ChatMsg m;
   final Api api;
   final ValueChanged<String> onChoose;
-  const _Bubble({required this.m, required this.api, required this.onChoose});
+  final VoidCallback? onRetry;
+  const _Bubble({required this.m, required this.api, required this.onChoose, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1159,7 +1184,40 @@ class _Bubble extends StatelessWidget {
             ),
             child: answer,
           ),
-          if (m.choose.isNotEmpty) ...[
+          if (m.error && onRetry != null) ...[
+            const SizedBox(height: Space.s),
+            ActionChip(
+              key: const Key('chat:retry'),
+              backgroundColor: p.card,
+              side: BorderSide(color: p.accent),
+              shape: const StadiumBorder(),
+              avatar: Icon(Icons.refresh_rounded, size: 18, color: p.accent),
+              label: Text('Повторить', style: s.body(13, weight: FontWeight.w600)),
+              onPressed: () {
+                tick();
+                onRetry!();
+              },
+            ),
+          ],
+          if (m.chosen != null)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.s),
+              child: Row(
+                key: const Key('chat:chosen'),
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 18, color: p.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      m.chosen!,
+                      style: s.body(14, weight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (m.choose.isNotEmpty) ...[
             const SizedBox(height: Space.s),
             Wrap(
               spacing: Space.s,

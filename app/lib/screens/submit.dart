@@ -89,6 +89,7 @@ Future<bool?> showSubmitSheet(
 }) {
   final s = AppStyle.of(context);
   return showModalBottomSheet<bool>(
+    useSafeArea: true,
     context: context,
     backgroundColor: s.p.cardSolid,
     showDragHandle: true,
