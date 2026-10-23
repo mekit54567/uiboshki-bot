@@ -19,6 +19,7 @@ PER_FILE кусков из одного файла.
 """
 
 import logging
+import re
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
@@ -221,6 +222,29 @@ def place(h: dict) -> str:
     return f"{kind} {a}–{b}"
 
 
+_JUNK_HEAD = re.compile(r"^[\s!#*_~.\-–—]+")
+
+
+def human_title(title: str, subject: str = "") -> str:
+    """Название файла для человека: без «!» и «_» в начале (так файлы
+    поднимают наверх в СДО), без названия предмета — оно и так выбрано;
+    от файла осталось одно название предмета — «Материалы курса»."""
+    t = _JUNK_HEAD.sub("", title or "").strip()
+    subj = (subject or "").strip()
+    if subj and t.lower().startswith(subj.lower()):
+        rest = _JUNK_HEAD.sub("", t[len(subj):].lstrip(" .,:;()–—-")).strip()
+        t = rest or "Материалы курса"
+    return t or (title or "").strip()
+
+
+def chip_label(title: str, subject: str, where: str, kind: str) -> str:
+    """Подпись чипа под ответом: «Лекция 3 · стр. 37». У DOCX/TXT «часть 18» —
+    кусок текста, а не страница, человеку ничего не говорит (Никита 21.10:
+    «!План и комплект… часть 18 — что это?») — только название."""
+    name = short_title(human_title(title, subject))
+    return name if kind == "часть" else f"{name} · {where}"
+
+
 def short_title(title: str, limit: int = 28) -> str:
     """Название под ответом: длинное — по границе слова, с «…»."""
     t = (title or "").strip()
@@ -243,6 +267,6 @@ def build_context(hits: list[dict], limit: int = CONTEXT_CHARS) -> tuple[str, li
         where = place(h)
         blocks.append(f"=== [{n}] {h['subject'] or 'Без предмета'}: {h['title']} · {where} ===\n{h['text']}")
         sources.append({"n": n, "id": h["file_id"], "title": h["title"], "page": h["page_from"],
-                        "kind": h["kind"], "label": f"{short_title(h['title'])} · {where}"})
+                        "kind": h["kind"], "label": chip_label(h["title"], h.get("subject") or "", where, h["kind"])})
         used += len(h["text"])
     return "\n\n".join(blocks), sources

@@ -78,10 +78,27 @@ async def search_targets(query: str, target_type: int, limit: int = 8) -> list[d
         return []
 
 
-async def add_hints_for_namesakes(results: list[dict], limit: int = 10) -> list[dict]:
+def teaches(raw: bytes, subject: str, days: int = 120) -> bool:
+    """Ведёт ли этот преподаватель (или есть ли у этой цели) пары предмета
+    subject в пределах ±days дней — по названию без «ЛК/ПР»."""
+    from datetime import datetime, timedelta
+    from schedule_events import TZ, _calendar_query
+    from schedule_format import _split_kind
+    now = datetime.now(TZ)
+    want = subject.strip().lower()
+    for comp in _calendar_query(raw).between(now - timedelta(days=days), now + timedelta(days=days)):
+        if _split_kind(str(comp.get("SUMMARY", "")))[0].strip().lower() == want:
+            return True
+    return False
+
+
+async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject: str = "") -> list[dict]:
     """Для одинаковых названий в выдаче («Морозов В. А.» ×3 — в справочнике
     только инициалы) подтягивает их расписание и добавляет "hint": главный
     предмет на 2 недели или «нет пар». Те, у кого есть пары, — выше.
+    subject — предмет пары, с которой пришли (экран пары → преподаватель):
+    однофамилец, который его ведёт, помечается "match" — его открываем сразу
+    (Никита 21.10: «мне нужен тот, кто ведёт пару у меня, зачем выбирать?»).
     results — [{"id", "fullTitle", "scheduleTarget"}]; остальные не трогаются."""
     import asyncio
     from collections import Counter
@@ -96,11 +113,16 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10) -> list[
         if raw is None:
             return
         try:
-            subject, pairs = summarize_target(raw)
+            main, pairs = summarize_target(raw)
         except Exception:
             return
         r["pairs"] = pairs
-        r["hint"] = subject if pairs else "нет пар в ближайшие 2 недели"
+        r["hint"] = main if pairs else "нет пар в ближайшие 2 недели"
+        if subject:
+            try:
+                r["match"] = teaches(raw, subject)
+            except Exception:
+                pass
 
     await asyncio.gather(*(hint(r) for r in dupes))
     # Порядок выдачи (совпадения с начала, свежие группы выше) сохраняем —

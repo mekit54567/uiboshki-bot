@@ -75,7 +75,7 @@ function openLesson(raw, { own = true } = {}) {
     const $ = (s) => body.querySelector(s);
     const handlers = {
       room: () => window.openTarget ? openTarget(room, 3) : toast("Скоро"),
-      teacher: () => window.openTarget ? openTarget(l.teacher, 2) : toast("Скоро"),
+      teacher: () => window.openTarget ? openTarget(l.teacher, 2, l.title) : toast("Скоро"),
     };
     on(body, handlers);
 
@@ -100,10 +100,12 @@ function openLesson(raw, { own = true } = {}) {
         const avg = r.avg, n = r.count || 0, mine = r.mine, can = r.can_rate === true;
         if (avg == null && !can) { box.innerHTML = ""; return; }
         const note = avg != null ? `${fmtRating(avg)} · ${n} ${plural(n, "оценка", "оценки", "оценок")}`
-          : mine != null ? `твоя — ${mine} · среднее покажем от ${r.show_min || 3} оценок` : "оцени первым";
-        box.innerHTML = `<span class="ls-rate" role="button" tabindex="0" data-act="rate" aria-label="Оценка преподавателя: ${esc(note)}">
+          : mine != null ? `твоя — ${mine} · среднее покажем от ${r.show_min || 3} оценок` : "пока без оценок";
+        // кнопкой во всю строку: в мелкие капибары было не попасть (Никита 21.10)
+        const act = can ? (mine != null ? "Изменить" : "Оценить") : "";
+        box.innerHTML = `<span class="ls-rate${can ? " can" : ""}" role="button" tabindex="0" data-act="rate" aria-label="Оценка преподавателя: ${esc(note)}">
           ${ratingRow(avg ?? mine ?? 0, 18, avg == null && mine == null ? "var(--muted)" : "var(--text)")}
-          <span class="bd mut ell" style="--sz:13px;${avg != null ? "font-weight:600" : ""}">${esc(note)}</span></span>`;
+          <span class="bd mut ell" style="--sz:13px;flex:1;${avg != null ? "font-weight:600" : ""}">${esc(note)}</span>${act ? `<span class="bd acc" style="--sz:14px;font-weight:600">${act}</span>` : ""}</span>`;
       };
       Api.get("/teacher/rating?" + new URLSearchParams({ name: l.teacher })).then((j) => { r = j; drawRating(); }).catch(() => {});
       handlers.rate = async (b, e) => {

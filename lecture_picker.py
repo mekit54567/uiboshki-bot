@@ -249,3 +249,40 @@ def subject_scores(context: str, query: str, min_score: int = AUTO_MIN_SCORE) ->
             subj = title.split(": ", 1)[0]
             best[subj] = max(best.get(subj, 0), score)
     return sorted(best.items(), key=lambda x: -x[1])
+
+
+# «МБП», «ООАП», «ФХД» — предмет по первым буквам слов названия (Никита
+# 21.10: «завтра МБП, что на лекции» — помощник не понял и вывалил весь
+# список предметов). Мелкие слова («и», «в», «по») не в счёт; слово через
+# дефис — либо две буквы («бизнес-процессов» → БП), либо одна.
+_ABBR = re.compile(r"(?<![а-яёa-z])[а-яё]{2,7}(?![а-яёa-z])", re.I)
+_SMALL = {"и", "в", "во", "на", "по", "к", "с", "со", "для", "о", "об", "от", "из"}
+
+
+def _initials(subject: str) -> set[str]:
+    words = [w for w in re.split(r"\s+", subject.lower().replace("ё", "е")) if w and w not in _SMALL]
+    out = {""}
+    for w in words:
+        parts = [p for p in w.split("-") if p]
+        if not parts:
+            continue
+        variants = {"".join(p[0] for p in parts), parts[0][0]}
+        out = {o + v for o in out for v in variants}
+    return {o for o in out if len(o) >= 2}
+
+
+def subject_by_abbrev(text: str, subjects: list[str]) -> str | None:
+    """Предмет, сокращение которого есть в тексте; два подходящих — None.
+    Строчными («мбп») — только от трёх букв: «пр», «лк» — не предметы."""
+    found = set()
+    for m in _ABBR.finditer(text or ""):
+        tok = m.group(0)
+        if not tok.isupper() and len(tok) < 3:
+            continue
+        low = tok.lower().replace("ё", "е")
+        if low in _STOP or low in {"лк", "пр", "лаб", "кр", "экз", "зач"}:
+            continue
+        for s in subjects:
+            if low in _initials(s):
+                found.add(s)
+    return found.pop() if len(found) == 1 else None

@@ -767,9 +767,38 @@ String pageImageUrl(String url) => url.startsWith('http') ? url : '${Api.base}/$
 /// Страница лекции по ссылке из ответа ИИ или из поиска («Лекция 5 · слайд 12»):
 /// у PDF — сама страница картинкой, ниже текст; листать соседние, «Весь файл» —
 /// обычный лист файла.
+/// Текст слайда или страницы под картинкой: из PDF он приходит обрывками
+/// строк (как стоял в рамке слайда) и с номером страницы в конце (Никита
+/// 21.10). Строки одной фразы склеиваем, номер страницы убираем, «бизнес
+/// -процессов» → «бизнес-процессов».
+String tidyPageText(String raw) {
+  final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+  if (lines.isNotEmpty && RegExp(r'^\d{1,3}$').hasMatch(lines.last)) lines.removeLast();
+  final out = <String>[];
+  for (final l in lines) {
+    if (out.isEmpty) {
+      out.add(l);
+      continue;
+    }
+    final prev = out.last;
+    final ends = RegExp(r'[.!?:;…»)]$').hasMatch(prev);
+    final lower = RegExp(r'^[a-zа-яё(«\-–—,]').hasMatch(l);
+    if (lower || (!ends && prev.length > 40)) {
+      out[out.length - 1] = '$prev $l';
+    } else {
+      out.add(l);
+    }
+  }
+  return out
+      .join('\n')
+      .replaceAllMapped(RegExp(r'([A-Za-zА-Яа-яЁё]) -([A-Za-zА-Яа-яЁё])'), (m) => '${m[1]}-${m[2]}')
+      .trim();
+}
+
 Future<void> showPageSheet(BuildContext context, Api api, int fileId, int page, {String subject = ''}) {
   final s = AppStyle.of(context);
   return showModalBottomSheet<void>(
+    useSafeArea: true,
     context: context,
     backgroundColor: s.p.cardSolid,
     showDragHandle: true,
@@ -869,7 +898,7 @@ class _PageSheetState extends State<_PageSheet> {
       final pages = (d['pages'] as num?)?.toInt() ?? page;
       final kind = d['kind'] == 'слайд' ? 'Слайд' : (d['kind'] == 'стр.' ? 'Страница' : 'Часть');
       final image = d['image'] as String?;
-      final text = (d['text'] as String? ?? '').trim();
+      final text = tidyPageText(d['text'] as String? ?? '');
       children = [
         Text('$kind $page из $pages', style: s.eyebrow()),
         const SizedBox(height: 4),
@@ -925,6 +954,7 @@ class _PageSheetState extends State<_PageSheet> {
 Future<void> showFileSheet(BuildContext context, Api api, FileItem f) {
   final s = AppStyle.of(context);
   return showModalBottomSheet<void>(
+    useSafeArea: true,
     context: context,
     backgroundColor: s.p.cardSolid,
     showDragHandle: true,
