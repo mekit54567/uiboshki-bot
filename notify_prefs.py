@@ -43,10 +43,14 @@ DEFAULTS = {
     "evening_time": "20:00",
     "quiz_remind": [],       # тесты СДО: за сколько минут до закрытия (quiz_alerts.py), несколько
     "quiz_open": True,       # тесты СДО: «Открыли тест»
+    "deadline_soon": True,   # «срок скоро, а ты не сдал» (deadline_soon.py, Никита 25.10)
+    "deadline_soon_hours": 3,
     "tg_copy": True,         # пуш дошёл — дублировать ли ещё в Telegram (delivery.deliver, Никита 14.10)
 }
 # Тесты СДО (quiz_alerts.CHOICES): за 1 день, 3 ч, 1 ч, 30 мин, 10 мин до закрытия
 QUIZ_REMIND_CHOICES = (1440, 180, 60, 30, 10)
+# «Срок скоро»: за сколько часов до срока, одно время (Никита 25.10: по умолчанию 3)
+DEADLINE_SOON_CHOICES = (1, 3, 6, 12, 24)
 DAYS_KEY = {"morning": "morning_days", "lessons": "lesson_days", "deadlines": "deadline_days"}
 _BOOLS = [k for k, v in DEFAULTS.items() if isinstance(v, bool)]
 _DAYS = [k for k in DEFAULTS if k.endswith("_days")]
@@ -72,6 +76,9 @@ def merge(raw: str | dict | None) -> dict:
     if isinstance(v, list):
         out["quiz_remind"] = sorted({m for m in v if isinstance(m, int) and not isinstance(m, bool)
                                      and m in QUIZ_REMIND_CHOICES}, reverse=True)
+    v = raw.get("deadline_soon_hours")
+    if isinstance(v, int) and not isinstance(v, bool) and v in DEADLINE_SOON_CHOICES:
+        out["deadline_soon_hours"] = v
     if raw.get("evening_time") in EVENING_TIMES:
         out["evening_time"] = raw["evening_time"]
     for k in _DAYS:

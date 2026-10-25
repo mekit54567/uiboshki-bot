@@ -791,6 +791,26 @@ function setEveningTime(t) {
   saveNotify({ prefs: { evening_time: t } });
 }
 
+// «Срок скоро, а ты не сдал» (deadline_soon.py, Никита 25.10): за сколько
+// часов до срока, одно время; по умолчанию 3 ч.
+const SOON_CHOICES = [1, 3, 6, 12, 24];
+
+function soonLabel(h) { return h >= 24 ? "1 день" : h + " ч"; }
+
+function ntSoon(s) {
+  const p = s.prefs, h = p.deadline_soon_hours || 3;
+  return '<div class="nt-card' + (p.deadline_soon ? "" : " off") + '"><div class="nt-head"><span class="nt-ic">' + icon("clock") + '</span>' +
+    '<div><b>Срок скоро</b><p>за ' + soonLabel(h) + ' до срока, если работа не сдана</p></div>' +
+    ntSwitch(p.deadline_soon, "toggleNotify('deadline_soon')") + '</div>' +
+    (p.deadline_soon ? '<div class="nt-mins">' + (s.deadline_soon_choices || SOON_CHOICES).map(x =>
+      '<button class="' + (x === h ? "on" : "") + '" onclick="setSoonHours(' + x + ')">' + soonLabel(x) + '</button>').join("") + '</div>' : "") +
+    '</div>';
+}
+
+function setSoonHours(h) {
+  saveNotify({ prefs: { deadline_soon_hours: h } });
+}
+
 // Тесты СДО (quiz_alerts.py, Никита 12.10): один пункт, по нажатию — за
 // сколько до закрытия напомнить (несколько сразу) и «Тест открылся».
 const QUIZ_CHOICES = [1440, 180, 60, 30, 10];
@@ -857,11 +877,12 @@ function renderNotify() {
       ntCard("clock", "Перед парой", "своё время для первой пары и после перемены", "lessons", "lesson_days",
         s.remind.map(ntRemind).join("")) +
       ntCard("deadlines", "Дедлайны", "в " + s.deadline_time + " — что сдать в ближайшие 3 дня", "deadlines", "deadline_days") +
+      ntSoon(s) +
       '<div class="nt-card' + (p.weekly ? "" : " off") + '"><div class="nt-head"><span class="nt-ic">' + icon("calendar") + '</span>' +
-        '<div><b>Обзор недели</b><p>в воскресенье в 19:00 — пары по дням и что сдать</p></div>' +
+        '<div><b>Обзор недели</b><p>в воскресенье в 19:00 — сколько пар и что сдать</p></div>' +
         ntSwitch(p.weekly, "toggleNotify('weekly')") + '</div></div>' +
       '<div class="nt-card' + (p.grades ? "" : " off") + '"><div class="nt-head"><span class="nt-ic">' + icon("medal") + '</span>' +
-        '<div><b>Новые баллы</b><p>напишу, когда в СДО изменятся баллы по предмету (если подключён вход)</p></div>' +
+        '<div><b>Новые баллы</b><p>напишу, когда проверят работу или изменятся баллы по предмету (если подключён вход в СДО)</p></div>' +
         ntSwitch(p.grades, "toggleNotify('grades')") + '</div></div>' +
       '<div class="nt-card' + (p.new_tasks ? "" : " off") + '"><div class="nt-head"><span class="nt-ic">' + icon("deadlines") + '</span>' +
         '<div><b>Новые задания</b><p>напишу, когда в СДО появится задание или перенесут срок</p></div>' +

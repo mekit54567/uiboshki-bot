@@ -64,6 +64,64 @@ def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
             " · ".join(f"{name(c)} {delta(o, w)} ({_num(w)})" for c, o, w in items))
 
 
+# ── «Работу проверили» (Никита 25.10) ────────────────────────────────────────
+# Что из работ текущего контроля уже было оценено — в settings «graded:<id>»
+# (JSON «курс:работа» → оценка как написана). Работа стала оценённой или
+# оценка у неё поменялась — пуш «Проверили: Практика 2 — 7 из 8». Первый раз
+# (ключа нет) — только запоминаем, как и с суммой баллов.
+
+def graded_map(courses: list[dict]) -> dict[str, str]:
+    out = {}
+    for c in courses:
+        for w in c.get("works") or []:
+            if w.get("cmid") and w.get("graded"):
+                out[f"{c.get('id')}:{w['cmid']}"] = _mark(w)
+    return out
+
+
+def _mark(w: dict) -> str:
+    """«7 из 8», «зачтено», «не зачтено»."""
+    if w.get("grade") is not None:
+        return f"{_num(w['grade'])} из {_num(w['max'])}" if w.get("max") else _num(w["grade"])
+    return "зачтено" if w.get("passed") else "не зачтено"
+
+
+def checked(seen: dict[str, str] | None, courses: list[dict]) -> list[tuple[dict, dict]]:
+    """[(курс, работа)] — проверенные с прошлого раза. seen None — первый раз, пусто."""
+    if seen is None:
+        return []
+    return [(c, w) for c in courses for w in c.get("works") or []
+            if w.get("cmid") and w.get("graded") and seen.get(f"{c.get('id')}:{w['cmid']}") != _mark(w)]
+
+
+def checked_text(items: list[tuple[dict, dict]]) -> str:
+    lines = ["✅ <b>Проверили работу</b>" if len(items) == 1 else "✅ <b>Проверили работы</b>"]
+    for c, w in items:
+        lines.append(f"• {esc(c.get('name') or c.get('title') or 'Предмет')} — {esc(w.get('name') or '')}: "
+                     f"<b>{_mark(w)}</b>")
+    return "\n".join(lines)
+
+
+def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
+    from push_text import word
+    if len(items) == 1:
+        c, w = items[0]
+        return f"Проверили: {w.get('name') or 'работу'} — {_mark(w)}", c.get("name") or c.get("title") or ""
+    n = len(items)
+    return (f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}",
+            " · ".join(f"{w.get('name')} — {_mark(w)}" for _, w in items[:4]))
+
+
+async def _seen(user_id: int) -> dict[str, str] | None:
+    import json
+    from database import get_setting
+    raw = await get_setting(f"graded:{user_id}")
+    try:
+        return json.loads(raw) if raw else None
+    except ValueError:
+        return None
+
+
 async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> bool:
     """Сверить баллы одного человека; True — сообщение отправлено. notify=False —
     только записать точку истории (для посещений, attendance.py)."""
@@ -71,15 +129,24 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
     import sdo_history
     from database import get_last_scores
     from keyboards import app_button
+    import json
+    from database import set_setting
     data = await sdo_grades.overview(user_id, cookie, fresh=True)
     courses = data.get("courses") or []
     diff = changes(await get_last_scores(user_id), courses)
     await sdo_history.record(user_id, courses)
-    if not diff or not notify:
+    seen = await _seen(user_id)
+    done = checked(seen, courses)
+    now = graded_map(courses)
+    if seen is None or now != seen:
+        # работу, которой в журнале больше нет, не забываем: вдруг СДО отдал журнал не целиком
+        await set_setting(f"graded:{user_id}", json.dumps({**(seen or {}), **now}, ensure_ascii=False))
+    if not (diff or done) or not notify:
         return False
     import delivery
-    title, short = headline(diff)
-    await delivery.deliver(bot, user_id, message(diff), kind="grades", tab="sdo", title=title, body=short,
+    title, short = checked_head(done) if done else headline(diff)
+    text = "\n\n".join(x for x in (checked_text(done) if done else "", message(diff) if diff else "") if x)
+    await delivery.deliver(bot, user_id, text, kind="grades", tab="sdo", title=title, body=short,
                            reply_markup=app_button("🎓 Открыть баллы", "sdo"))
     return True
 

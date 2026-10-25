@@ -157,8 +157,13 @@ window.openNotify = function openNotify() {
           children: days(p.lesson_days || [], "lesson_days") + (s.remind || []).map(remind).join("") });
         html += card({ ic: "flag", title: "Дедлайны", sub: `в ${s.deadline_time || "19:00"} — что сдать в ближайшие 3 дня`, key: "deadlines",
           on: p.deadlines === true, children: days(p.deadline_days || [], "deadline_days") });
-        html += card({ ic: "view_week", title: "Обзор недели", sub: "в воскресенье в 19:00 — пары по дням и что сдать", key: "weekly", on: p.weekly === true });
-        html += card({ ic: "military_tech", title: "Новые баллы", sub: "когда в СДО изменятся баллы (если подключён вход)", key: "grades", on: p.grades === true });
+        // «Срок скоро» (deadline_soon.py, Никита 25.10): за сколько часов до срока, если не сдано
+        const soonH = p.deadline_soon_hours || 3, soonLabel = (h) => h >= 24 ? "1 день" : `${h} ч`;
+        html += card({ ic: "hourglass_bottom", title: "Срок скоро", sub: `за ${soonLabel(soonH)} до срока, если работа не сдана`, key: "deadline_soon",
+          on: p.deadline_soon === true, children: `<div class="mr-wrap" style="margin-top:0">${(s.deadline_soon_choices || [1, 3, 6, 12, 24]).map((h) =>
+            mrPill(soonLabel(h), soonH === h, "soon", ` data-v="${h}"`, { wide: true })).join("")}</div>` });
+        html += card({ ic: "view_week", title: "Обзор недели", sub: "в воскресенье в 19:00 — сколько пар и что сдать", key: "weekly", on: p.weekly === true });
+        html += card({ ic: "military_tech", title: "Новые баллы", sub: "когда проверят работу или изменятся баллы (если подключён вход в СДО)", key: "grades", on: p.grades === true });
         html += card({ ic: "assignment", title: "Новые задания", sub: "когда в СДО появится задание или перенесут срок", key: "new_tasks", on: p.new_tasks === true });
         html += quiz();
         if (Theme.design2 && "evening" in p) {
@@ -238,6 +243,7 @@ window.openNotify = function openNotify() {
       },
       qopen() { save({ prefs: { quiz_open: prefs().quiz_open === false } }); },
       ev(b) { save({ prefs: { evening_time: b.dataset.v } }); },
+      soon(b) { save({ prefs: { deadline_soon_hours: +b.dataset.v } }); },
       "ev-own"() { customEvening(); },
     });
 

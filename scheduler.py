@@ -493,6 +493,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_deadline_custom_reminders, "cron", minute="*",        args=[bot])
     import quiz_alerts                    # тесты СДО: до закрытия и «открыли тест» (Уведомления → Тесты СДО)
     scheduler.add_job(quiz_alerts.send_due,    "cron", minute="*",             args=[bot])
+    import deadline_soon                  # «срок скоро, а ты не сдал» (Уведомления → Срок скоро)
+    scheduler.add_job(deadline_soon.send_due,  "cron", minute="*/5",           args=[bot])
     from database.sdo import purge_quiz_alerts
     scheduler.add_job(purge_quiz_alerts,       "cron", hour=4, minute=22)
     # Первый синк — через минуту после запуска: после деплоя СДО иначе молчал
