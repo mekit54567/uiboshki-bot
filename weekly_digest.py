@@ -72,46 +72,18 @@ def _week(raw: bytes, monday: date, deadlines: list[dict], home: str | None):
 
 def headline(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
              grades: list[tuple[str, float]] | None = None) -> tuple[str, str] | None:
-    """Пуш (Никита 25.10: разбивка по дням в пуше — «смысла ноль»):
-    заголовок «Неделя 9: 21 пара, свободен вт», текст — что сдать, куда
-    ехать не в свой корпус, самый плотный день, рост баллов. None — пусто."""
-    from push_text import split_subject, word
-    from schedule_parser import week_number
-    days, total, free, week_dl = _week(raw, monday, deadlines, home)
+    """Пуш: «Следующая неделя: 21 пара» и «Сдать 3 работы». Никита 25.10:
+    «Неделя 9: 21 пара» читается как две недели, свободные дни и корпус в
+    пуше не нужны, названия работ — тоже: нажал — открылись дедлайны.
+    None — неделя пустая. grades — только для сообщения в Telegram."""
+    from push_text import word
+    _, total, _, week_dl = _week(raw, monday, deadlines, home)
     if not total and not week_dl:
         return None
-    num = week_number(raw, monday)
-    title = f"Неделя {num}" if num else "Неделя"
-    if total:
-        title += f": {total} {word(total, 'пара', 'пары', 'пар')}"
-        low = [f.lower() for f in free]
-        if len(low) == 1:
-            title += f", свободен {low[0]}"
-        elif 1 < len(low) <= 3:
-            title += f", свободны {', '.join(low)}"
-        elif low:
-            title += f", {len(low)} {word(len(low), 'день', 'дня', 'дней')} без пар"
-    else:
-        title += ": пар нет"
-    parts = []
-    if week_dl:
-        first = week_dl[0]
-        due = DAYS[date.fromisoformat(first["due_date"]).weekday()].lower()
-        due += f" {first['due_time']}" if first.get("due_time") else ""
-        name = split_subject(first["subject"])[0]
-        n = len(week_dl)
-        parts.append(f"Сдать: {name}, {due}" if n == 1
-                     else f"Сдать {n} {word(n, 'работу', 'работы', 'работ')}, первая — {name}, {due}")
-    away = [(day.lower(), c) for day, _, _, cs in days for c in cs]
-    if away:
-        parts.append("Не в своём корпусе: " + ", ".join(f"{d} — {c}" for d, c in away))
-    if days:
-        day, pairs, start, _ = max(days, key=lambda x: x[1])
-        if pairs >= 4 and len({p for _, p, _, _ in days}) > 1:
-            parts.append(f"Самый плотный — {day.lower()}, {pairs} {word(pairs, 'пара', 'пары', 'пар')}")
-    if grades:
-        parts.append("Баллы: " + ", ".join(f"{n} +{_num(d)}" for n, d in grades[:2]))
-    return title, " · ".join(parts) or "Сроков на неделе нет"
+    title = (f"Следующая неделя: {total} {word(total, 'пара', 'пары', 'пар')}" if total
+             else "Следующая неделя: пар нет")
+    n = len(week_dl)
+    return title, f"Сдать {n} {word(n, 'работу', 'работы', 'работ')}" if n else "Сроков на неделе нет"
 
 
 def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
@@ -127,7 +99,9 @@ def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
     sunday = monday + timedelta(days=6)
     span = (f"{monday.day}–{sunday.day} {MONTHS_GEN[sunday.month - 1]}" if monday.month == sunday.month
             else f"{monday.day} {MONTHS_GEN[monday.month - 1]} – {sunday.day} {MONTHS_GEN[sunday.month - 1]}")
-    out = [f"🗓 <b>{esc(head[0])}</b> · {span}"]
+    from schedule_parser import week_number
+    num = week_number(raw, monday)
+    out = [f"🗓 <b>{esc(head[0])}</b>", (f"Неделя {num} · " if num else "") + span]
     if week_dl:
         out.append("\n⏳ <b>Сдать на неделе</b>")
         for d in week_dl[:MAX_DEADLINES]:
