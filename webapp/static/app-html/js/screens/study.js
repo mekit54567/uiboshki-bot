@@ -200,7 +200,7 @@ function openCourse(raw) {
             <div class="bd b7" style="--sz:16px;margin-top:var(--m)">${esc(c.need > 0 ? `ещё ${c.need} до «${c.needLabel}»` : c.enoughText)}</div>
           </div></div></div>
         ${c.goal ? `<div class="hx" style="margin-top:var(--m)"><div class="st-goal"></div></div>` : ""}
-        ${lectures.length ? section("Посещения лекций") + `<div class="hx"><div class="tile">${stAttendance(c.attendance, color)}</div></div>` : ""}
+        ${lectures.length ? section("Посещения лекций") + `<div class="hx"><div class="tile"${c.attendance.ok !== false ? ' data-tap data-act="att"' : ""}>${stAttendance(c.attendance, color)}</div></div>` : ""}
         ${c.works.length ? section(`Текущий контроль · ${c.worksPassed} из ${c.worksTotal} зачтено`)
           + `<div class="hx"><div class="tile p0">${c.works.map((w, i) => (i ? '<div class="divider"></div>' : "") + stWorkRow(w, i)).join("")}</div></div>` : ""}
         ${c.categories.length ? section("Из чего баллы") + c.categories.map((cat) => {
@@ -227,6 +227,15 @@ function openCourse(raw) {
     };
     on(body, {
       retry: () => { body.innerHTML = stBack() + spinner(); refresh(); },
+      att: () => {
+        if (!data || !data.attendance) return;
+        tick();
+        stAttendanceSheet(data.id, data.attendance, ink(data.title), (a) => {
+          if (!alive || !data) return;
+          data.attendance = a;
+          draw();
+        });
+      },
       work: (b) => {
         const w = data && data.works[+b.dataset.k];
         if (!w) return;
@@ -406,12 +415,85 @@ function stAttendance(att, color) {
   const total = att.total ?? lectures.length;
   const box = (l) => {
     const bg = { ok: color, excused: `color-mix(in srgb, ${color} 50%, transparent)`, miss: "transparent" }[l.status] || "var(--line)";
-    const border = { miss: "var(--danger)", wait: color }[l.status] || "transparent";
-    return `<i class="st-lec" title="${esc(`${l.n} лекция · ${stDayMonth(l.date)}`)}" style="background:${bg};border-color:${border}"></i>`;
+    const border = { miss: "var(--danger)", wait: color, before: "var(--muted)" }[l.status] || "transparent";
+    return `<i class="st-lec" title="${esc(`${l.n} лекция · ${stDayMonth(l.date)}`)}" style="background:${bg};border-color:${border}">${l.status === "before" ? "?" : ""}</i>`;
   };
+  const toMark = lectures.some((l) => l.status === "before");
+  const b = att.before;
   return `<div class="st-lecs">${lectures.map(box).join("")}</div>
     <div class="bd mut" style="--sz:13px;margin-top:var(--s)">был на ${att.attended ?? 0} из ${att.past ?? 0} прошедших · всего ${total}${
-      (att.waiting || 0) > 0 ? ` · ждём балл за ${att.waiting}` : ""}</div>`;
+      (att.waiting || 0) > 0 ? ` · ждём балл за ${att.waiting}` : ""}</div>
+    ${att.ok !== false ? `<div class="row st-att-more" style="${toMark ? `color:${color}` : ""}">
+      ${icon(toMark ? "edit" : "list", "", "font-size:16px")}
+      <span class="grow bd b6" style="--sz:13px">${toMark && b ? `отметь сам, на каких был до ${esc(stDayMonth(b.day))}` : "все лекции и отметки"}</span>
+      ${icon("chevron_right", "", "font-size:18px;color:var(--muted)")}</div>` : ""}`;
+}
+
+// Свои отметки — только у лекций до начала истории: знак «?», уже своя или
+// «Н», когда плюсики по баллам кончились (attendance.py, то же в js/sdo.js).
+function stLectureEditable(att, l) {
+  if (l.status === "before" || l.manual) return true;
+  const b = att.before;
+  return l.status === "miss" && !!b && (att.lectures || []).some((x) => x.manual) && String(l.date) <= String(b.day);
+}
+
+/** Лист «Посещения»: все лекции; у лекций до начала истории — своя отметка
+ *  нажатием «?» → «+» → «У» → снять (POST /api/sdo/attendance/<курс>). */
+function stAttendanceSheet(courseId, att, color, onChange) {
+  let a = att, busy = null;
+  const LOOK = {
+    ok: ["+", "был", color], excused: ["У", "уважительная причина", "var(--warn)"], miss: ["Н", "не был", "var(--danger)"],
+    wait: ["", "ждём отметку", color], before: ["?", "отметь сам", "var(--muted)"], future: ["", "впереди", "var(--muted)"],
+  };
+  const html = () => {
+    const b = a.before, unit = Number(a.unit) || 0;
+    let hint = "Бот отмечает лекции сам — по баллам за посещаемость в СДО.";
+    if (b) {
+      const open = b.left_ok || b.left_excused;
+      hint = `До ${stDayMonth(b.day)} бот баллы не записывал: из ${b.past} лекций по баллам посещено ${b.attended}${b.excused ? `, по уважительной ${b.excused}` : ""}. ` +
+        (open ? `Нажми на лекцию со знаком «?», на которой был: осталось +${b.left_ok}${b.left_excused ? ` и У ${b.left_excused}` : ""}.`
+              : "Всё отмечено, на остальных — «Н». Нажми на свою отметку, чтобы снять.");
+    }
+    return `<div class="ttl" style="--sz:24px">Посещения</div>
+      <div class="bd b6" style="--sz:15px;margin-top:8px">был на ${a.attended ?? 0} из ${a.past ?? 0} · баллы ${stNum(a.score || 0)} из ${stNum(a.max || 0)}${unit > 0 ? ` · ${stNum(unit)} за лекцию` : ""}</div>
+      <div class="bd mut" style="--sz:14px;margin-top:8px">${esc(hint)}</div>
+      <div class="st-att-list">${(a.lectures || []).map((l) => {
+        const [sign, label, tone] = LOOK[l.status] || LOOK.future;
+        const edit = stLectureEditable(a, l);
+        const mark = busy === l.date ? '<span class="st-att-spin"></span>'
+          : l.status === "wait" ? icon("schedule", "", "font-size:16px") : esc(sign);
+        return `<div class="row st-att-row${edit ? " edit" : ""}"${edit ? ` data-act="mark" data-day="${esc(l.date)}"` : ""}>
+          <span class="st-att-sign" style="--t:${tone}">${mark}</span>
+          <div class="grow"><div class="bd b6" style="--sz:15px">Лекция ${esc(l.n)}</div>
+            <div class="bd mut" style="--sz:13px">${esc(stDayMonth(l.date))} · ${label}${l.manual ? " · твоя отметка" : ""}</div></div>
+          ${l.status === "ok" && unit > 0 ? `<span class="bd b7" style="--sz:14px;color:${color}">+${stNum(unit)}</span>` : ""}</div>`;
+      }).join("")}</div>`;
+  };
+  Sheet.show(html(), (body) => {
+    on(body, {
+      mark: async (el) => {
+        if (busy) return;
+        const day = el.dataset.day, l = (a.lectures || []).find((x) => x.date === day);
+        if (!l) return;
+        const b = a.before || { left_ok: 0, left_excused: 0, excused: 0, attended: 0 };
+        let next = null;
+        if (l.manual && l.status === "ok") next = b.excused && b.left_excused ? "excused" : null;
+        else if (l.manual) next = null;
+        else if (b.left_ok) next = "ok";
+        else if (b.left_excused) next = "excused";
+        else { toast(`По баллам посещено ${b.attended} — сначала сними плюсик с другой лекции`); return; }
+        tick();
+        busy = day; body.innerHTML = html();
+        try {
+          a = await Api.post(`/sdo/attendance/${courseId}`, { day, mark: next });
+          onChange(a);
+        } catch (e) {
+          toast(errorText(e), "error");
+        }
+        busy = null; body.innerHTML = html();
+      },
+    });
+  });
 }
 
 // ── Как росли баллы (HistoryChart) ──

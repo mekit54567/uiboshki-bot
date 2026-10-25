@@ -543,7 +543,7 @@ class CourseScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.l),
                     child: Tile(
-                      child: AttendanceStrip(att: c.attendance!, color: color),
+                      child: AttendanceStrip(att: c.attendance!, color: color, api: api, courseId: c.id),
                     ),
                   ),
                 ],

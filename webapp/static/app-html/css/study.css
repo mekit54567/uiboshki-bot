@@ -53,7 +53,17 @@
 
 /* посещения лекций квадратиками */
 .st-lecs { display: flex; flex-wrap: wrap; gap: 6px; }
-.st-lec { width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid transparent; }
+.st-lec { width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid transparent;
+  display: grid; place-items: center; font-weight: 700; font-size: 13px; font-style: normal; color: var(--muted); }
+.st-att-more { margin-top: var(--s); gap: 6px; color: var(--muted); }
+.st-att-list { margin-top: var(--m); }
+.st-att-row { gap: var(--m); padding: 9px 0; }
+.st-att-row.edit { cursor: pointer; }
+.st-att-sign { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none;
+  color: var(--t); background: color-mix(in srgb, var(--t) 16%, transparent); font-weight: 800; font-size: 15px; }
+.st-att-row.edit .st-att-sign { border: 1.5px solid var(--t); }
+.st-att-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--t); border-right-color: transparent; animation: st-spin .8s linear infinite; }
+@keyframes st-spin { to { transform: rotate(360deg); } }
 
 /* как росли баллы: линия проявляется слева направо, точка — в конце */
 .st-line { height: 90px; width: 100%; }
