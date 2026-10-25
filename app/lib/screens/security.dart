@@ -410,7 +410,7 @@ class _Summary extends StatelessWidget {
     final text = [
       security['sdo'] == 'ok' ? 'Вход в СДО зашифрован, пароль не хранится' : 'Пароль от СДО не хранится',
       'ссылки на файлы живут ${security['link_minutes'] ?? 10} минут',
-      if (devices > 0) 'входов вне Telegram: $devices',
+      if (devices > 0) 'устройств вне Telegram: $devices',
     ].join(', ');
     return Tile(
       key: const Key('security:summary'),

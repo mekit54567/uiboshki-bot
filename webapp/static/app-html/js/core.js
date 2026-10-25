@@ -99,6 +99,8 @@ const Api = {
     const timer = setTimeout(() => ctl.abort(), timeout);
     const headers = { "Content-Type": "application/json" };
     if (this.token) headers.Authorization = "Bearer " + this.token;
+    // с экрана «Домой» — своё хранилище и свой вход: в «Устройствах» — «Ярлык», не Safari
+    if (matchMedia("(display-mode: standalone)").matches || navigator.standalone) headers["X-Client"] = "home";
     let r;
     try {
       r = await fetch("/api/v1" + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: ctl.signal });

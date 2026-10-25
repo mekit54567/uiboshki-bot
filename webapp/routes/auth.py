@@ -28,11 +28,17 @@ def _device(request: Request) -> str:
     app = {"ios": "iPhone", "android": "Android"}.get(request.headers.get("x-app", ""))
     if app:
         return f"Капибара · {app}"
+    # PWA с экрана «Домой» шлёт X-Client: home (app-html/js/core.js) — иначе её
+    # не отличить от Safari, где у сайта отдельное хранилище и свой вход;
+    # «Ярлык» — как кнопка в «Ещё» (Никита 25.10: «с экрана Домой» непонятно)
+    home = request.headers.get("x-client", "") == "home"
     ua = request.headers.get("user-agent", "")
     browser = next((b for b in ("Edg", "YaBrowser", "Chrome", "Firefox", "Safari") if b in ua), "Браузер")
     browser = {"Edg": "Edge", "YaBrowser": "Яндекс Браузер"}.get(browser, browser)
     os_name = next((o for o, k in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
                                    ("Windows", "Windows"), ("macOS", "Mac OS"), ("Linux", "Linux")) if k in ua), "")
+    if home:
+        browser = "Ярлык"
     return f"{browser} · {os_name}" if os_name else browser
 
 
@@ -94,25 +100,30 @@ async def auth_poll(body: PollBody, request: Request):
     return {"status": "ok", "token": token, "user_id": uid}
 
 
-@router.get("/api/auth/sessions")
-async def auth_sessions(request: Request, user: dict = CurrentUser):
-    from database.sessions import list_sessions, token_hash
+async def _devices(request: Request, user_id: int) -> list[dict]:
+    """Входы человека, склеенные по устройству (sessions.group_sessions)."""
+    from database._conn import connect
+    from database.sessions import group_sessions, list_sessions, token_hash
     current = request.headers.get("authorization", "")[7:].strip()
-    items = await list_sessions(user["id"])
+    row = None
     if current:
-        from database._conn import connect
         async with connect() as db:
             row = await (await db.execute("SELECT id FROM sessions WHERE token_hash = ?",
                                           (token_hash(current),))).fetchone()
-        for it in items:
-            it["current"] = bool(row and it["id"] == row[0])
-    return {"items": items}
+    return group_sessions(await list_sessions(user_id), row[0] if row else None)
+
+
+@router.get("/api/auth/sessions")
+async def auth_sessions(request: Request, user: dict = CurrentUser):
+    return {"items": await _devices(request, user["id"])}
 
 
 @router.delete("/api/auth/sessions/{session_id}")
-async def auth_revoke(session_id: int, user: dict = CurrentUser):
+async def auth_revoke(session_id: int, request: Request, user: dict = CurrentUser):
+    """«Выйти» у строки списка — все входы этого устройства (id — любой из строки)."""
     from database.sessions import revoke_session
-    if not await revoke_session(user["id"], session_id=session_id):
+    group = next((g["ids"] for g in await _devices(request, user["id"]) if session_id in g["ids"]), None)
+    if not group or not await revoke_session(user["id"], ids=group):
         raise HTTPException(404, "Нет такого входа")
     return {"ok": True}
 

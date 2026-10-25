@@ -166,6 +166,11 @@ async def init_db():
                 revoked    INTEGER DEFAULT 0
             )
         """)
+        # вход в браузере живёт 30 дней без заходов, не 90 (database/sessions.py,
+        # Никита 25.10: «сессий там пиздец») — старым записям срок тоже урезаем
+        await db.execute("UPDATE sessions SET expires_at = datetime(COALESCE(last_seen, created_at), '+30 days') "
+                         "WHERE device NOT LIKE 'Капибара ·%' "
+                         "AND expires_at > datetime(COALESCE(last_seen, created_at), '+30 days')")
         # Веб-пуши PWA (этап 2 (г), delivery.py): устройство = endpoint
         await db.execute("""
             CREATE TABLE IF NOT EXISTS push_subs (
