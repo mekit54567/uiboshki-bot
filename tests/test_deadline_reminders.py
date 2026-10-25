@@ -73,3 +73,19 @@ async def test_api_remind(db, monkeypatch):
 def test_scheduler_runs_every_minute():
     src = open("scheduler.py", encoding="utf-8").read()
     assert "send_deadline_custom_reminders" in src
+
+
+@pytest.mark.asyncio
+async def test_reminder_goes_through_delivery(db, monkeypatch):
+    """Своё напоминание — через слой доставки (пуш в приложение), а не только в Telegram."""
+    import delivery
+    a = await db.add_deadline("Практика 2 · Анализ данных", "", "2026-10-05", "18:00", 0)
+    await db.add_deadline_reminder(7, a, "2026-10-04 18:00")
+    got = []
+
+    async def deliver(bot, uid, html, **kw):
+        got.append((uid, kw["title"], kw["body"]))
+
+    monkeypatch.setattr(delivery, "deliver", deliver)
+    await dr.send_due(object(), datetime(2026, 10, 4, 18, 0, tzinfo=TZ))
+    assert got == [(7, "Напоминание: Практика 2", "Анализ данных · срок завтра до 18:00")]
