@@ -124,11 +124,31 @@ async def send_morning_schedule(bot: Bot):
                 if note:
                     head += f"\n{note}"
             body = format_day(events, now.date(), now=now) if events is not None else await get_today_schedule(gid)
-            await deliver(bot, uid, f"{head}\n\n{body}", kind="morning", tab="today",
+            title, short = morning_push(events, home, prefs, weather_text) if events is not None else (None, None)
+            await deliver(bot, uid, f"{head}\n\n{body}", kind="morning", tab="today", title=title, body=short,
                           reply_markup=app_button("📅 Открыть расписание", "today"))
             await pace()
         except Exception as e:
             logger.warning(f"Не смог отправить {uid}: {e}")
+
+
+def morning_push(events: list[dict], home: str | None, prefs: dict, weather: str | None):
+    """Пуш утра (Никита 25.10): «Сегодня: 5 пар с 09:00, В-78» и «Первая — …
+    · ☁️ +3°, пасмурно». events — пары дня (parse_events_for_date, без
+    предметов по выбору, куда человек не ходит)."""
+    from evening_digest import day_title, first_pair
+    from schedule_format import _split_kind
+    lessons = []
+    for e in sorted((e for e in events if e.get("time_start")), key=lambda e: e["time_start"]):
+        name, kind, _ = _split_kind(e.get("summary") or "")
+        if kind != "сам. работа":
+            lessons.append({"start": e["time_start"].strftime("%H:%M"), "pairs": 1, "title": name,
+                            "kind": kind, "room": e.get("location") or ""})
+    sky = (weather or "").split(" · ")[0] if prefs.get("weather") else ""
+    if not lessons:
+        return "Сегодня пар нет", sky or "Отдыхай"
+    title = day_title(lessons, "Сегодня", home, prefs.get("campus", True))
+    return title, " · ".join(x for x in (first_pair(lessons), sky) if x)
 
 
 async def send_group_morning_digest(bot: Bot):
@@ -166,6 +186,23 @@ def _format_deadline_reminders(deadlines: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def deadlines_push(deadlines: list[dict], today: date | None = None) -> tuple[str, str]:
+    """Пуш о сроках (Никита 25.10): один — «Завтра до 23:59: Практика 2»,
+    несколько — «3 срока за 3 дня, ближайший завтра»; ниже — что и когда."""
+    from push_text import cap, split_subject, when, word
+    today = today or today_msk()
+    items = sorted(deadlines, key=lambda d: (d["due_date"], d.get("due_time") or "99"))
+    first = items[0]
+    name, course = split_subject(first["subject"])
+    if len(items) == 1:
+        return f"{cap(when(first['due_date'], first.get('due_time'), today))}: {name}", course or "Срок близко"
+    n = len(items)
+    title = f"{n} {word(n, 'срок', 'срока', 'сроков')} за 3 дня, ближайший {when(first['due_date'], None, today)}"
+    body = "; ".join(f"{split_subject(d['subject'])[0]} — {when(d['due_date'], d.get('due_time'), today)}"
+                     for d in items[:4])
+    return title, body + (f" и ещё {n - 4}" if n > 4 else "")
+
+
 # Вопрос старосте дописывается в конец того же текста — хендлер кнопки
 # (handlers/deadlines.py: deadline_post_confirm) отрезает его перед отправкой
 # в группу, иначе группа видела бы "Опубликовать этот список?" в самом посте.
@@ -191,7 +228,9 @@ async def send_deadline_reminders(bot: Bot):
             deadlines = await get_deadlines_soon(days=3, viewer_id=uid)
             if not deadlines:
                 continue
+            title, short = deadlines_push(deadlines)
             await deliver(bot, uid, _format_deadline_reminders(deadlines), kind="deadlines", tab="deadlines",
+                          title=title, body=short,
                           reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
             await pace()
         except Exception as e:
@@ -287,18 +326,30 @@ async def check_lesson_reminders(bot: Bot):
                     continue
                 _sent_reminders.add(key)
                 label = "первая пара" if kind == "remind_first" else "пара"
+                title, short = lesson_push(e, remind_mins)
                 try:
                     await deliver(
                         bot, uid,
                         f"⏰ <b>Через {notify_prefs.minutes_text(remind_mins)} {label}</b>\n\n"
                         + format_lesson(e),
-                        kind="lesson", tab="today",
+                        kind="lesson", tab="today", title=title, body=short,
                         reply_markup=app_button("📅 Расписание", "today"),
                     )
                 except Exception as ex:
                     logger.warning(f"Reminder error {uid}: {ex}")
     except Exception as e:
         logger.error(f"check_lesson_reminders: {e}")
+
+
+def lesson_push(e: dict, minutes: int) -> tuple[str, str]:
+    """Пуш перед парой (Никита 25.10): «Через 15 мин: Анализ данных»,
+    ниже «А-1 (В-78) · лекция · Иванов И. И.»."""
+    import notify_prefs
+    from schedule_format import _short_teacher, _split_kind
+    name, kind, _ = _split_kind(e.get("summary") or "")
+    title = f"Через {notify_prefs.minutes_text(minutes)}: {name or 'пара'}"
+    parts = [e.get("location") or "", kind, _short_teacher(e.get("teacher") or "")]
+    return title, " · ".join(p for p in parts if p) or "Пара по расписанию"
 
 
 # ── Автосинк дедлайнов из СДО ────────────────────────────────────────────────

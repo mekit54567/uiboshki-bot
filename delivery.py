@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 TITLES = {"morning": "Доброе утро", "lesson": "Скоро пара", "deadlines": "Дедлайны",
           "new_tasks": "Новое в СДО", "weekly": "Неделя", "grades": "Новые баллы", "evening": "Завтра",
-          "quiz": "Тест СДО", "plus": "Капибара+", "ugc": "Записи группы"}
+          "quiz": "Тест СДО", "plus": "Капибара+", "ugc": "Записи группы",
+          "lessons": "Изменилось расписание", "sdo": "Вход в СДО"}
 
 
 def plain(html: str, limit: int = 180) -> str:
@@ -33,14 +34,16 @@ def _body(html: str, title: str | None) -> str:
     return plain(text)
 
 
-async def push(user_id: int, kind: str, html: str, tab: str | None = None, title: str | None = None) -> int:
+async def push(user_id: int, kind: str, html: str, tab: str | None = None, title: str | None = None,
+               body: str | None = None) -> int:
     """Пуш на все устройства человека: браузеры (веб-пуш) и телефоны (app_push).
     → сколько ушло. title — свой заголовок вместо общего по kind (вечерняя
-    сводка: «Завтра: 3 пары с 09:00»)."""
+    сводка: «Завтра: 3 пары с 09:00»), body — свой короткий текст вместо
+    начала сообщения Telegram (push_text.py)."""
     import app_push
     import webpush
     from database.push import delete_push_sub, get_push_subs
-    data = {"title": title or TITLES.get(kind, "Капибара"), "body": _body(html, title),
+    data = {"title": title or TITLES.get(kind, "Капибара"), "body": plain(body) if body else _body(html, title),
             "url": "/app" + (f"?tab={tab}" if tab else ""), "tag": kind}
     sent = 0
     try:
@@ -72,7 +75,7 @@ async def _tg_copy(user_id: int) -> bool:
 
 
 async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = None, reply_markup=None,
-                  parse_mode: str = "HTML", title: str | None = None):
+                  parse_mode: str = "HTML", title: str | None = None, body: str | None = None):
     """Сообщение человеку: пуш на его устройства + Telegram (выключен
     тумблером tg_copy — только если пуш дошёл).
     Ошибка Telegram пробрасывается (рассылки её логируют), пуш — молча.
@@ -82,7 +85,8 @@ async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = 
         return None
     sent = 0
     try:
-        sent = await push(user_id, kind, html, tab, **({"title": title} if title else {}))
+        sent = await push(user_id, kind, html, tab, **({"title": title} if title else {}),
+                          **({"body": body} if body else {}))
     except Exception as e:
         logger.info(f"доставка {user_id}: пуш не ушёл: {e}")
     from database.identities import is_local

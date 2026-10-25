@@ -43,6 +43,27 @@ def message(diff: list[tuple[dict, float, float]]) -> str:
     return "\n".join(lines)
 
 
+def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
+    """Пуш (Никита 25.10): один предмет — «Моделирование: +5» и ниже «было 34,
+    стало 39»; несколько — «Новые баллы по 2 предметам» и ниже кратко."""
+    from push_text import word
+
+    def name(c):
+        return c.get("name") or c.get("title") or "Предмет"
+
+    def delta(old, new):
+        d = round(new - old, 1)
+        return f"{'+' if d > 0 else ''}{_num(d)}"
+
+    if len(diff) == 1:
+        c, old, new = diff[0]
+        return f"{name(c)}: {delta(old, new)}", f"Было {_num(old)}, стало {_num(new)}"
+    n = len(diff)
+    items = sorted(diff, key=lambda x: -abs(x[2] - x[1]))
+    return (f"Новые баллы по {n} {word(n, 'предмету', 'предметам', 'предметам')}",
+            " · ".join(f"{name(c)} {delta(o, w)} ({_num(w)})" for c, o, w in items))
+
+
 async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> bool:
     """Сверить баллы одного человека; True — сообщение отправлено. notify=False —
     только записать точку истории (для посещений, attendance.py)."""
@@ -57,7 +78,8 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
     if not diff or not notify:
         return False
     import delivery
-    await delivery.deliver(bot, user_id, message(diff), kind="grades", tab="sdo",
+    title, short = headline(diff)
+    await delivery.deliver(bot, user_id, message(diff), kind="grades", tab="sdo", title=title, body=short,
                            reply_markup=app_button("🎓 Открыть баллы", "sdo"))
     return True
 

@@ -118,6 +118,19 @@ def open_text(d: dict, limit: int | None) -> str:
     return "🔓 <b>Открыли тест</b>\n" + open_line(d, limit)
 
 
+def push_head(d: dict, kind: str, minutes: int, limit: int | None, now: datetime) -> tuple[str, str]:
+    """Пуш (Никита 25.10): «Через 30 мин закрывается тест» и ниже название;
+    «Открыли тест: Тест 2» и ниже предмет, лимит и срок."""
+    from notify_prefs import minutes_text
+    from push_text import split_subject, when
+    name, course = split_subject(d["subject"])
+    lim = f"{minutes_text(limit)} на попытку" if limit else ""
+    if kind == "open":
+        due = "сдать " + when(d["due_date"], d.get("due_time"), now.date())
+        return f"Открыли тест: {name}", " · ".join(x for x in (course, lim, due) if x)
+    return remind_head(minutes, close_at(d), now), " · ".join(x for x in (d["subject"], lim) if x)
+
+
 def due_now(quizzes: list[dict], opens: dict[int, str], now: datetime) -> list[tuple[dict, str, str, int]]:
     """Что пора прислать сейчас: (дедлайн, вид, время-ключ, минуты).
     Вид — «r<минуты>» (до закрытия) или «open»."""
@@ -178,9 +191,10 @@ async def send_due(bot, now: datetime | None = None) -> int:
                 continue
             limit = limits.get(quiz_time.quiz_cmid(d["description"]))
             text = open_text(d, limit) if kind == "open" else remind_text(d, m, limit, now)
+            title, short = push_head(d, kind, m, limit, now)
             try:
                 import delivery
-                await delivery.deliver(bot, uid, text, kind="quiz", tab="deadlines",
+                await delivery.deliver(bot, uid, text, kind="quiz", tab="deadlines", title=title, body=short,
                                        reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
                 sent += 1
             except Exception as e:
