@@ -62,7 +62,7 @@
 | **Telegram** | [@UiboshkiBot](https://t.me/UiboshkiBot) → «Открыть приложение» | бот сам пишет про пары и сроки, inline-режим в любом чате |
 | **Телефон без Telegram (PWA)** | [uiboshki.ru/app](https://www.uiboshki.ru/app) → iPhone: «Поделиться → На экран „Домой“», Android: «Установить приложение» | вход через Telegram, VK ID или Яндекс ID, уведомления пушем, расписание без сети |
 | **Компьютер** | тот же адрес в Chrome, Edge или Яндекс Браузере → «Установить» | отдельное окно, как обычная программа |
-| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`) — сборки APK и IPA в [GitHub Actions](https://github.com/mekit54567/uiboshki-bot/actions/workflows/app-build.yml) | скоро в RuStore; пока — тестовые сборки |
+| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`) — сборки APK и IPA в [GitHub Actions](https://github.com/mekit54567/uiboshki-bot/actions/workflows/app-build.yml) | Android — [в RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app); iPhone — скоро |
 
 Данные везде одни: что отметил в Telegram — видно в PWA и в приложении.
 
