@@ -58,7 +58,6 @@ const iconUnlock = <String, String>{
   'ballplanet': 'none',
   'bridge': 'sub',
   'bubbletea': 'sub',
-  'chalk': 'ach:secret',
   'circle': 'sub',
   'clay': 'none',
   'closeup': 'none',

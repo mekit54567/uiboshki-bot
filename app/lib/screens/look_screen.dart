@@ -656,7 +656,8 @@ class IconPicker extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.s),
             sliver: SliverToBoxAdapter(child: Text('Иконка приложения', style: s.title(24))),
           ),
-          for (final g in [classicGroup, ...artGroups]) ...[
+          // «Мел» — основная (5.117.12): отдельной строкой сверху, в «Фактурах» — нет
+          for (final g in [baseGroup, classicGroup, ...artGroups]) ...[
             SliverToBoxAdapter(child: Section(g)),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: Space.l),
@@ -667,7 +668,7 @@ class IconPicker extends StatelessWidget {
                 childAspectRatio: 0.68,
                 children: [
                   for (final i in all)
-                    if (i.group == g)
+                    if (g == baseGroup ? i == AppIcon.base : i.group == g && i != AppIcon.base)
                       _IconTile(
                         icon: i,
                         dark: dark,

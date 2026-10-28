@@ -80,3 +80,23 @@ def test_unlock_rules_valid():
             or (kind == "rank" and arg in achievements.RANKS), rule
     dart = (APP / "lib" / "theme" / "app_icons_art.dart").read_text(encoding="utf-8")
     assert dict(re.findall(r"'(\w+)': '([\w:]+)',", dart)) == ICONS.get("unlock", {})
+
+
+def test_base_icon_chalk_and_original_kept():
+    """5.117.12 (Никита 28.10): основная — «Мел» (tools/base_icon.py), 1024 для
+    App Store без прозрачности; прежняя синяя — альтернативная «Первая»."""
+    from PIL import Image
+
+    xcassets = APP / "ios" / "Runner" / "Assets.xcassets"
+    big = Image.open(xcassets / "AppIcon.appiconset" / "Icon-App-1024x1024@1x.png")
+    assert big.size == (1024, 1024) and big.mode == "RGB"
+    pbx = (APP / "ios" / "Runner.xcodeproj" / "project.pbxproj").read_text(encoding="utf-8")
+    assert "IconOriginal" in re.findall(r'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "([^"]*)";', pbx)[0].split()
+    assert (xcassets / "IconOriginal.appiconset" / "Contents.json").exists()
+    manifest = (APP / "android" / "app" / "src" / "main" / "AndroidManifest.xml").read_text(encoding="utf-8")
+    assert 'android:name=".IconOriginal"' in manifest
+    res = APP / "android" / "app" / "src" / "main" / "res"
+    for dens in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"):
+        assert (res / f"mipmap-{dens}" / "ic_launcher_original.png").exists()
+    # «Мел» открыт всем
+    assert "chalk" not in ICONS.get("unlock", {})

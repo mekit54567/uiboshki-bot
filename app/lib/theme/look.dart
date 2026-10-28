@@ -54,7 +54,7 @@ class Look {
     this.card = CardStyle.tint,
     this.day = DayView.cards,
     this.cheer = Cheer.quiet,
-    this.icon = AppIcon.classic,
+    this.icon = AppIcon.base,
     this.iconDark = false,
   });
 

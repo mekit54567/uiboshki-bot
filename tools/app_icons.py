@@ -56,6 +56,8 @@ VARIANTS = {
     "sunset": (("grad", 160, [("#F2994A", 0.0), ("#B75438", 0.6), ("#5B3A8F", 1.0)]), "#FFFFFF"),
     "library": ("#111715", "#B9DCA3"),
 }
+# прежняя основная — картинки кладёт tools/base_icon.py (5.117.12)
+BASE_KEPT = ["original"]
 PAGE_PAPER, PAGE_LINE = "#F3EEE5", "#B75438"
 
 ANDROID = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
@@ -293,7 +295,7 @@ def build_art():
     MANIFEST.write_text(text[:a] + head + "".join(aliases) + "        " + text[b:], encoding="utf-8")
 
     # Xcode: какие наборы — альтернативные иконки
-    names = " ".join([cap(v) for v in VARIANTS] + [x for ic in icons for x in (cap(ic["name"]), cap(ic["name"]) + "Dark")])
+    names = " ".join([cap(v) for v in VARIANTS] + [cap(n) for n in BASE_KEPT] + [x for ic in icons for x in (cap(ic["name"]), cap(ic["name"]) + "Dark")])
     pbx = PBXPROJ.read_text(encoding="utf-8")
     pbx = re.sub(r"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = \"[^\"]*\";",
                  f'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "{names}";', pbx)

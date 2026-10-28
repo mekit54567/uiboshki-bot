@@ -92,15 +92,20 @@ void main() {
     await settle(t);
     // в листе — все, что можно выбрать, а праздничной нет
     final sheet = find.descendant(of: find.byKey(const Key('look:icons')), matching: find.byType(Scrollable)).first;
-    for (final i in AppIcon.choosable) {
+    // в порядке листа: «Мел» — первым, отдельной строкой «Основная» (5.117.12)
+    expect(find.byKey(const Key('look:icon:chalk')), findsOneWidget);
+    for (final i in AppIcon.choosable.where((i) => i != AppIcon.base)) {
       await t.scrollUntilVisible(find.byKey(Key('look:icon:${i.name}')), 200, scrollable: sheet);
     }
     expect(find.byKey(const Key('look:icon:halloween'), skipOffstage: false), findsNothing);
     // подписочная без подписки: на Android не видна, на iPhone — с замком
     // (открывается набором ачивок, 5.114.1)
     final ios = defaultTargetPlatform == TargetPlatform.iOS;
+    if (ios) await t.scrollUntilVisible(find.byKey(const Key('look:icon:crown')), -200, scrollable: sheet);
     expect(find.byKey(const Key('look:icon:crown'), skipOffstage: false), ios ? findsOneWidget : findsNothing);
     await t.scrollUntilVisible(find.byKey(const Key('look:icon:sunset')), -200, scrollable: sheet);
+    await t.ensureVisible(find.byKey(const Key('look:icon:sunset')));
+    await settle(t);
     await t.tap(find.byKey(const Key('look:icon:sunset')));
     await settle(t);
     expect(fake.sets, ['sunset']);
@@ -120,7 +125,7 @@ void main() {
     expect(fake.sets, ['sunset', null]);
     expect(fake.current, isNull);
     expect(styleOf(t).look, Look.classic);
-    expect(prefs.getString('uib_look_icon'), 'classic');
+    expect(prefs.getString('uib_look_icon'), 'chalk');
   }, variant: const TargetPlatformVariant({TargetPlatform.android, TargetPlatform.iOS}));
 
   testWidgets('сервер выключил новый дизайн — при запуске обычная иконка, выбор помнится', (t) async {
@@ -178,7 +183,7 @@ void main() {
     await settle(t);
     expect(t.takeException(), isNull);
     expect(styleOf(t).look.icon, AppIcon.library);
-    await t.runAsync(() => syncAppIcon(AppIcon.classic)); // и напрямую — тихо
+    await t.runAsync(() => syncAppIcon(AppIcon.base)); // и напрямую — тихо
   });
 
   testWidgets('картинка: светлая или тёмная по выбору — и на Android, и на iPhone (своя иконка …Dark)', (t) async {
@@ -215,19 +220,32 @@ void main() {
       await syncAppIcon(AppIcon.byName('kremlin'), dark: true, now: DateTime(2026, 11, 1, 9));
       expect(fake.current, 'kremlinDark');
       // выключенный новый дизайн — без праздника
-      await syncAppIcon(AppIcon.classic, holiday: false, now: DateTime(2026, 10, 31, 9));
+      await syncAppIcon(AppIcon.base, holiday: false, now: DateTime(2026, 10, 31, 9));
       expect(fake.current, isNull);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
   });
 
-  test('список иконок: имена разные, образцы на месте, «Обычная» — основная', () {
+  test('список иконок: имена разные, образцы на месте, «Мел» — основная', () {
     final names = AppIcon.values.map((i) => i.name).toList();
     expect(names.toSet().length, names.length);
-    expect(AppIcon.byName('нет такой'), AppIcon.classic);
+    expect(AppIcon.byName('нет такой'), AppIcon.base);
     expect(AppIcon.byName('sunset'), AppIcon.sunset);
-    expect(channelName(AppIcon.classic), isNull);
+    expect(channelName(AppIcon.base), isNull);
+    // 5.117.12 (Никита 28.10): «Мел» — основная, у всех по умолчанию и открыта;
+    // кто был на прежней («classic») — тоже на «Мел»; прежняя — «Первая»
+    expect(AppIcon.base.name, 'chalk');
+    expect(AppIcon.byName(null), AppIcon.base);
+    expect(AppIcon.byName('classic'), AppIcon.base);
+    expect(AppIcon.byName('chalk'), AppIcon.base);
+    expect(const Look().icon, AppIcon.base);
+    expect(channelName(AppIcon.base, dark: true), 'chalkDark');
+    expect(channelName(AppIcon.original), 'original');
+    expect(AppIcon.base.unlock, isNull);
+    expect(AppIcon.base.isOpen({}), isTrue);
+    expect(AppIcon.original.isOpen({}), isTrue);
+    expect(AppIcon.choosable, containsAll([AppIcon.base, AppIcon.original]));
     for (final i in AppIcon.values.where((i) => i.art)) {
       for (final dark in [false, true]) {
         expect(

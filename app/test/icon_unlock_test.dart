@@ -78,7 +78,7 @@ void main() {
                 onPressed: () async => picked = await showModalBottomSheet<AppIcon>(
                   context: context,
                   isScrollControlled: true,
-                  builder: (_) => const IconPicker(current: AppIcon.classic, dark: false),
+                  builder: (_) => const IconPicker(current: AppIcon.base, dark: false),
                 ),
                 child: const Text('open'),
               ),
@@ -94,6 +94,9 @@ void main() {
       200,
       scrollable: find.descendant(of: find.byKey(const Key('look:icons')), matching: find.byType(Scrollable)).first,
     );
+    // над «Москвой» — «Основная» (5.117.12): дотянуть плитку целиком, а не краем
+    await t.ensureVisible(find.byKey(const Key('look:icon:kremlin')));
+    await t.pumpAndSettle();
     expect(
       find.descendant(of: find.byKey(const Key('look:icon:kremlin')), matching: find.byIcon(Icons.lock_rounded)),
       findsOneWidget,
