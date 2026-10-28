@@ -82,8 +82,14 @@ void main() {
         expect(text, isNot(contains('…')));
         final para = t.renderObject<RenderParagraph>(find.descendant(of: label, matching: find.byType(RichText)));
         expect(para.didExceedMaxLines, isFalse);
-        // FittedBox не уменьшил: подпись помещается своим размером
-        expect(t.getRect(label).width, closeTo(t.getSize(label).width, 0.5));
+        // FittedBox не уменьшил: подпись помещается своим размером; неделя на
+        // стыке месяцев («26 окт – 1 ноя») на 320 с крупным шрифтом — чуть мельче
+        final shrink = t.getRect(label).width / t.getSize(label).width;
+        if (scale == 1.0 || !text.contains(' – ')) {
+          expect(shrink, closeTo(1, 0.005));
+        } else {
+          expect(shrink, greaterThan(0.85));
+        }
         // и длиннее, через месяц
         final long = TextPainter(
           text: TextSpan(text: '16 неделя · 28 сен – 4 окт', style: para.text.style),
