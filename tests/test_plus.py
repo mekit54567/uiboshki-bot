@@ -511,3 +511,16 @@ def test_public_plus_page_for_robokassa(client, robokassa, monkeypatch):  # noqa
     assert page.count("a@b.ru") == 2      # по разу в «Отказ и возврат» и «Исполнитель» — не дважды подряд (21.10)
     about = c.get("/about").text
     assert "ИНН 123456789012" in about and 'href="/plus"' in about and "__CONTRACTOR__" not in about
+
+
+def test_no_kassa_yet_names_yookassa(client, monkeypatch):  # noqa: F811
+    """28.10: Robokassa отказала, подключаем ЮKassa — пока кассы нет, на /plus,
+    в оферте и политике называем ЮKassa, а не Robokassa (её проверяющий смотрит сайт)."""
+    import legal_texts
+    for k in ("ROBOKASSA_LOGIN", "YOOKASSA_SHOP_ID"):
+        monkeypatch.setattr(billing, k, "")
+    c, _ = client
+    page = c.get("/plus").text
+    offer = str(legal_texts.doc("offer"))
+    for text in (page, offer, str(legal_texts.doc("privacy"))):
+        assert "ЮKassa" in text and "Robokassa" not in text and "Робокасса" not in text

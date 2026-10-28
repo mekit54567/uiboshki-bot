@@ -310,10 +310,11 @@ DOCS = {"consent": CONSENT, "privacy": PRIVACY, "offer": OFFER, "rules": RULES, 
 
 
 def payment_names() -> str:
-    """Касса, которая правда включена (billing.provider); не включена — обе возможные."""
+    """Касса, которая правда включена (billing.provider); не включена — ЮKassa
+    (Robokassa отказала 26.10, подключаем ЮKassa)."""
     import billing
-    names = {"yookassa": "ООО НКО «ЮMoney» (ЮKassa, Россия)", "robokassa": "ООО «Робокасса» (Россия)"}
-    return names.get(billing.provider(configured_only=True)) or " или ".join(names.values())
+    names = {"yookassa": "ЮKassa (ООО НКО «ЮMoney», Россия)", "robokassa": "Robokassa (ООО «Робокасса», Россия)"}
+    return names.get(billing.provider(configured_only=True)) or names["yookassa"]
 
 
 def doc(name: str) -> dict:
