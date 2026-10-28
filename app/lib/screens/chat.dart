@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ai_consent.dart';
 import '../api/api.dart';
 import '../api/models.dart' show monthsShort, plural;
 import '../theme/app_theme.dart';
@@ -456,6 +457,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final text = again ?? _input.text.trim();
     final att = again != null ? againAtt : _att;
     if ((text.isEmpty && att == null) || _waiting) return;
+    if (!await ensureAiConsent(context) || !mounted) return;
     tick();
     final log = _log; // ответ — в этот разговор, даже если открыли другой
     _id ??= 'c${now().microsecondsSinceEpoch}';
@@ -564,6 +566,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// (подписка, свой дневной лимит); новый ответ — под прежним.
   Future<void> _think() async {
     if (_waiting || _log.length < 2 || _log.last.role != 'assistant') return;
+    if (!await ensureAiConsent(context) || !mounted) return;
     tick();
     final log = _log;
     final id = _id;
