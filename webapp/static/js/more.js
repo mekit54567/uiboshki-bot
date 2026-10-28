@@ -489,6 +489,7 @@ async function sendSubmission() {
 // компьютере (uiboshki.ru/app), своё приложение. Раньше плитка «Ярлык» только
 // добавляла ярлык Telegram, и про PWA никто не знал (владелец, 09.10).
 const APP_URL = "https://www.uiboshki.ru/app";
+const RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app";   // config.RUSTORE_URL
 
 function openPlatforms() {
   haptic();
@@ -503,7 +504,8 @@ function openPlatforms() {
         "Chrome → «Установить приложение» (на iPhone — Safari → «Поделиться» → «На экран „Домой“»).") +
       " Вход — через Telegram или VK, уведомления приходят пушем, расписание открывается и без сети.") +
     secItem("laptop", "На компьютере", "Тот же адрес в Chrome, Edge или Яндекс Браузере — значок «Установить» в адресной строке.") +
-    secItem("sparkle", "Android и iPhone", "Своё приложение уже собирается — скоро.") +
+    secItem("sparkle", "Android и iPhone", (ios ? "Своё приложение для iPhone — скоро." :
+      'Приложение для Android — <a href="' + RUSTORE_URL + '" target="_blank" rel="noopener">в RuStore</a>. Для iPhone — скоро.')) +
     '<button class="primary" style="margin-top:10px" onclick="addToHome()">' +
       (IN_TG ? "Ярлык на экран «Домой»" : "Установить") + '</button>' +
     '<button class="ghost" onclick="copyAppLink()">' + icon("copy", "inl") + ' Скопировать ссылку</button>';

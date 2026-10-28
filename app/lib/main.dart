@@ -88,7 +88,7 @@ class _UiboAppState extends State<UiboApp> {
       // иконка на телефоне — по выбору, а без нового дизайна — обычная
       // (откат DESIGN2=0 убирает и её; включат снова — выбор вернётся)
       final d2 = on ?? _design2;
-      syncAppIcon(d2 ? _look.icon : AppIcon.classic, dark: d2 && _look.iconDark, holiday: d2);
+      syncAppIcon(d2 ? _look.icon : AppIcon.base, dark: d2 && _look.iconDark, holiday: d2);
     });
     // «по закату»: раз в минуту проверить, не пора ли темнеть
     _sun = Timer.periodic(const Duration(minutes: 1), (_) {

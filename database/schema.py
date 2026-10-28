@@ -143,6 +143,15 @@ async def init_db():
                 token      TEXT NOT NULL
             )
         """)
+        # Отзыв у Apple не прошёл (сеть, 5xx) — токен ждёт повтора здесь, без
+        # user_id: человек уже удалён, а отозвать вход Apple всё равно требует.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS apple_revoke_queue (
+                token      TEXT PRIMARY KEY,
+                tries      INTEGER NOT NULL DEFAULT 0,
+                created    TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS oauth_states (
                 state      TEXT PRIMARY KEY,

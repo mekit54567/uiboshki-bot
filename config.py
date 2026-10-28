@@ -47,6 +47,8 @@ CHANNEL_ID = channel_id_from(os.getenv("CHANNEL_ID", ""), CHANNEL_URL)
 # Открытый канал, на который подписывается новый человек при первом входе через
 # Telegram (login_channel.py): «@имя» или t.me/<имя>. Пусто — без проверки.
 LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
+# Android-приложение в RuStore (вышло 27.10.2026): ссылка — в боте, на сайте и в «Установить»
+RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app"
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.

@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../ai_consent.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
@@ -983,6 +984,7 @@ class _FileSheetState extends State<_FileSheet> {
   }
 
   Future<void> _loadSummary({required bool make}) async {
+    if (make && (!await ensureAiConsent(context) || !mounted)) return;
     setState(() {
       _busy = true;
       _note = make ? 'Делаю конспект — это до минуты…' : null;

@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import upsert_user, set_subscription, get_user
-from config import BOT_USERNAME, GROUP_NAME, SCHEDULE_HOUR, SCHEDULE_MINUTE
+from config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
 from utils import esc, split_by_lines
 
@@ -230,7 +230,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     if store:
         text = without_pay(text)
     text += ("\n\n" + ASK) if ask else ""
-    sent = await message.answer(text, parse_mode="HTML", reply_markup=MAIN_KB)
+    sent = await message.answer(text, parse_mode="HTML", reply_markup=MAIN_KB, disable_web_page_preview=True)
     kb = app_button()
     if kb:
         try:
@@ -302,9 +302,10 @@ async def cmd_app(message: Message):
     news = login_channel.news_line()
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.\n"
-        "📱 Без Telegram — uiboshki.ru/app: ставится на телефон и компьютер как приложение."
+        "📱 Без Telegram — uiboshki.ru/app: ставится на телефон и компьютер как приложение.\n"
+        f"🤖 Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>."
         + (f"\n{news}" if news else ""),
-        reply_markup=kb,
+        parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True,
     )
 
 
@@ -393,7 +394,8 @@ def start_text(first_name: str) -> str:
         "И можно просто написать мне: «скинь лекцию 3 по анализу данных», "
         "задать вопрос или прислать фото задачи — отвечу.\n\n"
         "📱 Без Telegram — тоже: <b>uiboshki.ru/app</b> ставится на экран телефона "
-        "или компьютера как приложение (как — в приложении: Ещё → Установить).\n\n"
+        "или компьютера как приложение (как — в приложении: Ещё → Установить).\n"
+        f"🤖 На Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>.\n\n"
         + _news()
         + "✨ Всё это бесплатно. Хочешь больше — /plus: подписка «Капибара+», оплата на сайте."
     )
@@ -410,7 +412,8 @@ HELP_TEXT = (
     "🚀 Всё главное — в приложении: кнопка «Открыть приложение» слева от поля ввода "
     "или /app.\n"
     "📱 Без Telegram — <b>uiboshki.ru/app</b>: на телефоне и компьютере, вход через Telegram или VK, "
-    "уведомления пушем.\n\n"
+    "уведомления пушем.\n"
+    f"🤖 Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>.\n\n"
     "💬 <b>Просто напиши</b>\n"
     "«когда следующая пара», «что сдавать на неделе», «скинь практику 3 по …», "
     "вопрос по учёбе или фото задачи.\n\n"
@@ -438,7 +441,7 @@ HELP_TEXT = (
 def help_text() -> str:
     """HELP_TEXT и строка про открытый канал под «Без Telegram», если он задан."""
     news = _news()
-    return HELP_TEXT.replace("уведомления пушем.\n\n", "уведомления пушем.\n" + news, 1) if news else HELP_TEXT
+    return HELP_TEXT.replace("в RuStore</a>.\n\n", "в RuStore</a>.\n" + news, 1) if news else HELP_TEXT
 
 
 STAROSTA_HELP = (
@@ -473,7 +476,7 @@ async def cmd_help(message: Message):
     text = help_text()
     if await is_editor(message.from_user.id):
         text += STAROSTA_HELP
-    await message.answer(text, parse_mode="HTML", reply_markup=app_button())
+    await message.answer(text, parse_mode="HTML", reply_markup=app_button(), disable_web_page_preview=True)
 
 
 @router.message(Command("subscribe"))

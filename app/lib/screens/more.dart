@@ -321,6 +321,9 @@ class MoreScreen extends StatelessWidget {
         ),
       if ((l['news'] ?? '').isNotEmpty)
         (Icons.campaign_outlined, 'Канал Капибары', 'Новости и обновления', 'Открыть', _url(l['news']!)),
+      // приложение для Android — в браузере и не на iPhone (в самом приложении оно уже стоит)
+      if (web && (l['rustore'] ?? '').isNotEmpty && !(ios ?? defaultTargetPlatform == TargetPlatform.iOS))
+        (Icons.phone_android_outlined, 'Приложение для Android', 'Капибара в RuStore — с виджетом и уведомлениями', 'Открыть', l['rustore']!),
     ];
   }
 
