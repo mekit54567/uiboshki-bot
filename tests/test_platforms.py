@@ -14,6 +14,21 @@ def test_start_and_help_mention_pwa():
     assert "uiboshki.ru/app" in HELP_TEXT and "VK" in HELP_TEXT
 
 
+def test_rustore_everywhere():
+    """Android-приложение в RuStore (27.10.2026) — в /start, /help, /app, описании бота,
+    на сайте, в «Установить» Mini App и в /api/meta (links.rustore)."""
+    import config
+    from pathlib import Path
+    from handlers.start import help_text
+    url = config.RUSTORE_URL
+    assert url.endswith("/ru.uiboshki.app")
+    assert url in start_text("Аня") and url in help_text()
+    assert "RuStore" in bot.BOT_DESCRIPTION
+    root = Path(__file__).resolve().parents[1]
+    assert url in (root / "webapp/static/site/index.html").read_text(encoding="utf-8")
+    assert url in (root / "webapp/static/js/more.js").read_text(encoding="utf-8")
+
+
 def test_news_channel_everywhere(monkeypatch):
     """Открытый канал Капибары (LOGIN_CHANNEL, Никита 19.10) — в /start, /help и
     описании бота; не задан — строки нет. Имя бота — «Капибара МИРЭА»."""

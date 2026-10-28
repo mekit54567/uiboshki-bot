@@ -117,6 +117,9 @@ function mrPlaces(l) {
   const out = [];
   if (l.bot) out.push(["send", "o", "Telegram-бот", "Расписание в чате, напоминания до пары и приложение прямо в Telegram", "Открыть", l.bot]);
   if (l.news) out.push(["campaign", "o", "Канал Капибары", "Новости и обновления", "Открыть", mrUrl(l.news)]);
+  // приложение для Android — тем, кто не на iPhone (на iPhone ссылка на чужой магазин ни к чему)
+  if (l.rustore && !/iPhone|iPad|iPod/.test(navigator.userAgent))
+    out.push(["phone_android", "o", "Приложение для Android", "Капибара в RuStore — с виджетом и уведомлениями", "Открыть", l.rustore]);
   return out;
 }
 
