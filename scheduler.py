@@ -460,7 +460,9 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     from database import purge_events          # статистика старше 180 дней не нужна
     scheduler.add_job(purge_events,            "cron", hour=4, minute=20)
     import privacy                             # 152-ФЗ: год без заходов — данные стираются
+    import apple_signin                        # отзыв входа Apple, если Apple не ответил при удалении
     scheduler.add_job(privacy.purge,           "cron", hour=4, minute=25)
+    scheduler.add_job(apple_signin.retry_revokes, "cron", minute=37)      # отзыв входа Apple, который не прошёл
     import referrals                           # «пригласи друга»: друг пользуется — обоим дни подписки
     scheduler.add_job(referrals.check_all,     "cron", hour=12, minute=17, args=[bot])
     import group_award                         # группа месяца: 1-го числа — 7 дней «Капибары+» (5.100.7)

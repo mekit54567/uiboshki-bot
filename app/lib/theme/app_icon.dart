@@ -16,6 +16,9 @@
 // 5.114.1: на iPhone подписочные открываются набором ачивок ([iosCombo],
 // Никита 20.10) — подписка куплена не через Apple (App Store 3.1.1), а
 // ачивки — можно.
+//
+// 5.117.12: основная иконка — «Мел» (Никита 28.10: «базовой везде»), открыта
+// всем и стоит по умолчанию; прежняя синяя капибара на мяче — «Первая».
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
@@ -24,8 +27,11 @@ import '../achievements/catalog.dart';
 
 part 'app_icons_art.dart';
 
-/// Группа нарисованных кодом вариантов (капибара на мяче, как на основной).
+/// Группа нарисованных кодом вариантов (капибара на мяче, как на прежней основной).
 const classicGroup = 'Капибара на мяче';
+
+/// Первая строка в листе выбора — основная иконка ([AppIcon.base]).
+const baseGroup = 'Основная';
 
 class AppIcon {
   /// Имя в канале и в настройках: classic, depth, kremlin…
@@ -45,8 +51,13 @@ class AppIcon {
   const AppIcon._(this.name, this.label) : group = classicGroup, art = false, sub = false, season = null;
   const AppIcon._art(this.name, this.label, this.group, {this.sub = false, this.season}) : art = true;
 
-  /// «Обычная» — нынешняя иконка, по умолчанию.
-  static const classic = AppIcon._('classic', 'Обычная');
+  /// «Мел» — основная иконка приложения (5.117.12), по умолчанию. Та же, что
+  /// в списке картинок (app_icons_art.dart): светлая — сама основная иконка,
+  /// тёмная — альтернативная IconChalkDark.
+  static const base = AppIcon._art('chalk', 'Мел', 'Фактуры');
+
+  /// «Первая» — прежняя основная (до 5.117.12 — «Обычная», имя classic).
+  static const original = AppIcon._('original', 'Первая');
   static const depth = AppIcon._('depth', 'Глубина');
   static const indigo = AppIcon._('indigo', 'Индиго');
   static const terracotta = AppIcon._('terracotta', 'Терракота');
@@ -54,7 +65,7 @@ class AppIcon {
   static const sunset = AppIcon._('sunset', 'Закат');
   static const library = AppIcon._('library', 'Библиотека');
 
-  static const drawn = <AppIcon>[classic, depth, indigo, terracotta, page, sunset, library];
+  static const drawn = <AppIcon>[original, depth, indigo, terracotta, page, sunset, library];
 
   /// Все, что есть в приложении (и в сборке под iOS/Android).
   static const values = <AppIcon>[...drawn, ...artIcons];
@@ -125,7 +136,8 @@ class AppIcon {
     return 'Пока закрыта';
   }
 
-  static AppIcon byName(String? name) => values.firstWhere((i) => i.name == name, orElse: () => classic);
+  /// Не выбрана или «classic» (до 5.117.12 — прежняя основная) — «Мел».
+  static AppIcon byName(String? name) => values.firstWhere((i) => i.name == name, orElse: () => base);
 
   /// Праздничная на этот день, если есть.
   static AppIcon? seasonal(DateTime now) {
@@ -141,7 +153,7 @@ class AppIcon {
 
   /// Цвет капибары — как на самой иконке (для нарисованных кодом).
   Color get capy => switch (name) {
-    'classic' => const Color(0xFFFFF8EE),
+    'original' => const Color(0xFFFFF8EE),
     'terracotta' => const Color(0xFFF3EEE5),
     'page' => const Color(0xFF2A2721),
     'library' => const Color(0xFFB9DCA3),
@@ -150,8 +162,8 @@ class AppIcon {
 
   /// Фон иконки (для образца в «Оформлении»).
   Decoration get background => switch (name) {
-    // нынешняя: индиго с градиентом из левого верхнего угла
-    'classic' => const BoxDecoration(
+    // прежняя основная: индиго с градиентом из левого верхнего угла
+    'original' => const BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
@@ -192,10 +204,10 @@ bool get appIconSupported =>
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
 /// Имя для канала: у картинок тёмная версия — отдельная иконка (Android —
-/// alias, iOS — набор Icon<Имя>Dark). null — основная иконка.
+/// alias, iOS — набор Icon<Имя>Dark). null — основная иконка («Мел» светлый).
 @visibleForTesting
 String? channelName(AppIcon icon, {bool dark = false}) {
-  if (icon == AppIcon.classic) return null;
+  if (icon == AppIcon.base && !dark) return null;
   if (icon.art && dark) return '${icon.name}Dark';
   return icon.name;
 }

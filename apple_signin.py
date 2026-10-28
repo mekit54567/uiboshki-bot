@@ -153,8 +153,23 @@ async def save_token(user_id: int, refresh_token: str):
         await db.commit()
 
 
+async def _revoke(token: str) -> bool:
+    """Запрос к Apple /auth/revoke. → принят ли (200)."""
+    try:
+        status, _ = await _post(REVOKE_URL, {"client_id": client_id(), "client_secret": client_secret(),
+                                             "token": token, "token_type_hint": "refresh_token"})
+    except Exception as e:  # noqa: BLE001 — удаление аккаунта не должно падать из-за Apple
+        logger.warning(f"Apple /auth/revoke: {e}")
+        return False
+    if status != 200:
+        logger.warning(f"Apple /auth/revoke: {status}")
+    return status == 200
+
+
 async def revoke_for(user_id: int) -> bool:
-    """Отозвать вход через Apple (удаление аккаунта, отвязка). → был ли токен."""
+    """Отозвать вход через Apple (удаление аккаунта, отвязка). → был ли токен.
+    Apple не ответил — токен (шифровкой) уходит в apple_revoke_queue, повтор —
+    retry_revokes по расписанию; у человека запись стирается сразу."""
     import sdo_accounts
     from database._conn import connect
     async with connect() as db:
@@ -164,11 +179,35 @@ async def revoke_for(user_id: int) -> bool:
     token = sdo_accounts.decrypt(row[0]) if row else None
     if not token or not enabled():
         return bool(token)
-    try:
-        status, _ = await _post(REVOKE_URL, {"client_id": client_id(), "client_secret": client_secret(),
-                                             "token": token, "token_type_hint": "refresh_token"})
-        if status != 200:
-            logger.warning(f"Apple /auth/revoke: {status}")
-    except Exception as e:  # noqa: BLE001 — удаление аккаунта не должно падать из-за Apple
-        logger.warning(f"Apple /auth/revoke: {e}")
+    if not await _revoke(token):
+        async with connect() as db:
+            await db.execute("INSERT OR IGNORE INTO apple_revoke_queue (token) VALUES (?)", (row[0],))
+            await db.commit()
     return True
+
+
+RETRY_MAX = 48  # раз в час — двое суток, потом сдаёмся (в логе предупреждение)
+
+
+async def retry_revokes() -> int:
+    """Повторить отзыв токенов, на которых Apple не ответил. → сколько отозвано."""
+    import sdo_accounts
+    from database._conn import connect
+    if not enabled():
+        return 0
+    async with connect() as db:
+        rows = await (await db.execute("SELECT token, tries FROM apple_revoke_queue")).fetchall()
+    done = 0
+    for enc, tries in rows:
+        token = sdo_accounts.decrypt(enc)
+        ok = bool(token) and await _revoke(token)
+        async with connect() as db:
+            if ok or not token or tries + 1 >= RETRY_MAX:
+                if not ok:
+                    logger.warning("Apple /auth/revoke: не вышло за двое суток, токен из очереди убран")
+                await db.execute("DELETE FROM apple_revoke_queue WHERE token = ?", (enc,))
+            else:
+                await db.execute("UPDATE apple_revoke_queue SET tries = tries + 1 WHERE token = ?", (enc,))
+            await db.commit()
+        done += ok
+    return done

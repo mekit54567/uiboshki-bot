@@ -23,6 +23,15 @@ void main() {
     expect(web.map((e) => e.$2), ['Telegram-бот']); // канала нет — и строки нет
   });
 
+  test('RuStore — только в браузере и не на iPhone', () {
+    const l = {'bot': 'https://t.me/b', 'rustore': 'https://www.rustore.ru/catalog/app/ru.uiboshki.app'};
+    expect(MoreScreen.places(l, ios: false, web: true).map((e) => e.$2), ['Telegram-бот', 'Приложение для Android']);
+    expect(MoreScreen.places(l, ios: false, web: true).last.$5, l['rustore']);
+    expect(MoreScreen.places(l, ios: true, web: true).map((e) => e.$2), ['Telegram-бот']);
+    expect(MoreScreen.places(l, ios: false, web: false).map((e) => e.$2), isNot(contains('Приложение для Android')));
+    expect(MoreScreen.places(l, ios: true, web: false).map((e) => e.$2), isNot(contains('Приложение для Android')));
+  });
+
   test('ни слова о цене и оплате', () {
     final text = MoreScreen.places(links, ios: true, web: false).map((e) => '${e.$2} ${e.$3} ${e.$4}').join(' ');
     for (final w in ['₽', 'оплат', 'подписк', 'Капибара+', 'дешевле', 'цен']) {
