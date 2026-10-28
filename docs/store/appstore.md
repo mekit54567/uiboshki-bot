@@ -110,6 +110,8 @@ User-generated content (notes, group homework, lesson comments): every item has 
 
 Account deletion: More (Ещё) → Security (Безопасность) → Delete all my data.
 
+AI assistant (Kapi): before the first question the app shows what is sent and to whom (OpenRouter, Inc. and Google LLC) and asks for consent; nothing is sent without it (guideline 5.1.2(i)).
+
 The app has no in-app purchases and no ads.
 ```
 

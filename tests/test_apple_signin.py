@@ -127,3 +127,29 @@ def test_client_secret_is_es256_jwt(apple):
     raw = base64.urlsafe_b64decode(sig + "==")
     der = encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big"))
     EC_KEY.public_key().verify(der, f"{head}.{body}".encode(), ec.ECDSA(hashes.SHA256()))
+
+
+@pytest.mark.asyncio
+async def test_failed_revoke_is_retried(client, apple, monkeypatch):
+    """Apple не ответил при удалении — токен ждёт в очереди, повтор его отзывает (аудит R7)."""
+    from database._conn import connect
+    from database.identities import find_user
+    client.post("/api/auth/apple", json={"id_token": id_token(), "code": "c-1", "nonce": "raw-nonce"})
+    uid = await find_user("apple", "001234.abc")
+    real = apple_signin._post
+
+    async def down(url, data):
+        if url == apple_signin.REVOKE_URL:
+            raise OSError("сеть")
+        return await real(url, data)
+    monkeypatch.setattr(apple_signin, "_post", down)
+    assert await apple_signin.revoke_for(uid) is True
+    async with connect() as db:
+        assert (await (await db.execute("SELECT COUNT(*) FROM apple_tokens")).fetchone())[0] == 0
+        assert (await (await db.execute("SELECT COUNT(*) FROM apple_revoke_queue")).fetchone())[0] == 1
+    assert await apple_signin.retry_revokes() == 0                      # Apple всё ещё молчит
+    monkeypatch.setattr(apple_signin, "_post", real)
+    assert await apple_signin.retry_revokes() == 1
+    assert apple[-1][0] == apple_signin.REVOKE_URL and apple[-1][1]["token"] == "rt-1"
+    async with connect() as db:
+        assert (await (await db.execute("SELECT COUNT(*) FROM apple_revoke_queue")).fetchone())[0] == 0
