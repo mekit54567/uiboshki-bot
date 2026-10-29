@@ -31,8 +31,32 @@ Future<String?> systemSdoLogin(BuildContext context) =>
 Future<String> readSdoCookie() async =>
     await _cookies.invokeMethod<String>('get', {'url': sdoBase, 'name': 'MoodleSession'}) ?? '';
 
-/// Человек уже вошёл: открыта страница СДО, и это не вход (единый вход МИРЭА — на другом адресе).
+/// Открыта страница СДО, и это не вход (единый вход МИРЭА — на другом адресе).
+/// Одного адреса мало: окно сперва открывает /my/ со старой кукой и только
+/// потом СДО уводит на /login — поэтому куку берём лишь после [sdoUserShown].
 bool sdoLoggedIn(Uri? url) => url != null && url.host == Uri.parse(sdoBase).host && !url.path.startsWith('/login');
+
+/// На странице есть ссылка «Выйти» — её Moodle рисует только вошедшему (не
+/// гостю и не на странице входа).
+const sdoUserProbe = '''(function(){
+  return document.querySelector('a[href*="/login/logout.php"]') ? 'in' : '';
+})()''';
+
+/// Ответ пробы: Android отдаёт строку в кавычках JSON, iPhone — как есть.
+String probeResult(Object? r) {
+  final s = '${r ?? ''}';
+  return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.substring(1, s.length - 1) : s;
+}
+
+/// Страница догрузилась, это СДО и в нём виден вошедший человек.
+Future<bool> sdoUserShown(WebViewController web, String? url) async {
+  if (!sdoLoggedIn(Uri.tryParse(url ?? ''))) return false;
+  try {
+    return probeResult(await web.runJavaScriptReturningResult(sdoUserProbe)) == 'in';
+  } catch (_) {
+    return false;
+  }
+}
 
 class SdoLoginPage extends StatefulWidget {
   const SdoLoginPage({super.key});
@@ -51,14 +75,15 @@ class _SdoLoginPageState extends State<SdoLoginPage> {
         onProgress: (v) {
           if (mounted) setState(() => _progress = v / 100);
         },
+        // только когда страница догрузилась: смена адреса приходит раньше
+        // переадресации на вход, и тогда в окне ещё старая, мёртвая кука
         onPageFinished: (url) => _check(url),
-        onUrlChange: (c) => _check(c.url),
       ),
     )
     ..loadRequest(Uri.parse('$sdoBase/my/'));
 
   Future<void> _check(String? url) async {
-    if (_done || !sdoLoggedIn(Uri.tryParse(url ?? ''))) return;
+    if (_done || !await sdoUserShown(_web, url)) return;
     final v = await readSdoCookie();
     if (v.isEmpty || _done || !mounted) return;
     _done = true;

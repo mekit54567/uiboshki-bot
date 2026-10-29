@@ -100,12 +100,6 @@ const _probe = '''(function(){
   return a.length === 1 ? a[0] : '';
 })()''';
 
-/// Что ответила проба: Android отдаёт строку в кавычках JSON, iPhone — как есть.
-String probeResult(Object? r) {
-  final s = '${r ?? ''}';
-  return s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.substring(1, s.length - 1) : s;
-}
-
 Future<String?> hiddenSdoLogin(BuildContext context) async {
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return null;
@@ -117,7 +111,7 @@ Future<String?> hiddenSdoLogin(BuildContext context) async {
   var followed = false;
   final web = WebViewController();
   Future<void> check(String? url) async {
-    if (done.isCompleted || !sdoLoggedIn(Uri.tryParse(url ?? ''))) return;
+    if (done.isCompleted || !await sdoUserShown(web, url)) return;
     final v = await readSdoCookie();
     if (v.isNotEmpty) finish(v);
   }
@@ -142,7 +136,6 @@ Future<String?> hiddenSdoLogin(BuildContext context) async {
   await web.setNavigationDelegate(
     NavigationDelegate(
       onPageFinished: finished,
-      onUrlChange: (c) => check(c.url),
       onWebResourceError: (e) {
         if (e.isForMainFrame ?? false) finish(null);
       },
