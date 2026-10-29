@@ -1,0 +1,111 @@
+@font-face{font-family:SourceSerif;src:url('/site/fonts/serif-cyrillic.woff2') format('woff2');font-weight:200 900;font-display:swap;unicode-range:U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:SourceSerif;src:url('/site/fonts/serif-latin.woff2') format('woff2');font-weight:200 900;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:Onest;src:url('/site/fonts/sans-cyrillic.woff2') format('woff2');font-weight:100 900;font-display:swap;unicode-range:U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Onest;src:url('/site/fonts/sans-latin.woff2') format('woff2');font-weight:100 900;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2116}
+/* «Было и стало» (/history, webapp/routes/site.py) — в стиле /about; светлая и тёмная тема по системе */
+:root{--paper:#f8f6f0;--ink:#282720;--sec:#66635b;--line:#dcd8ce;--accent:#b75438;--peach:#eee1d3;--orbit:#d7c6b3;
+  --chip:#faf8f3;--chip-edge:#c5b8a8;--seg:#e4ded2;--on-bg:#282720;--on-ink:#fbf8f0;--hot:#f2e6db;--frame:#252321;--frame-edge:#70695e;
+  --serif:SourceSerif,Georgia,serif;--sans:Onest,Arial,sans-serif}
+@media(prefers-color-scheme:dark){:root{--paper:#1d1b17;--ink:#ece6da;--sec:#b0a99c;--line:#37322a;--accent:#e0805f;--peach:#2b2620;
+  --orbit:#3e362c;--chip:#25221d;--chip-edge:#4a4237;--seg:#2c2822;--on-bg:#ece6da;--on-ink:#1d1b17;--hot:#3a2a22;--frame:#0e0d0b;--frame-edge:#4a443b}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+h1,h2,p,ol{margin:0}
+h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.045em}
+.eyebrow{font-size:10px;letter-spacing:.14em;font-weight:550;color:var(--sec);text-transform:uppercase}
+
+.header{max-width:1360px;margin:0 auto;padding:22px 42px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.brand{display:inline-flex;align-items:center;gap:9px;font-size:23px;font-weight:650;letter-spacing:-.055em}
+.brand img{width:34px;height:34px}
+@media(prefers-color-scheme:dark){.brand img{filter:invert(.92)}}
+.brand-period{color:var(--accent)}
+.header-link{font-size:13px}.header-link:hover{color:var(--accent)}
+
+.hero{max-width:1240px;margin:0 auto;padding:56px 40px 30px;text-align:center}
+.hero h1{font-size:64px;line-height:1.05;margin-top:12px}
+.sub{color:var(--sec);margin:14px auto 0;max-width:560px}
+
+.stage{margin-top:40px;background:var(--peach);border-radius:140px 140px 10px 10px;padding:42px 30px 34px;display:flex;justify-content:center;gap:70px;align-items:flex-start;position:relative}
+.col{display:flex;flex-direction:column;align-items:center;gap:14px;min-width:0}
+.arrow{align-self:center;font-family:var(--serif);font-size:44px;color:var(--accent);margin-top:40px}
+.seg{display:inline-flex;background:var(--seg);border-radius:30px;padding:3px;font-size:12px;max-width:100%}
+.seg button,.seg span{padding:7px 14px;border-radius:30px;color:var(--sec);white-space:nowrap}
+.seg .on,.seg [aria-selected=true]{background:var(--on-bg);color:var(--on-ink)}
+
+.phone{width:290px;padding:7px;background:var(--frame);border-radius:42px;position:relative;box-shadow:1px 2px 0 1px var(--frame-edge),9px 17px 24px #5c40222c}
+.screen{width:276px;height:590px;border-radius:35px;overflow:hidden;position:relative;background:#fff}
+.screen.now{background:#efe9df}
+.screen img{display:block;width:100%;height:auto}
+.island{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:72px;height:18px;border-radius:20px;background:#080808;z-index:5}
+
+/* чат Telegram тех дней — светлый, как на телефоне Никиты */
+.tg{text-align:left;height:100%;display:flex;flex-direction:column;background:linear-gradient(160deg,#b9cf98,#86a86e);font:11px/1.38 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#000}
+.tg-top{padding:38px 12px 8px;background:#fff;display:flex;align-items:center;gap:8px;border-bottom:1px solid #ddd;flex:none}
+.tg-ava{width:28px;height:28px;border-radius:50%;background:#5b8bd6;color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px}
+.tg-top b{display:block;font-size:12px}.tg-top span{font-size:9px;color:#8a8a8a}
+.tg-chat{position:relative;flex:1;min-height:0;padding:8px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;scrollbar-width:none}
+.tg-chat::-webkit-scrollbar{display:none}
+.tg-chat>:first-child{margin-top:auto}
+.msg{max-width:90%;padding:6px 8px 5px;border-radius:12px;background:#fff;white-space:pre-wrap;word-wrap:break-word;box-shadow:0 1px 0 #0002;align-self:flex-start;animation:pop .25s ease-out both}
+.msg.me{align-self:flex-end;background:#e1fec6}
+.msg.ex{outline:1px dashed #b75438aa;outline-offset:2px}
+.msg small{float:right;font-size:8px;color:#9a9a9a;margin:5px 0 0 8px}
+.tg-hint{align-self:center;max-width:90%;text-align:center;font-size:10px;color:#fff;background:#0004;border-radius:10px;padding:4px 10px}
+.kb{background:#e9ebee;padding:5px;display:grid;gap:4px;flex:none}
+.kb div{display:grid;gap:4px}
+.kb span{background:#fff;border-radius:6px;padding:7px 2px;text-align:center;font-size:9px;box-shadow:0 1px 0 #0002;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}}
+@media(prefers-reduced-motion:reduce){.msg{animation:none}}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:26px}
+.chips button{border:1px solid var(--chip-edge);border-radius:30px;padding:8px 16px;font-size:13px;background:var(--chip);transition:border-color .2s,color .2s}
+.chips button:hover{border-color:var(--accent)}
+.chips .on{border-color:var(--accent);color:var(--accent);background:var(--hot)}
+.note{font-size:11px;color:var(--sec);max-width:560px;margin:16px auto 0}
+
+.story{max-width:1240px;margin:0 auto;padding:70px 40px 20px;display:grid;grid-template-columns:1fr 1.5fr;gap:80px}
+.story h2{font-size:52px;line-height:1.08;margin-top:16px}
+.timeline{list-style:none;padding:0;border-left:1px solid var(--line);margin-left:6px}
+.timeline li{position:relative;padding:0 0 26px 28px}
+.timeline li:before{content:"";position:absolute;left:-5px;top:7px;width:9px;height:9px;border-radius:50%;background:var(--orbit)}
+.timeline .hot:before{background:var(--accent);box-shadow:0 0 0 4px #b7543833}
+.timeline time{font-size:11px;color:var(--sec)}
+.timeline b{display:block;font-family:var(--serif);font-weight:400;font-size:24px;letter-spacing:-.02em;line-height:1.25}
+.timeline .hot b{color:var(--accent)}
+.timeline p{font-size:13px;color:var(--sec);margin-top:4px;max-width:560px}
+
+.numbers{max-width:1160px;margin:30px auto 0;padding:26px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);gap:20px}
+.numbers div{padding:0 10px}
+.numbers b{display:block;font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-.03em;line-height:1.2}
+.numbers span{font-size:11px;color:var(--sec)}
+
+.closing{max-width:1160px;margin:60px auto 0;background:var(--peach);border-radius:8px;padding:44px 48px;display:flex;align-items:center;justify-content:space-between;gap:30px}
+.closing h2{font-size:42px}.closing p{font-size:13px;color:var(--sec);margin-top:8px}
+.closing-actions{display:flex;flex-direction:column;gap:10px;flex:none}
+.button{display:inline-flex;align-items:center;justify-content:center;padding:13px 22px;border-radius:4px;background:var(--on-bg);color:var(--on-ink);font-size:13px}
+.button.outline{background:none;color:var(--ink);border:1px solid var(--chip-edge)}
+.button:hover{opacity:.9}
+.footer{max-width:1160px;margin:0 auto;padding:36px 0 34px;display:flex;justify-content:space-between;gap:20px;font-size:10px;color:var(--sec)}
+.footer a:hover{color:var(--accent)}
+
+@media(max-width:900px){
+  .header{padding:18px 16px}
+  .hero{padding:36px 16px 20px}
+  .hero h1{font-size:46px}
+  .stage{flex-direction:column;align-items:center;gap:26px;border-radius:90px 90px 10px 10px;padding:34px 12px 26px}
+  .arrow{transform:rotate(90deg);margin:0}
+  .story{grid-template-columns:1fr;gap:26px;padding:48px 16px 10px}
+  .story h2{font-size:40px}
+  .numbers{grid-template-columns:1fr 1fr;margin:20px 16px 0}
+  .numbers b{font-size:24px}
+  .closing{flex-direction:column;align-items:flex-start;margin:40px 16px 0;padding:30px 22px}
+  .closing h2{font-size:34px}
+  .closing-actions{width:100%}
+  .footer{flex-direction:column;padding:28px 16px}
+}
+@media(max-width:340px){.phone{width:270px}.screen{width:256px;height:548px}.seg button,.seg span{padding:7px 10px}}
+@media(max-width:900px){.chips{position:sticky;bottom:10px;z-index:9;background:var(--paper);padding:8px;border-radius:30px;box-shadow:0 4px 18px #0002;width:max-content;max-width:100%;margin-left:auto;margin-right:auto}}

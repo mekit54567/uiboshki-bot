@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Было и стало — Капибара</title>
+<meta name="description" content="Первая версия бота группы УИБО-03-24 из апреля 2026 и Капибара сейчас — рядом, на одних и тех же парах.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Капибара">
+<meta property="og:title" content="Было и стало — Капибара">
+<meta property="og:description" content="Бот из апреля 2026 и приложение сейчас: нажми кнопку — ответят оба.">
+<meta property="og:url" content="__BASE__/history">
+<meta property="og:image" content="__BASE__/site/og.jpg?v=__OGV__">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f8f6f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1d1b17" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="/site/favicon.png" type="image/png">
+<link rel="preload" href="/site/fonts/serif-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/site/fonts/sans-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site/history.css">
+</head>
+<body>
+<header class="header">
+  <a class="brand" href="/about" aria-label="Капибара — на сайт"><img src="/site/capy.svg" width="34" height="34" alt=""><span>Капибара<span class="brand-period">.</span></span></a>
+  <a class="header-link" href="/about">На сайт →</a>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow">Апрель 2026 → октябрь 2026</p>
+    <h1>Было и стало</h1>
+    <p class="sub">Нажми кнопку внизу — ответят оба: бот из апреля и Капибара сейчас. День и пары одни и те же.</p>
+
+    <div class="stage">
+      <div class="col">
+        <p class="eyebrow">Тогда · бот в Telegram</p>
+        <div class="seg" role="tablist" aria-label="Версия бота">
+          <button type="button" role="tab" data-ver="first" aria-selected="false">24.04, первый коммит</button>
+          <button type="button" role="tab" data-ver="akadem" aria-selected="true">25.04, «Академик»</button>
+        </div>
+        <div class="phone"><div class="island"></div><div class="screen" id="old-screen" aria-live="polite"></div></div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="col">
+        <p class="eyebrow">Сейчас · приложение</p>
+        <div class="seg"><span class="on">Октябрь 2026</span></div>
+        <div class="phone"><div class="island"></div><div class="screen now"><img id="new-shot" src="/site/history/today.jpg" width="540" height="960" alt="Экран «Сегодня» в приложении Капибара"></div></div>
+      </div>
+    </div>
+
+    <div class="chips" role="tablist" aria-label="Что сравнить">
+      <button type="button" data-tab="today" class="on">Сегодня</button>
+      <button type="button" data-tab="week">Неделя</button>
+      <button type="button" data-tab="deadlines">Дедлайны</button>
+      <button type="button" data-tab="solver">Решалка</button>
+      <button type="button" data-tab="menu">Меню</button>
+    </div>
+    <p class="note">Сообщения старого бота восстановлены из кода тех дней. Ответ ИИ в «Решалке» — пример, настоящих ответов не сохранилось. Справа — приложение на демо-данных.</p>
+  </section>
+
+  <section class="story">
+    <div class="story-head">
+      <p class="eyebrow">История Капибары</p>
+      <h2>С чего всё начиналось</h2>
+    </div>
+    <ol class="timeline">
+      <li><time>24 апреля · 00:19</time><b>Первый коммит</b><p>15 файлов, 978 строк. Расписание, общий список дедлайнов, решалка на Groq и рассылка по утрам в 7:30.</p></li>
+      <li><time>24 апреля · 01:10</time><b>v2.0</b><p>Кнопки «Неделя», «Завтра», «Следующая», файлы, голосования, анонимный вопрос и напоминание перед парой.</p></li>
+      <li><time>24 апреля · 01:28–03:20</time><b>Ночь выбора ИИ</b><p>Groq → Gemini через OpenRouter → Gemini Flash Lite → снова Groq, Llama 4 Scout: бесплатно и видит фото. В 03:20 — разговор с решалкой и запрет LaTeX: «умножение через ×, деление через ÷».</p></li>
+      <li class="hot"><time>24 апреля · 20:17</time><b>v3.0 «Академик»</b><p>Первое кодовое имя версии. Доска ДЗ, погода, рейтинг, рассылка от старосты, файлы по предметам.</p></li>
+      <li><time>25 апреля</time><b>Меню из 12 кнопок</b><p>Попытка переехать на облачную базу — откат через 14 минут. Последний коммит той версии — 18:43.</p></li>
+      <li><time>май — сентябрь</time><b>Пауза</b><p>Бот живёт на Railway и просто работает.</p></li>
+      <li><time>21 сентября</time><b>Возвращение</b><p>Дедлайны сами из СДО, Mini App, поиск расписания любого преподавателя и аудитории, ответы ИИ по лекциям группы.</p></li>
+      <li><time>октябрь</time><b>Капибара</b><p>Любая группа МИРЭА, своё приложение в RuStore, сервер в Москве, баллы БРС и сдача работ из приложения.</p></li>
+    </ol>
+  </section>
+
+  <section class="numbers" aria-label="Тогда и сейчас">
+    <div><b>29 → 1000+</b><span>коммитов</span></div>
+    <div><b>2 тыс. → 59 тыс.</b><span>строк на Python</span></div>
+    <div><b>0 → 700+</b><span>автотестов</span></div>
+    <div><b>1 → все</b><span>группы МИРЭА</span></div>
+    <div><b>Railway → Москва</b><span>где живёт сервер</span></div>
+  </section>
+
+  <section class="closing">
+    <div><h2>Попробовать сейчас</h2><p>Бот, приложение и сайт — для любой группы МИРЭА.</p></div>
+    <div class="closing-actions"><a class="button" href="https://t.me/__BOT__?start=history" target="_blank" rel="noopener noreferrer">Открыть в Telegram ↗</a><a class="button outline" href="/about">Всё о Капибаре</a></div>
+  </section>
+</main>
+
+<footer class="footer"><span>Неофициальное приложение для студентов РТУ МИРЭА · 2026</span><a href="https://t.me/uiboshki_dev" target="_blank" rel="noopener noreferrer">Канал проекта ↗</a></footer>
+<script src="/site/history.js"></script>
+</body>
+</html>
