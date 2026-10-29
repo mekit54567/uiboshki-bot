@@ -42,7 +42,7 @@ async def test_start_is_one_short_message_with_app_button(db, monkeypatch):
     finally:
         start.router._parent_router = None
     texts = [t for t, _ in bot.session.sent]
-    assert len(texts) == 1 and "Привет, <b>Милюков</b>" in texts[0] and "в приложении" in texts[0]
+    assert len(texts) == 1 and "Привет, <b>Милюков</b>" in texts[0] and "В приложении" in texts[0]
     assert bot.session.markups[0] == ("SendMessage", "ReplyKeyboardRemove")
     assert ("EditMessageReplyMarkup", "InlineKeyboardMarkup") in bot.session.markups
     kb = keyboards.app_button("📋 Открыть дедлайны", "deadlines")

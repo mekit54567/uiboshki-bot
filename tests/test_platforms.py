@@ -63,3 +63,14 @@ def test_appstore_only_when_live(monkeypatch):
     for text in (start_text("Аня"), help_text(), stores_line()):
         assert url in text and config.RUSTORE_URL in text
     assert "App Store" in bot.bot_description("УИБО-03-24") and len(bot.bot_description("УИБО-03-24")) <= 512
+
+
+def test_start_html_balanced_and_ios_without_pay():
+    """Вариант «А»: теги цитат закрыты (Telegram иначе не примет сообщение),
+    а для start=ios абзац о «Капибаре+» уходит целиком."""
+    from handlers.start import without_pay
+    text = start_text("Аня", "ИКБО-01-23")
+    for tag in ("b", "i", "blockquote"):
+        assert text.count(f"<{tag}>") == text.count(f"</{tag}>")
+    ios = without_pay(text)
+    assert "/plus" not in ios and "Капибара+" not in ios and "Сюда пришлю сам" in ios
