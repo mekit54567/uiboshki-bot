@@ -121,6 +121,7 @@ async def _notify_view(uid: int) -> dict:
             "reminder_choices": list(notify_prefs.REMINDER_CHOICES), "prefs": prefs,
             "remind": [{"key": k, **v} for k, v in notify_prefs.REMIND.items()],
             "quiz_choices": list(notify_prefs.QUIZ_REMIND_CHOICES),      # «Тесты СДО»: минут до закрытия
+            "deadline_soon_choices": list(notify_prefs.DEADLINE_SOON_CHOICES),   # «Срок скоро»: часов до срока
             "home_campus": home, "morning_time": f"{SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d}",
             "deadline_time": f"{DEADLINE_REMINDER_HOUR}:{DEADLINE_REMINDER_MINUTE:02d}"}
 

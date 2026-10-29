@@ -58,6 +58,40 @@ def build(items: list[dict], moved: list[dict] | None = None, opened: list[str] 
     return "\n\n".join(parts)
 
 
+def headline(items: list[dict], moved: list[dict] | None = None, opened: list[dict] | None = None,
+             today: date | None = None) -> tuple[str, str]:
+    """Пуш (Никита 25.10): одно событие — «Новое задание: Практика 3» и ниже
+    «Анализ данных · сдать в чт до 23:59»; несколько — «В СДО новое: 2
+    задания, 1 перенос» и ниже названия."""
+    from push_text import split_subject, when as when_s, word
+    from utils import today_msk
+    today = today or today_msk()
+    moved, opened = moved or [], opened or []
+
+    def due(d):
+        return when_s(d["due_date"], d.get("due_time"), today)
+
+    events = ([("Открыли тест", d) for d in opened] + [("Новое задание", d) for d in items]
+              + [("Перенесли срок", d) for d in moved])
+    if len(events) == 1:
+        head, d = events[0]
+        name, course = split_subject(d["subject"])
+        if d.get("was"):
+            tail = f"теперь {due(d)}" + (f", было {_was(d['was'])}" if d["was"] != d["due_date"] else "")
+        else:
+            tail = f"сдать {due(d)}"
+        return f"{head}: {name}", " · ".join(x for x in (course, tail) if x)
+    bits = []
+    if opened:
+        bits.append(f"{len(opened)} {word(len(opened), 'тест открыт', 'теста открыты', 'тестов открыто')}")
+    if items:
+        bits.append(f"{len(items)} {word(len(items), 'задание', 'задания', 'заданий')}")
+    if moved:
+        bits.append(f"{len(moved)} {word(len(moved), 'перенос', 'переноса', 'переносов')}")
+    body = "; ".join(f"{split_subject(d['subject'])[0]} — {due(d)}" for _, d in events[:4])
+    return "В СДО новое: " + ", ".join(bits), body
+
+
 async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None) -> int:
     """Разослать про новые дедлайны и перенесённые сроки (из синка). → скольким ушло."""
     import notify_prefs
@@ -90,13 +124,14 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
         # новый тест, который уже открыт, — «Открыли тест» (Тесты СДО → «Тест
         # открылся»), а не строкой нового задания; отметка — та же, что у
         # quiz_alerts, чтобы минутная проверка не прислала его ещё раз
-        opened = []
+        opened, opened_d = [], []
         if prefs.get("quiz_open"):
             from database.sdo import mark_quiz_alert
             for d in [d for d in mine if d["id"] in opened_now]:
                 mine.remove(d)
                 if await mark_quiz_alert(uid, d["id"], "open", ""):
                     opened.append(opened_now[d["id"]])
+                    opened_d.append(d)
         if not prefs.get("new_tasks"):
             mine, shifted = [], []
         else:
@@ -105,7 +140,9 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
             continue
         try:
             import delivery
+            title, short = headline(mine, shifted, opened_d)
             await delivery.deliver(bot, uid, build(mine, shifted, opened), kind="new_tasks", tab="deadlines",
+                                   title=title, body=short,
                                    reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
             sent += 1
         except Exception as e:

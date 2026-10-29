@@ -202,6 +202,13 @@ def expired_text(via: str | None) -> str:
             "Подключи заново: приложение → СДО → Вход.")
 
 
+def expired_push(via: str | None) -> str:
+    """Текст пуша под заголовком «Вход в СДО устарел» — что делать."""
+    if via in ("page", "silent"):
+        return "Открой Капибару — если МИРЭА тебя помнит, вход обновится сам"
+    return "Баллы и сдача работ не работают. Подключи заново: СДО → Вход"
+
+
 async def _check_one(row: dict, bot=None, now: datetime | None = None):
     from database import set_sdo_next_check, set_sdo_status, update_sdo_cookie
     uid, enc = row["user_id"], row["cookie_enc"]
@@ -233,8 +240,8 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
         try:
             from delivery import deliver
             from keyboards import app_button
-            await deliver(bot, uid, expired_text(row.get("via")),
-                          kind="sdo", tab="sdo", reply_markup=app_button("🎓 Подключить СДО", "sdo"))
+            await deliver(bot, uid, expired_text(row.get("via")), kind="sdo", tab="sdo",
+                          title="Вход в СДО устарел", body=expired_push(row.get("via")), reply_markup=app_button("🎓 Подключить СДО", "sdo"))
         except Exception as e:
             logger.info(f"СДО: не смог сказать {uid}, что вход устарел: {e!r}")
 

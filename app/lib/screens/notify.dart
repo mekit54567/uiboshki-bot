@@ -235,10 +235,29 @@ class _NotifyBodyState extends State<_NotifyBody> {
             onChanged: () => _toggle('deadlines'),
             children: [_Days(days: _prefs['deadline_days'] as List, daysKey: 'deadline_days', onTap: _toggleDay)],
           ),
+          // «Срок скоро» (deadline_soon.py, Никита 25.10): за сколько часов до
+          // срока напомнить, если работа не сдана; по умолчанию 3 ч.
+          _Card(
+            icon: Icons.hourglass_bottom_outlined,
+            title: 'Срок скоро',
+            sub: 'за ${soonLabel(_soonHours())} до срока, если работа не сдана',
+            switchKey: 'deadline_soon',
+            on: _prefs['deadline_soon'] == true,
+            onChanged: () => _toggle('deadline_soon'),
+            children: [
+              _SoonHours(
+                choices: [for (final h in (_s['deadline_soon_choices'] as List? ?? soonChoices)) h as int],
+                value: _soonHours(),
+                onPick: (h) => _save({
+                  'prefs': {'deadline_soon_hours': h},
+                }),
+              ),
+            ],
+          ),
           _Card(
             icon: Icons.view_week_outlined,
             title: 'Обзор недели',
-            sub: 'в воскресенье в 19:00 — пары по дням и что сдать',
+            sub: 'в воскресенье в 19:00 — сколько пар и что сдать',
             switchKey: 'weekly',
             on: _prefs['weekly'] == true,
             onChanged: () => _toggle('weekly'),
@@ -246,7 +265,7 @@ class _NotifyBodyState extends State<_NotifyBody> {
           _Card(
             icon: Icons.military_tech_outlined,
             title: 'Новые баллы',
-            sub: 'когда в СДО изменятся баллы (если подключён вход)',
+            sub: 'когда проверят работу или изменятся баллы (если подключён вход в СДО)',
             switchKey: 'grades',
             on: _prefs['grades'] == true,
             onChanged: () => _toggle('grades'),
@@ -299,6 +318,8 @@ class _NotifyBodyState extends State<_NotifyBody> {
       'prefs': {'quiz_remind': list},
     });
   }
+
+  int _soonHours() => _prefs['deadline_soon_hours'] as int? ?? 3;
 
   String _eveningTime() => _prefs['evening_time'] as String? ?? '20:00';
 
@@ -458,6 +479,31 @@ String eveningSlot(int hour, int minute) {
 }
 
 /// Время вечерней сводки: частые — плашками, «своё» — часы.
+/// «Срок скоро»: за сколько часов до срока (как deadline_soon_choices сервера).
+const soonChoices = [1, 3, 6, 12, 24];
+
+String soonLabel(int h) => h >= 24 ? '1 день' : '$h ч';
+
+class _SoonHours extends StatelessWidget {
+  final List<int> choices;
+  final int value;
+  final ValueChanged<int> onPick;
+  const _SoonHours({required this.choices, required this.value, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppStyle.of(context).p;
+    return Wrap(
+      spacing: Space.xs,
+      runSpacing: Space.xs,
+      children: [
+        for (final h in choices)
+          _Pill(key: Key('soon:$h'), text: soonLabel(h), on: value == h, onTap: () => onPick(h), color: p.accent, wide: true),
+      ],
+    );
+  }
+}
+
 class _EveningTime extends StatelessWidget {
   static const presets = ['19:00', '20:00', '21:00', '22:00'];
   final String value;

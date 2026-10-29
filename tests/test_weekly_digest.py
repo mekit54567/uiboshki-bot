@@ -34,10 +34,23 @@ def test_build(week):
     dls = [{"subject": "Курсовая", "due_date": "2026-10-08", "due_time": "18:00"},
            {"subject": "Старое", "due_date": "2026-10-20"}, {"subject": "Сделано", "due_date": "2026-10-06", "done": 1}]
     text = weekly_digest.build(b"", MON, dls, "В-78")
-    assert "Неделя 6" in text and "5–11 октября" in text and "Всего пар: <b>3</b>" in text
+    assert text.startswith("🗓 <b>Следующая неделя: 3 пары</b>\nНеделя 6 · 5–11 октября")
     assert "<b>Пн</b> — 2 пары, с 09:00" in text and "<b>Чт</b> — 1 пара, с 12:40 · 📍 МП-1" in text
-    assert "свободно: Вт, Ср, Пт, Сб" in text
     assert "Курсовая — Чт 18:00" in text and "Старое" not in text and "Сделано" not in text
+    assert text.index("Сдать на неделе") < text.index("<b>Пн</b>")        # сначала — что делать
+
+
+def test_headline_for_push(week):
+    """Пуш (Никита 25.10): «Следующая неделя: 16 пар» и «Сдать 2 работы» — без
+    номера недели, свободных дней, корпусов и названий работ."""
+    week({0: [("09:00", "А-1 (В-78)")] * 5, 1: [("09:00", "А-1 (В-78)")] * 2, 2: [("09:00", "А-1 (В-78)")] * 3,
+          3: [("09:00", "А-1 (В-78)")] * 3, 4: [("12:40", "И-201 (МП-1)")] * 3})
+    dls = [{"subject": "Практика 2 · Анализ данных (Экз)", "due_date": "2026-10-05", "due_time": "23:59"},
+           {"subject": "Лаба 3", "due_date": "2026-10-08"}]
+    assert weekly_digest.headline(b"", MON, dls, "В-78", [("ООП", 2.5)]) == ("Следующая неделя: 16 пар",
+                                                                           "Сдать 2 работы")
+    assert weekly_digest.headline(b"", MON, dls[1:], "В-78")[1] == "Сдать 1 работу"
+    assert weekly_digest.headline(b"", MON, [], "В-78")[1] == "Сроков на неделе нет"
 
 
 def test_empty_week_not_sent(week):

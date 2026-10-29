@@ -287,7 +287,9 @@ async def check_schedule_changes(bot):
                 continue
             try:
                 from delivery import deliver
-                await deliver(bot, uid, text, kind="lessons", tab="today")
+                await deliver(bot, uid, text, kind="lessons", tab="today",
+                              title=f"Изменилось расписание на {weekday_label}",
+                              body="\n".join(text.split("\n")[2:]))
             except Exception as e:
                 logger.warning(f"Не смог отправить diff расписания {uid}: {e}")
 

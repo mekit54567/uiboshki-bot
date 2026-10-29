@@ -2,7 +2,7 @@
 
 erase_user убирает человека отовсюду: все строки таблиц с колонкой user_id
 (список берётся из схемы — новая таблица попадёт сама, тест следит), его
-настройки (goals:, member:, счётчики ИИ), входы, устройства и куку СДО.
+настройки (goals:, member:, graded:, счётчики ИИ), входы, устройства и куку СДО.
 Оплаты остаются без его id (налоговый учёт), приглашения стираются.
 Общее для группы (дедлайны старосты и СДО, файлы, ДЗ, заметки, конспекты,
 голосования, посты «Подслушано») остаётся, но без его id."""
@@ -163,8 +163,8 @@ async def erase_user(user_id: int, starosta_ids=()) -> dict:
                 done[table] = cur.rowcount
 
         # Настройки: свои ключи и счётчики ИИ (JSON {id: число} по дням и неделям).
-        await db.execute("DELETE FROM settings WHERE key IN (?, ?, ?)",
-                         (f"goals:{uid}", f"member:{uid}", f"login_channel:{uid}"))
+        await db.execute("DELETE FROM settings WHERE key IN (?, ?, ?, ?)",
+                         (f"goals:{uid}", f"member:{uid}", f"login_channel:{uid}", f"graded:{uid}"))
         rows = await (await db.execute(
             "SELECT key, value FROM settings WHERE key LIKE 'ai_day:%' OR key LIKE 'ai_sum:%'")).fetchall()
         for key, value in rows:

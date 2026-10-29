@@ -70,8 +70,15 @@ async def send_due(bot, now: datetime | None = None):
         desc = (r.get("description") or "").strip()
         text = (f"⏰ <b>Напоминание: {esc(r['subject'])}</b>\n{due_label(due, now.date(), r.get('due_time'))}"
                 + (f"\n📝 {esc(desc[:300])}" if desc and not desc.startswith("http") else ""))
+        from push_text import split_subject, when
+        name, course = split_subject(r["subject"])
         try:
-            await bot.send_message(r["user_id"], text, parse_mode="HTML",
+            # через слой доставки: раньше — только Telegram, и в приложении
+            # (вход через VK/Яндекс) своё напоминание не приходило совсем
+            import delivery
+            await delivery.deliver(bot, r["user_id"], text, kind="deadlines", tab="deadlines",
+                                   title=f"Напоминание: {name}",
+                                   body=" · ".join(x for x in (course, "срок " + when(r["due_date"], r.get("due_time"), now.date())) if x),
                                    reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
         except Exception as e:
             logger.info(f"напоминание о дедлайне не дошло до {r['user_id']}: {e!r}")  # обычно — бот заблокирован

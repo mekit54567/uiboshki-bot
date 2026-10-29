@@ -56,3 +56,47 @@ def test_toggle_in_app():
     import notify_prefs
     assert notify_prefs.merge(None)["grades"] is True
     assert "toggleNotify('grades')" in open("webapp/static/js/more.js", encoding="utf-8").read()
+
+
+def _course(works):
+    return {"id": 7, "name": "Моделирование", "score": 39, "works": works}
+
+
+def test_checked_works():
+    """«Работу проверили» (Никита 25.10): новая оценка у работы — пуш с оценкой; первый раз — молча."""
+    w1 = {"cmid": 11, "name": "Практика 1", "grade": 7.0, "max": 8.0, "graded": True, "passed": True}
+    w2 = {"cmid": 12, "name": "Практика 2", "grade": None, "max": 8.0, "graded": False, "passed": None}
+    seen = grade_alerts.graded_map([_course([w1, w2])])
+    assert seen == {"7:11": "7 из 8"}
+    assert grade_alerts.checked(None, [_course([w1, w2])]) == []
+    w2 = dict(w2, grade=5.0, graded=True, passed=True)
+    done = grade_alerts.checked(seen, [_course([w1, w2])])
+    assert [w["cmid"] for _, w in done] == [12]
+    assert grade_alerts.checked_head(done) == ("Проверили: Практика 2 — 5 из 8", "Моделирование")
+    assert "Практика 2: <b>5 из 8</b>" in grade_alerts.checked_text(done)
+    w3 = {"cmid": 13, "name": "Тест", "grade": None, "max": None, "graded": True, "passed": False}
+    done = grade_alerts.checked(seen, [_course([w1, w2, w3])])
+    assert grade_alerts.checked_head(done) == ("Проверили 2 работы", "Практика 2 — 5 из 8 · Тест — не зачтено")
+
+
+@pytest.mark.asyncio
+async def test_check_user_sends_checked_once(db, monkeypatch):
+    import sdo_grades
+    await db.upsert_user(1, "", "X")
+    works = [{"cmid": 11, "name": "Практика 1", "grade": None, "max": 8.0, "graded": False, "passed": None}]
+
+    async def overview(uid, cookie, fresh=False):
+        return {"courses": [_course(works)]}
+
+    monkeypatch.setattr(sdo_grades, "overview", overview)
+    sent = []
+
+    class Bot:
+        async def send_message(self, uid, text, **kw):
+            sent.append(text)
+
+    assert not await grade_alerts.check_user(Bot(), 1, "c")             # первый раз — запомнили
+    works[0] = dict(works[0], grade=7.0, graded=True, passed=True)
+    assert await grade_alerts.check_user(Bot(), 1, "c")
+    assert "Проверили работу" in sent[-1]
+    assert not await grade_alerts.check_user(Bot(), 1, "c")             # второй раз — тишина

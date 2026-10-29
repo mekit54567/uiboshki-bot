@@ -523,19 +523,33 @@ def _settings_view(user: dict | None) -> tuple[str, InlineKeyboardMarkup]:
         "⚙️ <b>Настройки</b>\n\n"
         f"🔔 Утренняя рассылка и напоминания: <b>{'включены' if sub else 'выключены'}</b>\n"
         f"⏰ Перед парой: {notify_prefs.summary(prefs)}\n"
-        "Кнопки ниже ставят одно время на все пары.\n\n"
+        "Кнопки ниже ставят одно время на все пары.\n"
+        f"⌛ Срок скоро, а работа не сдана: {_soon_text(prefs)}\n\n"
         f"Рассылка приходит каждое утро в {SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d}: расписание и погода.\n\n"
         "Дни недели, погода, подсказка про другой корпус — в приложении: ☰ Ещё → Уведомления."
     )
     from keyboards import app_button
     app = app_button("🔔 Настроить в приложении", "notify")
+    soon = [InlineKeyboardButton(text=("✓ " if not prefs["deadline_soon"] else "") + "срок: нет", callback_data="set:soon:0")]
+    soon += [InlineKeyboardButton(text=("✓ " if prefs["deadline_soon"] and h == prefs["deadline_soon_hours"] else "")
+                                  + "срок: " + (f"{h} ч" if h < 24 else "1 день"), callback_data=f"set:soon:{h}")
+             for h in notify_prefs.DEADLINE_SOON_CHOICES]
     kb = InlineKeyboardMarkup(inline_keyboard=([app.inline_keyboard[0]] if app else []) + [
         [InlineKeyboardButton(text="🔕 Выключить уведомления" if sub else "🔔 Включить уведомления",
                               callback_data="set:sub")],
         [InlineKeyboardButton(text=("✓ " if m == mins else "") + f"за {m} мин", callback_data=f"set:rem:{m}")
          for m in REMINDER_CHOICES],
+        # «Срок скоро» (deadline_soon.py, Никита 25.10): за сколько часов, «нет» — выключить
+        *[soon[i:i + 3] for i in range(0, len(soon), 3)],
     ])
     return text, kb
+
+
+def _soon_text(prefs: dict) -> str:
+    if not prefs["deadline_soon"]:
+        return "<b>не напоминать</b>"
+    h = prefs["deadline_soon_hours"]
+    return f"напомню за <b>{f'{h} ч' if h < 24 else '1 день'}</b>"
 
 
 @router.message(Command("settings"))
@@ -557,6 +571,16 @@ async def settings_change(callback: CallbackQuery):
     elif parts[1] == "rem" and len(parts) == 3 and parts[2].isdigit() and int(parts[2]) in REMINDER_CHOICES:
         import notify_prefs
         await notify_prefs.set_all_reminders(uid, int(parts[2]))
+    elif parts[1] == "soon" and len(parts) == 3 and parts[2].isdigit():
+        import notify_prefs
+        h = int(parts[2])
+        if h == 0 or h in notify_prefs.DEADLINE_SOON_CHOICES:
+            from database import set_notify
+            from locks import lock
+            async with lock("notify", uid):
+                prefs = notify_prefs.merge((await get_user(uid) or {}).get("notify"))
+                prefs.update({"deadline_soon": True, "deadline_soon_hours": h} if h else {"deadline_soon": False})
+                await set_notify(uid, prefs)
     text, kb = _settings_view(await get_user(uid))
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)

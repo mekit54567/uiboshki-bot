@@ -56,11 +56,34 @@ def _deadlines_text(deadlines: list[dict], tomorrow: date) -> str:
     return f"Сдать: {', '.join(parts)}{tail}."
 
 
+def day_title(lessons: list[dict], day: str, home: str | None, campus: bool = True) -> str:
+    """«Завтра: 3 пары с 09:00, В-78» / «Сегодня: 5 пар с 09:00, МП-1 (не В-78)».
+    lessons — lessons_for_date, отсортированы по началу."""
+    import notify_prefs
+    pairs = sum(l.get("pairs") or 1 for l in lessons)
+    title = f"{day}: {pairs} {_word(pairs)} с {lessons[0]['start']}"
+    if campus:
+        found = list(dict.fromkeys(c for c in (notify_prefs.campus_of(l.get("room")) for l in lessons) if c))
+        if found:
+            title += ", " + ", ".join(found) + (f" (не {home})" if home and home not in found else "")
+    return title
+
+
+def first_pair(lessons: list[dict]) -> str:
+    """«Первая — Анализ данных, лекция · А-1 (В-78)» (без HTML-экранирования)."""
+    first = lessons[0]
+    pair = f"Первая — {first.get('title') or ''}"
+    if first.get("kind"):
+        pair += f", {first['kind']}"
+    if first.get("room"):
+        pair += f" · {first['room']}"
+    return pair
+
+
 def build(raw: bytes, tomorrow: date, deadlines: list[dict], home: str | None, weather: str = "",
           campus: bool = True) -> tuple[str, str] | None:
     """(заголовок для пуша, HTML для Telegram) или None — завтра пусто.
     deadlines — не сданные сроки с завтрашнего дня на DEADLINE_DAYS дней."""
-    import notify_prefs
     from schedule_parser import lessons_for_date
     lessons = [l for l in lessons_for_date(raw, tomorrow) if l.get("start") and l.get("kind") != "сам. работа"]
     dl = _deadlines_text(deadlines, tomorrow)
@@ -70,19 +93,9 @@ def build(raw: bytes, tomorrow: date, deadlines: list[dict], home: str | None, w
         title = "Завтра пар нет"
         return title, f"🌙 <b>{title}</b>\n{dl} Отдыхай."
     lessons.sort(key=lambda l: l["start"])
-    pairs = sum(l.get("pairs") or 1 for l in lessons)
-    title = f"Завтра: {pairs} {_word(pairs)} с {lessons[0]['start']}"
-    if campus:
-        found = list(dict.fromkeys(c for c in (notify_prefs.campus_of(l.get("room")) for l in lessons) if c))
-        if found:
-            title += ", " + ", ".join(found) + (f" (не {home})" if home and home not in found else "")
+    title = day_title(lessons, "Завтра", home, campus)
     line = " ".join(x for x in ((weather + ".") if weather else "", dl) if x)
-    first = lessons[0]
-    pair = f"Первая — {esc(first.get('title') or '')}"
-    if first.get("kind"):
-        pair += f", {esc(first['kind'])}"
-    if first.get("room"):
-        pair += f" · {esc(first['room'])}"
+    pair = esc(first_pair(lessons))
     return title, "\n".join(x for x in (f"🌙 <b>{esc(title)}</b>", line, pair) if x)
 
 
