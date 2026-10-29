@@ -32,10 +32,15 @@
   <section class="hero">
     <p class="eyebrow">Апрель 2026 → октябрь 2026</p>
     <h1>Было и стало</h1>
-    <p class="sub">Нажми кнопку внизу — ответят оба: бот из апреля и Капибара сейчас. День и пары одни и те же.</p>
+    <p class="sub">Нажми кнопку — ответят оба: бот из апреля и Капибара сейчас. День и пары одни и те же.</p>
 
-    <div class="stage">
-      <div class="col">
+    <div class="view" role="tablist" aria-label="Что показать">
+      <button type="button" role="tab" data-view="old" aria-selected="true">Тогда · апрель</button>
+      <button type="button" role="tab" data-view="new" aria-selected="false">Сейчас · октябрь</button>
+    </div>
+
+    <div class="stage show-old">
+      <div class="col old">
         <p class="eyebrow">Тогда · бот в Telegram</p>
         <div class="seg" role="tablist" aria-label="Версия бота">
           <button type="button" role="tab" data-ver="first" aria-selected="false">24.04, первый коммит</button>
@@ -44,10 +49,10 @@
         <div class="phone"><div class="island"></div><div class="screen" id="old-screen" aria-live="polite"></div></div>
       </div>
       <div class="arrow" aria-hidden="true">→</div>
-      <div class="col">
+      <div class="col new">
         <p class="eyebrow">Сейчас · приложение</p>
         <div class="seg"><span class="on">Октябрь 2026</span></div>
-        <div class="phone"><div class="island"></div><div class="screen now"><img id="new-shot" src="/site/history/today.jpg" width="540" height="960" alt="Экран «Сегодня» в приложении Капибара"></div></div>
+        <div class="phone"><div class="island"></div><div class="screen now"><img id="new-shot" src="/site/history/today.jpg" width="540" height="943" alt="Экран «Сегодня» в приложении Капибара"></div></div>
       </div>
     </div>
 

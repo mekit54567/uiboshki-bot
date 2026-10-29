@@ -213,3 +213,20 @@ def test_history_page():
         root = Path(__file__).resolve().parent.parent
         res = subprocess.run(["node", "--check", str(root / "webapp/static/site/history.js")], capture_output=True, text=True)
         assert res.returncode == 0, res.stderr
+
+
+def test_history_mobile_layout():
+    """/history на телефоне (Никита 29.10, скрины с iPhone): вырез не закрывает
+    шапку приложения, снимок не обрывается посреди экрана, кнопки не липнут
+    поверх экранов, а показывается один экран без рамки — «Тогда» или «Сейчас»."""
+    from pathlib import Path
+    from PIL import Image
+    site = Path(__file__).resolve().parent.parent / "webapp" / "static" / "site"
+    css = (site / "history.css").read_text(encoding="utf-8")
+    html = (site / "history.html").read_text(encoding="utf-8")
+    assert "sticky" not in css                                   # кнопки ехали поверх экрана «Сейчас»
+    assert 'data-view="old"' in html and 'data-view="new"' in html
+    assert ".stage.show-old .col.new" in css and "aspect-ratio:540/943" in css
+    assert ".screen.now{background:#eae4d8;padding:34px 0 14px}" in css    # полоса под вырезом
+    for shot in ("today", "week", "deadlines", "assistant", "more"):
+        assert Image.open(site / "history" / f"{shot}.jpg").size == (540, 943), shot   # без обрезка под меню

@@ -37,10 +37,13 @@ h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.045em}
 .seg .on,.seg [aria-selected=true]{background:var(--on-bg);color:var(--on-ink)}
 
 .phone{width:290px;padding:7px;background:var(--frame);border-radius:42px;position:relative;box-shadow:1px 2px 0 1px var(--frame-edge),9px 17px 24px #5c40222c}
-.screen{width:276px;height:590px;border-radius:35px;overflow:hidden;position:relative;background:#fff}
-.screen.now{background:#efe9df}
+/* экран телефона — по размеру снимков приложения (540×943) + полоса под вырезом
+   сверху и отступ снизу, чтобы вырез не закрывал шапку, а скругление — меню */
+.screen{width:276px;height:530px;border-radius:35px;overflow:hidden;position:relative;background:#fff}
+.screen.now{background:#eae4d8;padding:34px 0 14px}
 .screen img{display:block;width:100%;height:auto}
 .island{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:72px;height:18px;border-radius:20px;background:#080808;z-index:5}
+.view{display:none}
 
 /* чат Telegram тех дней — светлый, как на телефоне Никиты */
 .tg{text-align:left;height:100%;display:flex;flex-direction:column;background:linear-gradient(160deg,#b9cf98,#86a86e);font:11px/1.38 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#000}
@@ -96,16 +99,29 @@ h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.045em}
   .header{padding:18px 16px}
   .hero{padding:36px 16px 20px}
   .hero h1{font-size:46px}
-  .stage{flex-direction:column;align-items:center;gap:26px;border-radius:90px 90px 10px 10px;padding:34px 12px 26px}
-  .arrow{transform:rotate(90deg);margin:0}
+  /* на телефоне — без рамки телефона (иначе телефон в телефоне) и по одному
+     экрану: «Тогда · апрель» / «Сейчас · октябрь»; кнопки — над экраном, все видны */
+  .hero{display:flex;flex-direction:column;align-items:center}
+  .chips{order:3;margin-top:22px}
+  .view{order:4;display:inline-flex;margin-top:14px;background:var(--seg);border-radius:30px;padding:3px;font-size:13px}
+  .view button{padding:8px 16px;border-radius:30px;color:var(--sec)}
+  .view [aria-selected=true]{background:var(--on-bg);color:var(--on-ink)}
+  .stage{order:5;width:100%;margin-top:16px;border-radius:28px;padding:20px 14px 22px;gap:0}
+  .note{order:6}
+  .stage.show-old .col.new,.stage.show-new .col.old,.arrow{display:none}
+  .col{width:100%}
+  .col>.eyebrow,.col.new .seg{display:none}
+  .phone{width:100%;max-width:360px;padding:0;background:none;border-radius:24px;box-shadow:0 10px 30px #5c402233}
+  .island{display:none}
+  .screen{width:100%;height:auto;aspect-ratio:540/943;border-radius:24px;border:1px solid var(--line)}
+  .screen.now{padding:0}
+  .tg-top{padding-top:12px}
   .story{grid-template-columns:1fr;gap:26px;padding:48px 16px 10px}
   .story h2{font-size:40px}
   .numbers{grid-template-columns:1fr 1fr;margin:20px 16px 0}
-  .numbers b{font-size:24px}
+  .numbers b{font-size:20px}
   .closing{flex-direction:column;align-items:flex-start;margin:40px 16px 0;padding:30px 22px}
   .closing h2{font-size:34px}
   .closing-actions{width:100%}
-  .footer{flex-direction:column;padding:28px 16px}
+  .footer{flex-direction:column;padding:28px 16px max(28px,env(safe-area-inset-bottom))}
 }
-@media(max-width:340px){.phone{width:270px}.screen{width:256px;height:548px}.seg button,.seg span{padding:7px 10px}}
-@media(max-width:900px){.chips{position:sticky;bottom:10px;z-index:9;background:var(--paper);padding:6px;border-radius:30px;box-shadow:0 4px 18px #0002;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;width:max-content;max-width:100%;margin-left:auto;margin-right:auto}.chips::-webkit-scrollbar{display:none}.chips button{flex:none;padding:7px 13px}}
