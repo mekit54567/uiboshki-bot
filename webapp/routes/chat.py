@@ -212,6 +212,94 @@ async def _chat_file_request(text: str) -> dict | None:
     return {"content": msg, "html": esc(msg), "reasoning": "", "files": files}
 
 
+def clean_history(messages: list[ChatMessage]) -> list[dict]:
+    """Последние 20 сообщений. Роли — только user/assistant, и первым — вопрос:
+    срез [-20:] мог начаться с ответа ИИ, а deepseek-reasoner такое не принимает."""
+    history = [{"role": m.role, "content": m.content} for m in messages[-20:]
+               if m.role in ("user", "assistant")]
+    while history and history[0]["role"] != "user":
+        history.pop(0)
+    return history
+
+
+async def _solve(history: list, subject: str, context: str, lectures: str,
+                 attachment: ChatAttachment | None) -> dict:
+    """Вопрос (и вложение — фото решает Gemini по картинке, у документа текст
+    уходит в сообщение) → {"content", "reasoning"} от модели."""
+    import asyncio
+    import base64
+    from ai_solver import solve_image
+    from file_text import SUPPORTED_EXTENSIONS, extract_text
+    if not attachment:
+        return await _chat_with_fallback(history, subject, context, lectures)
+    try:
+        raw = base64.b64decode(attachment.data, validate=False)
+    except Exception:
+        raise HTTPException(status_code=400, detail="вложение повреждено")
+    if len(raw) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(status_code=413, detail="файл больше 10 МБ")
+    name = attachment.name or "файл"
+    if attachment.mime.startswith("image/"):
+        question = history[-1]["content"].strip() or "Реши задание на фото с подробным объяснением."
+        earlier = "\n".join(f"{'Студент' if m['role'] == 'user' else 'Ты'}: {m['content'][:500]}"
+                             for m in history[-7:-1])
+        prompt = (f"Предыдущий разговор:\n{earlier}\n\n" if earlier else "") + f"Сообщение студента: {question}"
+        content = await solve_image(raw, attachment.mime, subject=subject,
+                                    lectures=lectures, prompt=prompt + "\n\n" + context)
+        return {"content": content, "reasoning": ""}
+    if not name.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise HTTPException(status_code=415, detail="умею читать PDF, DOCX, PPTX и TXT, а ещё фото")
+    text = (await asyncio.to_thread(extract_text, raw, name)).strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="не смог достать текст из файла (скан без текстового слоя?)")
+    note = "\n\n(файл обрезан — слишком длинный)" if len(text) > DOC_TEXT_LIMIT else ""
+    history[-1]["content"] = (
+        (history[-1]["content"].strip() or "Разбери этот файл.")
+        + f"\n\n=== Файл «{name}» ===\n{text[:DOC_TEXT_LIMIT]}{note}"
+    )
+    result = await _chat_with_fallback(history, subject, context, lectures)
+    result["file_text"] = (f"=== Файл «{name}» ===\n{text[:FILE_MEMORY_LIMIT]}"
+                           + ("\n(дальше файл обрезан)" if len(text) > FILE_MEMORY_LIMIT else ""))
+    return result
+
+
+async def reply(history: list, subject: str, context: str, lectures: str, sources: list[dict] | None = None,
+                attachment: ChatAttachment | None = None, solve=None) -> dict:
+    """Контекст + лекции + история → ответ /api/chat (content, html, reasoning,
+    sources). Общая часть настоящего чата и демо-входа проверяющих магазинов
+    (review_demo.demo_chat). sources — куски с номерами [n] (поиск по смыслу);
+    None — целые лекции, источники ищутся по заголовкам. solve — своя модель
+    вместо обычной («Подумать»). Сбой модели — 502 BUSY_TEXT."""
+    from utils import md_to_tg_html_chunks
+    try:
+        result = await (solve() if solve else _solve(history, subject, context, lectures, attachment))
+    except HTTPException:
+        raise
+    except Exception as e:
+        # причина (какая модель, код) — в лог для /status; человеку — без
+        # названий провайдеров и кодов (Никита 21.10: «причём тут Gemini?»)
+        logger.warning(f"webapp chat failed: {_short_reason(e)} ({e!r})")
+        raise HTTPException(status_code=502, detail=BUSY_TEXT)
+    # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
+    result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
+    # Под ответом — только материалы, на которые ИИ сослался номером: на
+    # болтовню и вопросы не по учёбе плашек нет. Ответ без лекций (запасной
+    # путь _chat_with_fallback) — источников нет.
+    if lectures and not result.pop("no_lectures", False):
+        used = cited(result.get("content", ""))
+        if sources is None:     # целые лекции: номер не нужен фронту (страницы нет)
+            sources = [{k: v for k, v in s.items() if k != "n"}
+                       for s in await _lecture_sources(lectures, subject) if s["n"] in used]
+        else:
+            sources = [s for s in sources if s["n"] in used]
+        if sources:
+            # чипы по порядку: «Лекция 2, Лекция 3 · стр. 28, Лекция 3 · стр. 37»,
+            # а не в порядке релевантности (Никита 21.10: «почему 2, 4?»)
+            sources.sort(key=lambda s: (_natural(str(s.get("title") or "")), s.get("page") or 0))
+            result["sources"] = sources
+    return result
+
+
 @router.post("/api/chat")
 async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header(default="")):
     """Чат WebApp: история (последние 20), по желанию предмет (если по нему
@@ -219,12 +307,8 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     Gemini по картинке) или документ PDF/DOCX/PPTX/TXT (его текст уходит в
     сообщение). В системный промпт — контекст группы: пары, дедлайны, ДЗ."""
     import asyncio
-    import base64
-    from ai_solver import solve_image
     from database import get_subject_lecture_context, get_subjects_with_lecture_text
-    from file_text import SUPPORTED_EXTENSIONS, extract_text
     from group_context import build_group_context
-    from utils import md_to_tg_html_chunks
 
     import ai_quota
     import think
@@ -236,13 +320,8 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     else:
         why = await ai_quota.gate(user["id"])
         if why:
-            raise HTTPException(status_code=429, detail=ai_quota.text(why))
-    # Роли — только user/assistant, и первым — вопрос: срез [-20:] мог
-    # начаться с ответа ИИ, а deepseek-reasoner такое не принимает.
-    history = [{"role": m.role, "content": m.content} for m in body.history[-20:]
-               if m.role in ("user", "assistant")]
-    while history and history[0]["role"] != "user":
-        history.pop(0)
+            raise HTTPException(status_code=429, detail=ai_quota.text(why, app=x_app))
+    history = clean_history(body.history)
     if not history:
         raise HTTPException(status_code=400, detail="пустая история")
     subject = body.subject.strip()
@@ -326,70 +405,16 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     if lecture_note:
         context += "\n" + lecture_note
 
-    try:
-        if deep:
+    solve = None
+    if deep:
+        async def solve():
             try:
-                result = {"content": await think.solve(user["id"], history, subject, lectures, context,
-                                                       first=body.think_first),
-                          "reasoning": ""}
+                return {"content": await think.solve(user["id"], history, subject, lectures, context,
+                                                     first=body.think_first),
+                        "reasoning": ""}
             except think.ThinkError as e:
                 raise HTTPException(status_code=502, detail=str(e))
-        elif body.attachment:
-            try:
-                raw = base64.b64decode(body.attachment.data, validate=False)
-            except Exception:
-                raise HTTPException(status_code=400, detail="вложение повреждено")
-            if len(raw) > MAX_ATTACHMENT_BYTES:
-                raise HTTPException(status_code=413, detail="файл больше 10 МБ")
-            name = body.attachment.name or "файл"
-            if body.attachment.mime.startswith("image/"):
-                question = history[-1]["content"].strip() or "Реши задание на фото с подробным объяснением."
-                earlier = "\n".join(f"{'Студент' if m['role'] == 'user' else 'Ты'}: {m['content'][:500]}"
-                                     for m in history[-7:-1])
-                prompt = (f"Предыдущий разговор:\n{earlier}\n\n" if earlier else "") + f"Сообщение студента: {question}"
-                content = await solve_image(raw, body.attachment.mime, subject=subject,
-                                            lectures=lectures, prompt=prompt + "\n\n" + context)
-                result = {"content": content, "reasoning": ""}
-            else:
-                if not name.lower().endswith(SUPPORTED_EXTENSIONS):
-                    raise HTTPException(status_code=415, detail="умею читать PDF, DOCX, PPTX и TXT, а ещё фото")
-                text = (await asyncio.to_thread(extract_text, raw, name)).strip()
-                if not text:
-                    raise HTTPException(status_code=422, detail="не смог достать текст из файла (скан без текстового слоя?)")
-                note = "\n\n(файл обрезан — слишком длинный)" if len(text) > DOC_TEXT_LIMIT else ""
-                history[-1]["content"] = (
-                    (history[-1]["content"].strip() or "Разбери этот файл.")
-                    + f"\n\n=== Файл «{name}» ===\n{text[:DOC_TEXT_LIMIT]}{note}"
-                )
-                result = await _chat_with_fallback(history, subject, context, lectures)
-                result["file_text"] = (f"=== Файл «{name}» ===\n{text[:FILE_MEMORY_LIMIT]}"
-                                       + ("\n(дальше файл обрезан)" if len(text) > FILE_MEMORY_LIMIT else ""))
-        else:
-            result = await _chat_with_fallback(history, subject, context, lectures)
-    except HTTPException:
-        raise
-    except Exception as e:
-        # причина (какая модель, код) — в лог для /status; человеку — без
-        # названий провайдеров и кодов (Никита 21.10: «причём тут Gemini?»)
-        logger.warning(f"webapp chat failed: {_short_reason(e)} ({e!r})")
-        raise HTTPException(status_code=502, detail=BUSY_TEXT)
-    # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
-    result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
-    # Под ответом — только материалы, на которые ИИ сослался номером: на
-    # болтовню и вопросы не по учёбе плашек нет. Ответ без лекций (запасной
-    # путь _chat_with_fallback) — источников нет.
-    if lectures and not result.pop("no_lectures", False):
-        used = cited(result.get("content", ""))
-        if sources is None:     # целые лекции: номер не нужен фронту (страницы нет)
-            sources = [{k: v for k, v in s.items() if k != "n"}
-                       for s in await _lecture_sources(lectures, subject) if s["n"] in used]
-        else:
-            sources = [s for s in sources if s["n"] in used]
-        if sources:
-            # чипы по порядку: «Лекция 2, Лекция 3 · стр. 28, Лекция 3 · стр. 37»,
-            # а не в порядке релевантности (Никита 21.10: «почему 2, 4?»)
-            sources.sort(key=lambda s: (_natural(str(s.get("title") or "")), s.get("page") or 0))
-            result["sources"] = sources
+    result = await reply(history, subject, context, lectures, sources, body.attachment, solve)
     # кнопка «Подумать ещё» под ответом (подписчикам, не на iPhone); к фото и
     # файлу — нет: модель второго уровня читает только текст
     offer = None if body.attachment else await think.offer(user["id"], x_app)

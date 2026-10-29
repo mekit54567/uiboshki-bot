@@ -28,6 +28,8 @@ DAY_TEXT = ("на сегодня вопросы к ИИ кончились ({n} 
             "группу. Завтра можно снова")
 TRIAL_TEXT = ("на сегодня пробные вопросы к ИИ кончились ({n} в день). Завтра можно снова, а без "
               "лимита ИИ будет в подписке — скоро")
+# в приложении на iPhone о подписке не говорим (App Store 3.1.1, как billing: X-App: ios)
+TRIAL_IOS_TEXT = "на сегодня пробные вопросы к ИИ кончились ({n} в день). Завтра можно снова"
 TRIAL_ALL_TEXT = ("пробные вопросы к ИИ на сегодня кончились у всех — слишком много желающих. "
                   "Завтра можно снова")
 SUB_TEXT = "на сегодня вопросы к ИИ кончились ({n} в сутки). Завтра можно снова"
@@ -150,11 +152,12 @@ async def day_only(user_id: int) -> str | None:
     return await take(user_id)
 
 
-def text(why: str, capital: bool = False) -> str:
+def text(why: str, capital: bool = False, app: str = "") -> str:
+    """Причина отказа человеку; app — заголовок X-App клиента."""
     import config
     t = {
         "day": DAY_TEXT.format(n=config.AI_DAILY_LIMIT),
-        "trial": TRIAL_TEXT.format(n=config.AI_TRIAL_DAILY),
+        "trial": (TRIAL_IOS_TEXT if (app or "").lower() == "ios" else TRIAL_TEXT).format(n=config.AI_TRIAL_DAILY),
         "trial_all": TRIAL_ALL_TEXT,
         "sub": SUB_TEXT.format(n=config.AI_SUB_DAILY),
         "summary": SUMMARY_TEXT.format(n=config.SUMMARY_WEEKLY),
