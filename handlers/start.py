@@ -226,7 +226,8 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     if ask:
         from handlers.group_pick import ASK, GroupPick
         await state.set_state(GroupPick.query)
-    text = start_text(user.first_name)
+    g = None if ask else await groups.of_user(user.id)
+    text = start_text(user.first_name, g["name"] if g else None)
     if store:
         text = without_pay(text)
     text += ("\n\n" + ASK) if ask else ""
@@ -303,7 +304,7 @@ async def cmd_app(message: Message):
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.\n"
         "📱 Без Telegram — uiboshki.ru/app: ставится на телефон и компьютер как приложение.\n"
-        f"🤖 Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>."
+        + stores_line()
         + (f"\n{news}" if news else ""),
         parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True,
     )
@@ -382,22 +383,42 @@ def without_pay(text: str) -> str:
     return "\n\n".join(p for p in text.split("\n\n") if not any(w in p for w in PAY_WORDS))
 
 
-def start_text(first_name: str) -> str:
+RUSTORE_LINE = f"🤖 На Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>."
+
+
+def stores_line() -> str:
+    """Строка о приложении в сторах. App Store — только когда задан
+    APPSTORE_URL (приложение уже в сторе), до этого — только RuStore."""
+    import config
+    if not config.APPSTORE_URL:
+        return RUSTORE_LINE
+    return (f"📲 Приложение — в <a href=\"{RUSTORE_URL}\">RuStore</a> (Android) "
+            f"и <a href=\"{config.APPSTORE_URL}\">App Store</a> (iPhone).")
+
+
+def start_text(first_name: str, group: str | None = None) -> str:
+    """Приветствие /start (вариант «А», Никита 29.10: разделы под жирными
+    заголовками, списки — в цитатах). Бот — для любой группы МИРЭА (с этапа 1),
+    поэтому представляется Капибарой, а группа человека — отдельной строкой,
+    если он её уже выбрал (новому вопрос о группе дописывает welcome).
+    Абзацы — через пустую строку: without_pay убирает абзац об оплате."""
+    import login_channel
+    news = login_channel.news_line()
+    mine = f"\n🎓 Твоя группа — <b>{esc(group)}</b> · сменить: /group" if group else ""
     return (
         f"👋 Привет, <b>{esc(first_name or 'друг')}</b>!\n\n"
-        f"Я — бот группы <b>{GROUP_NAME}</b>. Всё главное — в приложении:\n"
-        "расписание, дедлайны, баллы БРС, файлы и сдача работ в СДО.\n\n"
-        "А сюда я сам пришлю:\n"
-        "🔔 напоминание до пары\n"
-        "☀️ расписание на день — утром\n"
-        "⏰ дедлайны, которые горят\n\n"
-        "И можно просто написать мне: «скинь лекцию 3 по анализу данных», "
-        "задать вопрос или прислать фото задачи — отвечу.\n\n"
-        "📱 Без Telegram — тоже: <b>uiboshki.ru/app</b> ставится на экран телефона "
-        "или компьютера как приложение (как — в приложении: Ещё → Установить).\n"
-        f"🤖 На Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>.\n\n"
-        + _news()
-        + "✨ Всё это бесплатно. Хочешь больше — /plus: подписка «Капибара+», оплата на сайте."
+        "Я — <b>Капибара</b>, помощник студентов РТУ МИРЭА." + mine + "\n\n"
+        "<b>В приложении</b> — всё главное:\n"
+        "<blockquote>расписание, дедлайны, баллы БРС, файлы и сдача работ в СДО</blockquote>\n\n"
+        "<b>Сюда пришлю сам</b>\n"
+        "<blockquote>🔔 напоминание до пары\n☀️ расписание на день — утром\n"
+        "⏰ дедлайны, которые горят</blockquote>\n\n"
+        "<b>Можно просто написать</b>\n"
+        "<blockquote><i>«скинь лекцию 3 по анализу данных»</i>, вопрос по учёбе "
+        "или фото задачи — отвечу</blockquote>\n\n"
+        "📱 Без Telegram — <b>uiboshki.ru/app</b>, ставится как приложение: Ещё → Установить\n"
+        + stores_line() + (f"\n{news}" if news else "") + "\n\n"
+        "✨ Всё бесплатно. Больше возможностей — <b>Капибара+</b>: /plus"
     )
 
 
@@ -413,7 +434,7 @@ HELP_TEXT = (
     "или /app.\n"
     "📱 Без Telegram — <b>uiboshki.ru/app</b>: на телефоне и компьютере, вход через Telegram или VK, "
     "уведомления пушем.\n"
-    f"🤖 Android — <a href=\"{RUSTORE_URL}\">приложение в RuStore</a>.\n\n"
+    + RUSTORE_LINE + "\n\n"
     "💬 <b>Просто напиши</b>\n"
     "«когда следующая пара», «что сдавать на неделе», «скинь практику 3 по …», "
     "вопрос по учёбе или фото задачи.\n\n"
@@ -439,9 +460,11 @@ HELP_TEXT = (
 )
 
 def help_text() -> str:
-    """HELP_TEXT и строка про открытый канал под «Без Telegram», если он задан."""
+    """HELP_TEXT со строкой о сторах (App Store — когда вышел) и строкой про
+    открытый канал под «Без Telegram», если он задан."""
     news = _news()
-    return HELP_TEXT.replace("в RuStore</a>.\n\n", "в RuStore</a>.\n" + news, 1) if news else HELP_TEXT
+    stores = stores_line()
+    return HELP_TEXT.replace(RUSTORE_LINE + "\n\n", stores + ("\n" + news if news else "\n\n"), 1)
 
 
 STAROSTA_HELP = (
