@@ -450,15 +450,14 @@ def release(text: str, ver: str, name: str, extra: str = "", temp: bool = False)
 
 def pr_check(changed: list[tuple[str, str]], base_notes: list[str]) -> list[str]:
     """Что не так в PR (changed — git diff --name-status base...HEAD,
-    base_notes — заметки в base). Обычный PR не ставит версию и не правит
-    CHANGELOG.md; релизный добавляет одну запись changelog.d/X.Y.Z.md и
-    забирает все заметки, что были в main."""
+    base_notes — заметки в base). Обычный PR не ставит версию; релизный
+    добавляет одну запись changelog.d/X.Y.Z.md и забирает все заметки, что
+    были в main. Правка старых записей в CHANGELOG.md — можно (29.10:
+    заголовок v5.117.14 ушёл в main со старым номером, чинить — там)."""
     errors = []
     added_ver = [p for st, p in changed if st.startswith("A") and re.fullmatch(r"changelog\.d/\d+\.\d+\.\d+\.md", p)]
     removed = {p for st, p in changed if st.startswith("D")}
     added_notes = [p for st, p in changed if st.startswith("A") and p.startswith("changelog.d/next/")]
-    if any(p == "CHANGELOG.md" for _, p in changed):
-        errors.append("CHANGELOG.md правит только сборщик после мержа — запись кладётся в changelog.d/")
     if len(added_ver) > 1:
         errors.append("в одном PR больше одной версии: " + ", ".join(added_ver))
     if added_ver and (left := sorted(set(base_notes) - removed)):
@@ -468,6 +467,17 @@ def pr_check(changed: list[tuple[str, str]], base_notes: list[str]) -> list[str]
     if added_ver and added_notes:
         errors.append("релизный PR не добавляет новых заметок — их текст уже в версии: " + ", ".join(added_notes))
     return errors
+
+
+def header_mismatches() -> list[str]:
+    """Записи changelog.d/, где номер в заголовке не совпадает с именем файла
+    (29.10: файл переименовали в 5.117.14.md, а заголовок остался v5.117.8)."""
+    bad = []
+    for f in _fragments():
+        m = re.match(r"### v([\d.]+) ", f.read_text(encoding="utf-8"))
+        if not m or m.group(1) != f.stem:
+            bad.append(f"{f.name}: заголовок {m.group(1) if m else 'нет'}")
+    return bad
 
 
 def free(text: str) -> list[str]:
@@ -528,6 +538,7 @@ def main(argv: list[str]) -> int:
         base = subprocess.run(["git", "ls-tree", "-r", "--name-only", argv[2], "--", "changelog.d/next/"],
                               capture_output=True, text=True, cwd=CHANGELOG.parent, check=True).stdout
         errors = pr_check(changed, [p for p in base.splitlines() if p.endswith(".md")])
+        errors += [f"номер в заголовке не как в имени файла — {b}" for b in header_mismatches()]
         for e in errors:
             print("::error::" + e)
         if not errors and not any(p.startswith("changelog.d/") for _, p in changed):

@@ -143,7 +143,20 @@ def test_pr_check():
     assert pr_check([("A", "changelog.d/5.118.0.md")], []) == []                 # срочный, заметок нет
     assert pr_check([("A", "changelog.d/5.118.0.md"), ("A", "changelog.d/next/c.md")], [])
     assert pr_check([("A", "changelog.d/5.118.0.md"), ("A", "changelog.d/5.118.1.md")], [])
-    assert pr_check([("M", "CHANGELOG.md")], [])
+    assert pr_check([("M", "CHANGELOG.md")], []) == []          # поправить старую запись — можно
+
+
+def test_header_matches_file_name(tmp_path, monkeypatch):
+    """29.10: файл записи переименовали в 5.117.14.md, а заголовок внутри
+    остался v5.117.8 — так и ушло в CHANGELOG. pr-check ловит это."""
+    import tools.changelog as cl
+    assert cl.header_mismatches() == []                         # в репозитории — всё сходится
+    d = tmp_path / "changelog.d"
+    d.mkdir()
+    monkeypatch.setattr(cl, "FRAGMENTS", d)
+    (d / "5.117.14.md").write_text("### v5.117.8 «Куйбышев»\n- текст\n", encoding="utf-8")
+    (d / "5.117.15.md").write_text("### v5.117.15 «Лебедев»\n- текст\n", encoding="utf-8")
+    assert cl.header_mismatches() == ["5.117.14.md: заголовок 5.117.8"]
 
 
 def test_build_info_in_meta(tmp_path, monkeypatch):

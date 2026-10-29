@@ -26,8 +26,9 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
   место). Номер `эпоха.фича.фикс` (сейчас эпоха 5) и кодовое имя ставит
   **отдельный релизный PR** раз в ~10 PR или срочно, когда нужно: `python
   tools/changelog.py release 5.X.Y Имя` собирает все заметки в
-  `changelog.d/5.X.Y.md` и удаляет их (`pending` — что ждёт версии). Сам
-  `CHANGELOG.md` в PR не править. CI (`changelog.py pr-check`) не пускает
+  `changelog.d/5.X.Y.md` и удаляет их (`pending` — что ждёт версии). Новые
+  записи в `CHANGELOG.md` руками не добавлять (старые поправить можно);
+  переименовал файл записи — поменяй и номер в заголовке (CI сверяет). CI (`changelog.py pr-check`) не пускает
   версию в обычный PR и релиз, который забрал не все заметки. После мержа
   записи в `CHANGELOG.md` переносит GitHub Action `changelog.yml` (`collect`,
   коммит от github-actions); проверки имён, `/api/meta` и `/status` читают
