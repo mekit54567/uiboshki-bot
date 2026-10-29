@@ -452,7 +452,7 @@ window.openSecurity = function openSecurity() {
       const ids = d.identities, available = (ids && ids.available) || [];
       const linked = new Set(((ids && ids.items) || []).map((i) => i.provider));
       const summary = [sec.sdo === "ok" ? "Вход в СДО зашифрован, пароль не хранится" : "Пароль от СДО не хранится",
-        `ссылки на файлы живут ${sec.link_minutes ?? 10} минут`, n > 0 ? `входов вне Telegram: ${n}` : ""].filter(Boolean).join(", ");
+        `ссылки на файлы живут ${sec.link_minutes ?? 10} минут`, n > 0 ? `устройств вне Telegram: ${n}` : ""].filter(Boolean).join(", ");
       let html = backRow() + screenTitle("Безопасность")
         + `<div class="hx"><div class="tile row mr-safe"><span class="mr-safe-ic">${icon("verified_user", "o")}</span>
           <div class="grow"><div class="bd b7" style="--sz:16px;color:var(--ok)">Всё под защитой</div>

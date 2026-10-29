@@ -123,3 +123,55 @@ async def test_login_wrong_number_denied(db, client):
     finally:
         start.router._parent_router = None
     assert client.post("/api/auth/poll", json={"code": code}).json()["status"] == "denied"
+
+
+@pytest.mark.asyncio
+async def test_devices_grouped_and_revoked_together(db, client):
+    """Никита 25.10: девять «Safari · iPhone» — каждый перелогин оставлял запись.
+    Одинаковые устройства — одной строкой, «Выйти» закрывает их все, текущий
+    вход — своей строкой и соседей не трогает."""
+    from database.sessions import create_session, session_user
+    await db.upsert_user(UID, "anya", "Аня")
+    cur = await create_session(UID, "Safari · iPhone")
+    old = [await create_session(UID, d) for d in ("Safari · iPhone", "Safari · iPhone · VK ID", "Safari · iPhone")]
+    pc = await create_session(UID, "Chrome · Windows")
+    h = {"Authorization": f"Bearer {cur}"}
+    items = client.get("/api/auth/sessions", headers=h).json()["items"]
+    names = sorted((i["device"], i["current"]) for i in items)
+    assert names == [("Chrome · Windows", False), ("Safari · iPhone", True), ("Safari · iPhone · 3 входа", False)]
+    group = next(i for i in items if i["count"] == 3)
+    assert client.delete(f"/api/auth/sessions/{group['ids'][-1]}", headers=h).json() == {"ok": True}
+    assert [await session_user(t) for t in old] == [None, None, None]
+    assert await session_user(cur) == UID and await session_user(pc) == UID
+    assert len(client.get("/api/auth/sessions", headers=h).json()["items"]) == 2
+    assert client.delete("/api/auth/sessions/999999", headers=h).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_browser_session_idles_out_in_30_days_app_in_90(db):
+    from database._conn import connect
+    from database.sessions import create_session, session_user
+    from database.schema import init_db
+    web = await create_session(UID, "Safari · iPhone")
+    app = await create_session(UID, "Капибара · iPhone")
+    async with connect() as db_:
+        rows = dict(await (await db_.execute(
+            "SELECT device, julianday(expires_at) - julianday(last_seen) FROM sessions")).fetchall())
+    assert round(rows["Safari · iPhone"]) == 30 and round(rows["Капибара · iPhone"]) == 90
+    # записи до этой версии жили 90 дней — при запуске урезаются (браузерные)
+    async with connect() as db_:
+        await db_.execute("UPDATE sessions SET last_seen = datetime('now', '-40 days'), "
+                          "expires_at = datetime('now', '+50 days')")
+        await db_.commit()
+    await init_db()
+    assert await session_user(web) is None
+    assert await session_user(app) == UID
+
+
+def test_home_screen_pwa_named_apart(client):
+    from webapp.routes.auth import _device
+    from starlette.requests import Request
+    ua = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1"
+    req = lambda extra: Request({"type": "http", "headers": [(b"user-agent", ua.encode())] + extra})  # noqa: E731
+    assert _device(req([])) == "Safari · iPhone"
+    assert _device(req([(b"x-client", b"home")])) == "Ярлык · iPhone"

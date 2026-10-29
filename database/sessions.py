@@ -11,6 +11,18 @@ from database._conn import connect, write_later
 
 LOGIN_TTL = timedelta(minutes=10)
 SESSION_TTL = timedelta(days=90)          # продлевается при каждом заходе
+# Вход в браузере — 30 дней без заходов: Safari и так стирает данные сайта
+# через неделю без открытий, токен теряется, а запись висела в «Устройствах»
+# 90 дней (Никита 25.10, девять «Safari · iPhone»). Приложение — 90: кто только
+# читает пуши, его не открывает.
+WEB_TTL = timedelta(days=30)
+APP_PREFIX = "Капибара ·"                 # webapp/routes/auth._device для своего приложения
+# хвосты названия входа через провайдера (auth.py): то же устройство
+VIA = (" · VK ID", " · Яндекс ID", " · Apple")
+
+
+def ttl(device: str | None) -> timedelta:
+    return SESSION_TTL if (device or "").startswith(APP_PREFIX) else WEB_TTL
 
 
 def _now() -> datetime:
@@ -79,7 +91,7 @@ async def create_session(user_id: int, device: str) -> str:
     async with connect() as db:
         await db.execute("INSERT INTO sessions (user_id, token_hash, device, last_seen, expires_at) "
                          "VALUES (?, ?, ?, ?, ?)",
-                         (user_id, token_hash(token), device[:120], _ts(_now()), _ts(_now() + SESSION_TTL)))
+                         (user_id, token_hash(token), device[:120], _ts(_now()), _ts(_now() + ttl(device))))
         await db.commit()
     return token
 
@@ -96,24 +108,24 @@ async def session_lookup(token: str) -> tuple[int, int] | None:
         return None
     h = token_hash(token)
     async with connect() as db:
-        row = await (await db.execute("SELECT id, user_id, expires_at, last_seen FROM sessions "
+        row = await (await db.execute("SELECT id, user_id, expires_at, last_seen, device FROM sessions "
                                       "WHERE token_hash = ? AND revoked = 0", (h,))).fetchone()
         if not row or row[2] < _ts(_now()):
             return None
     if row[3] < _ts(_now() - timedelta(minutes=10)) and row[0] not in _prolonging:
         _prolonging.add(row[0])                                   # продлеваем не чаще раза в 10 минут,
-        await write_later(_prolong(row[0]))                       # и запрос этого не ждёт
+        await write_later(_prolong(row[0], ttl(row[4])))         # и запрос этого не ждёт
     return row[0], row[1]
 
 
 _prolonging: set[int] = set()       # пачка запросов разом — одно продление
 
 
-async def _prolong(session_id: int):
+async def _prolong(session_id: int, life: timedelta = SESSION_TTL):
     try:
         async with connect() as db:
             await db.execute("UPDATE sessions SET last_seen = ?, expires_at = ? WHERE id = ?",
-                             (_ts(_now()), _ts(_now() + SESSION_TTL), session_id))
+                             (_ts(_now()), _ts(_now() + life), session_id))
             await db.commit()
     finally:
         _prolonging.discard(session_id)
@@ -128,10 +140,45 @@ async def list_sessions(user_id: int) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-async def revoke_session(user_id: int, session_id: int | None = None, token: str | None = None) -> int:
-    """Выйти: одно устройство (по id или токену) или все (оба None)."""
+def base_device(device: str | None) -> str:
+    """«Safari · iPhone · VK ID» → «Safari · iPhone»: вход через провайдера — то же устройство."""
+    device = device or "Устройство"
+    for tail in VIA:
+        if device.endswith(tail):
+            return device[:-len(tail)]
+    return device
+
+
+def group_sessions(items: list[dict], current_id: int | None = None) -> list[dict]:
+    """Одинаковые устройства — одной строкой «Safari · iPhone · 6 входов»
+    (каждый перелогин — новая запись, старую закрыть было некому). Текущий
+    вход — своей строкой: «Выйти» на нём не трогает соседей. Порядок — по
+    последнему заходу; id строки — самый свежий вход, ids — все."""
+    from utils import plural
+    groups: dict[tuple, dict] = {}
+    for it in items:                                   # items — уже по last_seen DESC
+        cur = it["id"] == current_id
+        key = ("current",) if cur else ("dev", base_device(it["device"]))
+        g = groups.get(key)
+        if g is None:
+            groups[key] = g = {**it, "device": base_device(it["device"]), "ids": [], "current": cur}
+        g["ids"].append(it["id"])
+    out = list(groups.values())
+    for g in out:
+        g["count"] = n = len(g["ids"])
+        if n > 1:
+            g["device"] += f" · {n} {plural(n, 'вход', 'входа', 'входов')}"
+    return out
+
+
+async def revoke_session(user_id: int, session_id: int | None = None, token: str | None = None,
+                         ids: list[int] | None = None) -> int:
+    """Выйти: одно устройство (по id, списку id или токену) или все (все None)."""
     sql, args = "UPDATE sessions SET revoked = 1 WHERE user_id = ?", [user_id]
-    if session_id is not None:
+    if ids is not None:
+        ids = [int(i) for i in ids] or [-1]
+        sql, args = sql + f" AND id IN ({','.join('?' * len(ids))})", args + ids
+    elif session_id is not None:
         sql, args = sql + " AND id = ?", args + [session_id]
     elif token is not None:
         sql, args = sql + " AND token_hash = ?", args + [token_hash(token)]
