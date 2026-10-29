@@ -286,6 +286,14 @@ async def check_lesson_reminders(bot: Bot):
                 if key in _sent_reminders:
                     continue
                 _sent_reminders.add(key)
+                # Память стирается перезапуском (деплой посреди минуты
+                # напоминания) — отметка в базе ловит второй процесс.
+                try:
+                    from database.schedule import mark_lesson_reminder
+                    if not await mark_lesson_reminder(uid, today.isoformat(), key[2], remind_mins):
+                        continue
+                except Exception as ex:
+                    logger.warning(f"отметка напоминания о паре: {ex}")
                 label = "первая пара" if kind == "remind_first" else "пара"
                 try:
                     await deliver(
@@ -444,6 +452,11 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(quiz_alerts.send_due,    "cron", minute="*",             args=[bot])
     from database.sdo import purge_quiz_alerts
     scheduler.add_job(purge_quiz_alerts,       "cron", hour=4, minute=22)
+    from database.schedule import purge_lesson_reminders   # отметки «напомнил о паре» старше вчера
+
+    async def purge_reminders():
+        await purge_lesson_reminders((datetime.now(TZ).date() - timedelta(days=1)).isoformat())
+    scheduler.add_job(purge_reminders,         "cron", hour=4, minute=23)
     # Первый синк — через минуту после запуска: после деплоя СДО иначе молчал
     # до 6 часов, и сессия Moodle успевала истечь. Плюс лёгкий запрос в СДО
     # каждый час, чтобы сессия не гасла без обращений (sdo_parser.keepalive).
