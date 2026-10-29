@@ -95,3 +95,68 @@ def test_fragments_then_collect(tmp_path, monkeypatch):
     assert text.endswith("- сделано в 5.10.0\n\n## Как будет дальше\nправила\n")
     assert not list((tmp_path / "changelog.d").glob("*.md"))
     assert cl.collect() == 0 and f.read_text(encoding="utf-8") == text
+
+
+def test_notes_then_release(tmp_path, monkeypatch):
+    """С 23.10 (Никита): обычный PR кладёт только заметку changelog.d/next/<ветка>.md,
+    версию и имя ставит релизный PR раз в ~10 PR — все заметки в одну запись."""
+    import io
+
+    import tools.changelog as cl
+    f = tmp_path / "CHANGELOG.md"
+    f.write_text("### v5.9.0 «Метель»\nтекст\n\n## Как будет дальше\n", encoding="utf-8")
+    monkeypatch.setattr(cl, "CHANGELOG", f)
+    monkeypatch.setattr(cl, "FRAGMENTS", tmp_path / "changelog.d")
+    monkeypatch.setattr(cl, "NOTES", tmp_path / "changelog.d" / "next")
+    a = cl.add_note("- карта корпусов", "claude/project-thread-aaa")
+    cl.add_note("- и подписи к ней", "claude/project-thread-aaa")       # та же ветка — дописывает
+    cl.add_note("- двойное напоминание", "thread-bbb")
+    assert a.name == "project-thread-aaa.md" and len(cl.notes()) == 2
+    with pytest.raises(ValueError):
+        cl.add_note("### v5.9.1 «Курчатов»\n- версию сам не ставит", "x")
+    assert cl.versions(cl.full_text()) == [("5.9.0", "Метель")]         # заметки — ещё не версия
+    with pytest.raises(ValueError):
+        cl.release(cl.full_text(), "5.9.0", "Курчатов")                 # повтор версии
+    with pytest.raises(ValueError):
+        cl.release(cl.full_text(), "5.10.0", "Метель")                  # занятое имя
+    monkeypatch.setattr(cl.sys, "stdin", io.StringIO(""))
+    assert cl.main(["x", "release", "5.10.0", "Курчатов"]) == 0
+    entry = (tmp_path / "changelog.d" / "5.10.0.md").read_text(encoding="utf-8")
+    assert entry.startswith("### v5.10.0 «Курчатов»\n")
+    for line in ("- карта корпусов", "- и подписи к ней", "- двойное напоминание"):
+        assert line in entry
+    assert cl.notes() == []
+    with pytest.raises(ValueError):                                     # пусто — релизить нечего
+        cl.release(cl.full_text(), "5.10.1", "Лебедев")
+
+
+def test_pr_check():
+    """CI: обычный PR не ставит версию и не правит CHANGELOG.md; релизный —
+    одна версия и все заметки из main."""
+    from tools.changelog import pr_check
+    base = ["changelog.d/next/a.md", "changelog.d/next/b.md"]
+    assert pr_check([("M", "bot.py"), ("A", "changelog.d/next/c.md")], base) == []
+    assert pr_check([("M", "bot.py")], base) == []
+    assert pr_check([("A", "changelog.d/5.118.0.md")], base)                     # заметки не забрал
+    assert pr_check([("A", "changelog.d/5.118.0.md"), ("D", "changelog.d/next/a.md"),
+                     ("D", "changelog.d/next/b.md")], base) == []                # настоящий релиз
+    assert pr_check([("A", "changelog.d/5.118.0.md")], []) == []                 # срочный, заметок нет
+    assert pr_check([("A", "changelog.d/5.118.0.md"), ("A", "changelog.d/next/c.md")], [])
+    assert pr_check([("A", "changelog.d/5.118.0.md"), ("A", "changelog.d/5.118.1.md")], [])
+    assert pr_check([("M", "CHANGELOG.md")], [])
+
+
+def test_build_info_in_meta(tmp_path, monkeypatch):
+    """/api/meta показывает коммит и номер PR (Никита 23.10: версия раз в ~10
+    PR, а видеть, что сервер обновился, — после каждого мержа)."""
+    from webapp.routes import meta
+    monkeypatch.setattr(meta, "BUILD_INFO", tmp_path / "build-info.json")
+    meta.build_info.cache_clear()
+    assert meta.build_info()["commit"] == "" and meta.build_info()["started"]
+    (tmp_path / "build-info.json").write_text(
+        '{"commit": "abc1234", "commit_time": "2026-10-23T16:00:00+03:00", "pr": 261, '
+        '"built": "2026-10-23T13:01:00Z"}', encoding="utf-8")
+    meta.build_info.cache_clear()
+    b = meta.build_info()
+    assert (b["commit"], b["pr"], b["built"]) == ("abc1234", 261, "2026-10-23T13:01:00Z")
+    meta.build_info.cache_clear()

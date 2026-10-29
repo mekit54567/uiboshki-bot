@@ -252,7 +252,11 @@ async def report() -> str:
     from schedule_parser import stale_label
     now = datetime.now(TZ)
     up = (now - STARTED).total_seconds()
-    lines = [f"🩺 <b>Состояние бота</b> · {version()}",
+    from webapp.routes.meta import build_info
+    b = build_info()
+    build = f" · PR #{b['pr']}" if b["pr"] else ""
+    build += f" · {b['commit']}" if b["commit"] else ""
+    lines = [f"🩺 <b>Состояние бота</b> · {version()}{build}",
              f"Работает {_ago(up)} (запущен {_when(STARTED.isoformat(), now)})", ""]
     import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)

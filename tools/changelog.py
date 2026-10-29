@@ -1,11 +1,23 @@
 """
 Версии и кодовые имена (правила — CLAUDE.md, «Правила работы»).
 
+С 23.10 (Никита): обычный PR версию не ставит — кладёт только заметку,
+номер и имя раз в ~10 PR (или срочно) ставит отдельный релизный PR:
+
+  python tools/changelog.py note <<'EOF'
+  - что сделано
+  EOF                                         — заметка changelog.d/next/<ветка>.md
+  python tools/changelog.py pending           — заметки, которые ждут версии
+  python tools/changelog.py release 5.118.0 Имя
+                                              — релиз: все заметки → changelog.d/5.118.0.md
+  python tools/changelog.py pr-check origin/main
+                                              — CI: обычный PR не ставит версию
+
   python tools/changelog.py check Имя1 Имя2   — свободны ли имена
   python tools/changelog.py free              — свободные имена из песен владельца
   python tools/changelog.py add 4.45.0 Имя <<'EOF'
   - что сделано (текст версии)
-  EOF                                         — запись версии в changelog.d/
+  EOF                                         — запись версии сразу (только релиз)
   … add 5.18.0 Слово --temp                   — временное слово (владелец заменит)
   python tools/changelog.py figures           — свободные деятели и под что они
   python tools/changelog.py collect           — собрать changelog.d/ в CHANGELOG.md
@@ -22,11 +34,13 @@
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
 FRAGMENTS = CHANGELOG.parent / "changelog.d"     # запись версии — свой файл, без конфликтов
+NOTES = FRAGMENTS / "next"          # заметки PR без версии (23.10): файл на ветку — не конфликтуют
 ANCHOR = "\n## Как будет дальше"
 TEMP_MARK = "(временное имя)"       # имена из песен кончились — владелец заменит
 # придержаны владельцем под особые версии (CLAUDE.md)
@@ -209,6 +223,7 @@ FIGURES = {
     "Суворин": "издатель «Нового времени»: канал новостей Капибары при первом входе",
     "Шишков": "президент Российской академии, блюститель языка: правила и жалобы на записи людей",
     "Андреевский": "Сергей Андреевский, адвокат, мастер защитной речи: автор оспаривает убранную по жалобе запись и объясняет, с чем не согласен",
+    "Куйбышев": "председатель Госплана, первые пятилетки: версии пачками — релиз раз в ~10 PR",
     "Папанин": "автономность, работа без сети",
     "Чкалов": "перелёт, миграция, переезд",
     "Бенуа": "«Мир искусства», декорации к спектаклям: оформление на выбор — темы, бумага, шрифты",
@@ -378,6 +393,83 @@ def collect() -> int:
     return len(files)
 
 
+def notes() -> list[Path]:
+    """Заметки, которые ждут релиза, — по времени появления, потом по имени."""
+    files = NOTES.glob("*.md") if NOTES.is_dir() else []
+    return sorted(files, key=lambda f: (f.stat().st_mtime, f.name))
+
+
+def _slug(s: str) -> str:
+    return re.sub(r"[^\w.-]+", "-", s).strip("-.") or "note"
+
+
+def _branch() -> str:
+    try:
+        return subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True,
+                              text=True, cwd=CHANGELOG.parent, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def add_note(body: str, name: str = "") -> Path:
+    """Заметка обычного PR: changelog.d/next/<ветка>.md. Свой файл у каждой
+    ветки — два PR не трогают одно место. Повторный вызов дописывает."""
+    body = body.strip()
+    if not body or re.search(r"^### v", body, re.M):
+        raise ValueError("нужен текст заметки, без заголовка версии")
+    NOTES.mkdir(parents=True, exist_ok=True)
+    f = NOTES / f"{_slug((name or _branch()).rsplit('/', 1)[-1])}.md"
+    old = f.read_text(encoding="utf-8").rstrip() + "\n" if f.exists() else ""
+    f.write_text(old + body + "\n", encoding="utf-8")
+    return f
+
+
+def release(text: str, ver: str, name: str, extra: str = "", temp: bool = False) -> Path:
+    """Релизный PR: все заметки из changelog.d/next/ → changelog.d/<версия>.md
+    с номером и именем; заметки удаляются. extra — свой текст сверху."""
+    if why := check(text, name, temp):
+        raise ValueError(f"{name}: {why}")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", ver) or ver in {v for v, _ in versions(text)}:
+        raise ValueError(f"версия {ver} уже есть или не вида X.Y.Z")
+    if ANCHOR not in text:
+        raise ValueError("нет раздела «Как будет дальше»")
+    files = notes()
+    parts = [extra.strip()] if extra.strip() else []
+    parts += [f.read_text(encoding="utf-8").strip() for f in files]
+    parts = [p for p in parts if p]
+    if not parts:
+        raise ValueError("нет ни заметок, ни текста версии")
+    mark = f" {TEMP_MARK}" if temp else ""
+    FRAGMENTS.mkdir(exist_ok=True)
+    out = FRAGMENTS / f"{ver}.md"
+    out.write_text(f"### v{ver} «{name}»{mark}\n" + "\n".join(parts) + "\n", encoding="utf-8")
+    for f in files:
+        f.unlink()
+    return out
+
+
+def pr_check(changed: list[tuple[str, str]], base_notes: list[str]) -> list[str]:
+    """Что не так в PR (changed — git diff --name-status base...HEAD,
+    base_notes — заметки в base). Обычный PR не ставит версию и не правит
+    CHANGELOG.md; релизный добавляет одну запись changelog.d/X.Y.Z.md и
+    забирает все заметки, что были в main."""
+    errors = []
+    added_ver = [p for st, p in changed if st.startswith("A") and re.fullmatch(r"changelog\.d/\d+\.\d+\.\d+\.md", p)]
+    removed = {p for st, p in changed if st.startswith("D")}
+    added_notes = [p for st, p in changed if st.startswith("A") and p.startswith("changelog.d/next/")]
+    if any(p == "CHANGELOG.md" for _, p in changed):
+        errors.append("CHANGELOG.md правит только сборщик после мержа — запись кладётся в changelog.d/")
+    if len(added_ver) > 1:
+        errors.append("в одном PR больше одной версии: " + ", ".join(added_ver))
+    if added_ver and (left := sorted(set(base_notes) - removed)):
+        errors.append(f"{added_ver[0]}: версию ставит релизный PR, и он забирает все заметки "
+                      f"(python tools/changelog.py release …), а остались: {', '.join(left)}. "
+                      "Обычному PR хватит заметки: python tools/changelog.py note")
+    if added_ver and added_notes:
+        errors.append("релизный PR не добавляет новых заметок — их текст уже в версии: " + ", ".join(added_notes))
+    return errors
+
+
 def free(text: str) -> list[str]:
     used = {_norm(n) for _, n in versions(text)}
     return sorted({w for w in SONG_WORDS if _norm(w) not in used and w not in RESERVED})
@@ -411,6 +503,37 @@ def main(argv: list[str]) -> int:
     elif cmd == "check":
         for n in argv[2:]:
             print(n, "—", check(text, n) or "свободно")
+    elif cmd == "note":
+        try:
+            f = add_note(sys.stdin.read(), argv[2] if len(argv) > 2 else "")
+        except ValueError as e:
+            sys.exit(str(e))
+        print("ok →", f.relative_to(CHANGELOG.parent))
+    elif cmd == "pending":
+        files = notes()
+        print(f"заметок без версии: {len(files)}")
+        for f in files:
+            print(" ", f.relative_to(CHANGELOG.parent))
+    elif cmd == "release" and len(argv) == 4:
+        extra = "" if sys.stdin.isatty() else sys.stdin.read()
+        try:
+            f = release(text, argv[2], argv[3], extra, temp)
+        except ValueError as e:
+            sys.exit(str(e))
+        print("ok", argv[2], argv[3], "→", f.relative_to(CHANGELOG.parent))
+    elif cmd == "pr-check" and len(argv) == 3:
+        out = subprocess.run(["git", "diff", "--name-status", "--no-renames", f"{argv[2]}...HEAD"],
+                             capture_output=True, text=True, cwd=CHANGELOG.parent, check=True).stdout
+        changed = [tuple(line.split("\t", 1)) for line in out.splitlines() if "\t" in line]
+        base = subprocess.run(["git", "ls-tree", "-r", "--name-only", argv[2], "--", "changelog.d/next/"],
+                              capture_output=True, text=True, cwd=CHANGELOG.parent, check=True).stdout
+        errors = pr_check(changed, [p for p in base.splitlines() if p.endswith(".md")])
+        for e in errors:
+            print("::error::" + e)
+        if not errors and not any(p.startswith("changelog.d/") for _, p in changed):
+            print("::warning::нет заметки в changelog.d/next/ — если PR что-то меняет для людей, "
+                  "добавь: python tools/changelog.py note")
+        return 1 if errors else 0
     elif cmd == "add" and len(argv) == 4:
         ver, name = argv[2], argv[3]
         if why := check(text, name, temp):
