@@ -1,4 +1,4 @@
-"""Сайт-презентация бота: /about.
+"""Сайт-презентация бота: /about (и «Было и стало» — /history).
 
 Страница — webapp/static/site/index.html (свои стили и скрипт, без
 Telegram). На ней два живых места:
@@ -87,6 +87,23 @@ async def about_page(request: Request):
     # стили и скрипт сайта — по ссылке с хэшем: после обновления браузер не
     # склеит новую страницу со старым site.js (и кэширует их надолго)
     for rel in ("site/site.css", "site/site.js"):
+        html = html.replace(f'"/{rel}"', f'"/{rel}?v={_digest(rel)}"')
+    return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/history", include_in_schema=False)
+async def history_page(request: Request):
+    """«Было и стало» (Никита 29.10): бот из апреля 2026 — в чате Telegram,
+    тексты восстановлены из кода первых коммитов (site/history.js), рядом —
+    экраны приложения сейчас (демо-данные). Ниже — лента по датам и цифры."""
+    from webapp import deps
+    from webapp.server import _digest
+    import config
+    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
+    html = ((_site_dir() / "history.html").read_text(encoding="utf-8")
+            .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
+            .replace("__OGV__", _digest("site/og.jpg")))
+    for rel in ("site/history.css", "site/history.js"):
         html = html.replace(f'"/{rel}"', f'"/{rel}?v={_digest(rel)}"')
     return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
