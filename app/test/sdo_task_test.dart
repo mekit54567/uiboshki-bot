@@ -132,6 +132,15 @@ void main() {
     expect(sdoLoggedIn(null), isFalse);
   });
 
+  test('куку берём, только когда СДО показал вошедшего (есть «Выйти»), а не по адресу /my/', () {
+    // 29.10: окно открывало /my/ со старой кукой и сразу её отдавало — до
+    // переадресации на страницу входа; сервер отвечал «СДО не пускает»
+    expect(sdoUserProbe, contains('/login/logout.php'));
+    expect(probeResult('"in"'), 'in');
+    expect(probeResult('in'), 'in');
+    expect(probeResult('""'), '');
+  });
+
   testWidgets('учёба без входа в СДО: карточка «Подключить СДО» ведёт на вход', (t) async {
     phone(t);
     final asked = <String>[];
