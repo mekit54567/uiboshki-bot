@@ -274,6 +274,8 @@ JSON приложения VPN (секрет хостинга, в репозит�
 `REVIEW_CODE` (необязательно, от 12 знаков): демо-вход для проверяющих App Store и
 RuStore — «Вход по коду доступа» в приложении, ответы из `site/demo.json` со
 сдвигом на текущую неделю (`review_demo.py`, токен `rv.…`); не задан — кнопки нет.
+ИИ-чат демо — настоящая модель по демо-данным (`demo_chat` → `webapp/routes/chat.reply`,
+лекции — `site/demo_lectures.json`), без базы и лимитов людей, 40 вопросов в сутки (29.10).
 Вход через Apple в iPhone-приложении (`apple_signin.py`, `POST /api/auth/apple`) —
 ключи `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (.p8), `APPLE_CLIENT_ID`
 (по умолчанию `ru.uiboshki.app`); нет ключей — кнопки нет. Удаление аккаунта и
