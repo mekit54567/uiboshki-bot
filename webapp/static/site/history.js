@@ -145,6 +145,19 @@
     });
   }
 
+  // на телефоне виден один экран: «Тогда» или «Сейчас»
+  document.querySelectorAll(".view [data-view]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var stage = document.querySelector(".stage");
+      var view = b.getAttribute("data-view");
+      stage.classList.toggle("show-old", view === "old");
+      stage.classList.toggle("show-new", view === "new");
+      document.querySelectorAll(".view [data-view]").forEach(function (x) {
+        x.setAttribute("aria-selected", x === b ? "true" : "false");
+      });
+    });
+  });
+
   pick(".seg [data-ver]", "data-ver", "ver");
   pick(".chips [data-tab]", "data-tab", "tab");
   render();
