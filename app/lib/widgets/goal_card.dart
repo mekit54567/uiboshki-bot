@@ -372,18 +372,58 @@ class GoalModeToggle extends StatelessWidget {
 }
 
 /// Посещения лекций квадратиками: был, пропуск, ждём балл, впереди.
-class AttendanceStrip extends StatelessWidget {
+/// С api и courseId нажатие открывает список лекций, где у лекций до начала
+/// истории баллов можно отметить самому, на каких был (как в Mini App).
+class AttendanceStrip extends StatefulWidget {
   final Map<String, dynamic> att;
   final Color color;
-  const AttendanceStrip({super.key, required this.att, required this.color});
+  final Api? api;
+  final int? courseId;
+  const AttendanceStrip({super.key, required this.att, required this.color, this.api, this.courseId});
+
+  @override
+  State<AttendanceStrip> createState() => _AttendanceStripState();
+}
+
+/// Свои отметки — только у лекций до начала истории: знак «?», уже своя или
+/// «Н», когда плюсики по баллам кончились (attendance.py, то же в sdo.js).
+bool _lectureEditable(Map<String, dynamic> att, Map<String, dynamic> l) {
+  final before = att['before'] as Map?;
+  if (l['status'] == 'before' || l['manual'] == true) return true;
+  if (l['status'] != 'miss' || before == null) return false;
+  final anyManual = (att['lectures'] as List? ?? []).any((x) => (x as Map)['manual'] == true);
+  return anyManual && '${l['date']}'.compareTo('${before['day']}') <= 0;
+}
+
+class _AttendanceStripState extends State<AttendanceStrip> {
+  Future<void> _open() async {
+    tick();
+    await appSheet<void>(
+      context,
+      (ctx) => AttendanceSheet(
+        api: widget.api!,
+        courseId: widget.courseId!,
+        att: widget.att,
+        color: widget.color,
+        // Лист пишет новые посещения в тот же map: карточка в ленивом
+        // ListView создаётся заново из widget.att (как у GoalCard).
+        onChanged: () => setState(() {}),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
+    final att = widget.att;
+    final color = widget.color;
     final lectures = [for (final l in (att['lectures'] as List? ?? [])) Map<String, dynamic>.from(l)];
     final total = att['total'] ?? lectures.length;
-    return Column(
+    final tappable = widget.api != null && widget.courseId != null && att['ok'] != false;
+    final before = att['before'] as Map?;
+    final toMark = lectures.any((l) => l['status'] == 'before');
+    final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
@@ -396,6 +436,7 @@ class AttendanceStrip extends StatelessWidget {
                 child: Container(
                   width: 26,
                   height: 26,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: switch (l['status']) {
                       'ok' => color,
@@ -408,11 +449,18 @@ class AttendanceStrip extends StatelessWidget {
                       color: switch (l['status']) {
                         'miss' => p.danger,
                         'wait' => color,
+                        'before' => p.muted,
                         _ => Colors.transparent,
                       },
                       width: 1.5,
                     ),
                   ),
+                  child: l['status'] == 'before'
+                      ? Text(
+                          '?',
+                          style: s.body(13, weight: FontWeight.w700, color: p.muted),
+                        )
+                      : null,
                 ),
               ),
           ],
@@ -423,7 +471,192 @@ class AttendanceStrip extends StatelessWidget {
           '${(att['waiting'] ?? 0) > 0 ? ' · ждём балл за ${att['waiting']}' : ''}',
           style: s.body(13, color: p.muted),
         ),
+        if (tappable) ...[
+          const SizedBox(height: Space.s),
+          Row(
+            children: [
+              Icon(toMark ? Icons.edit_rounded : Icons.list_rounded, size: 16, color: toMark ? color : p.muted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  toMark && before != null
+                      ? 'отметь сам, на каких был до ${dayMonth('${before['day']}')}'
+                      : 'все лекции и отметки',
+                  style: s.body(13, weight: FontWeight.w600, color: toMark ? color : p.muted),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
+            ],
+          ),
+        ],
       ],
+    );
+    if (!tappable) return body;
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: _open, child: body);
+  }
+}
+
+/// Лист «Посещения»: все лекции семестра, у лекций до начала истории —
+/// своя отметка нажатием: «?» → «+» (если плюсики по баллам остались) →
+/// «У» (если есть уважительные) → снять. Сервер проверяет то же
+/// (POST /api/sdo/attendance/<курс>, attendance.check_mark).
+class AttendanceSheet extends StatefulWidget {
+  final Api api;
+  final int courseId;
+  final Map<String, dynamic> att;
+  final Color color;
+  final VoidCallback onChanged;
+  const AttendanceSheet({
+    super.key,
+    required this.api,
+    required this.courseId,
+    required this.att,
+    required this.color,
+    required this.onChanged,
+  });
+
+  @override
+  State<AttendanceSheet> createState() => _AttendanceSheetState();
+}
+
+class _AttendanceSheetState extends State<AttendanceSheet> {
+  String? _busy;
+
+  Future<void> _tap(Map<String, dynamic> l) async {
+    final a = widget.att;
+    final b = Map<String, dynamic>.from(a['before'] as Map? ?? {});
+    final leftOk = (b['left_ok'] as num?) ?? 0, leftEx = (b['left_excused'] as num?) ?? 0;
+    final String? next;
+    if (l['manual'] == true && l['status'] == 'ok') {
+      next = ((b['excused'] as num?) ?? 0) > 0 && leftEx > 0 ? 'excused' : null;
+    } else if (l['manual'] == true) {
+      next = null;
+    } else if (leftOk > 0) {
+      next = 'ok';
+    } else if (leftEx > 0) {
+      next = 'excused';
+    } else {
+      showToast(context, 'По баллам посещено ${b['attended'] ?? 0} — сначала сними плюсик с другой лекции');
+      return;
+    }
+    tick();
+    setState(() => _busy = '${l['date']}');
+    try {
+      final r = await widget.api.post('/sdo/attendance/${widget.courseId}', {'day': l['date'], 'mark': next});
+      HapticFeedback.lightImpact();
+      widget.att
+        ..clear()
+        ..addAll(Map<String, dynamic>.from(r));
+      widget.onChanged();
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.message, kind: ToastKind.error);
+    } finally {
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final a = widget.att;
+    final color = widget.color;
+    final lectures = [for (final l in (a['lectures'] as List? ?? [])) Map<String, dynamic>.from(l)];
+    final b = a['before'] as Map?;
+    final unit = (a['unit'] as num?) ?? 0;
+    String hint;
+    if (b == null) {
+      hint = 'Бот отмечает лекции сам — по баллам за посещаемость в СДО.';
+    } else {
+      final open = ((b['left_ok'] as num?) ?? 0) > 0 || ((b['left_excused'] as num?) ?? 0) > 0;
+      hint =
+          'До ${dayMonth('${b['day']}')} бот баллы не записывал: из ${b['past']} лекций по баллам посещено '
+          '${b['attended']}${((b['excused'] as num?) ?? 0) > 0 ? ', по уважительной ${b['excused']}' : ''}. '
+          '${open ? 'Нажми на лекцию со знаком «?», на которой был: осталось +${b['left_ok']}'
+                    '${((b['left_excused'] as num?) ?? 0) > 0 ? ' и У ${b['left_excused']}' : ''}.' : 'Всё отмечено, на остальных — «Н». Нажми на свою отметку, чтобы снять.'}';
+    }
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.l),
+          children: [
+            Text('Посещения', style: s.title(24)),
+            const SizedBox(height: Space.s),
+            Text(
+              'был на ${a['attended'] ?? 0} из ${a['past'] ?? 0} · баллы ${fmtNum((a['score'] as num?) ?? 0)} из ${fmtNum((a['max'] as num?) ?? 0)}'
+              '${unit > 0 ? ' · ${fmtNum(unit)} за лекцию' : ''}',
+              style: s.body(15, weight: FontWeight.w600),
+            ),
+            const SizedBox(height: Space.s),
+            Text(hint, style: s.body(14, color: p.muted)),
+            const SizedBox(height: Space.m),
+            for (final l in lectures) _row(s, p, color, unit, l),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(AppStyle s, Palette p, Color color, num unit, Map<String, dynamic> l) {
+    final status = '${l['status']}';
+    final editable = _lectureEditable(widget.att, l);
+    final (String sign, String label, Color tone) = switch (status) {
+      'ok' => ('+', 'был', color),
+      'excused' => ('У', 'уважительная причина', p.warn),
+      'miss' => ('Н', 'не был', p.danger),
+      'wait' => ('', 'ждём отметку', color),
+      'before' => ('?', 'отметь сам', p.muted),
+      _ => ('', 'впереди', p.muted),
+    };
+    final busy = _busy == '${l['date']}';
+    return InkWell(
+      onTap: editable && _busy == null ? () => _tap(l) : null,
+      borderRadius: BorderRadius.circular(Radii.chip),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tone.withValues(alpha: status == 'future' ? 0.08 : 0.16),
+                borderRadius: BorderRadius.circular(9),
+                border: editable ? Border.all(color: tone, width: 1.5) : null,
+              ),
+              child: busy
+                  ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: tone))
+                  : status == 'wait'
+                  ? Icon(Icons.schedule_rounded, size: 16, color: tone)
+                  : Text(
+                      sign,
+                      style: s.body(15, weight: FontWeight.w800, color: tone),
+                    ),
+            ),
+            const SizedBox(width: Space.m),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Лекция ${l['n']}', style: s.body(15, weight: FontWeight.w600)),
+                  Text(
+                    '${dayMonth('${l['date']}')} · $label${l['manual'] == true ? ' · твоя отметка' : ''}',
+                    style: s.body(13, color: p.muted),
+                  ),
+                ],
+              ),
+            ),
+            if (status == 'ok' && unit > 0)
+              Text(
+                '+${fmtNum(unit)}',
+                style: s.body(14, weight: FontWeight.w700, color: color),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
