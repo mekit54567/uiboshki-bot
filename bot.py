@@ -103,9 +103,13 @@ BOT_NAME = "Капибара МИРЭА"
 
 
 def bot_description(group: str) -> str:
+    import config
     import login_channel
     news = login_channel.news_line()
-    return BOT_DESCRIPTION.format(group=group) + (f"\n{news}" if news else "")
+    text = BOT_DESCRIPTION.format(group=group)
+    if config.APPSTORE_URL:              # iPhone-приложение уже в App Store
+        text = text.replace("на Android — приложение в RuStore", "приложение — в RuStore и App Store")
+    return text + (f"\n{news}" if news else "")
 
 
 async def setup_bot_menu(bot: Bot):

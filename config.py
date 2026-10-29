@@ -49,6 +49,9 @@ CHANNEL_ID = channel_id_from(os.getenv("CHANNEL_ID", ""), CHANNEL_URL)
 LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
 # Android-приложение в RuStore (вышло 27.10.2026): ссылка — в боте, на сайте и в «Установить»
 RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app"
+# iPhone-приложение в App Store: ссылку задать, когда Apple его одобрит и оно
+# появится в сторе (kap env, без выпуска). Пусто — бот про App Store молчит.
+APPSTORE_URL = os.getenv("APPSTORE_URL", "").strip()
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.

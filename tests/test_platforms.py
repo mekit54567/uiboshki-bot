@@ -41,3 +41,25 @@ def test_news_channel_everywhere(monkeypatch):
         assert "Новости Капибары — @kapibara_mirea" in text
     assert len(bot.bot_description("УИБО-03-24")) <= 512                   # предел Telegram
     assert bot.BOT_NAME == "Капибара МИРЭА"
+
+
+def test_start_not_one_group_bot(monkeypatch):
+    """Бот — для любой группы МИРЭА (Никита 29.10: «Я бот группы УИБО…» — уже не так):
+    представляется Капибарой, группа человека — строкой «Твоя группа», если выбрана."""
+    text = start_text("Аня")
+    assert "бот группы" not in text and "Капибара" in text and "Твоя группа" not in text
+    assert "Твоя группа — <b>ИКБО-01-23</b>" in start_text("Аня", "ИКБО-01-23")
+
+
+def test_appstore_only_when_live(monkeypatch):
+    """App Store — только когда задан APPSTORE_URL (приложение вышло), до этого — молчим."""
+    import config
+    from handlers.start import help_text, stores_line
+    monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
+    monkeypatch.setattr(config, "APPSTORE_URL", "")
+    assert "App Store" not in start_text("Аня") + help_text() + stores_line() + bot.bot_description("УИБО-03-24")
+    url = "https://apps.apple.com/ru/app/id123"
+    monkeypatch.setattr(config, "APPSTORE_URL", url)
+    for text in (start_text("Аня"), help_text(), stores_line()):
+        assert url in text and config.RUSTORE_URL in text
+    assert "App Store" in bot.bot_description("УИБО-03-24") and len(bot.bot_description("УИБО-03-24")) <= 512
