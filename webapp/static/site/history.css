@@ -108,4 +108,4 @@ h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.045em}
   .footer{flex-direction:column;padding:28px 16px}
 }
 @media(max-width:340px){.phone{width:270px}.screen{width:256px;height:548px}.seg button,.seg span{padding:7px 10px}}
-@media(max-width:900px){.chips{position:sticky;bottom:10px;z-index:9;background:var(--paper);padding:8px;border-radius:30px;box-shadow:0 4px 18px #0002;width:max-content;max-width:100%;margin-left:auto;margin-right:auto}}
+@media(max-width:900px){.chips{position:sticky;bottom:10px;z-index:9;background:var(--paper);padding:6px;border-radius:30px;box-shadow:0 4px 18px #0002;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;width:max-content;max-width:100%;margin-left:auto;margin-right:auto}.chips::-webkit-scrollbar{display:none}.chips button{flex:none;padding:7px 13px}}
