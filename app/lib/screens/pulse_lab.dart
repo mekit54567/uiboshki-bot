@@ -76,7 +76,7 @@ bool onPulse(String? url) {
 const pulseHookJs = r'''(function(){
 if (location.host !== 'pulse.mirea.ru') return 'skip';
 if (window.__capy) return 'ok';
-var C = window.__capy = {calls: [], total: 0, pages: []};
+var C = window.__capy = {calls: [], n: 0, total: 0, pages: []};
 var MAX_CALLS = 600, MAX_BODY = 262144, MAX_TOTAL = 6000000;
 var AUTHY = /sso|oauth|openid|oidc|token|login|auth/i;
 var SECRET = /authorization|cookie|token|session|secret|password|passwd|key/i;
@@ -116,8 +116,8 @@ function bodyOf(b){
   if (ArrayBuffer.isView(b)) return b64(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
   return '(' + Object.prototype.toString.call(b) + ')';
 }
-function wanted(url){ return !STATIC.test(url) && C.calls.length < MAX_CALLS; }
-function keep(rec){ C.calls.push(rec); }
+function wanted(url){ return !STATIC.test(url) && C.n < MAX_CALLS; }
+function keep(rec){ C.n++; C.calls.push(rec); }
 var of = window.fetch;
 if (of) window.fetch = function(input, init){
   var url = String((input && input.url) || input), t0 = Date.now();
@@ -166,24 +166,28 @@ X.send = function(body){
 var md = navigator.mediaDevices;
 if (md && md.getUserMedia) { var gum = md.getUserMedia.bind(md);
   md.getUserMedia = function(c){ var rec = {kind: 'camera', t: Date.now(), page: location.pathname, url: 'getUserMedia', constraints: JSON.stringify(c)};
-    C.calls.push(rec);
+    keep(rec);
     return gum(c).then(function(s){ rec.status = 'ok'; return s; }, function(e){ rec.status = 'отказ'; rec.err = String(e && (e.name + ': ' + e.message)); throw e; }); }; }
 return 'ok';
 })()''';
 
 /// Кнопка «Отсканировать QR» на странице (текст кнопки или ссылки).
 const _scanFindJs = r'''(function(){
-var el = Array.prototype.find.call(document.querySelectorAll('button, a, [role=button]'), function(x){
-  return /отскан|сканир|scan|qr/i.test((x.textContent || '') + ' ' + (x.getAttribute('aria-label') || '')); });
+var el = Array.prototype.find.call(document.querySelectorAll('button, a, [role=button], [routerlink]'), function(x){
+  var h = x.getAttribute('href') || x.getAttribute('routerlink') || '';
+  if (/selfapprove|self-approve|token=/i.test(h)) return false;
+  return /отскан|сканир|scan|qr/i.test((x.textContent || '') + ' ' + (x.getAttribute('aria-label') || '') + ' '
+    + (x.getAttribute('title') || '') + ' ' + h + ' ' + (typeof x.className === 'string' ? x.className : '')); });
 if (!el) return '';
-window.__capyScan = el; return (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 60);
+window.__capyScan = el;
+return ((el.textContent || '').trim() || el.getAttribute('aria-label') || el.getAttribute('href') || el.className || '?').toString().slice(0, 60);
 })()''';
 
 /// Ссылки текущей страницы на разделы Пульса (для обхода).
 const _linksJs = r'''(function(){
 var out = {};
-document.querySelectorAll('a[href]').forEach(function(a){
-  try { var u = new URL(a.getAttribute('href'), location.href);
+document.querySelectorAll('a[href], [routerlink], [ng-reflect-router-link]').forEach(function(a){
+  try { var u = new URL(a.getAttribute('href') || a.getAttribute('routerlink') || a.getAttribute('ng-reflect-router-link'), location.href);
     if (u.host === location.host) out[u.pathname] = (a.textContent || '').trim().slice(0, 40); } catch (e) {}
 });
 return JSON.stringify(out);
@@ -191,12 +195,74 @@ return JSON.stringify(out);
 
 /// Перейти в раздел без перезагрузки (перехват остаётся): нажать ссылку на
 /// него, если есть, иначе — роутер через history.
-String pulseGoJs(String path) => '''(function(){
-var p = ${jsonEncode(path)};
+const _goJs = r'''(function(){
+var p = __PATH__;
 var a = Array.prototype.find.call(document.querySelectorAll('a[href]'), function(x){
-  try { return new URL(x.getAttribute('href'), location.href).pathname === p; } catch (e) { return false; } });
+  try { var u = new URL(x.getAttribute('href'), location.href); return u.host === location.host && u.pathname === p; }
+  catch (e) { return false; } });
 if (a) { a.click(); return 'click'; }
 history.pushState({}, '', p); window.dispatchEvent(new PopStateEvent('popstate', {state: {}})); return 'push';
+})()''';
+
+String pulseGoJs(String path, [String template = _goJs]) => template.replaceAll('__PATH__', jsonEncode(path));
+
+/// Набор скриптов обхода. Сервер (/pulse/lab/kit, файл pulse_lab_kit.json)
+/// может подменить любой — правки разведки доезжают без новой сборки.
+class PulseKit {
+  final String hook, scan, links, go, drain, routes, dump;
+  final List<String> seeds;
+  final RegExp skip;
+  final int waitSec, maxPages;
+  const PulseKit._(this.hook, this.scan, this.links, this.go, this.drain, this.routes, this.dump, this.seeds, this.skip,
+      this.waitSec, this.maxPages);
+
+  factory PulseKit([Map? from]) {
+    final m = from ?? const {};
+    String str(String k, String d) => m[k] is String && (m[k] as String).isNotEmpty ? m[k] as String : d;
+    int whole(String k, int d) => m[k] is int ? m[k] as int : d;
+    RegExp skip = pulseSkip;
+    if (m['skip'] is String) {
+      try {
+        skip = RegExp(m['skip'] as String, caseSensitive: false);
+      } catch (_) {}
+    }
+    return PulseKit._(
+      str('hook', pulseHookJs),
+      str('scan', _scanFindJs),
+      str('links', _linksJs),
+      str('go', _goJs),
+      str('drain', _drainJs),
+      str('routes', _routesJs),
+      str('dump', _dumpJs),
+      m['seeds'] is List ? [for (final x in m['seeds'] as List) '$x'] : pulseSeeds,
+      skip,
+      whole('wait_sec', 4),
+      whole('max_pages', 40),
+    );
+  }
+}
+
+/// Забрать накопленные запросы в приложение (полная перезагрузка страницы
+/// их стёрла бы) — строкой в window.__capyOut, длина в ответ.
+const _drainJs = r'''(function(){
+var C = window.__capy; var out = C ? C.calls : [];
+if (C) C.calls = [];
+window.__capyOut = JSON.stringify(out); return String(window.__capyOut.length);
+})()''';
+
+/// Разделы из кода самого сайта: в скриптах Пульса пути роутера записаны как
+/// path:"…" — ищем фоном, ответ потом в window.__capyRoutes.
+const _routesJs = r'''(function(){
+window.__capyRoutes = null;
+var srcs = Array.prototype.map.call(document.querySelectorAll('script[src]'), function(s){ return s.src; })
+  .filter(function(u){ try { return new URL(u).host === location.host; } catch (e) { return false; } }).slice(0, 15);
+Promise.all(srcs.map(function(u){ return fetch(u).then(function(r){ return r.text(); }).catch(function(){ return ''; }); }))
+  .then(function(texts){
+    var out = {}, re = /path\s*:\s*["'`]([\w\-\/]*)["'`]/g, m;
+    texts.forEach(function(t){ while ((m = re.exec(t))) { out['/' + m[1].replace(/^\/+/, '')] = 1; } });
+    window.__capyRoutes = JSON.stringify(Object.keys(out).slice(0, 200));
+  });
+return String(srcs.length);
 })()''';
 
 /// Журнал целиком: запросы, пройденные страницы, форма хранилищ и кук
@@ -221,7 +287,17 @@ class PulseLabScreen extends StatefulWidget {
 }
 
 class _PulseLabScreenState extends State<PulseLabScreen> {
+  PulseKit _k = PulseKit();
   double _progress = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.get('/pulse/lab/kit').then((m) {
+      if (m is Map && m.isNotEmpty) _k = PulseKit(m);
+    }).catchError((_) {});
+  }
+
   String? _url;
   bool _busy = false;
   String _status = 'Войди в Пульс как обычно: почта, пароль, код. Пароль видит только сайт МИРЭА.';
@@ -253,7 +329,7 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
       return;
     }
     try {
-      await _web.runJavaScript(pulseHookJs);
+      await _web.runJavaScript(_k.hook);
     } catch (_) {}
     if (first == null) await prefs.setInt(_loginKey, now);
     await prefs.setInt(_aliveKey, now);
@@ -266,60 +342,126 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
 
   Future<Map<String, String>> _links() async {
     try {
-      final m = jsonDecode(jsString(await _web.runJavaScriptReturningResult(_linksJs))) as Map;
+      final m = jsonDecode(jsString(await _web.runJavaScriptReturningResult(_k.links))) as Map;
       return m.map((k, v) => MapEntry('$k', '$v'));
     } catch (_) {
       return {};
     }
   }
 
+  /// Длинная строка из окна по кускам (у runJavaScriptReturningResult есть предел).
+  Future<String> _readOut(String js) async {
+    final len = int.tryParse(jsString(await _web.runJavaScriptReturningResult(js))) ?? 0;
+    final buf = StringBuffer();
+    const step = 400000;
+    for (var i = 0; i < len; i += step) {
+      buf.write(jsString(await _web.runJavaScriptReturningResult('window.__capyOut.slice($i, ${i + step})')));
+    }
+    return buf.toString();
+  }
+
+  final _calls = <Object?>[];
+
+  Future<void> _drain() async {
+    try {
+      final s = await _readOut(_k.drain);
+      if (s.isNotEmpty) _calls.addAll(jsonDecode(s) as List);
+    } catch (_) {}
+  }
+
+  /// Окно ушло с Пульса (ссылка на ЛКС и т. п.) — вернуть. false — не вышло
+  /// (вход протух: Пульс отправил на вход).
+  Future<bool> _backToPulse() async {
+    if (onPulse(await _web.currentUrl())) return true;
+    await _web.loadRequest(Uri.parse('$pulseBase/services'));
+    for (var i = 0; i < 15; i++) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (onPulse(await _web.currentUrl())) {
+        await Future.delayed(const Duration(seconds: 2));
+        await _web.runJavaScript(_k.hook);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<List<String>> _routes() async {
+    try {
+      await _web.runJavaScript(_k.routes);
+      for (var i = 0; i < 10; i++) {
+        await Future.delayed(const Duration(seconds: 1));
+        final r = jsString(await _web.runJavaScriptReturningResult('window.__capyRoutes || ""'));
+        if (r.isNotEmpty && r != 'null') return (jsonDecode(r) as List).map((e) => '$e').toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
   Future<void> _collect() async {
     if (_busy || !onPulse(_url)) return;
     setState(() => _busy = true);
+    _calls.clear();
     final started = DateTime.now();
-    final queue = <String>[...pulseSeeds];
+    final here = Uri.parse(_url!).path;
+    final queue = <String>[here, ..._k.seeds.where((p) => p != '/')];
     final seen = <String>{};
     final pages = <Map<String, Object?>>[];
+    var left = 0;
     try {
-      await _web.runJavaScript(pulseHookJs);
-      // главная заново: первые запросы после входа прошли до перехвата
-      while (queue.isNotEmpty && seen.length < 30) {
+      await _web.runJavaScript(_k.hook);
+      if (mounted) setState(() => _status = 'Ищу разделы в коде Пульса…');
+      final routes = await _routes();
+      for (final r in routes) {
+        if (!queue.contains(r)) queue.add(r);
+      }
+      pages.add({'routes_from_code': routes});
+      while (queue.isNotEmpty && seen.length < _k.maxPages) {
         final path = queue.removeAt(0);
-        if (seen.contains(path) || pulseSkip.hasMatch(path)) continue;
+        if (seen.contains(path) || _k.skip.hasMatch(path) || path.contains(':')) continue;
         seen.add(path);
         if (mounted) setState(() => _status = 'Обхожу Пульс: ${seen.length} — $path');
         String how = '';
         try {
-          how = jsString(await _web.runJavaScriptReturningResult(pulseGoJs(path)));
+          how = jsString(await _web.runJavaScriptReturningResult(pulseGoJs(path, _k.go)));
         } catch (_) {}
-        await Future.delayed(const Duration(seconds: 4));
-        // ушли с Пульса (вход протух) — дальше смысла нет
-        if (!onPulse(await _web.currentUrl())) break;
-        await _web.runJavaScript(pulseHookJs);
+        await Future.delayed(Duration(seconds: _k.waitSec));
+        final now = Uri.tryParse(await _web.currentUrl() ?? '');
+        if (!onPulse(now?.toString())) {
+          // увела ссылка на другой сайт — вернуться; не вышло — вход протух
+          pages.add({'path': path, 'how': how, 'left_to': now?.host ?? ''});
+          left++;
+          if (!await _backToPulse()) break;
+          continue;
+        }
+        await _drain();
+        await _web.runJavaScript(_k.hook);
         final links = await _links();
         String scan = '';
         try {
-          scan = jsString(await _web.runJavaScriptReturningResult(_scanFindJs));
+          scan = jsString(await _web.runJavaScriptReturningResult(_k.scan));
         } catch (_) {}
-        pages.add({'path': path, 'how': how, 'links': links, if (scan.isNotEmpty) 'scan': scan});
+        pages.add({'path': path, 'how': how, 'at': now?.path, 'links': links, if (scan.isNotEmpty) 'scan': scan});
         for (final l in links.keys) {
-          if (!seen.contains(l) && !queue.contains(l) && !pulseSkip.hasMatch(l)) queue.add(l);
+          if (!seen.contains(l) && !queue.contains(l) && !_k.skip.hasMatch(l)) queue.add(l);
         }
       }
-      // пускает ли сайт к своему сканеру: нажать «Отсканировать QR» (сам скан не делаем)
+      // пускает ли сайт к своему сканеру: нажать кнопку QR (сам скан не делаем)
       final withScan = pages.where((p) => p['scan'] != null).toList();
-      if (withScan.isNotEmpty) {
+      if (withScan.isNotEmpty && await _backToPulse()) {
         final path = '${withScan.first['path']}';
-        if (mounted) setState(() => _status = 'Пробую «${withScan.first['scan']}» — камера спросит разрешение');
-        await _web.runJavaScriptReturningResult(pulseGoJs(path));
+        if (mounted) setState(() => _status = 'Пробую кнопку QR — камера спросит разрешение');
+        await _web.runJavaScriptReturningResult(pulseGoJs(path, _k.go));
         await Future.delayed(const Duration(seconds: 3));
-        await _web.runJavaScript(pulseHookJs);
-        final found = jsString(await _web.runJavaScriptReturningResult(_scanFindJs));
+        await _web.runJavaScript(_k.hook);
+        final found = jsString(await _web.runJavaScriptReturningResult(_k.scan));
         if (found.isNotEmpty) await _web.runJavaScript('window.__capyScan.click()');
         await Future.delayed(const Duration(seconds: 8));
-        pages.add({'path': path, 'scan_clicked': found});
+        final after = await _web.currentUrl();
+        pages.add({'path': path, 'scan_clicked': found, 'after': Uri.tryParse(after ?? '')?.path});
+        if (onPulse(after)) await _drain();
       }
-      await _send(pages, started);
+      await _backToPulse();
+      await _send(pages, started, extra: {'left_pulse': left});
     } catch (e) {
       if (mounted) setState(() => _status = 'Не вышло: $e');
     } finally {
@@ -327,21 +469,18 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
     }
   }
 
-  Future<void> _send(List<Map<String, Object?>> pages, DateTime started) async {
+  Future<void> _send(List<Map<String, Object?>> pages, DateTime started, {Map<String, Object?> extra = const {}}) async {
     if (mounted) setState(() => _status = 'Собираю журнал…');
-    final len = int.tryParse(jsString(await _web.runJavaScriptReturningResult(_dumpJs))) ?? 0;
-    final buf = StringBuffer();
-    const step = 400000;
-    for (var i = 0; i < len; i += step) {
-      buf.write(jsString(await _web.runJavaScriptReturningResult('window.__capyOut.slice($i, ${i + step})')));
-    }
-    final report = Map<String, dynamic>.from(jsonDecode(buf.toString()) as Map);
+    await _drain();
+    final report = Map<String, dynamic>.from(jsonDecode(await _readOut(_k.dump)) as Map);
+    report['calls'] = [..._calls, ...(report['calls'] as List? ?? const [])];
     final prefs = await SharedPreferences.getInstance();
     final loginAt = prefs.getInt(_loginKey);
     report['pages'] = pages;
     report['login'] = {
       if (loginAt != null) 'age_min': DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(loginAt)).inMinutes,
       'tour_sec': DateTime.now().difference(started).inSeconds,
+      ...extra,
     };
     if (mounted) setState(() => _status = 'Отправляю…');
     final r = await widget.api.post('/pulse/lab', report);
