@@ -332,3 +332,52 @@ async def test_robokassa_test_mode_only_for_nikita(db, bot, client, monkeypatch,
     assert r.status_code == 400 and not (await billing.status(ME))["active"]
     r = c.post("/api/billing/robokassa", data={"OutSum": out_sum, "InvId": inv, "SignatureValue": sig})
     assert r.text == f"OK{inv}" and (await billing.status(ME))["active"]          # боевой — как раньше
+
+
+@pytest.mark.asyncio
+async def test_yookassa_test_shop_only_for_nikita(db, bot, client, monkeypatch, robokassa):  # noqa: F811
+    """31.10: тестовый магазин ЮKassa (ключ test_…) — как тест Robokassa: касса
+    открыта только Никите, а тестовую оплату чужого платежа сервер не засчитывает."""
+    from database.billing import add_payment
+    c, _ = client
+    monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
+    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "test_abc")
+    await db.upsert_user(ME, "", "u")
+    assert billing.test_mode()
+    assert billing.provider(uid=ME) == "" and billing.provider(uid=STAROSTA_ID) == "yookassa"
+    with pytest.raises(billing.PayError):
+        await billing.create(ME, "month", "https://x")
+
+    await add_payment("yk-t1", "yookassa", ME, "month", 149, 30)        # создан до теста или подделан
+    await add_payment("yk-t2", "yookassa", STAROSTA_ID, "month", 149, 30)
+
+    class Resp:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id": self.pid, "status": "succeeded", "test": True,
+                    "amount": {"value": "149.00", "currency": "RUB"}}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url):
+            return Resp(url.rsplit("/", 1)[1])
+    monkeypatch.setattr(billing, "_yk_client", Client)
+
+    def hook(pid):
+        return c.post("/api/billing/yookassa", json={"event": "payment.succeeded", "object": {"id": pid}})
+    assert hook("yk-t1").status_code == 200 and not (await billing.status(ME))["active"]
+    assert hook("yk-t2").status_code == 200 and (await billing.status(STAROSTA_ID))["active"]
+
+    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "live_abc")      # боевой магазин — как раньше
+    assert not billing.test_mode() and billing.provider(uid=ME) == "yookassa"

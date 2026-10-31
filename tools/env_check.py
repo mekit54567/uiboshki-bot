@@ -396,7 +396,11 @@ async def check_yookassa() -> Result:
                             auth=(env("YOOKASSA_SHOP_ID"), env("YOOKASSA_SECRET_KEY")))
     except httpx.HTTPError as e:
         return Result(BAD, f"ЮKassa {_err(e)}")
-    return Result(OK, "ключи приняты") if r.status_code == 200 else Result(BAD, f"не приняла (HTTP {r.status_code})")
+    if r.status_code != 200:
+        return Result(BAD, f"не приняла (HTTP {r.status_code})")
+    if env("YOOKASSA_SECRET_KEY").startswith("test_"):
+        return Result(WARN, "ключи приняты, магазин тестовый: деньги не списываются, платить может только Никита")
+    return Result(OK, "ключи приняты")
 
 
 def check_requisites() -> Result:
