@@ -6,6 +6,8 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Чтобы отсканировать QR-код отметки на паре в Пульсе МИРЭА.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Чтобы приложить фото к вопросу помощнику или сдать работу в СДО.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

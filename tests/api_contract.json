@@ -96,6 +96,7 @@
  "POST /api/optional",
  "POST /api/plus/rank",
  "POST /api/plus/ref",
+ "POST /api/pulse/lab",
  "POST /api/pulsecheck",
  "POST /api/push/app/subscribe",
  "POST /api/push/app/unsubscribe",
