@@ -139,6 +139,10 @@ class AppIcon {
   /// Не выбрана или «classic» (до 5.117.12 — прежняя основная) — «Мел».
   static AppIcon byName(String? name) => values.firstWhere((i) => i.name == name, orElse: () => base);
 
+  /// Тесты: «сегодня» для праздничной иконки — иначе 31.10 тесты видят Хэллоуин.
+  @visibleForTesting
+  static DateTime? nowForTest;
+
   /// Праздничная на этот день, если есть.
   static AppIcon? seasonal(DateTime now) {
     final d = '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -218,7 +222,7 @@ String? channelName(AppIcon icon, {bool dark = false}) {
 /// (веб, тесты, старая сборка) или система отказала — молча ничего.
 Future<void> syncAppIcon(AppIcon want, {bool dark = false, bool holiday = true, DateTime? now}) async {
   if (!appIconSupported) return;
-  final day = holiday ? AppIcon.seasonal(now ?? DateTime.now()) : null;
+  final day = holiday ? AppIcon.seasonal(now ?? AppIcon.nowForTest ?? DateTime.now()) : null;
   final target = channelName(day ?? want, dark: dark);
   try {
     final have = await _channel.invokeMethod<String>('getIcon');
