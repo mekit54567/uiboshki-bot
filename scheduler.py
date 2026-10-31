@@ -523,6 +523,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # очередь (50–59 мин случайно, потом 55), а не все разом (sdo_accounts.py)
     from sdo_accounts import keepalive_due
     scheduler.add_job(keepalive_due,           "interval", minutes=1, args=[bot])
+    import pulse_accounts                      # вход в Пульс — так же, как СДО (pulse_accounts.py)
+    scheduler.add_job(pulse_accounts.keepalive_due, "interval", minutes=1)
     from database import purge_events          # статистика старше 180 дней не нужна
     scheduler.add_job(purge_events,            "cron", hour=4, minute=20)
     import privacy                             # 152-ФЗ: год без заходов — данные стираются

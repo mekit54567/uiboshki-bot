@@ -208,6 +208,35 @@ async def api_pulse_lab(request: Request, user: dict = CurrentUser):
     return {"ok": True, "sent": sent, "summary": summary}
 
 
+class PulseConnectBody(BaseModel):
+    cookie: str
+
+
+@router.post("/api/pulse/connect")
+async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser):
+    """Вход в Пульс из окна приложения → серверу (pulse_accounts): проверка
+    с сервера (пускает ли DDoS-Guard) и хранение зашифрованным. Пока — эксперимент старосты."""
+    if not is_starosta(user["id"]):
+        raise HTTPException(status_code=403, detail="только для старосты")
+    import pulse_accounts
+    return await pulse_accounts.connect_from_app(user["id"], body.cookie[:16384])
+
+
+@router.get("/api/pulse/status")
+async def api_pulse_status(user: dict = CurrentUser):
+    if not is_starosta(user["id"]):
+        raise HTTPException(status_code=403, detail="только для старосты")
+    import pulse_accounts
+    return await pulse_accounts.status_for(user["id"])
+
+
+@router.post("/api/pulse/disconnect")
+async def api_pulse_disconnect(user: dict = CurrentUser):
+    import pulse_accounts
+    await pulse_accounts.forget(user["id"])
+    return {"ok": True}
+
+
 # ── Персональный ICS-календарь (Фаза 12) ────────────────────────────────────
 # /api/calendar/link — за initData (фронт WebApp узнаёт свою ссылку и может
 # показать кнопку "скопировать"). /ics/{token} — БЕЗ initData: календарные
