@@ -295,24 +295,32 @@ async def send(row: dict, data: dict) -> str:
     return GONE
 
 
-async def push_user(user_id: int, data: dict) -> int:
-    """Пуш на все телефоны человека. → сколько ушло. Мёртвый токен — забываем."""
+async def push_report(user_id: int, data: dict) -> list[dict]:
+    """Пуш на все телефоны человека, по устройству: platform, device, result
+    (ok / gone / error / off — канал выключен на сервере). Мёртвый токен — забываем."""
     from database.app_push import delete_app_push, get_app_pushes
     on = platforms()
-    sent = 0
+    out = []
     for row in await get_app_pushes(user_id):
+        item = {"platform": row["platform"], "device": row.get("device") or ""}
+        out.append(item)
         if not on.get(row["platform"]):
+            item["result"] = "off"
             continue
         try:
             res = await send(row, data)
         except Exception as e:
             logger.info(f"пуш приложения {user_id} ({row['platform']}): {type(e).__name__}: {e}")
-            continue
+            res = ERROR
         if res == GONE:
             await delete_app_push(row["platform"], row["token"])
-        elif res == OK:
-            sent += 1
-    return sent
+        item["result"] = res
+    return out
+
+
+async def push_user(user_id: int, data: dict) -> int:
+    """Пуш на все телефоны человека. → сколько ушло."""
+    return sum(1 for r in await push_report(user_id, data) if r["result"] == OK)
 
 
 async def rotate_keys() -> int:
