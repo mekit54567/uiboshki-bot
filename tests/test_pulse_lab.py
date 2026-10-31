@@ -72,3 +72,12 @@ def test_endpoint_only_for_starosta(db, monkeypatch):
     assert r.status_code == 200 and r.json()["sent"]
     assert sent[0][0] == STAROSTA_ID and sent[0][1].startswith("pulse-lab-")
     assert c.post("/api/pulse/lab", headers=me, content=b"[1]").status_code == 400
+    assert c.get("/api/pulse/lab/kit", headers=other).status_code == 403
+    assert isinstance(c.get("/api/pulse/lab/kit", headers=me).json(), dict)
+
+
+def test_kit_from_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(pulse_lab, "KIT_PATH", str(tmp_path / "kit.json"))
+    assert pulse_lab.kit() == {}
+    (tmp_path / "kit.json").write_text('{"seeds": ["/services"], "wait_sec": 6, "evil": 1}')
+    assert pulse_lab.kit() == {"seeds": ["/services"], "wait_sec": 6}

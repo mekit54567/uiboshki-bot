@@ -17,4 +17,17 @@ void main() {
     expect(jsString('12'), '12');
     expect(pulseGoJs('/x"y'), contains('"/x\\"y"'));
   });
+
+  test('Пульс: сервер подменяет скрипты обхода, мусор — нет', () {
+    final def = PulseKit();
+    expect(def.seeds, pulseSeeds);
+    expect(def.waitSec, 4);
+    final k = PulseKit({'seeds': ['/services'], 'wait_sec': 7, 'hook': 'x()', 'skip': '(', 'dump': ''});
+    expect(k.seeds, ['/services']);
+    expect(k.waitSec, 7);
+    expect(k.hook, 'x()');
+    expect(k.dump, def.dump);
+    expect(k.skip.hasMatch('/logout'), isTrue);
+    expect(pulseGoJs('/a', 'go(__PATH__)'), 'go("/a")');
+  });
 }

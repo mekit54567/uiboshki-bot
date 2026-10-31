@@ -167,6 +167,16 @@ async def api_pulsecheck(user: dict = CurrentUser):
     return await pulse_check.check()
 
 
+@router.get("/api/pulse/lab/kit")
+async def api_pulse_lab_kit(user: dict = CurrentUser):
+    """Скрипты обхода Пульса для приложения (pulse_lab.KIT_PATH): правки
+    разведки без новой сборки. Пусто — у приложения свои."""
+    if not is_starosta(user["id"]):
+        raise HTTPException(status_code=403, detail="только для старосты")
+    import pulse_lab
+    return pulse_lab.kit()
+
+
 @router.post("/api/pulse/lab")
 async def api_pulse_lab(request: Request, user: dict = CurrentUser):
     """Журнал разведки Пульса с телефона (pulse_lab) → архив старосте в бота."""

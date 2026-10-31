@@ -39,6 +39,7 @@
  "GET /api/optional",
  "GET /api/pins",
  "GET /api/plus",
+ "GET /api/pulse/lab/kit",
  "GET /api/push/app",
  "GET /api/push/key",
  "GET /api/rating",

@@ -14,6 +14,7 @@
 import base64
 import io
 import json
+import os
 import re
 import time
 import zipfile
@@ -21,6 +22,9 @@ import zipfile
 import pulse_probe
 
 MAX_BODY = 15 * 1024 * 1024
+# Подмена скриптов обхода в приложении (ключи — как в PulseKit, app/lib/screens/pulse_lab.dart)
+KIT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulse_lab_kit.json")
+KIT_KEYS = {"hook", "scan", "links", "go", "drain", "routes", "dump", "seeds", "skip", "wait_sec", "max_pages"}
 _SECRET_NAME = re.compile(r"authorization|cookie|token|session|secret|password|passwd|key", re.I)
 _JWT = re.compile(r"[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}")
 # Из JWT оставляем только то, что говорит о сроке и выдавшем — без имени и почты
@@ -147,3 +151,13 @@ def build(report: dict) -> tuple[bytes, str]:
     summary = (f"Пульс: обошли {len(report.get('pages') or [])} страниц, записали {len(calls)} запросов "
                f"({ok} с ответом 200), разных адресов {len(methods)}")
     return buf.getvalue(), summary
+
+
+def kit() -> dict:
+    """Скрипты обхода из pulse_lab_kit.json (только известные ключи); нет файла — {}."""
+    try:
+        with open(KIT_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in data.items() if k in KIT_KEYS} if isinstance(data, dict) else {}
