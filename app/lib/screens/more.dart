@@ -20,8 +20,10 @@ import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
 import 'look_screen.dart';
 import 'notify.dart';
+import 'pulse_lab.dart';
 import 'rating.dart';
 import 'sdo_connect.dart';
+import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'security.dart';
 import 'study.dart';
 
@@ -222,6 +224,19 @@ class MoreScreen extends StatelessWidget {
                             ],
                           ),
                   ),
+                  // экспериментальный вход в Пульс (31.10) — только старосте и только в приложении
+                  if (me['lab'] == true && sdoWebLoginAvailable) ...[
+                    Divider(height: 1, color: p.line),
+                    _MenuRow(
+                      key: const Key('more:pulse'),
+                      icon: Icons.science_outlined,
+                      title: 'Пульс · эксперимент',
+                      sub: 'вход в Пульс МИРЭА и разведка, что он отдаёт',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => PulseLabScreen(api: api)),
+                      ),
+                    ),
+                  ],
                   if (me['group'] != null && me['group']['own'] != true) ...[
                     Divider(height: 1, color: p.line),
                     _AdminRequest(api: api),
@@ -905,7 +920,7 @@ class _MenuRow extends StatelessWidget {
 
   /// null — строка не нажимается (запрос уже отправлен).
   final VoidCallback? onTap;
-  const _MenuRow({required this.icon, required this.title, required this.sub, required this.onTap});
+  const _MenuRow({super.key, required this.icon, required this.title, required this.sub, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

@@ -1,7 +1,9 @@
 """Свой профиль: /api/me, экран «Безопасность», уведомления, проверка Пульса
 (староста) и персональный ICS-календарь."""
 
-from fastapi import APIRouter, HTTPException
+import time
+
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -18,6 +20,7 @@ async def api_me(user: dict = CurrentUser):
     return {"id": user["id"], "first_name": user.get("first_name", ""), "username": user.get("username", ""),
             "group": await groups.of_user(user["id"]), "plan": await plans.plan_of(user["id"]),
             "plus": await plans.has_plus(user["id"]),     # «Капибара+» (иконки «по подписке» и т. п.)
+            "lab": is_starosta(user["id"]),               # экспериментальное (вход в Пульс) — только старосте
             **await consent_state(user["id"])}
 
 
@@ -162,6 +165,37 @@ async def api_pulsecheck(user: dict = CurrentUser):
         raise HTTPException(status_code=403, detail="только для старосты")
     import pulse_check
     return await pulse_check.check()
+
+
+@router.post("/api/pulse/lab")
+async def api_pulse_lab(request: Request, user: dict = CurrentUser):
+    """Журнал разведки Пульса с телефона (pulse_lab) → архив старосте в бота."""
+    if not is_starosta(user["id"]):
+        raise HTTPException(status_code=403, detail="только для старосты")
+    import json
+
+    from aiogram.types import BufferedInputFile
+
+    import pulse_lab
+    from webapp.deps import tg_bot
+    raw = await request.body()
+    if len(raw) > pulse_lab.MAX_BODY:
+        raise HTTPException(status_code=413, detail="журнал слишком большой")
+    try:
+        report = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="не JSON")
+    if not isinstance(report, dict):
+        raise HTTPException(status_code=400, detail="не JSON")
+    data, summary = pulse_lab.build(report)
+    name = f"pulse-lab-{time.strftime('%Y%m%d-%H%M')}.zip"
+    try:
+        await tg_bot().send_document(user["id"], BufferedInputFile(data, filename=name),
+                                     caption=summary + "\n\nПерешли этот файл Claude в тред про Пульс.")
+        sent = True
+    except Exception:
+        sent = False
+    return {"ok": True, "sent": sent, "summary": summary}
 
 
 # ── Персональный ICS-календарь (Фаза 12) ────────────────────────────────────
