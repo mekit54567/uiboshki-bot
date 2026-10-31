@@ -81,3 +81,11 @@ def test_kit_from_file(tmp_path, monkeypatch):
     assert pulse_lab.kit() == {}
     (tmp_path / "kit.json").write_text('{"seeds": ["/services"], "wait_sec": 6, "evil": 1}')
     assert pulse_lab.kit() == {"seeds": ["/services"], "wait_sec": 6}
+
+
+def test_body_limit_fits_journal():
+    """31.10: журнал после обхода 40 страниц упёрся в общий предел 1 МБ (413)."""
+    from webapp.server import body_limit
+    assert body_limit("/api/v1/pulse/lab") == pulse_lab.MAX_BODY
+    assert body_limit("/api/v1/pulse/lab/kit") == pulse_lab.MAX_BODY
+    assert body_limit("/api/v1/me") == 1024 * 1024

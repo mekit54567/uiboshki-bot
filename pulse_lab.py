@@ -21,7 +21,7 @@ import zipfile
 
 import pulse_probe
 
-MAX_BODY = 15 * 1024 * 1024
+MAX_BODY = 40 * 1024 * 1024      # = предел пути в webapp/server.BODY_LIMITS
 # Подмена скриптов обхода в приложении (ключи — как в PulseKit, app/lib/screens/pulse_lab.dart)
 KIT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulse_lab_kit.json")
 KIT_KEYS = {"hook", "scan", "links", "go", "drain", "routes", "dump", "seeds", "skip", "wait_sec", "max_pages"}
