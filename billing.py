@@ -86,8 +86,12 @@ def provider(configured_only: bool = False, uid: int | None = None) -> str:
 
 
 def test_mode() -> bool:
-    """Robokassa в тестовом режиме (ROBOKASSA_TEST=1) — деньги не списываются."""
-    return ROBOKASSA_TEST and (_kassas() or [""])[0] == "robokassa"
+    """Касса в тестовом режиме — деньги не списываются: Robokassa с
+    ROBOKASSA_TEST=1 или тестовый магазин ЮKassa (секретный ключ test_…)."""
+    kind = (_kassas() or [""])[0]
+    if kind == "yookassa":
+        return YOOKASSA_SECRET_KEY.startswith("test_")
+    return ROBOKASSA_TEST and kind == "robokassa"
 
 
 def test_only(uid: int | None) -> bool:
@@ -436,6 +440,10 @@ async def yookassa_check(pid: str) -> str | None:
         logger.warning(f"ЮKassa: статус {pid} не узнать: {e}")
         return None
     pay = await _payment(pid)
+    if pay and data.get("status") == "succeeded" and data.get("test") and not config.is_starosta(pay["payer_id"] or 0):
+        # тестовый платёж (денег нет) засчитывается только Никите — как у Robokassa, 21.10
+        logger.warning(f"ЮKassa: тестовый платёж {pid} не от Никиты — не засчитан")
+        return "test"
     if pay and data.get("status") == "succeeded":
         amount = data.get("amount") or {}
         if amount.get("currency") != "RUB" or float(amount.get("value", 0)) + 0.001 < pay["amount"]:
