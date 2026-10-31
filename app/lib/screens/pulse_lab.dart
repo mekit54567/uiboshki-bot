@@ -20,8 +20,10 @@ import 'files.dart';
 const pulseBase = 'https://pulse.mirea.ru';
 const _loginKey = 'pulse_lab_login_at';
 
-/// Страницы, которые обход не открывает: выход, отметка по QR, правки.
-final pulseSkip = RegExp(r'logout|log-out|signout|sign-out|exit|approve|delete|remove|edit|create|/new|save|send|submit',
+/// Страницы, которые обход не открывает: выход, отметка по QR (и экран
+/// преподавателя с QR), правки.
+final pulseSkip = RegExp(
+    r'logout|log-out|signout|sign-out|exit|selfapprove|self-approve|token=|delete|remove|edit|create|/new|save|send|submit',
     caseSensitive: false);
 
 /// Разделы, которые стоит проверить, даже если на главной нет ссылки.
@@ -152,7 +154,20 @@ X.send = function(body){
   }
   return xs.apply(this, arguments);
 };
+var md = navigator.mediaDevices;
+if (md && md.getUserMedia) { var gum = md.getUserMedia.bind(md);
+  md.getUserMedia = function(c){ var rec = {kind: 'camera', t: Date.now(), page: location.pathname, url: 'getUserMedia', constraints: JSON.stringify(c)};
+    C.calls.push(rec);
+    return gum(c).then(function(s){ rec.status = 'ok'; return s; }, function(e){ rec.status = 'отказ'; rec.err = String(e && (e.name + ': ' + e.message)); throw e; }); }; }
 return 'ok';
+})()''';
+
+/// Кнопка «Отсканировать QR» на странице (текст кнопки или ссылки).
+const _scanFindJs = r'''(function(){
+var el = Array.prototype.find.call(document.querySelectorAll('button, a, [role=button]'), function(x){
+  return /отскан|сканир|scan|qr/i.test((x.textContent || '') + ' ' + (x.getAttribute('aria-label') || '')); });
+if (!el) return '';
+window.__capyScan = el; return (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 60);
 })()''';
 
 /// Ссылки текущей страницы на разделы Пульса (для обхода).
@@ -183,7 +198,8 @@ function st(s){ var o = {}; try { for (var i = 0; i < s.length; i++) { var k = s
 var res = []; try { res = performance.getEntriesByType('resource').map(function(e){ return e.name; }).filter(function(n){ return !/\.(js|css|png|jpe?g|svg|woff2?|ico)(\?|$)/i.test(n); }); } catch (e) {}
 window.__capyOut = JSON.stringify({calls: C.calls, storage: {local: st(localStorage), session: st(sessionStorage)},
   cookie_names: document.cookie.split(';').map(function(c){ return c.split('=')[0].trim(); }).filter(Boolean),
-  resources: res.slice(-300), url: location.pathname, ua: navigator.userAgent});
+  resources: res.slice(-300), url: location.pathname, ua: navigator.userAgent,
+  page_text: (document.body && document.body.innerText || '').slice(0, 1500)});
 return String(window.__capyOut.length);
 })()''';
 
@@ -257,37 +273,58 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
         if (!onPulse(await _web.currentUrl())) break;
         await _web.runJavaScript(pulseHookJs);
         final links = await _links();
-        pages.add({'path': path, 'how': how, 'links': links});
+        String scan = '';
+        try {
+          scan = jsString(await _web.runJavaScriptReturningResult(_scanFindJs));
+        } catch (_) {}
+        pages.add({'path': path, 'how': how, 'links': links, if (scan.isNotEmpty) 'scan': scan});
         for (final l in links.keys) {
           if (!seen.contains(l) && !queue.contains(l) && !pulseSkip.hasMatch(l)) queue.add(l);
         }
       }
-      if (mounted) setState(() => _status = 'Собираю журнал…');
-      final len = int.tryParse(jsString(await _web.runJavaScriptReturningResult(_dumpJs))) ?? 0;
-      final buf = StringBuffer();
-      const step = 400000;
-      for (var i = 0; i < len; i += step) {
-        buf.write(jsString(await _web.runJavaScriptReturningResult('window.__capyOut.slice($i, ${i + step})')));
+      // пускает ли сайт к своему сканеру: нажать «Отсканировать QR» (сам скан не делаем)
+      final withScan = pages.where((p) => p['scan'] != null).toList();
+      if (withScan.isNotEmpty) {
+        final path = '${withScan.first['path']}';
+        if (mounted) setState(() => _status = 'Пробую «${withScan.first['scan']}» — камера спросит разрешение');
+        await _web.runJavaScriptReturningResult(pulseGoJs(path));
+        await Future.delayed(const Duration(seconds: 3));
+        await _web.runJavaScript(pulseHookJs);
+        final found = jsString(await _web.runJavaScriptReturningResult(_scanFindJs));
+        if (found.isNotEmpty) await _web.runJavaScript('window.__capyScan.click()');
+        await Future.delayed(const Duration(seconds: 8));
+        pages.add({'path': path, 'scan_clicked': found});
       }
-      final report = Map<String, dynamic>.from(jsonDecode(buf.toString()) as Map);
-      final prefs = await SharedPreferences.getInstance();
-      final loginAt = prefs.getInt(_loginKey);
-      report['pages'] = pages;
-      report['login'] = {
-        if (loginAt != null) 'age_min': DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(loginAt)).inMinutes,
-        'tour_sec': DateTime.now().difference(started).inSeconds,
-      };
-      if (mounted) setState(() => _status = 'Отправляю…');
-      final r = await widget.api.post('/pulse/lab', report);
-      if (mounted) {
-        setState(() => _status = r['sent'] == true
-            ? 'Готово: ${r['summary']}. Архив пришёл в бота — перешли его Claude.'
-            : 'Сервер принял журнал, но в бота не отправил: ${r['summary']}');
-      }
+      await _send(pages, started);
     } catch (e) {
       if (mounted) setState(() => _status = 'Не вышло: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _send(List<Map<String, Object?>> pages, DateTime started) async {
+    if (mounted) setState(() => _status = 'Собираю журнал…');
+    final len = int.tryParse(jsString(await _web.runJavaScriptReturningResult(_dumpJs))) ?? 0;
+    final buf = StringBuffer();
+    const step = 400000;
+    for (var i = 0; i < len; i += step) {
+      buf.write(jsString(await _web.runJavaScriptReturningResult('window.__capyOut.slice($i, ${i + step})')));
+    }
+    final report = Map<String, dynamic>.from(jsonDecode(buf.toString()) as Map);
+    final prefs = await SharedPreferences.getInstance();
+    final loginAt = prefs.getInt(_loginKey);
+    report['pages'] = pages;
+    report['login'] = {
+      if (loginAt != null) 'age_min': DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(loginAt)).inMinutes,
+      'tour_sec': DateTime.now().difference(started).inSeconds,
+    };
+    if (mounted) setState(() => _status = 'Отправляю…');
+    final r = await widget.api.post('/pulse/lab', report);
+    if (mounted) {
+      setState(() => _status = r['sent'] == true
+          ? 'Готово: ${r['summary']}. Архив пришёл в бота — перешли его Claude.'
+          : 'Сервер принял журнал, но в бота не отправил: ${r['summary']}');
     }
   }
 

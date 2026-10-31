@@ -8,6 +8,7 @@ void main() {
     expect(onPulse('https://sso.mirea.ru/realms/x/protocol/openid-connect/auth'), isFalse);
     expect(pulseSkip.hasMatch('/lessons/visiting-logs/selfapprove'), isTrue);
     expect(pulseSkip.hasMatch('/logout'), isTrue);
+    expect(pulseSkip.hasMatch('/students-self-approve/abc'), isTrue);
     expect(pulseSkip.hasMatch('/services/maps'), isFalse);
     expect(jsString('"{\\"a\\":1}"'), '{"a":1}');
     expect(jsString('12'), '12');
