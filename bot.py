@@ -78,6 +78,7 @@ STAROSTA_COMMANDS = BOT_COMMANDS + [
     BotCommand(command="delnote", description="🗑 Удалить заметку к паре"),
     BotCommand(command="pulsecheck", description="📡 Пускает ли Пульс"),
     BotCommand(command="netcheck", description="🌐 Сеть сервера: прокси и доступность"),
+    BotCommand(command="pushtest", description="📲 Пробный пуш на свои телефоны"),
     BotCommand(command="embedtest", description="🧪 Своя модель векторов против Gemini"),
     BotCommand(command="backup", description="💾 Копия базы"),
     BotCommand(command="restore", description="♻️ Восстановить базу из копии"),

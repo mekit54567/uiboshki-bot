@@ -67,46 +67,28 @@ APNs — HTTP/2, пакет `h2` в `requirements.txt`. Запросы идут 
   появляется, только когда человек включил пуши.
 - **RuStore**: переменная `RUSTORE_PROJECT_ID` при сборке (в CI — секрет с
   тем же именем). Без неё SDK RuStore не подключается (`src/norustore` —
-  заглушка): их репозиторий `artifactory-external.vkpartner.ru` из облака
-  разработки не открылся (404 на всё), и сборка без него не должна падать.
-  С ней — `src/rustore` и `ru.rustore.sdk:pushclient:7.2.0`. **Этот вариант
-  ещё ни разу не собирался** — первый раз проверить сборку в CI.
+  заглушка), сборка без неё не падает. С ней — `src/rustore` и
+  `ru.rustore.sdk:pushclient:7.2.0` из репозитория
+  `nexus-external.rustore.ru/repository/maven-rustore-exposed/` (прежний
+  `artifactory-external.vkpartner.ru` пакет не отдаёт — первая сборка с
+  RuStore 31.10 упала на нём).
 
-### iPhone — что сделать (нужна подпись для App Store)
+### iPhone — что сделать
 
-Сейчас (AltStore) пуши на iPhone не заработают: Apple выдаёт токен только
-приложению с правом `aps-environment`, а AltStore с ним не ставит (как и со
-входом через Apple). Код готов; когда будет аккаунт разработчика:
+Расширение **KapibaraNotify** (`app/ios/KapibaraNotify/`) уже в проекте: своя
+цель в `Runner.xcodeproj` (добавлена правкой pbxproj по образцу виджета),
+вложена в приложение; право `aps-environment = production` — только в
+`Runner/RunnerStore.entitlements` (AltStore с ним не ставит, поэтому в сборке
+AltStore пушей на iPhone нет). Осталось сделать в аккаунте Apple:
 
-1. В `app/ios/Runner/Runner.entitlements` добавить
-   `aps-environment` = `production` (для сборок из Xcode — `development` и
-   `APNS_SANDBOX=1` на сервере). В App ID `ru.uiboshki.app` на
-   developer.apple.com включить Push Notifications.
-2. Добавить target расширения **KapibaraNotify** (файлы уже лежат в
-   `app/ios/KapibaraNotify/`):
-   - **С Mac, в Xcode**: File → New → Target → Notification Service
-     Extension, имя `KapibaraNotify`, язык Swift, «Embed in Runner». Xcode
-     создаст свою папку — заменить её файлы нашими (`NotificationService.swift`,
-     `Info.plist`, `KapibaraNotify.entitlements`). В настройках target:
-     Bundle ID `ru.uiboshki.app.KapibaraNotify`, iOS 15.0, Signing &
-     Capabilities → App Groups → `group.ru.uiboshki.app`, Code Signing
-     Entitlements = `KapibaraNotify/KapibaraNotify.entitlements`, Info.plist =
-     `KapibaraNotify/Info.plist`. Build Phases у Runner: «Embed Foundation
-     Extensions» стоит выше «Thin Binary» (иначе цикл сборки Flutter).
-   - **Без Mac** — правкой `Runner.xcodeproj/project.pbxproj` по образцу
-     target `KapibaraWidget` (так он и был добавлен): свой PBXFileReference
-     на три файла и на `KapibaraNotify.appex`, PBXGroup, PBXSourcesBuildPhase
-     с `NotificationService.swift`, PBXNativeTarget с
-     `productType = "com.apple.product-type.app-extension"`,
-     PBXContainerItemProxy + PBXTargetDependency, строка в «Embed Foundation
-     Extensions» у Runner, XCBuildConfiguration Debug/Release/Profile (как у
-     виджета, но `PRODUCT_BUNDLE_IDENTIFIER = ru.uiboshki.app.KapibaraNotify`,
-     `INFOPLIST_FILE = KapibaraNotify/Info.plist`, `CODE_SIGN_ENTITLEMENTS =
-     KapibaraNotify/KapibaraNotify.entitlements`, `IPHONEOS_DEPLOYMENT_TARGET
-     = 15.0`, без `ASSETCATALOG_*` и WidgetKit). Проверка — iOS-сборка в CI
-     (`app-build.yml`); туда же — ad-hoc `codesign` для
-     `Payload/Runner.app/PlugIns/KapibaraNotify.appex`, как у виджета.
-3. На сервере — `APNS_*` (таблица выше).
+1. Ключ APNs: developer.apple.com → Keys → «+» → Apple Push Notifications
+   service (APNs), Environment «Sandbox & Production», Team Scoped → файл
+   `.p8` и Key ID → на сервер `APNS_*` (таблица выше).
+2. App ID `ru.uiboshki.app.KapibaraNotify` с App Group `group.ru.uiboshki.app`,
+   профиль «Kapibara Notify App Store» → секрет `IOS_PROFILE_NOTIFY`
+   (docs/store/ios-signing.md, шаги 4 и 7). Без него магазинная сборка
+   не запускается — CI собирает без подписи.
+3. У App ID `ru.uiboshki.app` — Push Notifications (CI проверяет профиль).
 
 Ключ расшифровки приложение кладёт в связку ключей с группой
 `group.<id приложения>` (AltStore дописывает к id свой Team ID — группа

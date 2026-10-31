@@ -19,7 +19,9 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		4B1D0E0A2F000002000000A1 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0E0A2F000001000000A1 /* WidgetBridge.swift */; };
 		4B1D0E0A2F000011000000A1 /* KapibaraWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0E0A2F000010000000A1 /* KapibaraWidget.swift */; };
+		4B1D0E0A2F000011000000B2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1D0E0A2F000010000000B2 /* NotificationService.swift */; };
 		4B1D0E0A2F000015000000A1 /* KapibaraWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B1D0E0A2F000014000000A1 /* KapibaraWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4B1D0E0A2F000015000000B2 /* KapibaraNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 4B1D0E0A2F000014000000B2 /* KapibaraNotify.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +38,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 4B1D0E0A2F000017000000A1;
 			remoteInfo = KapibaraWidget;
+		};
+		4B1D0E0A2F00001C000000B2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4B1D0E0A2F000017000000B2;
+			remoteInfo = KapibaraNotify;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -57,6 +66,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				4B1D0E0A2F000015000000A1 /* KapibaraWidget.appex in Embed Foundation Extensions */,
+				4B1D0E0A2F000015000000B2 /* KapibaraNotify.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -86,9 +96,13 @@
 		4B1D0E0A2F000001000000A1 /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridge.swift; sourceTree = "<group>"; };
 		4B1D0E0A2F000003000000A1 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		4B1D0E0A2F000010000000A1 /* KapibaraWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KapibaraWidget.swift; sourceTree = "<group>"; };
+		4B1D0E0A2F000010000000B2 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		4B1D0E0A2F000012000000A1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4B1D0E0A2F000012000000B2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4B1D0E0A2F000013000000A1 /* KapibaraWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KapibaraWidget.entitlements; sourceTree = "<group>"; };
+		4B1D0E0A2F000013000000B2 /* KapibaraNotify.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KapibaraNotify.entitlements; sourceTree = "<group>"; };
 		4B1D0E0A2F000014000000A1 /* KapibaraWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KapibaraWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B1D0E0A2F000014000000B2 /* KapibaraNotify.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KapibaraNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,6 +115,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		4B1D0E0A2F000019000000A1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B1D0E0A2F000019000000B2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -138,6 +159,7 @@
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				4B1D0E0A2F000016000000A1 /* KapibaraWidget */,
+				4B1D0E0A2F000016000000B2 /* KapibaraNotify */,
 			);
 			sourceTree = "<group>";
 		};
@@ -147,6 +169,7 @@
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 				4B1D0E0A2F000014000000A1 /* KapibaraWidget.appex */,
+				4B1D0E0A2F000014000000B2 /* KapibaraNotify.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -178,6 +201,16 @@
 				4B1D0E0A2F000013000000A1 /* KapibaraWidget.entitlements */,
 			);
 			path = KapibaraWidget;
+			sourceTree = "<group>";
+		};
+		4B1D0E0A2F000016000000B2 /* KapibaraNotify */ = {
+			isa = PBXGroup;
+			children = (
+				4B1D0E0A2F000010000000B2 /* NotificationService.swift */,
+				4B1D0E0A2F000012000000B2 /* Info.plist */,
+				4B1D0E0A2F000013000000B2 /* KapibaraNotify.entitlements */,
+			);
+			path = KapibaraNotify;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,6 +249,7 @@
 			);
 			dependencies = (
 				4B1D0E0A2F00001D000000A1 /* PBXTargetDependency */,
+				4B1D0E0A2F00001D000000B2 /* PBXTargetDependency */,
 			);
 			name = Runner;
 			packageProductDependencies = (
@@ -242,6 +276,23 @@
 			productReference = 4B1D0E0A2F000014000000A1 /* KapibaraWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		4B1D0E0A2F000017000000B2 /* KapibaraNotify */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4B1D0E0A2F00001E000000B2 /* Build configuration list for PBXNativeTarget "KapibaraNotify" */;
+			buildPhases = (
+				4B1D0E0A2F000018000000B2 /* Sources */,
+				4B1D0E0A2F000019000000B2 /* Frameworks */,
+				4B1D0E0A2F00001A000000B2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KapibaraNotify;
+			productName = KapibaraNotify;
+			productReference = 4B1D0E0A2F000014000000B2 /* KapibaraNotify.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -261,6 +312,9 @@
 						LastSwiftMigration = 1100;
 					};
 					4B1D0E0A2F000017000000A1 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					4B1D0E0A2F000017000000B2 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -285,6 +339,7 @@
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 				4B1D0E0A2F000017000000A1 /* KapibaraWidget */,
+				4B1D0E0A2F000017000000B2 /* KapibaraNotify */,
 			);
 		};
 /* End PBXProject section */
@@ -310,6 +365,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		4B1D0E0A2F00001A000000A1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4B1D0E0A2F00001A000000B2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -380,6 +442,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		4B1D0E0A2F000018000000B2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4B1D0E0A2F000011000000B2 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -392,6 +462,11 @@
 			isa = PBXTargetDependency;
 			target = 4B1D0E0A2F000017000000A1 /* KapibaraWidget */;
 			targetProxy = 4B1D0E0A2F00001C000000A1 /* PBXContainerItemProxy */;
+		};
+		4B1D0E0A2F00001D000000B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4B1D0E0A2F000017000000B2 /* KapibaraNotify */;
+			targetProxy = 4B1D0E0A2F00001C000000B2 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -737,6 +812,33 @@
 			};
 			name = Debug;
 		};
+		4B1D0E0A2F00001F000000B2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = KapibaraNotify/KapibaraNotify.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = KapibaraNotify/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ru.uiboshki.app.KapibaraNotify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		4B1D0E0A2F000020000000A1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
@@ -762,6 +864,31 @@
 			};
 			name = Release;
 		};
+		4B1D0E0A2F000020000000B2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = KapibaraNotify/KapibaraNotify.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = KapibaraNotify/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ru.uiboshki.app.KapibaraNotify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		4B1D0E0A2F000021000000A1 /* Profile */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
@@ -780,6 +907,31 @@
 				);
 				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = ru.uiboshki.app.KapibaraWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Profile;
+		};
+		4B1D0E0A2F000021000000B2 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = KapibaraNotify/KapibaraNotify.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				INFOPLIST_FILE = KapibaraNotify/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = ru.uiboshki.app.KapibaraNotify;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -826,6 +978,16 @@
 				4B1D0E0A2F00001F000000A1 /* Debug */,
 				4B1D0E0A2F000020000000A1 /* Release */,
 				4B1D0E0A2F000021000000A1 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4B1D0E0A2F00001E000000B2 /* Build configuration list for PBXNativeTarget "KapibaraNotify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4B1D0E0A2F00001F000000B2 /* Debug */,
+				4B1D0E0A2F000020000000B2 /* Release */,
+				4B1D0E0A2F000021000000B2 /* Profile */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
