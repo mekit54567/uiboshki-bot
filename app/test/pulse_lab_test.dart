@@ -10,6 +10,9 @@ void main() {
     expect(pulseSkip.hasMatch('/logout'), isTrue);
     expect(pulseSkip.hasMatch('/students-self-approve/abc'), isTrue);
     expect(pulseSkip.hasMatch('/services/maps'), isFalse);
+    expect(pulseAgo(45 * 60000), '45 мин');
+    expect(pulseAgo((3 * 60 + 20) * 60000), '3 ч 20 мин');
+    expect(pulseAgo((50 * 60) * 60000), '2 дн 2 ч');
     expect(jsString('"{\\"a\\":1}"'), '{"a":1}');
     expect(jsString('12'), '12');
     expect(pulseGoJs('/x"y'), contains('"/x\\"y"'));

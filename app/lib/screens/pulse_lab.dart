@@ -19,6 +19,15 @@ import 'files.dart';
 
 const pulseBase = 'https://pulse.mirea.ru';
 const _loginKey = 'pulse_lab_login_at';
+const _aliveKey = 'pulse_lab_alive_at';
+
+/// «3 ч 20 мин», «45 мин», «2 дн 4 ч».
+String pulseAgo(int ms) {
+  final m = ms ~/ 60000;
+  if (m < 60) return '$m мин';
+  if (m < 24 * 60) return '${m ~/ 60} ч ${m % 60} мин';
+  return '${m ~/ (24 * 60)} дн ${m % (24 * 60) ~/ 60} ч';
+}
 
 /// Страницы, которые обход не открывает: выход, отметка по QR (и экран
 /// преподавателя с QR), правки.
@@ -228,16 +237,31 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
     )
     ..loadRequest(Uri.parse('$pulseBase/'));
 
+  // Сколько на самом деле живёт вход (срок в токене может врать, как было в
+  // СДО): первый вход и последний раз, когда окно было в Пульсе, — на телефоне.
   Future<void> _loaded(String url) async {
     if (!mounted) return;
     setState(() => _url = url);
-    if (!onPulse(url)) return;
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final first = prefs.getInt(_loginKey), alive = prefs.getInt(_aliveKey);
+    if (!onPulse(url)) {
+      if (alive != null && mounted && !_busy) {
+        setState(() => _status = 'Вход слетел или Пульс переспрашивает. Последний раз был в Пульсе ${pulseAgo(now - alive)} назад, '
+            'первый вход — ${pulseAgo(now - (first ?? alive))} назад. Скинь эти цифры Claude.');
+      }
+      return;
+    }
     try {
       await _web.runJavaScript(pulseHookJs);
     } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    if (!prefs.containsKey(_loginKey)) await prefs.setInt(_loginKey, DateTime.now().millisecondsSinceEpoch);
-    if (mounted && !_busy) setState(() => _status = 'Ты в Пульсе. Нажми «Собрать», дальше всё само (около 2 минут).');
+    if (first == null) await prefs.setInt(_loginKey, now);
+    await prefs.setInt(_aliveKey, now);
+    if (mounted && !_busy) {
+      setState(() => _status = first == null
+          ? 'Ты в Пульсе. Нажми «Собрать», дальше всё само (около 2 минут).'
+          : 'Вход жив: с первого входа прошло ${pulseAgo(now - first)}. «Собрать» — снова разведка.');
+    }
   }
 
   Future<Map<String, String>> _links() async {
