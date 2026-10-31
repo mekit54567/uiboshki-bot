@@ -67,10 +67,11 @@ APNs — HTTP/2, пакет `h2` в `requirements.txt`. Запросы идут 
   появляется, только когда человек включил пуши.
 - **RuStore**: переменная `RUSTORE_PROJECT_ID` при сборке (в CI — секрет с
   тем же именем). Без неё SDK RuStore не подключается (`src/norustore` —
-  заглушка): их репозиторий `artifactory-external.vkpartner.ru` из облака
-  разработки не открылся (404 на всё), и сборка без него не должна падать.
-  С ней — `src/rustore` и `ru.rustore.sdk:pushclient:7.2.0`. **Этот вариант
-  ещё ни разу не собирался** — первый раз проверить сборку в CI.
+  заглушка), сборка без неё не падает. С ней — `src/rustore` и
+  `ru.rustore.sdk:pushclient:7.2.0` из репозитория
+  `nexus-external.rustore.ru/repository/maven-rustore-exposed/` (прежний
+  `artifactory-external.vkpartner.ru` пакет не отдаёт — первая сборка с
+  RuStore 31.10 упала на нём).
 
 ### iPhone — что сделать (нужна подпись для App Store)
 
