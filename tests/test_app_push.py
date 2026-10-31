@@ -352,3 +352,41 @@ async def test_revoked_device_gets_no_pushes(db, monkeypatch):
         await conn.commit()
     assert [r["token"] for r in await get_app_pushes(uid)] == ["rustore-token-telegram-1234"]
     assert await get_push_subs(uid) == []
+
+
+@pytest.mark.asyncio
+async def test_push_report_per_device(db, monkeypatch):
+    """/pushtest: по каждому телефону — дошло, отписан, ошибка или канал выключен."""
+    monkeypatch.setenv("RUSTORE_PROJECT_ID", "rs-project")
+    monkeypatch.setenv("RUSTORE_SERVICE_TOKEN", "rs-secret")
+    fake = FakeHttp({"rustore": (503, {"error": {"status": "UNAVAILABLE"}})})
+    monkeypatch.setattr(app_push, "_request", fake)
+    await _register(1, "rustore", "rustore-token-1234567890")
+    await _register(1, "apns", APNS_TOKEN)
+    report = await app_push.push_report(1, DATA)
+    assert [(r["platform"], r["result"]) for r in report] == [("rustore", "error"), ("apns", "off")]
+    fake.answers = {"rustore": (200, {})}
+    assert await app_push.push_user(1, DATA) == 1
+
+
+@pytest.mark.asyncio
+async def test_pushtest_command(db, monkeypatch):
+    from handlers import group_tools
+    sent = []
+
+    class Msg:
+        from_user = type("U", (), {"id": 7})()
+
+        async def answer(self, text, **kw):
+            sent.append(text)
+
+    monkeypatch.setattr(group_tools, "is_starosta", lambda uid: True)
+    await group_tools.cmd_pushtest(Msg())
+    assert "Телефонов с пушами нет" in sent[-1]
+
+    async def report(uid, data):
+        assert "расшифровка" in data["body"]
+        return [{"platform": "apns", "device": "iPhone", "result": "ok"}]
+    monkeypatch.setattr(app_push, "push_report", report)
+    await group_tools.cmd_pushtest(Msg())
+    assert "iPhone (Apple) · iPhone: ✅ ушёл" in sent[-1]

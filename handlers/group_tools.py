@@ -1,5 +1,5 @@
 """Группа: зам старосты (/setzam), рейтинг активности (/rating), здоровье
-бота (/status), проверка Пульса (/pulsecheck, разведка — /pulseprobe), сети (/netcheck), векторов (/embedtest) и статистика (/stats) — у старосты."""
+бота (/status), проверка Пульса (/pulsecheck, разведка — /pulseprobe), сети (/netcheck), пробный пуш на свои телефоны (/pushtest), векторов (/embedtest) и статистика (/stats) — у старосты."""
 
 from aiogram import Router, F
 from aiogram.filters import Command
@@ -187,6 +187,29 @@ async def cmd_netcheck(message: Message):
         return
     import net_check
     await message.answer(net_check.text(await net_check.check(message.bot)), parse_mode="HTML")
+
+
+PUSH_NAMES = {"apns": "iPhone (Apple)", "rustore": "Android (RuStore)", "fcm": "Android (Google)"}
+PUSH_RESULTS = {"ok": "✅ ушёл", "gone": "❌ телефон отписан — включи пуши в приложении заново",
+                "error": "⚠️ сервис не принял — смотри kap logs", "off": "⏸ на сервере нет ключей этого канала"}
+
+
+@router.message(Command("pushtest"))
+async def cmd_pushtest(message: Message):
+    """Пробный пуш на свои телефоны (app_push) — только староста. Текст
+    шифруется, как у настоящих: дошёл с этим текстом — расшифровка работает."""
+    if STAROSTA_ID and not is_starosta(message.from_user.id):
+        return
+    import app_push
+    data = {"title": "Пробный пуш", "body": "Если ты читаешь этот текст — расшифровка на телефоне работает.",
+            "tab": "", "tag": "test"}
+    report = await app_push.push_report(message.from_user.id, data)
+    if not report:
+        await message.answer("Телефонов с пушами нет. В приложении: «Ещё → Уведомления» → включить пуши, потом /pushtest.")
+        return
+    lines = [f"{PUSH_NAMES.get(r['platform'], r['platform'])}{' · ' + esc(r['device']) if r['device'] else ''}: "
+             f"{PUSH_RESULTS.get(r['result'], r['result'])}" for r in report]
+    await message.answer("📲 Пробный пуш\n" + "\n".join(lines), parse_mode="HTML")
 
 
 @router.message(Command("pulsecheck"))

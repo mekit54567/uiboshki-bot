@@ -18,7 +18,8 @@ val rustoreProjectId = (findProperty("rustoreProjectId") ?: System.getenv("RUSTO
 val rustore = rustoreProjectId.isNotEmpty()
 if (rustore) {
     repositories {
-        maven { url = uri("https://artifactory-external.vkpartner.ru/artifactory/maven") }
+        // старый artifactory-external.vkpartner.ru пакеты пушей больше не отдаёт (404, 31.10)
+        maven { url = uri("https://nexus-external.rustore.ru/repository/maven-rustore-exposed/") }
     }
 }
 
