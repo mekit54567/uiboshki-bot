@@ -77,7 +77,7 @@ OpenSSL 3 macOS не всегда понимает.)
 место** (как ключ Android). Сертификат живёт год — потом повторить шаги 3 и 4 и
 заменить секреты.
 
-## 4. Два профиля «App Store Connect»
+## 4. Три профиля «App Store Connect»
 
 **Profiles** → **+** → в разделе Distribution — **App Store Connect** → Continue:
 
@@ -85,8 +85,16 @@ OpenSSL 3 macOS не всегда понимает.)
    Provisioning Profile Name: `Kapibara App Store` → Generate → **Download**.
 2. Ещё раз: App ID — `ru.uiboshki.app.KapibaraWidget` → тот же сертификат →
    Name: `Kapibara Widget App Store` → Generate → **Download**.
+3. И для расширения пушей: сначала **Identifiers** → **+** → App IDs → App →
+   Description `Kapibara Notify`, Bundle ID Explicit `ru.uiboshki.app.KapibaraNotify`,
+   в Capabilities — **App Groups** (потом Edit → группа `group.ru.uiboshki.app`).
+   Затем профиль: App ID `ru.uiboshki.app.KapibaraNotify` → тот же сертификат →
+   Name: `Kapibara Notify App Store` → Generate → **Download**.
 
-Скачаются два файла `.mobileprovision` — положи в `$HOME\kapibara-apple`.
+У App ID `ru.uiboshki.app` должна стоять галочка **Push Notifications** — без неё
+сборка остановится с подсказкой.
+
+Скачаются три файла `.mobileprovision` — положи в `$HOME\kapibara-apple`.
 
 > Поменял Capabilities у App ID (шаг 2) — профили нужно пересоздать (Edit → Save →
 > Download) и заменить секреты. Сборка сама проверит и подскажет, чего не хватает.
@@ -126,6 +134,7 @@ cd $HOME\kapibara-apple
 | `IOS_DIST_CERT_PASSWORD` | пароль p12 из шага 3.3                                                       |
 | `IOS_PROFILE_APP`        | base64 от профиля `Kapibara_App_Store.mobileprovision` (имя файла — как скачался) |
 | `IOS_PROFILE_WIDGET`     | base64 от профиля виджета `Kapibara_Widget_App_Store.mobileprovision`        |
+| `IOS_PROFILE_NOTIFY`     | base64 от профиля пушей `Kapibara_Notify_App_Store.mobileprovision`          |
 | `ASC_KEY_ID`             | Key ID из шага 5                                                             |
 | `ASC_ISSUER_ID`          | Issuer ID из шага 5                                                          |
 | `ASC_KEY_P8`             | весь текст файла `.p8`, вместе со строками `BEGIN`/`END`                      |

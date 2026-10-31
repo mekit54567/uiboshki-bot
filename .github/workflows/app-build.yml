@@ -12,7 +12,7 @@ name: Сборка приложения
 #
 # iPhone: без секретов — IPA без подписи для AltStore/Sideloadly, как раньше.
 # С секретами IOS_DIST_CERT_P12, IOS_DIST_CERT_PASSWORD, IOS_PROFILE_APP,
-# IOS_PROFILE_WIDGET (docs/store/ios-signing.md) — подписанная IPA для App
+# IOS_PROFILE_WIDGET, IOS_PROFILE_NOTIFY (docs/store/ios-signing.md) — подписанная IPA для App
 # Store (в ней «Вход через Apple» и только iPhone, tools/ios_store_signing.py),
 # а при ручном запуске с галочкой «TestFlight» и ключом App Store Connect API
 # (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8) — сразу загрузка в TestFlight.
@@ -134,7 +134,7 @@ jobs:
         working-directory: app
     env:
       # подписываем для App Store только вне pull request и только с секретами
-      STORE: ${{ github.event_name != 'pull_request' && secrets.IOS_DIST_CERT_P12 != '' && secrets.IOS_PROFILE_APP != '' && secrets.IOS_PROFILE_WIDGET != '' }}
+      STORE: ${{ github.event_name != 'pull_request' && secrets.IOS_DIST_CERT_P12 != '' && secrets.IOS_PROFILE_APP != '' && secrets.IOS_PROFILE_WIDGET != '' && secrets.IOS_PROFILE_NOTIFY != '' }}
       VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -161,6 +161,7 @@ jobs:
           # App Group, и виджет не видит данных приложения. Подпись ad-hoc — только
           # чтобы entitlements попали в бинарники (AltStore всё равно переподписывает).
           codesign --force --sign - --entitlements ios/KapibaraWidget/KapibaraWidget.entitlements Payload/Runner.app/PlugIns/KapibaraWidget.appex
+          codesign --force --sign - --entitlements ios/KapibaraNotify/KapibaraNotify.entitlements Payload/Runner.app/PlugIns/KapibaraNotify.appex
           codesign --force --sign - --entitlements ios/Runner/Runner.entitlements Payload/Runner.app
           zip -qr kapibara-${{ github.run_number }}.ipa Payload
 
@@ -171,6 +172,7 @@ jobs:
           CERT_PASS: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
           PROF_APP: ${{ secrets.IOS_PROFILE_APP }}
           PROF_WIDGET: ${{ secrets.IOS_PROFILE_WIDGET }}
+          PROF_NOTIFY: ${{ secrets.IOS_PROFILE_NOTIFY }}
         run: |
           KC="$RUNNER_TEMP/store.keychain-db"
           KP=$(openssl rand -hex 16)
@@ -191,7 +193,7 @@ jobs:
           for d in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
             mkdir -p "$d"
           done
-          for W in APP WIDGET; do
+          for W in APP WIDGET NOTIFY; do
             V="PROF_$W"
             echo "${!V}" | base64 --decode > "$RUNNER_TEMP/$W.mobileprovision"
             security cms -D -i "$RUNNER_TEMP/$W.mobileprovision" > "$RUNNER_TEMP/$W.plist"
@@ -208,9 +210,13 @@ jobs:
             || { echo "::error::IOS_PROFILE_APP — профиль не для App ID ru.uiboshki.app"; exit 1; }
           [ "$(info WIDGET Entitlements:application-identifier)" = "$TEAM.ru.uiboshki.app.KapibaraWidget" ] \
             || { echo "::error::IOS_PROFILE_WIDGET — профиль не для App ID ru.uiboshki.app.KapibaraWidget"; exit 1; }
+          [ "$(info NOTIFY Entitlements:application-identifier)" = "$TEAM.ru.uiboshki.app.KapibaraNotify" ] \
+            || { echo "::error::IOS_PROFILE_NOTIFY — профиль не для App ID ru.uiboshki.app.KapibaraNotify"; exit 1; }
+          [ "$(info APP Entitlements:aps-environment)" = "production" ] \
+            || { echo "::error::У App ID ru.uiboshki.app не включены Push Notifications — включи и пересоздай профиль"; exit 1; }
           info APP Entitlements:com.apple.developer.applesignin > /dev/null \
             || { echo "::error::У App ID ru.uiboshki.app не включён Sign In with Apple — включи и пересоздай профиль"; exit 1; }
-          for W in APP WIDGET; do
+          for W in APP WIDGET NOTIFY; do
             info "$W" Entitlements:com.apple.security.application-groups | grep -q group.ru.uiboshki.app \
               || { echo "::error::IOS_PROFILE_$W без App Group group.ru.uiboshki.app — включи App Groups у App ID и пересоздай профиль"; exit 1; }
           done
@@ -218,6 +224,7 @@ jobs:
             echo "TEAM=$TEAM"
             echo "APP_PROFILE=$(info APP Name)"
             echo "WIDGET_PROFILE=$(info WIDGET Name)"
+            echo "NOTIFY_PROFILE=$(info NOTIFY Name)"
             echo "KC=$KC"
           } >> "$GITHUB_ENV"
 
@@ -225,7 +232,8 @@ jobs:
         if: env.STORE == 'true'
         run: |
           python3 ../tools/ios_store_signing.py ios/Runner.xcodeproj/project.pbxproj \
-            --team "$TEAM" --app-profile "$APP_PROFILE" --widget-profile "$WIDGET_PROFILE"
+            --team "$TEAM" --app-profile "$APP_PROFILE" --widget-profile "$WIDGET_PROFILE" \
+            --notify-profile "$NOTIFY_PROFILE"
           python3 - <<'PY'
           import os, plistlib
           plistlib.dump({
@@ -236,6 +244,7 @@ jobs:
               "provisioningProfiles": {
                   "ru.uiboshki.app": os.environ["APP_PROFILE"],
                   "ru.uiboshki.app.KapibaraWidget": os.environ["WIDGET_PROFILE"],
+                  "ru.uiboshki.app.KapibaraNotify": os.environ["NOTIFY_PROFILE"],
               },
               "uploadSymbols": True,
               "manageAppVersionAndBuildNumber": False,
