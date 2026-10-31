@@ -212,13 +212,18 @@ String? channelName(AppIcon icon, {bool dark = false}) {
   return icon.name;
 }
 
+/// «Сегодня» для праздничной иконки; тесты ставят обычный день, иначе 31.10
+/// у них вместо выбранной — праздничная.
+@visibleForTesting
+DateTime Function() iconClock = DateTime.now;
+
 /// Поставить иконку [want], если на телефоне стоит другая. В праздник
 /// (31.10) — праздничная у всех, на следующий день — снова своя ([holiday]:
 /// при выключенном новом дизайне — нет). Нет канала
 /// (веб, тесты, старая сборка) или система отказала — молча ничего.
 Future<void> syncAppIcon(AppIcon want, {bool dark = false, bool holiday = true, DateTime? now}) async {
   if (!appIconSupported) return;
-  final day = holiday ? AppIcon.seasonal(now ?? DateTime.now()) : null;
+  final day = holiday ? AppIcon.seasonal(now ?? iconClock()) : null;
   final target = channelName(day ?? want, dark: dark);
   try {
     final have = await _channel.invokeMethod<String>('getIcon');

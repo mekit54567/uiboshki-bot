@@ -76,8 +76,12 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({'uib_toured': true});
     AppIcon.unlockForTest = {}; // здесь — про канал и выбор; кто что открывает — icon_unlock_test
+    iconClock = () => DateTime(2026, 10, 8, 10); // обычный день: в праздник иконка своя у всех
   });
-  tearDown(() => AppIcon.unlockForTest = null);
+  tearDown(() {
+    AppIcon.unlockForTest = null;
+    iconClock = DateTime.now;
+  });
 
   testWidgets('на телефоне — выбор иконки: в канал и в настройки; «Вернуть как было» — обычная', (t) async {
     phone(t);
