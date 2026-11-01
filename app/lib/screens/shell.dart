@@ -22,6 +22,8 @@ import 'deadlines.dart';
 import 'group_pick.dart';
 import 'legal.dart';
 import 'more.dart';
+import 'pulse_scan.dart';
+import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'sdo_relogin.dart';
 import 'study.dart';
 import 'today.dart';
@@ -240,6 +242,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     // подписочные иконки — только с подпиской (5.91): plus из /api/me
     // (у своей группы plan остаётся «own» и с подпиской), до него — plan
     AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
+    // кружок QR на «Сегодня» (сканер Пульса, 01.11) — пока у тех, кому открыт эксперимент
+    if (me['lab'] == true && sdoWebLoginAvailable) setState(() => _qr = true);
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;
@@ -274,6 +278,15 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   }
 
   final _bar = GlobalKey();
+  bool _qr = false;
+
+  /// Сканер отметки в Пульсе; отметился — плашка «Есть, ты на паре».
+  Future<void> _scan() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const PulseScanScreen()),
+    );
+    if (ok == true && mounted) showToast(context, 'Есть, ты на паре', kind: ToastKind.done);
+  }
 
   /// Где меню-капсула: верх её коробки, по бокам — отступ Space.l, высота 64
   /// (capsule_tabbar.dart); снизу у коробки ещё отступ до края экрана.
@@ -334,6 +347,23 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
           ),
         ),
       ),
+      // QR — только на «Сегодня», всегда, над меню справа (Никита 01.11)
+      floatingActionButton: _qr && _index == 0
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: Space.s),
+              child: FloatingActionButton.small(
+                key: const Key('today:qr'),
+                heroTag: 'qr',
+                tooltip: 'Отметиться по QR',
+                elevation: 2,
+                backgroundColor: AppStyle.of(context).p.accent,
+                foregroundColor: AppStyle.of(context).p.onAccent,
+                shape: const CircleBorder(),
+                onPressed: _scan,
+                child: const Icon(Icons.qr_code_scanner_rounded),
+              ),
+            )
+          : null,
       bottomNavigationBar: CapsuleTabBar(
         key: _bar,
         items: tabs,
