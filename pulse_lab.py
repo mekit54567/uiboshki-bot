@@ -23,7 +23,8 @@ import pulse_probe
 
 MAX_BODY = 40 * 1024 * 1024      # = предел пути в webapp/server.BODY_LIMITS
 # Подмена скриптов обхода в приложении (ключи — как в PulseKit, app/lib/screens/pulse_lab.dart)
-KIT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulse_lab_kit.json")
+KIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulse_lab_kit")
+KIT_PATH = os.path.join(KIT_DIR, "kit.json")
 KIT_KEYS = {"hook", "scan", "links", "go", "drain", "routes", "dump", "seeds", "skip", "wait_sec", "max_pages"}
 _SECRET_NAME = re.compile(r"authorization|cookie|token|session|secret|password|passwd|key", re.I)
 _JWT = re.compile(r"[\w-]{8,}\.[\w-]{8,}\.[\w-]{8,}")
@@ -154,10 +155,20 @@ def build(report: dict) -> tuple[bytes, str]:
 
 
 def kit() -> dict:
-    """Скрипты обхода из pulse_lab_kit.json (только известные ключи); нет файла — {}."""
+    """Скрипты обхода: pulse_lab_kit/kit.json (числа, списки) и <ключ>.js
+    (hook.js, scan.js…) рядом — только известные ключи; ничего нет — {}."""
+    data = {}
     try:
         with open(KIT_PATH, encoding="utf-8") as f:
-            data = json.load(f)
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            data.update(loaded)
     except (OSError, ValueError):
-        return {}
-    return {k: v for k, v in data.items() if k in KIT_KEYS} if isinstance(data, dict) else {}
+        pass
+    for key in KIT_KEYS:
+        try:
+            with open(os.path.join(os.path.dirname(KIT_PATH), key + ".js"), encoding="utf-8") as f:
+                data[key] = f.read()
+        except OSError:
+            pass
+    return {k: v for k, v in data.items() if k in KIT_KEYS}

@@ -80,7 +80,21 @@ def test_kit_from_file(tmp_path, monkeypatch):
     monkeypatch.setattr(pulse_lab, "KIT_PATH", str(tmp_path / "kit.json"))
     assert pulse_lab.kit() == {}
     (tmp_path / "kit.json").write_text('{"seeds": ["/services"], "wait_sec": 6, "evil": 1}')
-    assert pulse_lab.kit() == {"seeds": ["/services"], "wait_sec": 6}
+    (tmp_path / "hook.js").write_text("(function(){})()")
+    (tmp_path / "evil.js").write_text("x")
+    assert pulse_lab.kit() == {"seeds": ["/services"], "wait_sec": 6, "hook": "(function(){})()"}
+
+
+def test_shipped_hook():
+    """31.10: встроенный перехват не писал ответы «LeSSOns…» (ловил «sso» как вход)."""
+    import re
+    hook = pulse_lab.kit()["hook"]
+    assert "window.__capy.v === 2" in hook
+    authy = re.search(r"var AUTHY = /(.+)/i;", hook).group(1).replace("\\/", "/")
+    for url in ("https://pulse.mirea.ru/rtu_tc.attendance.api.LessonService/GetAvailableLessonsOfVisitingLogs",
+                "https://pulse.mirea.ru/rtu_tc.not_scheduled_lessons.api.StudentLanguageService/GetStudentLanguageState"):
+        assert not re.search(authy, url, re.I)
+    assert re.search(authy, "https://sso.mirea.ru/realms/x/protocol/openid-connect/token", re.I)
 
 
 def test_body_limit_fits_journal():
