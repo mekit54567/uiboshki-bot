@@ -385,6 +385,14 @@ class AttendanceStrip extends StatefulWidget {
   State<AttendanceStrip> createState() => _AttendanceStripState();
 }
 
+/// Откуда посещения (attendance.with_pulse, 01.11): из Пульса — строкой
+/// сверху; Пульс отвалился — что он сказал, осталось, остальное по СДО.
+String? attendanceSource(Map<String, dynamic> att) => switch (att['source']) {
+  'pulse' => 'из Пульса МИРЭА',
+  'pulse_lost' => 'Пульс отвалился — новые лекции считаю по СДО',
+  _ => null,
+};
+
 /// Свои отметки — только у лекций до начала истории: знак «?», уже своя или
 /// «Н», когда плюсики по баллам кончились (attendance.py, то же в sdo.js).
 bool _lectureEditable(Map<String, dynamic> att, Map<String, dynamic> l) {
@@ -423,9 +431,29 @@ class _AttendanceStripState extends State<AttendanceStrip> {
     final tappable = widget.api != null && widget.courseId != null && att['ok'] != false;
     final before = att['before'] as Map?;
     final toMark = lectures.any((l) => l['status'] == 'before');
+    final source = attendanceSource(att);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (source != null) ...[
+          Row(
+            children: [
+              Icon(
+                att['source'] == 'pulse' ? Icons.verified_outlined : Icons.cloud_off_rounded,
+                size: 15,
+                color: att['source'] == 'pulse' ? p.ok : p.warn,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  source,
+                  style: s.body(13, weight: FontWeight.w600, color: att['source'] == 'pulse' ? p.ok : p.warn),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.s),
+        ],
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -565,8 +593,12 @@ class _AttendanceSheetState extends State<AttendanceSheet> {
     final b = a['before'] as Map?;
     final unit = (a['unit'] as num?) ?? 0;
     String hint;
-    if (b == null) {
-      hint = 'Бот отмечает лекции сам — по баллам за посещаемость в СДО.';
+    if (a['source'] == 'pulse') {
+      hint = 'Отметки — из Пульса МИРЭА, как их поставил преподаватель или QR. Сам их не меняешь: что в Пульсе, то и здесь.';
+    } else if (b == null) {
+      hint = a['source'] == 'pulse_lost'
+          ? 'Что Пульс уже сказал, осталось. Новые лекции бот отмечает по баллам за посещаемость в СДО.'
+          : 'Бот отмечает лекции сам — по баллам за посещаемость в СДО.';
     } else {
       final open = ((b['left_ok'] as num?) ?? 0) > 0 || ((b['left_excused'] as num?) ?? 0) > 0;
       hint =

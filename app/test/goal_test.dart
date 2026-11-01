@@ -127,4 +127,11 @@ void main() {
     await t.scrollUntilVisible(find.text('+8 за неделю'), 300, scrollable: list);
     await settle(t);
   });
+
+  test('откуда посещения: Пульс или СДО', () {
+    expect(attendanceSource({'source': 'pulse'}), 'из Пульса МИРЭА');
+    expect(attendanceSource({'source': 'pulse_lost'}), contains('по СДО'));
+    expect(attendanceSource({'source': 'sdo'}), isNull);
+    expect(attendanceSource({}), isNull);
+  });
 }

@@ -146,6 +146,10 @@ async def connect_from_app(user_id: int, raw_cookie: str) -> dict:
         return {"state": "network", "error": type(e).__name__}
     if state == "ok":
         await save(user_id, cookie)
+        import asyncio
+
+        import pulse_attendance                 # первые посещения — сразу, фоном
+        asyncio.get_running_loop().create_task(pulse_attendance.sync_due(user_id))
     return {"state": state}
 
 
@@ -185,3 +189,6 @@ async def keepalive_due(now: datetime | None = None):
         rows = [dict(r) for r in await cur.fetchall()]
     for row in rows:
         await _check_one(row, now)
+        import pulse_attendance                 # посещения лекций — заодно, не чаще раза в 3 ч
+        if await cookie_for(row["user_id"]):
+            await pulse_attendance.sync_due(row["user_id"])

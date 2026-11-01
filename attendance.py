@@ -178,7 +178,46 @@ async def for_course(user_id: int, course: dict, manual: dict[str, str] | None =
     if manual is None:
         manual = await get_attendance_marks(user_id, course["id"])
     score = cat.get("score") if cat.get("set", True) else None     # «-» у преподавателя ≠ 0 баллов
-    return dict(build(score, float(cat["max"]), lectures, history, today, manual), subject=subject)
+    res = dict(build(score, float(cat["max"]), lectures, history, today, manual), subject=subject)
+    marks, state = await _pulse(user_id, subject, subjects)
+    return with_pulse(res, marks, state, today)
+
+
+async def _pulse(user_id: int, subject: str, subjects: list[str]) -> tuple[dict[str, str], str]:
+    """Отметки Пульса по лекциям предмета и состояние входа (pulse_accounts)."""
+    import pulse_accounts
+    import pulse_attendance
+    from sdo_files import match_subject
+    rows = await pulse_attendance.stored(user_id)
+    state = (await pulse_accounts.status_for(user_id)).get("state", "off")
+    return pulse_attendance.lecture_marks(rows, subject, lambda n: match_subject(n, subjects)), state
+
+
+def with_pulse(res: dict, marks: dict[str, str], state: str, today: date) -> dict:
+    """Пульс поверх баллов СДО (Никита 01.11): что сказал Пульс — то и есть,
+    своих отметок там нет. Пульс подключён — свои «?» не нужны вовсе
+    (непроверенные лекции ждут Пульс). Отвалился — сказанное Пульсом остаётся,
+    остальное — по СДО, как раньше."""
+    if not res.get("ok"):
+        return dict(res, source="sdo")
+    live = state == "ok"
+    if not marks and not live:
+        return dict(res, source="sdo")
+    lect = []
+    for x in res["lectures"]:
+        st = marks.get(x["date"])
+        if st and x["date"] <= today.isoformat():
+            x = dict(x, status=st, manual=False, pulse=True)
+        elif live and x["status"] == "before":
+            x = dict(x, status="wait", manual=False)
+        lect.append(x)
+    out = dict(res, lectures=lect, source="pulse" if live else "pulse_lost",
+               attended=sum(1 for x in lect if x["status"] == "ok"),
+               excused=sum(1 for x in lect if x["status"] == "excused"),
+               waiting=sum(1 for x in lect if x["status"] == "wait"))
+    if live or not any(x["status"] == "before" for x in lect):
+        out.pop("before", None)
+    return out
 
 
 def check_mark(blank: dict | None, marks: dict[str, str], day: str, mark: str | None) -> str:
