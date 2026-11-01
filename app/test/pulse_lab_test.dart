@@ -30,4 +30,10 @@ void main() {
     expect(k.skip.hasMatch('/logout'), isTrue);
     expect(pulseGoJs('/a', 'go(__PATH__)'), 'go("/a")');
   });
+
+  test('ответ сервера про вход в Пульс — словами', () {
+    expect(pulseServerWord({'state': 'ok'}), contains('пускают'));
+    expect(pulseServerWord({'state': 'blocked'}), contains('DDoS-Guard'));
+    expect(pulseServerWord({'state': 'network', 'error': 'ConnectTimeout'}), contains('ConnectTimeout'));
+  });
 }

@@ -117,6 +117,22 @@ class CookiesPlugin: NSObject, FlutterPlugin {
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // «header» (01.11, вход в Пульс на сервере): все куки сайта строкой Cookie
+    if call.method == "header",
+       let args = call.arguments as? [String: Any],
+       let url = args["url"] as? String,
+       let host = URL(string: url)?.host {
+      DispatchQueue.main.async {
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { all in
+          let pairs = all.filter { c in
+            let domain = c.domain.hasPrefix(".") ? String(c.domain.dropFirst()) : c.domain
+            return host == domain || host.hasSuffix("." + domain)
+          }.map { "\($0.name)=\($0.value)" }
+          result(pairs.joined(separator: "; "))
+        }
+      }
+      return
+    }
     guard call.method == "get",
           let args = call.arguments as? [String: Any],
           let url = args["url"] as? String,
