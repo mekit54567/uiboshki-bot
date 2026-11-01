@@ -365,6 +365,20 @@ async def init_db():
                 await db.execute(f"ALTER TABLE sdo_sessions ADD COLUMN {col}")
             except Exception:
                 pass  # колонка уже есть
+        # Вход в Пульс МИРЭА (31.10, pulse_accounts.py): кука сайта Пульса,
+        # зашифрована тем же ключом, что входы СДО; сервер держит её проверкой
+        # по таймеру (PULSE_KEEPALIVE_MIN), как СДО.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pulse_sessions (
+                user_id       INTEGER PRIMARY KEY,
+                cookie_enc    TEXT NOT NULL,
+                status        TEXT NOT NULL DEFAULT 'ok',
+                created_at    TEXT DEFAULT (datetime('now')),
+                checked_at    TEXT DEFAULT (datetime('now')),
+                next_check_at TEXT,
+                alive_until   TEXT
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS pinned_targets (
                 user_id     INTEGER NOT NULL,

@@ -5,10 +5,13 @@
 // Пульса, записывает запросы сайта и ответы (только чтение, только свои
 // данные), а вместо токенов и кук пишет их форму — длину и срок жизни.
 // Журнал уходит на сервер (/pulse/lab), тот присылает архив в бота.
-// Вход живёт только в окне на телефоне — сервер его не хранит.
+// «Серверу» (01.11): куки сайта Пульса (HttpOnly — каналом uiboshki/cookies)
+// уходят на /pulse/connect: сервер проверяет, пускает ли его Пульс, и держит
+// вход зашифрованным, как СДО (pulse_accounts.py).
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -20,6 +23,17 @@ import 'files.dart';
 const pulseBase = 'https://pulse.mirea.ru';
 const _loginKey = 'pulse_lab_login_at';
 const _aliveKey = 'pulse_lab_alive_at';
+const _cookies = MethodChannel('uiboshki/cookies');
+
+/// Ответ /pulse/connect человеческими словами.
+String pulseServerWord(Map r) => switch ('${r['state']}') {
+  'ok' => 'Сервер пускают: вход сохранён, держу его, как СДО.',
+  'blocked' => 'Сервер Пульс не пускает (DDoS-Guard) — данные будет читать телефон.',
+  'expired' => 'Пульс не принял вход с сервера — пришли скрин Claude.',
+  'empty' => 'Куки Пульса не нашлись — войди в Пульс в окне ниже.',
+  'network' => 'Сервер не достучался до Пульса: ${r['error'] ?? 'сеть'}.',
+  _ => 'Сервер ответил: ${r['state']}',
+};
 
 /// «3 ч 20 мин», «45 мин», «2 дн 4 ч».
 String pulseAgo(int ms) {
@@ -491,6 +505,22 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
     }
   }
 
+  Future<void> _toServer() async {
+    setState(() {
+      _busy = true;
+      _status = 'Передаю вход серверу…';
+    });
+    try {
+      final header = await _cookies.invokeMethod<String>('header', {'url': pulseBase}) ?? '';
+      final r = await widget.api.post('/pulse/connect', {'cookie': header});
+      if (mounted) setState(() => _status = pulseServerWord(r as Map));
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Не вышло: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
@@ -514,6 +544,12 @@ class _PulseLabScreenState extends State<PulseLabScreen> {
                 children: [
                   Expanded(child: Text(_status, style: s.body(13, color: p.muted))),
                   const SizedBox(width: Space.s),
+                  OutlinedButton(
+                    key: const Key('pulse:server'),
+                    onPressed: ready ? _toServer : null,
+                    child: const Text('Серверу'),
+                  ),
+                  const SizedBox(width: Space.xs),
                   FilledButton(
                     key: const Key('pulse:collect'),
                     onPressed: ready ? _collect : null,

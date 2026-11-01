@@ -68,6 +68,9 @@ class MainActivity : FlutterActivity() {
         PushBridge.fromIntent(intent, running = false)
         // вход в СДО страницей (5.93.2): кука MoodleSession — HttpOnly, из Dart её не видно
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "uiboshki/cookies").setMethodCallHandler { call, result ->
+            if (call.method == "header") {   // все куки сайта строкой Cookie (вход в Пульс на сервере)
+                return@setMethodCallHandler result.success(CookieManager.getInstance().getCookie(call.argument<String>("url") ?: "").orEmpty())
+            }
             if (call.method != "get") return@setMethodCallHandler result.notImplemented()
             val url = call.argument<String>("url") ?: ""
             val name = call.argument<String>("name") ?: ""
