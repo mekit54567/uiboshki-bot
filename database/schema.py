@@ -505,6 +505,21 @@ async def init_db():
                 PRIMARY KEY (user_id, course_id, day)
             )
         """)
+        # Отметки по лекциям из Пульса (pulse_attendance.py, 01.11): храним,
+        # чтобы после «Пульс отвалился» прошлые лекции остались как сказал Пульс.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS pulse_attendance (
+                user_id    INTEGER NOT NULL,
+                lesson_id  TEXT NOT NULL,
+                day        TEXT NOT NULL,
+                subject    TEXT NOT NULL DEFAULT '',
+                kind       TEXT NOT NULL DEFAULT '',
+                status     TEXT,
+                raw        TEXT,
+                checked_at TEXT,
+                PRIMARY KEY (user_id, lesson_id)
+            )
+        """)
         # Свои отметки «был / по уважительной» для лекций до начала истории
         # посещаемости (attendance.py) — только для показа в боте, на СДО не
         # влияют.

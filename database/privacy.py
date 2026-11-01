@@ -201,7 +201,7 @@ async def request_erase(user_id: int, due: str):
     пуши и вход в СДО; остальное стирает erase_user в день due."""
     async with connect() as db:
         await db.execute("INSERT OR REPLACE INTO erase_requests (user_id, due) VALUES (?, ?)", (user_id, due))
-        for table in ("consents", "sessions", "push_subs", "app_push", "sdo_sessions", "pulse_sessions"):
+        for table in ("consents", "sessions", "push_subs", "app_push", "sdo_sessions", "pulse_sessions", "pulse_attendance"):
             await db.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
         # восстановили — согласие спросят заново, «был до согласий» больше не в счёт
         await db.execute("UPDATE users SET legacy=0, consent_asked=NULL WHERE user_id=?", (user_id,))

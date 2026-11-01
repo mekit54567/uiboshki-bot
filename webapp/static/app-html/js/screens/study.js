@@ -420,7 +420,9 @@ function stAttendance(att, color) {
   };
   const toMark = lectures.some((l) => l.status === "before");
   const b = att.before;
-  return `<div class="st-lecs">${lectures.map(box).join("")}</div>
+  // откуда посещения (attendance.with_pulse, 01.11) — как attendanceSource в приложении
+  const src = { pulse: ["из Пульса МИРЭА", "var(--ok)"], pulse_lost: ["Пульс отвалился — новые лекции считаю по СДО", "var(--warn)"] }[att.source];
+  return `${src ? `<div class="bd b6" style="--sz:13px;color:${src[1]};margin-bottom:var(--s)">${src[0]}</div>` : ""}<div class="st-lecs">${lectures.map(box).join("")}</div>
     <div class="bd mut" style="--sz:13px;margin-top:var(--s)">был на ${att.attended ?? 0} из ${att.past ?? 0} прошедших · всего ${total}${
       (att.waiting || 0) > 0 ? ` · ждём балл за ${att.waiting}` : ""}</div>
     ${att.ok !== false ? `<div class="row st-att-more" style="${toMark ? `color:${color}` : ""}">

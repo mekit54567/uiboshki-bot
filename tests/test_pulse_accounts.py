@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 import pulse_accounts
+import pulse_attendance
 import pulse_probe
 from tests.test_pulse_probe import ME
 
@@ -47,6 +48,10 @@ async def test_connect_keepalive_expire(db, monkeypatch):
         assert cookie == "sid=abc"
         return answers[0]
     monkeypatch.setattr(pulse_accounts, "check", fake_check)
+
+    async def no_sync(uid, now=None):
+        return None
+    monkeypatch.setattr(pulse_attendance, "sync_due", no_sync)
     answers[0] = "blocked"
     assert (await pulse_accounts.connect_from_app(1, "sid=abc"))["state"] == "blocked"
     assert (await pulse_accounts.status_for(1))["state"] == "off"      # сервер не пускают — не храним
@@ -83,6 +88,10 @@ def test_endpoints_only_for_starosta(db, monkeypatch):
     async def fake_check(cookie):
         return "ok"
     monkeypatch.setattr(pulse_accounts, "check", fake_check)
+
+    async def no_sync(uid, now=None):
+        return None
+    monkeypatch.setattr(pulse_attendance, "sync_due", no_sync)
     c = TestClient(server.app)
     other = {"X-Telegram-Init-Data": _make_init_data(user={"id": 222, "first_name": "U"})}
     me = {"X-Telegram-Init-Data": _make_init_data(user={"id": STAROSTA_ID, "first_name": "N"})}
