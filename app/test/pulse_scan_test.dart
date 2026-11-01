@@ -1,5 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uiboshki/screens/pulse_scan.dart';
+import 'package:uiboshki/theme/app_theme.dart';
+
+import 'util.dart';
 
 void main() {
   const t = '01a04906-839e-7381-bb78-2a9f41f05f37';
@@ -25,5 +29,29 @@ void main() {
     expect(pulseMarkOf('Срок действия QR-кода истёк', page, []), PulseMark.failed);
     expect(pulseMarkOf('', 'https://sso.mirea.ru/realms/x/login', []), PulseMark.login);
     expect(pulseMarkOf('Загрузка', page, []), PulseMark.unknown);
+  });
+
+  testWidgets('подсказка и рамка — на весь экран, а не в полоске сверху', (t) async {
+    // 01.11: Stack сжимался до высоты ряда кнопок — ниже был чёрный экран
+    phone(t);
+    await t.pumpWidget(AppStyle(
+      p: Palette.notebook,
+      font: FontChoice.book,
+      child: MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(child: PulseScanOverlay(hint: 'Наведи на QR', busy: false, onClose: () {}, onTorch: () {})),
+            ],
+          ),
+        ),
+      ),
+    ));
+    await t.pump();
+    final hint = t.getRect(find.text('Наведи на QR'));
+    expect(hint.top, greaterThan(844 * 0.5));
+    expect(t.getRect(find.byKey(const Key('scan:close'))).top, lessThan(120));
   });
 }

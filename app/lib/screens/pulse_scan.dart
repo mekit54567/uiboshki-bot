@@ -135,13 +135,15 @@ class _PulseScanScreenState extends State<PulseScanScreen> {
     final loaded = Completer<void>();
     final web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) => _web?.runJavaScript(_markHookJs).catchError((_) {}),
-        onPageFinished: (_) {
-          _web?.runJavaScript(_markHookJs).catchError((_) {});
-          if (!loaded.isCompleted) loaded.complete();
-        },
-      ));
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) => _web?.runJavaScript(_markHookJs).catchError((_) {}),
+          onPageFinished: (_) {
+            _web?.runJavaScript(_markHookJs).catchError((_) {});
+            if (!loaded.isCompleted) loaded.complete();
+          },
+        ),
+      );
     setState(() => _web = web);
     await web.loadRequest(url);
     await loaded.future.timeout(const Duration(seconds: 15), onTimeout: () {});
@@ -152,7 +154,9 @@ class _PulseScanScreenState extends State<PulseScanScreen> {
         final m = jsonDecode(jsString(await web.runJavaScriptReturningResult(_readJs))) as Map;
         _pageText = '${m['text'] ?? ''}'.replaceAll(RegExp(r'\s+'), ' ').trim();
         if (_pageText.length > 120) _pageText = '${_pageText.substring(0, 120)}…';
-        last = pulseMarkOf('${m['text'] ?? ''}', '${m['url'] ?? ''}', [for (final c in m['calls'] as List? ?? []) c as Map]);
+        last = pulseMarkOf('${m['text'] ?? ''}', '${m['url'] ?? ''}', [
+          for (final c in m['calls'] as List? ?? []) c as Map,
+        ]);
       } catch (_) {
         continue;
       }
@@ -165,13 +169,12 @@ class _PulseScanScreenState extends State<PulseScanScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
-    final p = s.p;
-    final size = MediaQuery.sizeOf(context);
-    final box = (size.width * 0.66).clamp(200.0, 320.0);
-    final top = size.height * 0.30;
     return Scaffold(
       backgroundColor: Colors.black,
+      // fit: expand — иначе Stack берёт высоту ряда кнопок, и всё ниже
+      // обрезается (01.11: на iPhone камера была полоской сверху)
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Positioned.fill(
             child: MobileScanner(
@@ -191,58 +194,13 @@ class _PulseScanScreenState extends State<PulseScanScreen> {
               ),
             ),
           ),
-          // затемнение вокруг рамки
+          // всё поверх камеры — отдельным виджетом (тест проверяет раскладку)
           Positioned.fill(
-            child: CustomPaint(painter: _Mask(Rect.fromLTWH((size.width - box) / 2, top, box, box), p.accent)),
-          ),
-          // капибара выглядывает из-за верхнего края рамки
-          Positioned(
-            left: (size.width - 84) / 2,
-            top: top - 70,
-            child: CapyImage(pose: CapyPose.day, size: 84, color: p.accent),
-          ),
-          Positioned(
-            left: Space.xl,
-            right: Space.xl,
-            top: top + box + Space.xl,
-            child: Column(
-              children: [
-                Text(
-                  _hint,
-                  textAlign: TextAlign.center,
-                  style: s.body(17, weight: FontWeight.w700, color: Colors.white),
-                ),
-                const SizedBox(height: Space.s),
-                Text(
-                  'отметка уйдёт с твоего входа в Пульс',
-                  textAlign: TextAlign.center,
-                  style: s.body(13, color: Colors.white70),
-                ),
-                if (_busy) ...[
-                  const SizedBox(height: Space.l),
-                  CircularProgressIndicator(color: p.accent),
-                ],
-              ],
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(Space.l),
-              child: Row(
-                children: [
-                  _RoundButton(
-                    key: const Key('scan:close'),
-                    icon: Icons.close_rounded,
-                    onTap: () => Navigator.of(context).pop(false),
-                  ),
-                  const Spacer(),
-                  _RoundButton(
-                    key: const Key('scan:torch'),
-                    icon: Icons.flashlight_on_rounded,
-                    onTap: () => _cam.toggleTorch(),
-                  ),
-                ],
-              ),
+            child: PulseScanOverlay(
+              hint: _hint,
+              busy: _busy,
+              onClose: () => Navigator.of(context).pop(false),
+              onTorch: () => _cam.toggleTorch(),
             ),
           ),
           // невидимое окно отметки: платформенному окну нужен размер, поэтому 1×1 и прозрачно
@@ -260,6 +218,86 @@ class _PulseScanScreenState extends State<PulseScanScreen> {
   }
 }
 
+/// Поверх камеры: вуаль с рамкой, капибара, подсказка, кнопки.
+class PulseScanOverlay extends StatelessWidget {
+  final String hint;
+  final bool busy;
+  final VoidCallback onClose, onTorch;
+  const PulseScanOverlay({
+    super.key,
+    required this.hint,
+    required this.busy,
+    required this.onClose,
+    required this.onTorch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return LayoutBuilder(
+      builder: (context, c) {
+        final size = c.biggest;
+        final box = (size.width * 0.66).clamp(200.0, 320.0);
+        final top = size.height * 0.30;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // затемнение вокруг рамки
+            Positioned.fill(
+              child: CustomPaint(painter: _Mask(Rect.fromLTWH((size.width - box) / 2, top, box, box), p.accent)),
+            ),
+            // капибара выглядывает из-за верхнего края рамки
+            Positioned(
+              left: (size.width - 84) / 2,
+              top: top - 70,
+              child: CapyImage(pose: CapyPose.day, size: 84, color: p.accent),
+            ),
+            Positioned(
+              left: Space.xl,
+              right: Space.xl,
+              top: top + box + Space.xl,
+              child: Column(
+                children: [
+                  Text(
+                    hint,
+                    textAlign: TextAlign.center,
+                    style: s.body(17, weight: FontWeight.w700, color: Colors.white),
+                  ),
+                  const SizedBox(height: Space.s),
+                  Text(
+                    'отметка уйдёт с твоего входа в Пульс',
+                    textAlign: TextAlign.center,
+                    style: s.body(13, color: Colors.white70),
+                  ),
+                  if (busy) ...[const SizedBox(height: Space.l), CircularProgressIndicator(color: p.accent)],
+                ],
+              ),
+            ),
+            Positioned(
+              left: 0,
+              top: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(Space.l),
+                  child: Row(
+                    children: [
+                      _RoundButton(key: const Key('scan:close'), icon: Icons.close_rounded, onTap: onClose),
+                      const Spacer(),
+                      _RoundButton(key: const Key('scan:torch'), icon: Icons.flashlight_on_rounded, onTap: onTorch),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _RoundButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
@@ -272,7 +310,10 @@ class _RoundButton extends StatelessWidget {
     child: InkWell(
       customBorder: const CircleBorder(),
       onTap: onTap,
-      child: Padding(padding: const EdgeInsets.all(10), child: Icon(icon, color: Colors.white, size: 22)),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Icon(icon, color: Colors.white, size: 22),
+      ),
     ),
   );
 }
@@ -298,10 +339,26 @@ class _Mask extends CustomPainter {
     const k = 46.0;
     final (l, t, rt, b) = (hole.left, hole.top, hole.right, hole.bottom);
     for (final path in [
-      Path()..moveTo(l, t + k)..lineTo(l, t + 28)..arcToPoint(Offset(l + 28, t), radius: const Radius.circular(28))..lineTo(l + k, t),
-      Path()..moveTo(rt - k, t)..lineTo(rt - 28, t)..arcToPoint(Offset(rt, t + 28), radius: const Radius.circular(28))..lineTo(rt, t + k),
-      Path()..moveTo(l, b - k)..lineTo(l, b - 28)..arcToPoint(Offset(l + 28, b), radius: const Radius.circular(28), clockwise: false)..lineTo(l + k, b),
-      Path()..moveTo(rt - k, b)..lineTo(rt - 28, b)..arcToPoint(Offset(rt, b - 28), radius: const Radius.circular(28), clockwise: false)..lineTo(rt, b - k),
+      Path()
+        ..moveTo(l, t + k)
+        ..lineTo(l, t + 28)
+        ..arcToPoint(Offset(l + 28, t), radius: const Radius.circular(28))
+        ..lineTo(l + k, t),
+      Path()
+        ..moveTo(rt - k, t)
+        ..lineTo(rt - 28, t)
+        ..arcToPoint(Offset(rt, t + 28), radius: const Radius.circular(28))
+        ..lineTo(rt, t + k),
+      Path()
+        ..moveTo(l, b - k)
+        ..lineTo(l, b - 28)
+        ..arcToPoint(Offset(l + 28, b), radius: const Radius.circular(28), clockwise: false)
+        ..lineTo(l + k, b),
+      Path()
+        ..moveTo(rt - k, b)
+        ..lineTo(rt - 28, b)
+        ..arcToPoint(Offset(rt, b - 28), radius: const Radius.circular(28), clockwise: false)
+        ..lineTo(rt, b - k),
     ]) {
       canvas.drawPath(path, pen);
     }
