@@ -15,6 +15,14 @@ MOVED = {
     "deadline_reminders": "kapibara.features.deadlines.reminders",
     "deadline_soon": "kapibara.features.deadlines.soon",
     "quiz_time": "kapibara.features.deadlines.quiz_time",
+    "achievements": "kapibara.features.social.achievements",
+    "group_award": "kapibara.features.social.group_award",
+    "lesson_comments": "kapibara.features.social.comments",
+    "lesson_reactions": "kapibara.features.social.reactions",
+    "nick_filter": "kapibara.features.social.nick_filter",
+    "teacher_rating": "kapibara.features.social.teacher_rating",
+    "ugc": "kapibara.features.social.ugc",
+    "xp": "kapibara.features.social.xp",
 }
 
 
