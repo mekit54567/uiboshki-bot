@@ -1,9 +1,24 @@
 """Схема базы: таблицы, индексы, миграции (init_db)."""
 
 import logging
+import sqlite3
 
 from config import STAROSTA_ID
 from database._conn import connect
+
+
+async def _add_column(db, table: str, decl: str) -> bool:
+    """ALTER TABLE … ADD COLUMN, только если такой колонки ещё нет (02.11).
+    → True, если добавили: то, что делается один раз для новой колонки,
+    делаем под `if`. Раньше было `try: ALTER … except Exception: pass` —
+    любая ошибка (замок, диск, опечатка) молча считалась «колонка уже есть».
+    Таблицы ещё нет (её создают ниже, второй заход добавит) — пропускаем."""
+    name = decl.split()[0]
+    cols = {r[1] for r in await (await db.execute(f"PRAGMA table_info({table})")).fetchall()}
+    if not cols or name in cols:
+        return False
+    await db.execute(f"ALTER TABLE {table} ADD COLUMN {decl}")
+    return True
 
 
 async def init_db():
@@ -41,41 +56,26 @@ async def init_db():
             )
         """)
         # Миграция для баз, созданных до появления external_id (автосинк СДО).
-        try:
-            await db.execute("ALTER TABLE deadlines ADD COLUMN external_id TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "deadlines", "external_id TEXT")
         # Дедлайн отредактирован вручную (староста поправил название/срок
         # задания из СДО) — автосинк его больше не перезаписывает.
-        try:
-            await db.execute("ALTER TABLE deadlines ADD COLUMN manual_edit INTEGER DEFAULT 0")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "deadlines", "manual_edit INTEGER DEFAULT 0")
         # Личный дедлайн старосты (из WebApp): created_by старосты иначе = общий.
-        try:
-            await db.execute("ALTER TABLE deadlines ADD COLUMN personal INTEGER DEFAULT 0")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "deadlines", "personal INTEGER DEFAULT 0")
 
         # Персональный токен подписки на ICS-календарь (Фаза 12) — каждому
         # студенту своя приватная ссылка, не одна общая на группу. Генерится
         # лениво при первом /calendar (см. get_or_create_calendar_token), не
         # при регистрации — чтобы не плодить токены тем, кто им не пользуется.
         # Конструктор уведомлений (notify_prefs.py): JSON, пусто — умолчания
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN notify TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "users", "notify TEXT")
         # Группа человека (этап 1: любая группа института) — id на зеркале
         # расписания МИРЭА. Колонка новая — всех, кто уже есть, записываем в
         # свою группу (до этого бот был только для неё); новые выбирают сами.
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN group_id INTEGER")
+        if await _add_column(db, "users", "group_id INTEGER"):          # колонка новая — один раз
             from config import HOME_GROUP_ID
             if HOME_GROUP_ID:
                 await db.execute("UPDATE users SET group_id = ?", (HOME_GROUP_ID,))
-        except Exception:
-            pass  # колонка уже есть
         await db.execute("""
             CREATE TABLE IF NOT EXISTS groups (
                 id         INTEGER PRIMARY KEY,
@@ -87,10 +87,7 @@ async def init_db():
         # Общие данные — по группам (этап 1 (б)): NULL — своя группа (всё,
         # что было до этапа 1). Старосты чужих групп — group_admins.
         for table in ("deadlines", "files", "lesson_notes"):
-            try:
-                await db.execute(f"ALTER TABLE {table} ADD COLUMN group_id INTEGER")
-            except Exception:
-                pass  # колонка уже есть (или таблица создаётся ниже — тогда добавит второй заход)
+            await _add_column(db, table, "group_id INTEGER")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS group_admins (
                 group_id   INTEGER NOT NULL,
@@ -211,10 +208,7 @@ async def init_db():
         # «Безопасности» — пуши туда больше не идут (аудит 21.10, R3). NULL —
         # Mini App в Telegram или подписка до этой колонки.
         for table in ("push_subs", "app_push"):
-            try:
-                await db.execute(f"ALTER TABLE {table} ADD COLUMN session_id INTEGER")
-            except Exception:
-                pass  # колонка уже есть
+            await _add_column(db, table, "session_id INTEGER")
         # Подписка (ИИ сверх базы): до какой даты; source — откуда (вручную
         # старостой, оплата — потом)
         await db.execute("""
@@ -225,16 +219,13 @@ async def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN calendar_token TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "users", "calendar_token TEXT")
         try:
             await db.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token)"
             )
-        except Exception:
-            pass
+        except sqlite3.IntegrityError as e:     # одинаковые токены у двух людей — индекс не встанет
+            logging.getLogger(__name__).warning(f"календарь: уникальность токенов не включена: {e}")
 
         # Статус "выполнено" раньше был общим на всех (колонка deadlines.done),
         # теперь — персональный для каждого пользователя (свой чек-марк не влияет
@@ -257,10 +248,7 @@ async def init_db():
                 "SELECT id, ? FROM deadlines WHERE done = 1",
                 (STAROSTA_ID,)
             )
-        try:        # via='sdo' — сдачу подтвердило СДО (sdo_done), а не галочка: в счёт опыта (xp.py)
-            await db.execute("ALTER TABLE deadline_done ADD COLUMN via TEXT")
-        except Exception:
-            pass  # уже есть
+        await _add_column(db, "deadline_done", "via TEXT")   # via='sdo' — сдачу подтвердило СДО (sdo_done), а не галочка: в счёт опыта (xp.py)
         # Рейтинг (xp.py, 5.100.3): свой ник и «показывать меня в рейтинге»
         # (по умолчанию нет). reviewed — Никита видел ник (/nicks), locked —
         # свой ник ставить нельзя (после сброса).
@@ -275,16 +263,10 @@ async def init_db():
             )
         """)
         # «Показывать меня всем» (5.100.5): виден и тем, кто открыл группу из рейтинга
-        try:
-            await db.execute("ALTER TABLE rating_profiles ADD COLUMN show_all INTEGER NOT NULL DEFAULT 0")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "rating_profiles", "show_all INTEGER NOT NULL DEFAULT 0")
         # «Капибара №…» — ник для чужих групп, если свой не задан: случайный
         # номер, без связи с id и именем (ревью 152-ФЗ 18.10)
-        try:
-            await db.execute("ALTER TABLE rating_profiles ADD COLUMN alias INTEGER")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "rating_profiles", "alias INTEGER")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -308,21 +290,12 @@ async def init_db():
         """)
         # Тип файла внутри предмета (лекции/практики/КР/…, см. file_categories).
         # NULL у старых файлов — тип определяется по названию на лету.
-        try:
-            await db.execute("ALTER TABLE files ADD COLUMN category TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "files", "category TEXT")
         # Название до /tidyfiles («Лекция 3» вместо «ЛК3_бизнес») — для отката
-        try:
-            await db.execute("ALTER TABLE files ADD COLUMN orig_title TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "files", "orig_title TEXT")
         # Откуда файл пришёл автоматически ("sdo:<cmid>:<имя>" — выгрузка из
         # СДО, см. sdo_files.py): повторная выгрузка не плодит дубли.
-        try:
-            await db.execute("ALTER TABLE files ADD COLUMN source TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "files", "source TEXT")
         # Закреплённые в поиске WebApp группы/преподаватели/аудитории —
         # в базе, а не в браузере: видны с телефона и с компьютера.
         await db.execute("""
@@ -361,10 +334,7 @@ async def init_db():
         # via — как вошёл (page — страницей СДО в приложении, silent — приложение
         # само обновило протухший вход, paste — вставкой куки; 5.102.0)
         for col in ("next_check_at TEXT", "jitter_left INTEGER DEFAULT 3", "share INTEGER DEFAULT 0", "via TEXT"):
-            try:
-                await db.execute(f"ALTER TABLE sdo_sessions ADD COLUMN {col}")
-            except Exception:
-                pass  # колонка уже есть
+            await _add_column(db, "sdo_sessions", col)
         # Вход в Пульс МИРЭА (31.10, pulse_accounts.py): кука сайта Пульса,
         # зашифрована тем же ключом, что входы СДО; сервер держит её проверкой
         # по таймеру (PULSE_KEEPALIVE_MIN), как СДО.
@@ -626,10 +596,7 @@ async def init_db():
 
         # Отпечаток текста лекции (этап 1 (в)): та же лекция у другой группы —
         # готовый конспект без ИИ. Старым строкам — посчитать один раз.
-        try:
-            await db.execute("ALTER TABLE file_text ADD COLUMN text_hash TEXT")
-        except Exception:
-            pass  # уже есть
+        await _add_column(db, "file_text", "text_hash TEXT")
         rows = await (await db.execute("SELECT file_id, content FROM file_text WHERE text_hash IS NULL")).fetchall()
         if rows:
             from database.files import text_hash
@@ -641,10 +608,7 @@ async def init_db():
         # SQLite читал десятки МБ с медленного диска Amvera (17.10: 36 с)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_file_text_chars ON file_text(char_count)")
         for table in ("deadlines", "files", "lesson_notes"):
-            try:
-                await db.execute(f"ALTER TABLE {table} ADD COLUMN group_id INTEGER")
-            except Exception:
-                pass  # уже есть
+            await _add_column(db, table, "group_id INTEGER")
 
         # 152-ФЗ (privacy.py): согласия по версиям текста и последний заход —
         # от него срок хранения (год без заходов — данные удаляются).
@@ -668,20 +632,12 @@ async def init_db():
                 requested_at TEXT DEFAULT (datetime('now'))
             )
         """)
-        try:
-            await db.execute("ALTER TABLE users ADD COLUMN last_seen TEXT")
-        except Exception:
-            pass  # уже есть
+        await _add_column(db, "users", "last_seen TEXT")
         await db.execute("UPDATE users SET last_seen = datetime('now') WHERE last_seen IS NULL")
-        try:        # кто был до согласий — пользуется и без него (privacy.blocked)
-            await db.execute("ALTER TABLE users ADD COLUMN legacy INTEGER")
+        # кто был до согласий — пользуется и без него (privacy.blocked)
+        if await _add_column(db, "users", "legacy INTEGER"):          # колонка новая — один раз
             await db.execute("UPDATE users SET legacy = 1")
-        except Exception:
-            pass  # уже есть
-        try:        # версия текста, о которой уже спросили (privacy.ask_once) — один раз
-            await db.execute("ALTER TABLE users ADD COLUMN consent_asked TEXT")
-        except Exception:
-            pass  # уже есть
+        await _add_column(db, "users", "consent_asked TEXT")   # версия текста, о которой уже спросили (privacy.ask_once) — один раз
         # Сколько длится тест СДО (quiz_time.py): ограничение по времени со
         # страницы теста, одно на всех — по cmid. 0 — ограничения нет.
         await db.execute("""
@@ -729,10 +685,7 @@ async def init_db():
         # бонусы (ранг ачивок, «пригласи друга») — по разу; кто кого пригласил
         # (referrals) стирается вместе с любым из двух, у пригласившего
         # остаётся только счёт в bonuses.
-        try:
-            await db.execute("ALTER TABLE subscriptions ADD COLUMN founder INTEGER DEFAULT 0")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "subscriptions", "founder INTEGER DEFAULT 0")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id         TEXT PRIMARY KEY,
@@ -749,10 +702,7 @@ async def init_db():
         # Оплата звёздами Telegram (billing.stars_…, 5.115): сколько звёзд и
         # номер списания Telegram — для возврата (refundStarPayment).
         for col in ("stars INTEGER", "charge_id TEXT"):
-            try:
-                await db.execute(f"ALTER TABLE payments ADD COLUMN {col}")
-            except Exception:
-                pass  # колонка уже есть
+            await _add_column(db, "payments", col)
         # «Поддержать проект» (billing.donate…): добровольные платежи — не
         # подписка, дней не дают; как и payments, после «удалить мои данные»
         # остаются без человека (payer_id NULL) — налоговый учёт.
@@ -804,10 +754,7 @@ async def init_db():
                 note       TEXT
             )
         """)
-        try:                       # приписка Никиты к выдаче (/grant @ник 3m Спасибо!)
-            await db.execute("ALTER TABLE plus_grants ADD COLUMN note TEXT")
-        except Exception:
-            pass  # колонка уже есть
+        await _add_column(db, "plus_grants", "note TEXT")   # приписка Никиты к выдаче (/grant @ник 3m Спасибо!)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_plus_grants_user ON plus_grants(user_id)")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS plus_welcome (
