@@ -69,6 +69,17 @@ MOVED = {
     "local_embed": "kapibara.features.ai.local_embed",
     "semantic_index": "kapibara.features.ai.semantic_index",
     "semantic_search": "kapibara.features.ai.semantic_search",
+    "day_summary": "kapibara.features.notifications.day_summary",
+    "evening_digest": "kapibara.features.notifications.evening_digest",
+    "weekly_digest": "kapibara.features.notifications.weekly_digest",
+    "grade_alerts": "kapibara.features.notifications.grade_alerts",
+    "new_tasks": "kapibara.features.notifications.new_tasks",
+    "quiz_alerts": "kapibara.features.notifications.quiz_alerts",
+    "notify_prefs": "kapibara.features.notifications.prefs",
+    "delivery": "kapibara.features.notifications.delivery",
+    "webpush": "kapibara.features.notifications.webpush",
+    "app_push": "kapibara.features.notifications.app_push",
+    "push_text": "kapibara.features.notifications.push_text",
 }
 
 

@@ -233,10 +233,12 @@ async def test_keepalive_peek_runs_sync(monkeypatch):
 def test_jobs_registered():
     """Минутная проверка тестов и keepalive с ботом (для внеочередного синка)."""
     import deadline_reminders
+    import quiz_alerts
     import scheduler
     jobs = {(j.func.__module__, j.func.__name__): j for j in scheduler.start_scheduler(object()).get_jobs()}
-    reminders = deadline_reminders.__name__          # переехал в kapibara/ (ADR 0003) — имя по модулю
-    assert str(jobs[("quiz_alerts", "send_due")].trigger) == str(jobs[(reminders, "send_due")].trigger)
+    # переехали в kapibara/ (ADR 0003) — имя модуля берём у самого модуля
+    reminders, quizzes = deadline_reminders.__name__, quiz_alerts.__name__
+    assert str(jobs[(quizzes, "send_due")].trigger) == str(jobs[(reminders, "send_due")].trigger)
     assert jobs[("scheduler", "sdo_keepalive")].args
     assert ("database.sdo", "purge_quiz_alerts") in jobs
 
