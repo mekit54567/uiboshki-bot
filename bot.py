@@ -146,6 +146,28 @@ async def setup_bot_menu(bot: Bot):
         logger.warning(f"Не смог настроить меню бота: {e}")
 
 
+async def notify_rollback(bot: Bot):
+    """deploy/timeweb/update.sh откатил выкладку (новая сборка не дошла до
+    /ready): он кладёт rollback.txt «плохой_коммит прошлый_коммит» рядом с
+    базой, а вернувшийся бот говорит старосте и убирает отметку."""
+    import os
+    import database
+    path = os.path.join(os.path.dirname(database.DATABASE_PATH), "rollback.txt")
+    try:
+        with open(path, encoding="utf-8") as f:
+            bad, _, prev = f.read().strip().partition(" ")
+    except OSError:
+        return
+    if STAROSTA_ID:
+        try:
+            await bot.send_message(STAROSTA_ID, f"🔴 Сборка {bad} не поднялась на сервере — откатил на {prev}. "
+                                   "Её больше не пробую; починка — новым мержем (логи: kap logs).")
+        except Exception as e:
+            logger.warning(f"не смог сказать об откате: {e!r}")
+            return
+    os.remove(path)
+
+
 def start_webapp(port: int):
     """WebApp (webapp/server.py) в том же процессе, что и бот: одна служба на
     хостинге, один диск с SQLite — отдельный процесс не видел бы ту же базу.
@@ -221,6 +243,7 @@ async def main():
     health.mark_ready("scheduler")
 
     await setup_bot_menu(bot)
+    await notify_rollback(bot)
 
     async def offer_post():         # новый пост канала — превью старосте после деплоя
         try:
