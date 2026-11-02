@@ -48,3 +48,15 @@ def test_accepts_submodules_namespace_and_conditional_names(tmp_path):
         "b.py": "try:\n    from json import loads as fast\nexcept ImportError:\n    fast = None\n",
     })
     assert errors == []
+
+
+
+def test_follows_sys_modules_redirect(tmp_path):
+    """Переехавший модуль (ADR 0003): имена ищем в новом месте."""
+    errors = _tree(tmp_path, {
+        "old.py": "import sys\n\nimport pkg.new as _m\n\nsys.modules[__name__] = _m\n",
+        "pkg/__init__.py": "",
+        "pkg/new.py": "def here():\n    pass\n",
+        "a.py": "def f():\n    from old import here, gone\n",
+    })
+    assert errors == ["a.py:2: в old нет имени gone"]
