@@ -613,7 +613,7 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// PWA: уведомления на этом устройстве (веб-пуш) и «Дублировать в Telegram»
+/// PWA: уведомления на этом устройстве (веб-пуш) и «Дублировать пуши в Telegram»
 /// (Никита 14.10: «нажал в PWA — и приходят от PWA, а не от TG»).
 class _WebPushCard extends StatefulWidget {
   final Api api;
@@ -681,8 +681,8 @@ class _WebPushCardState extends State<_WebPushCard> {
       onChanged: _state == 'install' || _state == 'denied' ? () {} : _switch,
       children: [
         _Row(
-          title: 'Дублировать в Telegram',
-          sub: widget.tgCopy ? 'приходят и сюда, и в Telegram' : 'только сюда; не дошло — тогда в Telegram',
+          title: 'Дублировать пуши в Telegram',
+          sub: widget.tgCopy ? 'пуш в приложение и PWA, и то же сообщение в Telegram' : 'только пуш в приложение и PWA; не дошёл — тогда в Telegram. Об оплате — всегда и в Telegram',
           k: 'tg_copy',
           prefs: {'tg_copy': widget.tgCopy},
           onTap: (_) => widget.onTgCopy(),
@@ -748,8 +748,8 @@ class _AppPushCardState extends State<_AppPushCard> {
       children: [
         if (on)
           _Row(
-            title: 'Дублировать в Telegram',
-            sub: widget.tgCopy ? 'приходят и сюда, и в Telegram' : 'только сюда; не дошло — тогда в Telegram',
+            title: 'Дублировать пуши в Telegram',
+            sub: widget.tgCopy ? 'пуш в приложение и PWA, и то же сообщение в Telegram' : 'только пуш в приложение и PWA; не дошёл — тогда в Telegram. Об оплате — всегда и в Telegram',
             k: 'tg_copy',
             prefs: {'tg_copy': widget.tgCopy},
             onTap: (_) => widget.onTgCopy(),
