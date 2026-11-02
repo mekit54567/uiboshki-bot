@@ -1,6 +1,6 @@
 """
 Новые баллы в СДО — сообщением в личку (тумблер «Новые баллы» в
-уведомлениях, notify_prefs: grades). Раз в 3 часа днём бот по очереди
+уведомлениях, notify_prefs: grades). Днём, вместе с проверкой входа (check_soon), бот
 открывает журнал БРС каждого, кто подключил свой вход в СДО (sdo_grades.
 overview), и сравнивает сумму по предмету с последней точкой истории баллов
 (sdo_history). Выросла или упала — одно сообщение со всеми предметами:
@@ -168,6 +168,49 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
     await delivery.deliver(bot, user_id, text, kind="grades", tab="sdo", title=title, body=short,
                            reply_markup=app_button("🎓 Открыть баллы", "sdo"))
     return True
+
+
+# Когда проверять (Никита 02.11): не всех разом по расписанию, а каждого в
+# своё время — вместе с проверкой его входа в СДО (sdo_accounts._check_one,
+# раз в 50–59 минут, у всех вразнобой), староста с общим входом — вместе с
+# проверкой общей куки (scheduler.sdo_keepalive). Ночью не проверяем, чтобы
+# не будить пушем.
+DAY_HOURS = range(8, 23)          # 8:00–22:59 МСК
+_tasks: set = set()
+
+
+def daytime(now=None) -> bool:
+    from datetime import datetime, timezone
+
+    from utils import TZ
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:            # sdo_accounts считает время в UTC без пояса
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(TZ).hour in DAY_HOURS
+
+
+async def check_one(bot, user_id: int, cookie: str):
+    """Сверить баллы одного человека (тумблер «Новые баллы» — пишем ли ему).
+    Сбой СДО — молча, до следующей проверки входа."""
+    import notify_prefs
+    from database import get_user
+    user = await get_user(user_id)
+    if not user or not cookie:
+        return
+    notify = bool(user.get("subscribed")) and bool(notify_prefs.merge(user.get("notify")).get("grades"))
+    try:
+        await check_user(bot, user_id, cookie, notify=notify)
+    except Exception as e:
+        logger.info(f"новые баллы {user_id}: {type(e).__name__}")
+
+
+def check_soon(bot, user_id: int, cookie: str, now=None):
+    """Из проверки входа: фоном, чтобы очередь входов не ждала журналы СДО."""
+    if not bot or not daytime(now):
+        return
+    t = asyncio.ensure_future(check_one(bot, user_id, cookie))
+    _tasks.add(t)
+    t.add_done_callback(_tasks.discard)
 
 
 async def check_all(bot, pause: float = PAUSE_SEC):

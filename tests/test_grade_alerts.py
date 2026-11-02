@@ -151,3 +151,46 @@ async def test_starosta_with_shared_cookie_checked(db, monkeypatch):
 
     await grade_alerts.check_all(Bot(), pause=0)
     assert seen == [(5, "shared")]
+
+
+@pytest.mark.asyncio
+async def test_grades_checked_with_own_login_check(db, monkeypatch):
+    """Никита 02.11: баллы — у каждого вместе с проверкой его входа в СДО
+    (своё случайное время раз в 50–59 мин), днём; ночью — нет."""
+    import asyncio
+    from datetime import datetime
+
+    import sdo_accounts
+    import sdo_grades
+    await db.upsert_user(7, "", "Егор")
+    await db.save_sdo_session(7, sdo_accounts.encrypt("cookie0123456789abcdef0123"))
+    seen = []
+
+    async def check(cookie):
+        return True
+
+    async def overview(uid, cookie, fresh=False):
+        seen.append((uid, cookie))
+        return {"courses": []}
+
+    monkeypatch.setattr(sdo_accounts, "check", check)
+    monkeypatch.setattr(sdo_grades, "overview", overview)
+
+    class Bot:
+        async def send_message(self, *a, **kw):
+            pass
+
+    night = datetime(2026, 10, 1, 21, 30)      # UTC → 0:30 МСК
+    await sdo_accounts._check_one(await db.get_sdo_session(7), Bot(), night)
+    assert not grade_alerts._tasks and seen == []
+    day = datetime(2026, 10, 1, 9, 30)         # UTC → 12:30 МСК
+    await sdo_accounts._check_one(await db.get_sdo_session(7), Bot(), day)
+    await asyncio.gather(*grade_alerts._tasks)
+    assert seen == [(7, "cookie0123456789abcdef0123")]
+
+
+def test_daytime_msk():
+    from datetime import datetime
+    assert grade_alerts.daytime(datetime(2026, 10, 1, 5, 0))        # 8:00 МСК
+    assert not grade_alerts.daytime(datetime(2026, 10, 1, 4, 59))   # 7:59
+    assert not grade_alerts.daytime(datetime(2026, 10, 1, 20, 0))   # 23:00

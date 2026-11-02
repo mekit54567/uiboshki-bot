@@ -236,6 +236,8 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
         return
     if alive:
         await set_sdo_next_check(uid, _utc(now + timedelta(minutes=next_interval(left))), max(0, left - 1))
+        import grade_alerts             # новые баллы — у каждого в его время (Никита 02.11)
+        grade_alerts.check_soon(bot, uid, cookie, now)
     elif bot:
         try:
             from delivery import deliver
