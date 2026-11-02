@@ -11,11 +11,11 @@ import hmac
 import io
 import time
 from datetime import date, datetime, timedelta
-from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+from kapibara.core.paths import ROOT
 
-FONTS = Path(__file__).parent / "assets" / "fonts"
+FONTS = ROOT / "assets" / "fonts"            # данные в корне проекта (kapibara/core/paths.py)
 W = 1080
 PAD = 48
 BG = (15, 17, 21)
