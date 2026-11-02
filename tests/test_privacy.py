@@ -623,10 +623,12 @@ def test_timeweb_not_processor(monkeypatch):
 async def test_consent_check_failure_does_not_let_in(db, bot, monkeypatch):  # noqa: F811
     """02.11: база не ответила на проверке согласия — раньше бот обрабатывал
     человека как давшего согласие. Теперь не пускаем и просим подождать."""
+    import sqlite3
+
     import privacy
 
     async def broken(uid):
-        raise RuntimeError("database is locked")
+        raise sqlite3.OperationalError("database is locked")
     monkeypatch.setattr(privacy, "blocked", broken)
     d = _gated_dp()
     try:
