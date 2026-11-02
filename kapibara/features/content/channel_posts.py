@@ -27,10 +27,11 @@ import json
 import logging
 import re
 from pathlib import Path
+from kapibara.core.paths import ROOT
 
 logger = logging.getLogger(__name__)
 
-POSTS_DIR = Path(__file__).parent / "channel" / "posts"
+POSTS_DIR = ROOT / "channel" / "posts"   # от корня проекта (kapibara/core/paths.py)
 CAPTION_LIMIT = 1024     # подпись к фото/альбому
 TEXT_LIMIT = 4096        # обычное сообщение
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp")

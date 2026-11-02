@@ -92,6 +92,9 @@ MOVED = {
     "privacy": "kapibara.features.privacy.privacy",
     "legal_texts": "kapibara.features.privacy.legal_texts",
     "offer_text": "kapibara.features.privacy.offer_text",
+    "channel_posts": "kapibara.features.content.channel_posts",
+    "roadmap": "kapibara.features.content.roadmap",
+    "review_demo": "kapibara.features.content.review_demo",
 }
 
 
@@ -158,3 +161,11 @@ def test_data_files_found_from_project_root():
 def test_schedule_card_finds_fonts():
     import schedule_card
     assert schedule_card.FONTS.is_dir() and any(schedule_card.FONTS.iterdir())
+
+
+def test_content_data_found_from_project_root():
+    import channel_posts
+    import review_demo
+    import roadmap
+    assert channel_posts.POSTS_DIR.is_dir()
+    assert roadmap.PATH.is_file() and review_demo.FIXTURES.is_file()

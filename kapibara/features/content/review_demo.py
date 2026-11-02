@@ -23,12 +23,12 @@ import json
 import re
 from datetime import date, datetime, timedelta
 from functools import lru_cache
-from pathlib import Path
+from kapibara.core.paths import ROOT
 
 DEMO_UID = -19_000_000_000          # ниже LOCAL_BASE: «без Telegram», в рассылки не попадёт
 TOKEN_PREFIX = "rv."
 REC_MONDAY = date(2026, 10, 5)      # неделя записи demo.json
-FIXTURES = Path(__file__).parent / "webapp" / "static" / "site" / "demo.json"
+FIXTURES = ROOT / "webapp" / "static" / "site" / "demo.json"   # от корня проекта (kapibara/core/paths.py)
 LECTURES = FIXTURES.with_name("demo_lectures.json")    # придуманные лекции для ИИ-чата демо
 DEMO_AI_DAILY = 40                                    # вопросов ИИ демо-аккаунту в сутки (ratelimit «ai_demo»)
 
