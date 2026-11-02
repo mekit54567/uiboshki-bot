@@ -7,8 +7,10 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+    # С 02.11 — и на любой Python: перенос модуля или новый импорт должны
+    # собираться и импортироваться в настоящем образе, а не только в CI
     paths: ["Dockerfile", ".dockerignore", "docker/**", "requirements.txt", "tools/xray_conf.py",
-            ".github/workflows/docker.yml"]
+            "**.py", ".github/workflows/docker.yml"]
 
 permissions:
   contents: read
