@@ -112,6 +112,17 @@ def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
             " · ".join(f"{w.get('name')} — {_mark(w)}" for _, w in items[:4]))
 
 
+async def _told(user_id: int) -> dict[int, float] | None:
+    """Суммы по предметам, о которых уже сообщали (settings «told_scores:<id>»)."""
+    import json
+    from database import get_setting
+    raw = await get_setting(f"told_scores:{user_id}")
+    try:
+        return {int(k): float(v) for k, v in json.loads(raw).items()} if raw else None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 async def _seen(user_id: int) -> dict[str, str] | None:
     import json
     from database import get_setting
@@ -133,8 +144,16 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
     from database import set_setting
     data = await sdo_grades.overview(user_id, cookie, fresh=True)
     courses = data.get("courses") or []
-    diff = changes(await get_last_scores(user_id), courses)
+    # сравниваем с тем, что уже сообщали, а не с историей баллов: историю
+    # пишет и приложение, когда человек открывает баллы, и после этого
+    # новые баллы «уже были» — пуш не приходил (Никита 02.11)
+    told = await _told(user_id)
+    diff = changes(told if told is not None else await get_last_scores(user_id), courses)
     await sdo_history.record(user_id, courses)
+    scores = {str(c["id"]): float(c["score"]) for c in courses if c.get("id") is not None and c.get("score") is not None}
+    if scores:
+        await set_setting(f"told_scores:{user_id}", json.dumps({**{str(k): v for k, v in (told or {}).items()},
+                                                                **scores}))
     seen = await _seen(user_id)
     done = checked(seen, courses)
     now = graded_map(courses)
@@ -156,15 +175,19 @@ async def check_all(bot, pause: float = PAUSE_SEC):
     кого включён тумблер; остальным только точка истории: по ней видно, какие
     лекции засчитаны (attendance.py), — а она нужна каждому."""
     import notify_prefs
-    from database import get_sdo_sessions, get_user
+    from config import SDO_SESSION_COOKIE, STAROSTA_IDS
+    from database import get_sdo_session, get_sdo_sessions, get_user
     from sdo_accounts import decrypt
-    for row in await get_sdo_sessions("ok"):
-        uid = row["user_id"]
+    rows = [(r["user_id"], decrypt(r["cookie_enc"])) for r in await get_sdo_sessions("ok")]
+    # староста без своего входа ходит в СДО общей кукой (sdo_accounts.cookie_for) —
+    # раньше его тут не было, и новые баллы ему не приходили (Никита 02.11)
+    if SDO_SESSION_COOKIE:
+        rows += [(uid, SDO_SESSION_COOKIE) for uid in STAROSTA_IDS if uid and not await get_sdo_session(uid)]
+    for uid, cookie in rows:
         user = await get_user(uid)
         if not user:
             continue
         notify = bool(user.get("subscribed")) and bool(notify_prefs.merge(user.get("notify")).get("grades"))
-        cookie = decrypt(row["cookie_enc"])
         if not cookie:
             continue
         try:
