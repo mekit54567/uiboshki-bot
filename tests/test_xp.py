@@ -103,14 +103,14 @@ async def test_xp_parts_only_verified(db):
 async def test_ach_xp_by_rank(db, monkeypatch):
     """Опыт за ачивку — по её рангу (Никита 18.10); создателю ачивки открыты
     все сразу, поэтому в опыт не идут."""
-    import sys
     import types
 
     from kapibara.core import config
     from database._conn import connect
     fake = types.ModuleType("achievements")
     fake.RANKS = {"dawn": ["lesson"], "noon": ["submit"], "dusk": ["month"], "midnight": ["fri13"]}
-    monkeypatch.setitem(sys.modules, "achievements", fake)
+    from kapibara.features.social import achievements
+    monkeypatch.setattr(achievements, "RANKS", fake.RANKS)
     monkeypatch.setattr(config, "STAROSTA_IDS", [7])
     await _person(db, 1, "Анна")
     await _person(db, 7, "Никита")
