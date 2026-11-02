@@ -239,7 +239,7 @@ def test_jobs_registered():
     # переехали в kapibara/ (ADR 0003) — имя модуля берём у самого модуля
     reminders, quizzes = deadline_reminders.__name__, quiz_alerts.__name__
     assert str(jobs[(quizzes, "send_due")].trigger) == str(jobs[(reminders, "send_due")].trigger)
-    assert jobs[("scheduler", "sdo_keepalive")].args
+    assert jobs[(scheduler.__name__, "sdo_keepalive")].args
     assert ("database.sdo", "purge_quiz_alerts") in jobs
 
 
