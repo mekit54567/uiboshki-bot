@@ -9,6 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import config
+from kapibara.core.telegram import cosmetic
 
 router = Router()
 
@@ -42,10 +43,8 @@ async def report_decision(callback: CallbackQuery):
             await ugc.tell_author(callback.bot, int(rid))
     note = NOTES.get(status, "Уже решено.")
     await callback.answer(note)
-    try:
+    with cosmetic("reports.report_decision"):
         await callback.message.edit_text(f"{callback.message.html_text}\n\n<b>{note}</b>", parse_mode="HTML")
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == "dis:cancel")
@@ -53,11 +52,9 @@ async def dispute_cancel(callback: CallbackQuery, state: FSMContext):
     import ugc
     await state.clear()
     await callback.answer("Отменил")
-    try:
+    with cosmetic("reports.dispute_cancel"):
         await callback.message.edit_text(f"Отменил. Передумаешь — «Оспорить» можно нажать снова "
                                          f"в течение {ugc.DISPUTE_DAYS} дней после удаления.")
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data.startswith("dis:"))
@@ -103,8 +100,6 @@ async def dispute_why(message: Message, state: FSMContext):
         return
     await message.answer(SENT)
     if data.get("notice"):                          # у сообщения «убрали» — без кнопки, с отметкой
-        try:
+        with cosmetic("reports.dispute_why"):
             await message.bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=data["notice"],
                                                         reply_markup=None)
-        except Exception:
-            pass

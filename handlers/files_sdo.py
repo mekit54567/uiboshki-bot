@@ -9,6 +9,7 @@ from aiogram.types import (
 
 from config import STAROSTA_ID, is_starosta
 from utils import esc
+from kapibara.core.telegram import cosmetic
 
 router = Router()
 
@@ -162,10 +163,8 @@ async def sdo_files_go(callback: CallbackQuery):
         await callback.answer("Список устарел — запусти /sdofiles ещё раз", show_alert=True)
         return
     await callback.answer()
-    try:
+    with cosmetic("files_sdo.sdo_files_go"):
         await callback.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
     files = [f for c in courses for f in c.files]
     status = await callback.message.answer("📥 Выгружаю файлы из СДО… Займёт несколько минут, я напишу.")
     task = asyncio.create_task(_sdo_import(callback.bot, callback.message.chat.id, status, files))
@@ -182,10 +181,8 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
         now = asyncio.get_running_loop().time()
         if done == total or now - last[0] > 5:   # не чаще раза в 5 с — лимиты на правку
             last[0] = now
-            try:
+            with cosmetic("files_sdo._sdo_import"):
                 await status.edit_text(f"📥 Выгружаю файлы из СДО… {done} из {total}")
-            except Exception:
-                pass
 
     try:
         async with sdo_files.make_client(sdo_parser.SDO_SESSION_COOKIE) as client:

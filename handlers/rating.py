@@ -9,6 +9,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton
 
 from config import is_starosta
 from utils import esc
+from kapibara.core.telegram import cosmetic
 
 router = Router(name="rating")
 
@@ -42,10 +43,8 @@ async def nick_reset(callback: CallbackQuery):
     import xp
     await xp.reset_nick(int(callback.data.rsplit(":", 1)[1]))
     await callback.answer("Сброшено: теперь имя, свой ник поставить нельзя")
-    try:
+    with cosmetic("rating.nick_reset"):
         await callback.message.edit_text(f"{callback.message.html_text}\n\n<b>Сброшено.</b>", parse_mode="HTML")
-    except Exception:
-        pass
 
 
 @router.message(Command("institutes"))

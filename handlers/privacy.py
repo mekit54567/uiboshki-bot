@@ -14,6 +14,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from kapibara.core.telegram import cosmetic
 
 router = Router()
 
@@ -69,13 +70,11 @@ async def consent_given(callback: CallbackQuery, state: FSMContext | None = None
         await callback.answer(str(e)[:200], show_alert=True)
         return
     consent, policy = links()
-    try:
+    with cosmetic("privacy.consent_given"):
         await callback.message.edit_text(
             f"✅ Спасибо! Ты дал {consent}.\nПодробнее — в {policy}. "
             "Удалить всё о себе — /deleteme.",
             parse_mode="HTML", disable_web_page_preview=True)
-    except Exception:
-        pass
     await callback.answer("Готово")
     if first:
         from handlers.start import welcome
@@ -169,11 +168,9 @@ async def cmd_undelete(message: Message):
     await message.answer(
         f"✅ Вернул <code>{uid}</code>: профиль и данные на месте. Входы на устройствах и в СДО были "
         "удалены сразу — войдёт заново; согласие бот спросит снова.", parse_mode="HTML")
-    try:
+    with cosmetic("privacy.cmd_undelete"):
         await message.bot.send_message(uid, "↩️ Твои данные вернули. Войди в приложение и СДО заново "
                                             "и дай согласие на обработку данных — бот спросит.")
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data.startswith("erase:"))
