@@ -29,8 +29,8 @@ NOT_SAVED = "\n\n_Конспект не сохранён — нажми ещё �
 
 def _final(content: str) -> bool:
     """Нет пометок запасного ИИ и обрыва ответа (ai_solver, gemini_solver)."""
-    import ai_solver
-    import gemini_solver
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.features.ai import gemini as gemini_solver
     notes = (ai_solver.FALLBACK_NOTE_DS, ai_solver.FALLBACK_NOTE_GEMINI, gemini_solver.TRUNCATED_NOTE)
     return not any(n.strip() in content for n in notes)
 
@@ -41,7 +41,7 @@ class NoText(Exception):
 
 def to_html(content: str) -> str:
     """Тот же вид, что и ответы ИИ: жирный, списки, x² вместо x^2."""
-    from utils import md_to_tg_html_chunks
+    from kapibara.core.utils import md_to_tg_html_chunks
     return "\n".join(md_to_tg_html_chunks(content))
 
 
@@ -57,7 +57,7 @@ async def make(file_id: int, title: str, subject: str, user_id: int) -> dict:
         text = (await get_file_text(file_id)).strip()
         if not text:
             raise NoText()
-        from ai_solver import chat_with_reasoning
+        from kapibara.features.ai.solver import chat_with_reasoning
         result = await chat_with_reasoning([{"role": "user", "content": PROMPT}], subject=subject,
                                            lectures=f"=== {title} ===\n{text[:MAX_CHARS]}")
         content = (result.get("content") or "").strip()

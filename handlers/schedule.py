@@ -6,17 +6,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from schedule_parser import (
+from kapibara.features.schedule.parser import (
     get_today_schedule, get_tomorrow_schedule, get_week_schedule, get_next_lesson,
     get_next_week_schedule, format_target_schedule,
 )
-from mirea_schedule_api import (
+from kapibara.features.schedule.mirea_api import (
     search_targets, get_baseinfo, fetch_ical, SearchUnavailable, TARGET_GROUP, TARGET_TEACHER, TARGET_ROOM,
 )
 from database import upsert_user, add_lesson_note, delete_lesson_note, get_lesson_notes, get_or_create_calendar_token
-from keyboards import CANCEL_KB, MAIN_KB
-from config import GROUP_NAME, WEBAPP_URL, is_starosta
-from utils import esc, split_by_lines, today_msk
+from kapibara.bot.keyboards import CANCEL_KB, MAIN_KB
+from kapibara.core.config import GROUP_NAME, WEBAPP_URL, is_starosta
+from kapibara.core.utils import esc, split_by_lines, today_msk
 
 router = Router()
 
@@ -73,8 +73,8 @@ async def _gid(message: Message) -> int | None:
 
 async def _note_spam(message: Message, date_str: str, text: str) -> str | None:
     """Заметку видит вся группа — антиспам как в приложении (ugc.note_spam)."""
-    import ratelimit
-    import ugc
+    from kapibara.core import ratelimit
+    from kapibara.features.social import ugc
     if not ratelimit.allow("note", message.from_user.id):
         return "Много заметок подряд — подожди пару минут"
     return await ugc.note_spam(message.from_user.id, date_str, text, await _gid(message))
@@ -210,7 +210,7 @@ async def _handle_target_search(message: Message, query: str, target_type: int, 
             else:
                 await message.answer(chunk, parse_mode="HTML")
         return
-    from mirea_schedule_api import add_hints_for_namesakes
+    from kapibara.features.schedule.mirea_api import add_hints_for_namesakes
     results = await add_hints_for_namesakes(results)
     await wait.edit_text(
         f"{_TARGET_EMOJI[target_type]} Нашёл несколько совпадений — выбери:",

@@ -28,7 +28,7 @@ from datetime import date, datetime, timedelta, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 
-from config import TIMEZONE
+from kapibara.core.config import TIMEZONE
 
 TZ = ZoneInfo(TIMEZONE)
 

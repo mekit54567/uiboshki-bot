@@ -10,9 +10,9 @@ import json
 import httpx
 import pytest
 
-import ai_solver
-import gemini_solver
-import intent_router
+from kapibara.features.ai import solver as ai_solver
+from kapibara.features.ai import gemini as gemini_solver
+from kapibara.bot import intent_router
 
 
 @pytest.fixture
@@ -282,7 +282,7 @@ async def test_ling_main_by_subscription(db, monkeypatch):
     """18.10, Никита: Ling основная у всех (по умолчанию), Gemini — запасная.
     На случай отката: /aimain plus — он и у кого «Капибара+», me — только
     староста, gemini — никто; старое «group» в настройке — как по умолчанию."""
-    from config import STAROSTA_ID
+    from kapibara.core.config import STAROSTA_ID
     from database import set_setting
     from database import set_subscription_until
     from database.groups import current_group, current_user
@@ -355,7 +355,7 @@ async def test_aimain_command(db, monkeypatch):
     """/aimain у старосты меняет, кому Ling основная, без деплоя; чужим — молчит."""
     from types import SimpleNamespace
 
-    from config import STAROSTA_ID
+    from kapibara.core.config import STAROSTA_ID
     from handlers.group_tools import cmd_aimain
     monkeypatch.setattr(gemini_solver, "AI_SPARE_MODEL", "inclusionai/ling-3.0-flash-vl")
     monkeypatch.setattr(gemini_solver, "AI_MAIN", "all")

@@ -3,8 +3,8 @@
 import httpx
 import pytest
 
-import quiz_time
-import sdo_grades
+from kapibara.features.deadlines import quiz_time
+from kapibara.features.sdo import grades as sdo_grades
 from tests.test_webapp_home import _headers_for, client  # noqa: F401 — фикстура
 
 QUIZ = "https://online-edu.mirea.ru/mod/quiz/view.php?id={}"
@@ -77,7 +77,7 @@ async def test_learn_missing_fetches_only_unknown_quizzes(db, monkeypatch):
     assert seen == [QUIZ.format(7001)]
     assert await db.get_quiz_limits([7001, 7002, 7009, 7010]) == {7001: 40, 7002: 20}
     assert await quiz_time.learn_missing("cookie") == 0 and len(seen) == 1       # второй раз — не ходит
-    import config
+    from kapibara.core import config
     monkeypatch.setattr(config, "SDO_SESSION_COOKIE", "")
     await db.add_deadline("Тест 5", QUIZ.format(7005), "2099-10-05", "18:00", 0, external_id="sdo:6")
     assert await quiz_time.learn_missing() == 0 and len(seen) == 1                # без куки — никуда
@@ -86,7 +86,7 @@ async def test_learn_missing_fetches_only_unknown_quizzes(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_quiz_screen_remembers_limit(db, monkeypatch):
     """Открыл тест своим входом — время видно всей группе в «Сдать»."""
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from fastapi.testclient import TestClient
     import webapp.server as server
     from tests.test_sdo_submit import COOKIE

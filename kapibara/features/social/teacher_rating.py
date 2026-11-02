@@ -20,7 +20,7 @@ SCORES = range(1, 6)
 
 def key(name: str) -> str:
     """«Сиганьков Алексей Андреевич» и «Сиганьков А. А.» → «сиганьков а.а.»."""
-    from schedule_format import _short_teacher
+    from kapibara.features.schedule.format import _short_teacher
     name = " ".join((name or "").split())
     if name and not re.search(r"\b\w\.", name):
         name = _short_teacher(name)
@@ -30,7 +30,7 @@ def key(name: str) -> str:
 def teachers_in(raw: bytes) -> set[str]:
     """Ключи преподавателей из календаря группы."""
     from icalendar import Calendar
-    from schedule_events import _extract_teacher
+    from kapibara.features.schedule.events import _extract_teacher
     try:
         cal = Calendar.from_ical(raw)
     except Exception:
@@ -39,7 +39,7 @@ def teachers_in(raw: bytes) -> set[str]:
 
 
 async def can_rate(user_id: int, name: str) -> bool:
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     try:
         raw = await schedule_parser.raw_for_user(user_id)
     except Exception:

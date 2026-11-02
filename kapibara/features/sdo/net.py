@@ -82,7 +82,7 @@ def client(cookie: str, timeout: float = 30) -> httpx.AsyncClient:
                 logger.info(f"СДО: не соединились ({type(e).__name__}), неудача {_fails} из {TRIP_AFTER}")
             raise
         finally:
-            import timing            # время в СДО (с очередью) — в «Долгие запросы» /status
+            from kapibara.core import timing            # время в СДО (с очередью) — в «Долгие запросы» /status
             timing.spend("sdo", time.monotonic() - started)
         _fails = 0
         return resp

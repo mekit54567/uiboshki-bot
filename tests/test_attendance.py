@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 import pytest
 
-import attendance
+from kapibara.features.schedule import attendance
 
 LECTURES = [date(2026, 9, 7) + timedelta(weeks=i) for i in range(8)]     # по понедельникам
 
@@ -106,7 +106,7 @@ END:VCALENDAR
 
 @pytest.mark.asyncio
 async def test_history_records_attendance(db):
-    import sdo_history
+    from kapibara.features.sdo import history as sdo_history
     await sdo_history.record(5, [{"id": 7, "score": 30, "categories": [
         {"name": "Текущий контроль", "score": 25, "max": 45}, {"name": "Посещаемость", "score": 5, "max": 20}]}])
     pts = await db.get_attendance_points(5, 7, "2000-01-01")
@@ -116,11 +116,11 @@ async def test_history_records_attendance(db):
 @pytest.mark.asyncio
 async def test_webapp_attendance_and_marks(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import schedule_parser
-    import sdo_accounts
-    import sdo_grades
+    from kapibara.features.schedule import parser as schedule_parser
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
     import webapp.server as server
-    from schedule_events import TZ
+    from kapibara.features.schedule.events import TZ
     from datetime import datetime
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

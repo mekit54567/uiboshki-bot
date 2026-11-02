@@ -62,7 +62,7 @@ def model_dir(key: str) -> str:
 
 async def download(key: str) -> str:
     """Скачать файлы модели, если их ещё нет. → папка модели."""
-    import net
+    from kapibara.core import net
     base = (os.getenv("EMBED_HF_BASE") or "https://huggingface.co").rstrip("/")
     repo, folder = MODELS[key]["repo"], model_dir(key)
     for name in FILES + OPTIONAL:

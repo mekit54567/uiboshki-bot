@@ -1,5 +1,5 @@
 import logging
-import net
+from kapibara.core import net
 import time
 from zoneinfo import ZoneInfo
 

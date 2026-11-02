@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi.testclient import TestClient
 
-import apple_signin
+from kapibara.features.identity import apple as apple_signin
 
 RSA_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 EC_KEY = ec.generate_private_key(ec.SECP256R1())
@@ -36,7 +36,7 @@ def id_token(**over) -> str:
 
 @pytest.fixture
 def apple(db, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     pem = EC_KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                serialization.NoEncryption()).decode()
     monkeypatch.setenv("APPLE_TEAM_ID", "TEAM123")
@@ -112,7 +112,7 @@ async def test_delete_account_revokes_apple(client, apple):
     uid = await find_user("apple", "001234.abc")
     h = {"Authorization": "Bearer " + r.json()["token"]}
     assert client.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h).status_code == 200
-    import privacy                                                     # удаление насовсем — через 7 дней (#201)
+    from kapibara.features.privacy import privacy                                                     # удаление насовсем — через 7 дней (#201)
     await privacy.erase(uid)
     url, data = apple[-1]
     assert url == apple_signin.REVOKE_URL and data["token"] == "rt-1"

@@ -28,8 +28,8 @@ import zlib
 from datetime import datetime
 
 import database
-import health
-from utils import TZ
+from kapibara.ops import health
+from kapibara.core.utils import TZ
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         await bot.send_message(chat_id, f"⚠️ Не получилось снять копию базы: {e}")
         return False
     size_mb = len(data) / 1024 / 1024
-    import s3_store
+    from kapibara.ops import s3_store
     if s3_store.configured():
         # своё российское хранилище: база не уходит за границу, старосте — только отметка
         now = datetime.now(TZ)
@@ -265,7 +265,7 @@ def _drop_search_index():
     """Индекс поиска по смыслу — производные данные с id файлов; после
     восстановления id раздаются заново, и старые куски подклеились бы к чужим
     файлам. Удаляем — index_pending соберёт заново."""
-    from semantic_index import index_path
+    from kapibara.features.ai.semantic_index import index_path
     for suffix in ("", "-wal", "-shm"):
         p = index_path() + suffix
         if os.path.exists(p):

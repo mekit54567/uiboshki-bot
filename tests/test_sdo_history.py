@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-import sdo_history
+from kapibara.features.sdo import history as sdo_history
 
 
 @pytest.fixture

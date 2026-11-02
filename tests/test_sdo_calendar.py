@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import httpx
 import pytest
 
-import sdo_parser
+from kapibara.features.sdo import parser as sdo_parser
 
 BASE = "https://online-edu.mirea.ru"
 TZ = sdo_parser.TZ
@@ -199,7 +199,7 @@ def test_course_of_takes_last_top_level_parentheses():
 async def test_sync_keeps_only_courses_from_schedule(db, monkeypatch):
     # живой тест: «Методы принятия управленческих решений», «Физкультура 3/3»
     # прошлых семестров были без метки «[II.25-26]» — сверяем с расписанием
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
 
     async def subjects(**_):
@@ -260,7 +260,7 @@ async def test_sync_reports_redirect_loop_as_expired(db, monkeypatch):
 
 def test_sdo_jobs_keepalive_and_early_first_sync():
     from datetime import datetime, timedelta
-    import scheduler
+    from kapibara.jobs import scheduler
     jobs = {j.func.__name__: j for j in scheduler.start_scheduler(object()).get_jobs()}
     assert jobs["sdo_keepalive"].trigger.interval <= timedelta(hours=1)   # обёртка keepalive + отметка для /status
     first = jobs["sync_sdo_deadlines"].next_run_time

@@ -32,7 +32,7 @@ async def test_stats_read_sees_pending_events(db, monkeypatch):
 
 async def test_erase_drops_pending_events(db, monkeypatch):
     import database.service as svc
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(svc, "EVENT_FLUSH_SECONDS", 60)
     await db.upsert_user(3, "x", "X")
     await svc.add_event(3, "open")
@@ -65,7 +65,7 @@ async def test_upsert_user_skips_repeat_but_not_new_name(db, throttled):
 
 
 async def test_upsert_user_after_erase_writes_again(db, throttled):
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(6, "n", "N")
     await privacy.erase(6)
     await db.upsert_user(6, "n", "N")
@@ -83,7 +83,7 @@ async def test_seen_marks_do_not_wait_for_busy_db(db, monkeypatch):
     import database
     import database._conn as conn
     import database.sessions as sessions
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(conn, "WAIT", False)
     monkeypatch.setattr(privacy, "_seen", {})
     await db.upsert_user(5, "u", "U")

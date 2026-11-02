@@ -4,7 +4,7 @@
 вход обновится сам."""
 import pytest
 
-import sdo_accounts
+from kapibara.features.sdo import accounts as sdo_accounts
 from tests.test_sdo_submit import COOKIE, moodle  # noqa: F401  (фикстура)
 
 

@@ -31,10 +31,10 @@ from urllib.parse import unquote, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-import sdo_net
-from config import SDO_BASE_URL
-from file_categories import detect_category
-from sdo_parser import SdoSessionExpired
+from kapibara.features.sdo import net as sdo_net
+from kapibara.core.config import SDO_BASE_URL
+from kapibara.features.lectures.categories import detect_category
+from kapibara.features.sdo.parser import SdoSessionExpired
 from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ def _logged_out(resp: httpx.Response) -> bool:
 
 
 async def _get_html(client: httpx.AsyncClient, url: str) -> str:
-    from sdo_parser import get_checked
+    from kapibara.features.sdo.parser import get_checked
     resp = await get_checked(client, url)
     resp.raise_for_status()
     return resp.text
@@ -278,7 +278,7 @@ async def scan_course(client: httpx.AsyncClient, course: dict, subject: str) -> 
 
 
 async def scan(client: httpx.AsyncClient, subjects: list[str]) -> list[SdoCourse]:
-    from sdo_parser import is_old_semester, off_schedule
+    from kapibara.features.sdo.parser import is_old_semester, off_schedule
     courses = await list_courses(client)
     out = []
     for c in courses:
@@ -342,7 +342,7 @@ async def import_files(bot, chat_id: int, client: httpx.AsyncClient, files: list
     from aiogram.types import BufferedInputFile
 
     from database import add_file, get_file_sources, save_file_text
-    from file_text import extract_text
+    from kapibara.features.lectures.text import extract_text
 
     known = await get_file_sources()
     todo = [f for f in files if f.source not in known]
@@ -354,7 +354,7 @@ async def import_files(bot, chat_id: int, client: httpx.AsyncClient, files: list
             msg = await bot.send_document(chat_id, BufferedInputFile(data, filename=name),
                                           disable_notification=True)
             tg_file_id = msg.document.file_id if msg.document else None
-            with cosmetic("sdo_files.import_files"):
+            with cosmetic("kapibara.features.sdo.files.import_files"):
                 await bot.delete_message(chat_id, msg.message_id)
             if not tg_file_id:
                 stats["failed"] += 1

@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import backup  # noqa: E402
+from kapibara.ops import backup  # noqa: E402
 
 
 def main(path: str) -> str:

@@ -22,20 +22,20 @@ WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 def when(due_date: str, due_time: str | None) -> str:
     """«чт, 8 октября до 23:59»."""
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     d = date.fromisoformat(due_date)
     text = f"{WEEKDAYS[d.weekday()]}, {d.day} {MONTHS_GEN[d.month - 1]}"
     return text + (f" до {due_time}" if due_time else "")
 
 
 def _was(iso: str) -> str:
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     d = date.fromisoformat(iso)
     return f"{d.day} {MONTHS_GEN[d.month - 1]}"
 
 
 def _lines(items: list[dict]) -> list[str]:
-    from utils import esc
+    from kapibara.core.utils import esc
     return [f"• <b>{esc(i['subject'])}</b> — " + ("теперь " if i.get("was") else "")
             + when(i["due_date"], i.get("due_time"))
             + (f" (было {_was(i['was'])})" if i.get("was") and i["was"] != i["due_date"] else "")
@@ -63,8 +63,8 @@ def headline(items: list[dict], moved: list[dict] | None = None, opened: list[di
     """Пуш (Никита 25.10): одно событие — «Новое задание: Практика 3» и ниже
     «Анализ данных · сдать в чт до 23:59»; несколько — «В СДО новое: 2
     задания, 1 перенос» и ниже названия."""
-    from push_text import split_subject, when as when_s, word
-    from utils import today_msk
+    from kapibara.features.notifications.push_text import split_subject, when as when_s, word
+    from kapibara.core.utils import today_msk
     today = today or today_msk()
     moved, opened = moved or [], opened or []
 
@@ -94,9 +94,9 @@ def headline(items: list[dict], moved: list[dict] | None = None, opened: list[di
 
 async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None) -> int:
     """Разослать про новые дедлайны и перенесённые сроки (из синка). → скольким ушло."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     from database import get_active_deadlines, get_reminder_users
-    from keyboards import app_button
+    from kapibara.bot.keyboards import app_button
     moved = moved or {}
     if len(new_ids) > MASS:
         logger.info(f"новые задания: {len(new_ids)} за раз — не рассылаю (выгрузка, а не новое)")
@@ -106,7 +106,7 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
         moved = {}
     if not new_ids and not moved:
         return 0
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_all_optional_answers
     answers = await get_all_optional_answers()
     ids, sent = set(new_ids), 0
@@ -139,7 +139,7 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
         if not mine and not shifted and not opened:
             continue
         try:
-            import delivery
+            from kapibara.features.notifications import delivery
             title, short = headline(mine, shifted, opened_d)
             await delivery.deliver(bot, uid, build(mine, shifted, opened), kind="new_tasks", tab="deadlines",
                                    title=title, body=short,
@@ -154,12 +154,12 @@ async def _opened(new_ids: list[int]) -> dict[int, str]:
     """Новые дедлайны-тесты, которые уже открыты: {id: строка для «Открыли тест»}."""
     if not new_ids:
         return {}
-    import quiz_alerts
-    import quiz_time
+    from kapibara.features.notifications import quiz_alerts
+    from kapibara.features.deadlines import quiz_time
     from database import get_deadline, get_quiz_limits
     from database.sdo import get_quiz_opens
     from datetime import datetime
-    from utils import TZ
+    from kapibara.core.utils import TZ
     now = datetime.now(TZ)
     quizzes = [d for i in new_ids if (d := await get_deadline(i)) and quiz_time.quiz_cmid(d.get("description"))]
     if not quizzes:

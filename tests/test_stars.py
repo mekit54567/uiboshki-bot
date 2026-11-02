@@ -4,7 +4,7 @@
 import pytest
 from aiogram.types import Chat, Message, PreCheckoutQuery, SuccessfulPayment, Update, User
 
-import billing
+from kapibara.features.billing import billing
 from tests.test_plus import ME, robokassa  # noqa: F401 — фикстура (реквизиты исполнителя)
 from tests.test_review_bot import _uid, bot, dp, press  # noqa: F401 — фикстуры
 
@@ -67,7 +67,7 @@ async def test_stars_invoice_check_and_paid_once(db, bot, dp, robokassa):  # noq
 
 @pytest.mark.asyncio
 async def test_no_stars_without_requisites(db, monkeypatch):
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "INN", "")
     with pytest.raises(billing.PayError):
         await billing.stars_invoice(ME, "month")

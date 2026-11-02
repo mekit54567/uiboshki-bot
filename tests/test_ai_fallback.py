@@ -3,9 +3,9 @@ DeepSeek с пометкой; DeepSeek упал → Gemini. Постоянная
 модель) не маскируется."""
 import pytest
 
-import ai_solver
-import gemini_solver
-from gemini_solver import GeminiError
+from kapibara.features.ai import solver as ai_solver
+from kapibara.features.ai import gemini as gemini_solver
+from kapibara.features.ai.gemini import GeminiError
 
 HIST = [{"role": "user", "content": "2+2?"}]
 

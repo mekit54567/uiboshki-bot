@@ -45,8 +45,8 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
     → сколько ушло. title — свой заголовок вместо общего по kind (вечерняя
     сводка: «Завтра: 3 пары с 09:00»), body — свой короткий текст вместо
     начала сообщения Telegram (push_text.py)."""
-    import app_push
-    import webpush
+    from kapibara.features.notifications import app_push
+    from kapibara.features.notifications import webpush
     from database.push import delete_push_sub, get_push_subs
     data = {"title": title or TITLES.get(kind, "Капибара"), "body": plain(body) if body else _body(html, title),
             "url": "/app" + (f"?tab={tab}" if tab else ""), "tag": kind}
@@ -77,7 +77,7 @@ async def _tg_copy(user_id: int) -> bool:
     """Копировать ли, когда пуш уже дошёл (тумблер «Дублировать пуши» в
     уведомлениях): выключен — пуш в приложение на телефоне, без копии в PWA
     и Telegram (Никита 02.11). Пуш не дошёл — Telegram в любом случае."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     from database import get_user
     return notify_prefs.merge((await get_user(user_id) or {}).get("notify"))["tg_copy"]
 
@@ -91,7 +91,7 @@ async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = 
     часто из Telegram, — ответ должен прийти и туда).
     Ошибка Telegram пробрасывается (рассылки её логируют), пуш — молча.
     До согласия на обработку данных (privacy.blocked) — ничего."""
-    import privacy
+    from kapibara.features.privacy import privacy
     if await privacy.blocked(user_id):
         return None
     sent = 0

@@ -56,7 +56,7 @@ def tg_share_url(link: str) -> str:
 def share_image() -> str:
     """Картинка приглашения — своя, приложение в светлой теме (Никита 18.10):
     tools/site_og.py --invite; превью сайта og.jpg — отдельно."""
-    import billing
+    from kapibara.features.billing import billing
     return f"{billing.site()}/site/invite.jpg"
 
 
@@ -66,7 +66,7 @@ class BonusError(Exception):
 
 async def claim_rank(uid: int, rank: str) -> dict:
     """Закрыл ранг ачивок → дни подписки (один раз). → {days, until}."""
-    import billing
+    from kapibara.features.billing import billing
     from database.billing import active_days, add_bonus
     if rank not in RANKS:
         raise BonusError("нет такого ранга")
@@ -87,14 +87,14 @@ async def claim_rank(uid: int, rank: str) -> dict:
 async def _rank_closed(uid: int, rank: str) -> bool:
     """Ачивки на сервере (5.91) — все ачивки ранга открыты; без них — верим дням."""
     try:
-        import achievements
+        from kapibara.features.social import achievements
     except ImportError:
         return True
     return await achievements.rank_closed(uid, rank)
 
 
 async def link(uid: int) -> str:
-    import config
+    from kapibara.core import config
     from database.billing import ref_code
     return f"https://t.me/{config.BOT_USERNAME}?start=ref_{await ref_code(uid)}"
 
@@ -122,7 +122,7 @@ async def bind(friend_id: int, code: str, was_new: bool | None = None) -> bool:
 
 async def check(friend_id: int, bot=None) -> bool:
     """Друг уже правда пользуется? Тогда обоим дни. True — наградили сейчас."""
-    import billing
+    from kapibara.features.billing import billing
     from database.billing import active_days, add_bonus, get_referral, mark_rewarded
     ref = await get_referral(friend_id)
     if not ref or ref["rewarded_at"]:

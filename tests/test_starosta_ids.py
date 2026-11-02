@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-import config
+from kapibara.core import config
 
 
 def test_parse_ids():
@@ -32,7 +32,7 @@ async def test_second_account_runs_starosta_command(monkeypatch):
     from aiogram import Bot, Dispatcher
     from aiogram.fsm.storage.memory import MemoryStorage
     from aiogram.types import Chat, Message, Update, User
-    import pulse_check
+    from kapibara.features.pulse import check as pulse_check
     from handlers import announce
     from tests.test_solver_render import RecordingSession
 

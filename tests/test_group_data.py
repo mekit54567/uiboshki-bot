@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from fastapi.testclient import TestClient
 
-import config
+from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 from tests.test_deadlines_routing import FakeSession
 
@@ -29,8 +29,8 @@ async def people(db):
 
 @pytest.mark.asyncio
 async def test_schedule_of_other_group_comes_from_its_calendar(people, monkeypatch):
-    import mirea_schedule_api
-    import schedule_parser
+    from kapibara.features.schedule import mirea_api as mirea_schedule_api
+    from kapibara.features.schedule import parser as schedule_parser
     asked = []
 
     async def fetch_ical(tid, ttype):

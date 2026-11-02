@@ -4,8 +4,8 @@ from datetime import timedelta
 import aiosqlite
 import pytest
 
-import group_context
-from utils import today_msk
+from kapibara.features.groups import context as group_context
+from kapibara.core.utils import today_msk
 
 
 @pytest.mark.asyncio

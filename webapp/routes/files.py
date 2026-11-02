@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from config import STAROSTA_ID, is_starosta
+from kapibara.core.config import STAROSTA_ID, is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
@@ -30,7 +30,7 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
         items = await search_files(q.strip())
     else:
         items = await get_files(subject or None)
-    import ugc
+    from kapibara.features.social import ugc
     items = ugc.without_hidden(items, await ugc.hidden(user["id"]), "uploaded_by")
     # file_id намеренно не отдаём наружу как "ссылку на скачивание" — Telegram
     # file_id не резолвится в прямой URL без похода через getFile от лица
@@ -38,8 +38,8 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
     # открывает диплинк на сам бот (t.me/<bot>?start=file_<id>), который уже
     # шлёт документ — см. handlers/start.py: cmd_start_deeplink.
     from database import get_file_ids_with_summary, get_file_ids_with_text
-    from file_categories import CATEGORIES, LABELS, category_of
-    from file_names import split_title
+    from kapibara.features.lectures.categories import CATEGORIES, LABELS, category_of
+    from kapibara.features.lectures.names import split_title
     from database import is_editor
     with_text = await get_file_ids_with_text()
     with_summary = await get_file_ids_with_summary()
@@ -68,7 +68,7 @@ async def api_send_file(file_id: int, user: dict = CurrentUser):
     """Кнопка «Открыть»: бот шлёт файл в личку. Раньше фронт открывал
     диплинк t.me/<бот>?start=file_<id>, и в чате копились «/start file_…»."""
     from handlers.start import send_file_to
-    import ratelimit
+    from kapibara.core import ratelimit
     from database.identities import is_local
     if is_local(user["id"]):
         raise HTTPException(400, "Telegram не подключён — скачай файл кнопкой «Скачать»")
@@ -197,7 +197,7 @@ async def api_file_edit(file_id: int, body: FileMeta, user: dict = CurrentUser):
     названию угадан неверно). Предмет меняется вместе с контекстом ИИ:
     текст лекции привязан к файлу, а не к предмету."""
     from database import get_files, update_file_meta
-    from file_categories import LABELS
+    from kapibara.features.lectures.categories import LABELS
     from database import is_editor
     f = next((x for x in await get_files() if x["id"] == file_id), None)
     if not f:
@@ -224,9 +224,9 @@ async def api_file_edit(file_id: int, body: FileMeta, user: dict = CurrentUser):
 async def _summary_view(f: dict, s: dict | None = None) -> dict:
     """s — только что сделанный конспект: неполный (запасной ИИ) в базу не
     пишется, поэтому показываем его отсюда, а не из базы."""
-    import lecture_summary
+    from kapibara.features.lectures import summary as lecture_summary
     from database import get_file_summary, get_file_text
-    from file_categories import LABELS, category_of
+    from kapibara.features.lectures.categories import LABELS, category_of
     s = s or await get_file_summary(f["id"])
     return {
         "id": f["id"], "title": f["title"], "subject": f.get("subject") or "",
@@ -245,10 +245,10 @@ async def api_summary(file_id: int, user: dict = CurrentUser):
 @router.post("/api/summary/{file_id}")
 async def api_summary_make(file_id: int, user: dict = CurrentUser):
     """«Сделать конспект»: первый нажавший ждёт ИИ, дальше конспект у всех."""
-    import lecture_summary
+    from kapibara.features.lectures import summary as lecture_summary
     from database import get_file_summary
     f = await _visible_file(file_id, user)
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     why = None if await get_file_summary(file_id) else await ai_quota.gate(user["id"], kind="summary")
     if why:
         raise HTTPException(429, ai_quota.text(why, capital=True))
@@ -284,8 +284,8 @@ def _snippet(text: str, query: str, width: int = 180) -> str:
 
 @router.get("/api/lecture-search")
 async def api_lecture_search(q: str = "", subject: str = "", user: dict = CurrentUser):
-    import ratelimit
-    import semantic_search
+    from kapibara.core import ratelimit
+    from kapibara.features.ai import semantic_search
     q = q.strip()[:120]
     if len(q) < 3:
         return {"items": [], "ready": True}
@@ -322,7 +322,7 @@ def _pg_sig(file_id: int, page: int, exp: int) -> str:
 @router.get("/api/files/{file_id}/page/{page}")
 async def api_file_page(file_id: int, page: int, request: Request, user: dict = CurrentUser):
     import time
-    from semantic_index import open_index
+    from kapibara.features.ai.semantic_index import open_index
     f = await _visible_file(file_id, user)
     async with open_index() as db:
         rows = await (await db.execute(

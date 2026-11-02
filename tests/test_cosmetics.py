@@ -14,7 +14,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, Chat, User, Update
 
-from schedule_parser import format_day, format_lesson
+from kapibara.features.schedule.parser import format_day, format_lesson
 from tests.conftest import STAROSTA_ID
 from tests.test_solver_render import RecordingSession
 
@@ -167,7 +167,7 @@ async def test_solver_hint_only_after_first_answer(db, bot, monkeypatch):
 
 @pytest.mark.parametrize("n,word", [(1, "задача"), (3, "задачи"), (5, "задач"), (11, "задач"), (21, "задача"), (22, "задачи"), (112, "задач")])
 def test_plural(n, word):
-    from utils import plural
+    from kapibara.core.utils import plural
     assert plural(n, "задача", "задачи", "задач") == word
 
 
@@ -193,7 +193,7 @@ async def test_settings_buttons_toggle_and_reminder(db, bot):
         router._parent_router = None
     user = await db.get_user(USER.id)
     assert user["reminder_minutes"] == 30 and not user["subscribed"]
-    import notify_prefs     # кнопка в чате — одно время на все сценарии (в пределах каждого)
+    from kapibara.features.notifications import prefs as notify_prefs     # кнопка в чате — одно время на все сценарии (в пределах каждого)
     prefs = notify_prefs.merge(user["notify"])
     assert (prefs["remind_first"], prefs["remind_short"], prefs["remind_long"]) == (30, 30, 30)
     edits = [t for _, t in bot.session.sent_texts if "Настройки" in t]
@@ -217,7 +217,7 @@ async def test_actions_send_clickable_hints(db, bot):
 def test_deadlines_grouped_by_urgency_with_safe_links():
     from datetime import timedelta
     from handlers.deadlines import format_deadlines
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     t = today_msk()
     mk = lambda i, s, d, by=0, desc="": {"id": i, "subject": s, "due_date": (t + timedelta(days=d)).isoformat(),
                                          "due_time": None, "created_by": by, "description": desc}

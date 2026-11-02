@@ -6,7 +6,7 @@ import time
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from config import is_starosta
+from kapibara.core.config import is_starosta
 from webapp.deps import CurrentUser
 
 router = APIRouter()
@@ -22,7 +22,7 @@ def _now() -> int:
 
 @router.get("/api/achievements")
 async def api_achievements(user: dict = CurrentUser):
-    import achievements
+    from kapibara.features.social import achievements
     if is_starosta(user["id"]):
         return {"items": await achievements.grant_all(user["id"], _now())}
     return {"items": await achievements.of_user(user["id"])}
@@ -30,7 +30,7 @@ async def api_achievements(user: dict = CurrentUser):
 
 @router.post("/api/achievements")
 async def api_achievements_add(body: AchBody, user: dict = CurrentUser):
-    import achievements
+    from kapibara.features.social import achievements
     items = await achievements.add(user["id"], dict(list(body.items.items())[:64]), _now())
     if is_starosta(user["id"]):
         items = await achievements.grant_all(user["id"], _now())

@@ -9,9 +9,9 @@ import json
 import httpx
 import pytest
 
-import gemini_solver
-import net
-import net_check
+from kapibara.features.ai import gemini as gemini_solver
+from kapibara.core import net
+from kapibara.ops import net_check
 
 
 @pytest.fixture

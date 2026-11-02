@@ -4,7 +4,7 @@ LOCAL_BATCH, после каждой отдых втрое дольше счёт
 времени. Gemini — как было: пачки по 64 без отдыха."""
 import pytest
 
-import semantic_index as si
+from kapibara.features.ai import semantic_index as si
 from tests.test_semantic_search import embed  # noqa: F401 — фикстура
 
 
@@ -16,8 +16,8 @@ async def _fill(db, n):
 
 @pytest.mark.asyncio
 async def test_local_model_rests_between_small_batches(db, embed, monkeypatch):  # noqa: F811
-    import embedder
-    import local_embed
+    from kapibara.features.ai import embedder
+    from kapibara.features.ai import local_embed
     await _fill(db, 40)
     sizes, sleeps, clock = [], [], [0.0]
 
@@ -68,7 +68,7 @@ async def test_gemini_keeps_big_batches_without_rest(db, embed, monkeypatch):  #
 @pytest.mark.asyncio
 async def test_local_model_runs_in_low_priority_thread(monkeypatch):
     import os
-    import local_embed
+    from kapibara.features.ai import local_embed
     seen = []
     monkeypatch.setattr(local_embed, "_pool", None)
     monkeypatch.setattr(local_embed, "_encode_sync", lambda key, texts: seen.append(os.getpriority(os.PRIO_PROCESS, 0)) or [[0.0]])

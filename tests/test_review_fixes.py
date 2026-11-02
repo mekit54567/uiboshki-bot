@@ -8,8 +8,8 @@ from datetime import date
 import httpx
 import pytest
 
-import attendance
-import sdo_grades
+from kapibara.features.schedule import attendance
+from kapibara.features.sdo import grades as sdo_grades
 
 
 # ── СДО: разбор журнала и страниц заданий ───────────────────────────────────
@@ -92,7 +92,7 @@ def test_first_zero_snapshot_keeps_recent_lecture_waiting():
 
 @pytest.mark.asyncio
 async def test_deleted_sdo_deadline_stays_deleted(db, monkeypatch):
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     item = {"external_id": "sdo:6", "title": "Практика 2", "course": "Анализ данных [I.26-27]",
             "subject": "Практика 2 (Анализ данных)", "description": "", "due_date": "2026-10-20", "due_time": "23:59"}
 
@@ -140,7 +140,7 @@ async def test_personal_deadline_of_starosta_is_personal(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_bad_crypt_key_does_not_log_everyone_out(db, monkeypatch):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     enc = sdo_accounts.encrypt("abcdef0123456789abcdef0123")
     await db.save_sdo_session(222, enc)
     monkeypatch.setenv("SDO_CRYPT_KEY", "my-secret-phrase")                 # не ключ Fernet
@@ -160,7 +160,7 @@ async def test_bad_crypt_key_does_not_log_everyone_out(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_check_does_not_expire_freshly_connected(db, monkeypatch):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     old = sdo_accounts.encrypt("old0123456789abcdef0123456")
     await db.save_sdo_session(222, old)
 
@@ -175,8 +175,8 @@ async def test_check_does_not_expire_freshly_connected(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_download_redirect_loop_means_expired():
-    import sdo_files
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo import files as sdo_files
+    from kapibara.features.sdo.parser import SdoSessionExpired
 
     def loop(request):
         return httpx.Response(302, headers={"Location": str(request.url)})
@@ -190,14 +190,14 @@ async def test_download_redirect_loop_means_expired():
 
 @pytest.mark.asyncio
 async def test_parallel_writes_keep_both(db, monkeypatch):
-    import channel_posts
-    import sdo_goal
+    from kapibara.features.content import channel_posts
+    from kapibara.features.sdo import goal as sdo_goal
     await asyncio.gather(channel_posts.mark_published("01-a", [1]), channel_posts.mark_published("02-b", [2]))
     assert set(await channel_posts.published()) == {"01-a", "02-b"}
     await asyncio.gather(sdo_goal.set_goal(7, 1, "4"), sdo_goal.set_goal(7, 2, "5"))
     assert await sdo_goal.get_goals(7) == {"1": "4", "2": "5"}
 
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -223,8 +223,8 @@ async def test_parallel_writes_keep_both(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_channel_double_tap_publishes_once(db, tmp_path, monkeypatch):
-    import channel_posts
-    import config
+    from kapibara.features.content import channel_posts
+    from kapibara.core import config
     from handlers import channel
     from tests.test_channel_posts import _post
     _post(tmp_path, "01-start", "<b>Как всё началось</b>")
@@ -263,8 +263,8 @@ async def test_channel_double_tap_publishes_once(db, tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_restore_drops_search_index_and_limits_unpack(db, monkeypatch):
-    import backup
-    import semantic_index
+    from kapibara.ops import backup
+    from kapibara.features.ai import semantic_index
     open(semantic_index.index_path(), "wb").write(b"old index")
     data, _ = await backup.make_backup()
     tmp, info = await asyncio.to_thread(backup.inspect_backup, data)

@@ -8,8 +8,8 @@ from urllib.parse import parse_qs, urlparse
 import aiosqlite
 import pytest
 
-import billing
-import config
+from kapibara.features.billing import billing
+from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 from tests.test_plus import robokassa  # noqa: F401 — фикстура
 from tests.test_review_bot import press, send
@@ -70,7 +70,7 @@ async def test_robokassa_donation_gives_no_days(db, bot, client, monkeypatch, ro
     assert "Поддержка проекта: 500 ₽ от Вася @vasya" in owner and "Всего: 2 · 800 ₽" in owner
     assert not (await billing.status(ME))["active"]
 
-    import health
+    from kapibara.ops import health
     assert "Поддержка проекта (/donate): 2 · 800 ₽, за 30 дней — 2 · 800 ₽" in await health.report()
 
 
@@ -105,7 +105,7 @@ async def test_yookassa_hook_tells_donation_from_sub(db, client, monkeypatch):  
 
 @pytest.mark.asyncio
 async def test_api_donate_hidden_on_iphone_and_closed_without_requisites(db, client, monkeypatch, robokassa):  # noqa: F811
-    import privacy
+    from kapibara.features.privacy import privacy
     c, _ = client
     h = _headers_for(ME)
     d = c.get("/api/donate", headers=h).json()
@@ -200,7 +200,7 @@ async def test_bot_donate(db, bot, dp, robokassa):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_bot_donate_closed_without_requisites(db, bot, dp, monkeypatch, robokassa):  # noqa: F811
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "INN", "")
     await send(dp, bot, "/donate", uid=ME)
     m = bot.session.named("SendMessage")[-1]
@@ -209,7 +209,7 @@ async def test_bot_donate_closed_without_requisites(db, bot, dp, monkeypatch, ro
 
 @pytest.mark.asyncio
 async def test_erase_keeps_donations_without_person(db):
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.billing import add_donation
     await db.upsert_user(ME, "", "u")
     await add_donation("d-1", "robokassa", ME, 300)
@@ -222,7 +222,7 @@ async def test_erase_keeps_donations_without_person(db):
 async def test_roadmap_for_supporters(db, bot, dp, client, robokassa):  # noqa: F811
     """Роадмап (Никита 18.10) — тем, кто поддержал проект любой суммой, как спасибо;
     до доната — замок и ссылка на донат; на iPhone — нет вовсе (как и доната)."""
-    import roadmap
+    from kapibara.features.content import roadmap
     c, _ = client
     h = _headers_for(ME)
     await db.upsert_user(ME, "", "u")
@@ -250,7 +250,7 @@ async def test_roadmap_for_supporters(db, bot, dp, client, robokassa):  # noqa: 
 
 
 def test_roadmap_file_is_valid():
-    import roadmap
+    from kapibara.features.content import roadmap
     data = roadmap.load()
     assert data["updated"] and data["edition"] >= 1 and all(i["title"] and i["about"] for i in data["items"])
     assert all(i.get("from", 0) < data["edition"] for i in data["items"])         # итоги — только прошлых номеров
@@ -261,8 +261,8 @@ def test_roadmap_file_is_valid():
 async def test_roadmap_page(db, client, monkeypatch, robokassa):  # noqa: F811
     """Страница роадмапа (Никита 20.10): по личной ссылке, только поддержавшим;
     итоги прошлого номера — «Сделано N из M», не вышло — со ссылкой на пост."""
-    import channel_posts
-    import roadmap
+    from kapibara.features.content import channel_posts
+    from kapibara.features.content import roadmap
     from webapp.routes import roadmap_page
     c, _ = client
     await db.upsert_user(ME, "", "u")

@@ -9,7 +9,7 @@ from aiogram.types import (
 )
 
 from database import get_files, search_files
-from utils import esc
+from kapibara.core.utils import esc
 
 router = Router()
 
@@ -89,7 +89,7 @@ async def cmd_search(message: Message):
 
 
 def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | None:
-    from file_categories import sort_files
+    from kapibara.features.lectures.categories import sort_files
     if idx == "all":
         return "Все файлы", sort_files(all_files)
     subjects = sorted(set(f["subject"] for f in all_files if f.get("subject")))
@@ -104,7 +104,7 @@ def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | 
 async def files_by_subject(callback: CallbackQuery):
     """Предмет → сначала типы (лекции/практики/КР/…) с количеством, если
     их больше одного, иначе сразу файлы."""
-    from file_categories import CATEGORIES, category_of
+    from kapibara.features.lectures.categories import CATEGORIES, category_of
     idx = callback.data.split(":", 1)[1]
     picked = _subject_files(await get_files(), idx)
     if not picked:
@@ -136,7 +136,7 @@ async def files_by_subject(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("fct:"))
 async def files_by_category(callback: CallbackQuery):
-    from file_categories import LABELS, category_of
+    from kapibara.features.lectures.categories import LABELS, category_of
     parts = callback.data.split(":")
     idx, cat = parts[1], parts[2]
     page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
@@ -196,8 +196,8 @@ async def send_file(callback: CallbackQuery, bot: Bot):
 # (handlers/solver.py) до ИИ. False — не просьба о файле, пусть решает ИИ.
 
 async def answer_file_request(message: Message) -> bool:
-    import file_request
-    from config import WEBAPP_URL
+    from kapibara.features.lectures import request as file_request
+    from kapibara.core.config import WEBAPP_URL
     from handlers.start import send_file_to
     if not file_request.is_request(message.text or ""):
         return False

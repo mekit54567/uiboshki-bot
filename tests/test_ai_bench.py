@@ -8,7 +8,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-import ai_bench
+from kapibara.features.ai import bench as ai_bench
 
 
 def _m(mid, pin, pout, ctx=128_000, image=False, out=("text",)):
@@ -112,7 +112,7 @@ def _fake_openrouter(monkeypatch, calls, judge_calls, left=5.0):
             return {"text": json.dumps({x: 8 if "qwen" in user.split(f"Ответ {x} ===")[1][:40] else 5
                                         for x in letters}), "cost": 0.01, "secs": 1, "error": False}
         calls.append(model)
-        import intent_router
+        from kapibara.bot import intent_router
         text = "files" if system == intent_router.SYSTEM_PROMPT else f"ответ {model} по лекции"
         return {"text": text, "cost": 0.001, "secs": 0.5, "error": False}
 
@@ -220,8 +220,8 @@ async def test_page_links_are_signed_per_kind(db, monkeypatch):
 async def test_current_gemini_joins_by_own_key(group_data, monkeypatch):
     """OpenRouter закрывает аккаунту Google — нынешняя Gemini идёт в отбор своим
     ключом, бесплатно; обрыв по лимиту токенов отмечается."""
-    import config
-    import gemini_solver
+    from kapibara.core import config
+    from kapibara.features.ai import gemini as gemini_solver
     calls, gemini_calls = [], []
     _fake_openrouter(monkeypatch, calls, [])
     monkeypatch.setattr(config, "GEMINI_API_KEY", "g")
@@ -291,7 +291,7 @@ async def test_judge_retries_unparsed_answer(monkeypatch):
 
 
 async def test_gemini_retries_on_limit(monkeypatch):
-    import gemini_solver
+    from kapibara.features.ai import gemini as gemini_solver
     calls = []
 
     async def flaky(history, system, **kw):

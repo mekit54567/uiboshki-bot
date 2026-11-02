@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from config import TIMEZONE
+from kapibara.core.config import TIMEZONE
 from database import _conn
 
 logger = logging.getLogger(__name__)

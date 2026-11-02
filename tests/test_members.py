@@ -2,7 +2,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-import config
+from kapibara.core import config
 
 HOME = config.HOME_GROUP_ID
 CHAT = -100777
@@ -25,8 +25,8 @@ def chat(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_without_chat_nothing_changes(db):
-    import groups
-    import members
+    from kapibara.features.groups import groups
+    from kapibara.features.groups import members
     assert await members.is_member(501, FakeBot(set())) is None        # чат не задан — не знаем
     await db.upsert_user(501, "", "Вася")
     assert (await groups.choose(501, HOME, FakeBot(set())))["id"] == HOME
@@ -34,8 +34,8 @@ async def test_without_chat_nothing_changes(db):
 
 @pytest.mark.asyncio
 async def test_only_chat_members_choose_home_group(chat):
-    import groups
-    import plans
+    from kapibara.features.groups import groups
+    from kapibara.features.billing import plans
     from database.groups import viewer_group
     db = chat
     bot = FakeBot({601})
@@ -71,7 +71,7 @@ async def test_api_refuses_home_group_to_outsider(chat, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_bot_added_to_chat_by_starosta_remembers_it(db, monkeypatch):
-    import members
+    from kapibara.features.groups import members
     from handlers.members_chat import bot_added_to_group
     from tests.conftest import STAROSTA_ID
     monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
@@ -99,7 +99,7 @@ async def test_chat_id_and_settings_without_extra_db_opens(db, monkeypatch):
     """19.10, медленный диск: chat_id открывал базу по 5 раз на запрос, а каждое
     чтение настройки — ещё раз ради проверки таблиц (init_hw_table)."""
     import database.homework as hw
-    import members
+    from kapibara.features.groups import members
     monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
     await db.set_setting("group_chat_id", str(CHAT))
     members.forget_chat()

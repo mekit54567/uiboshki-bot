@@ -11,7 +11,7 @@ overview), и сравнивает сумму по предмету с посл�
 import asyncio
 import logging
 
-from utils import esc
+from kapibara.core.utils import esc
 
 logger = logging.getLogger(__name__)
 PAUSE_SEC = 20          # между людьми: не открывать журналы всех разом
@@ -46,7 +46,7 @@ def message(diff: list[tuple[dict, float, float]]) -> str:
 def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
     """Пуш (Никита 25.10): один предмет — «Моделирование: +5» и ниже «было 34,
     стало 39»; несколько — «Новые баллы по 2 предметам» и ниже кратко."""
-    from push_text import word
+    from kapibara.features.notifications.push_text import word
 
     def name(c):
         return c.get("name") or c.get("title") or "Предмет"
@@ -103,7 +103,7 @@ def checked_text(items: list[tuple[dict, dict]]) -> str:
 
 
 def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
-    from push_text import word
+    from kapibara.features.notifications.push_text import word
     if len(items) == 1:
         c, w = items[0]
         return f"Проверили: {w.get('name') or 'работу'} — {_mark(w)}", c.get("name") or c.get("title") or ""
@@ -136,10 +136,10 @@ async def _seen(user_id: int) -> dict[str, str] | None:
 async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> bool:
     """Сверить баллы одного человека; True — сообщение отправлено. notify=False —
     только записать точку истории (для посещений, attendance.py)."""
-    import sdo_grades
-    import sdo_history
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.features.sdo import history as sdo_history
     from database import get_last_scores
-    from keyboards import app_button
+    from kapibara.bot.keyboards import app_button
     import json
     from database import set_setting
     data = await sdo_grades.overview(user_id, cookie, fresh=True)
@@ -162,7 +162,7 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
         await set_setting(f"graded:{user_id}", json.dumps({**(seen or {}), **now}, ensure_ascii=False))
     if not (diff or done) or not notify:
         return False
-    import delivery
+    from kapibara.features.notifications import delivery
     title, short = checked_head(done) if done else headline(diff)
     text = "\n\n".join(x for x in (checked_text(done) if done else "", message(diff) if diff else "") if x)
     await delivery.deliver(bot, user_id, text, kind="grades", tab="sdo", title=title, body=short,
@@ -182,7 +182,7 @@ _tasks: set = set()
 def daytime(now=None) -> bool:
     from datetime import datetime, timezone
 
-    from utils import TZ
+    from kapibara.core.utils import TZ
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:            # sdo_accounts считает время в UTC без пояса
         now = now.replace(tzinfo=timezone.utc)
@@ -192,7 +192,7 @@ def daytime(now=None) -> bool:
 async def check_one(bot, user_id: int, cookie: str):
     """Сверить баллы одного человека (тумблер «Новые баллы» — пишем ли ему).
     Сбой СДО — молча, до следующей проверки входа."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     from database import get_user
     user = await get_user(user_id)
     if not user or not cookie:
@@ -217,10 +217,10 @@ async def check_all(bot, pause: float = PAUSE_SEC):
     """По расписанию (scheduler.py): все с рабочим входом. Сообщение — тем, у
     кого включён тумблер; остальным только точка истории: по ней видно, какие
     лекции засчитаны (attendance.py), — а она нужна каждому."""
-    import notify_prefs
-    from config import SDO_SESSION_COOKIE, STAROSTA_IDS
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.core.config import SDO_SESSION_COOKIE, STAROSTA_IDS
     from database import get_sdo_session, get_sdo_sessions, get_user
-    from sdo_accounts import decrypt
+    from kapibara.features.sdo.accounts import decrypt
     rows = [(r["user_id"], decrypt(r["cookie_enc"])) for r in await get_sdo_sessions("ok")]
     # староста без своего входа ходит в СДО общей кукой (sdo_accounts.cookie_for) —
     # раньше его тут не было, и новые баллы ему не приходили (Никита 02.11)

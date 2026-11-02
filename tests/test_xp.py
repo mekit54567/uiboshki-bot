@@ -3,11 +3,11 @@ from datetime import date, timedelta
 
 import pytest
 
-import institutes
-import legal_texts
-import nick_filter
-import privacy
-import xp
+from kapibara.features.groups import institutes
+from kapibara.features.privacy import legal_texts
+from kapibara.features.social import nick_filter
+from kapibara.features.privacy import privacy
+from kapibara.features.social import xp
 
 URL = "https://online-edu.mirea.ru/mod/assign/view.php?id={i}"
 
@@ -80,7 +80,7 @@ async def _person(db, uid, name, group_id=None):
 
 @pytest.mark.asyncio
 async def test_xp_parts_only_verified(db):
-    import sdo_done
+    from kapibara.features.sdo import done as sdo_done
     await _person(db, 1, "Анна Иванова")
     # баллы: берётся последняя точка по предмету
     await db.save_score_points(1, _day(-3), {10: 20, 11: 5})
@@ -103,14 +103,14 @@ async def test_xp_parts_only_verified(db):
 async def test_ach_xp_by_rank(db, monkeypatch):
     """Опыт за ачивку — по её рангу (Никита 18.10); создателю ачивки открыты
     все сразу, поэтому в опыт не идут."""
-    import sys
     import types
 
-    import config
+    from kapibara.core import config
     from database._conn import connect
     fake = types.ModuleType("achievements")
     fake.RANKS = {"dawn": ["lesson"], "noon": ["submit"], "dusk": ["month"], "midnight": ["fri13"]}
-    monkeypatch.setitem(sys.modules, "achievements", fake)
+    from kapibara.features.social import achievements
+    monkeypatch.setattr(achievements, "RANKS", fake.RANKS)
     monkeypatch.setattr(config, "STAROSTA_IDS", [7])
     await _person(db, 1, "Анна")
     await _person(db, 7, "Никита")
@@ -130,7 +130,7 @@ async def test_ach_xp_by_rank(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_sdo_upgrades_manual_mark(db):
     """Отметил от руки, потом СДО подтвердило — опыт за сдачу есть."""
-    import sdo_done
+    from kapibara.features.sdo import done as sdo_done
     await _person(db, 1, "Анна")
     did = await db.add_deadline("Практика 1", URL.format(i=5), _day(5), None, 0, external_id="sdo:5")
     await db.mark_deadline_done(did, 1)
@@ -168,7 +168,7 @@ async def test_groups_ranked_with_min_people(db):
 async def test_blocked_not_counted(db, monkeypatch):
     """Ждёт удаления или без согласия (privacy.blocked) — не виден в группе и
     не считается в опыте группы."""
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.groups import home
 
     async def blocked(uid):
@@ -233,7 +233,7 @@ async def test_show_is_separate_consent(db):
 
 
 def test_legal_texts_mention_rating():
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     text = str(legal_texts.__dict__)
     assert "Показывать меня группе" in text and "из баллов СДО и сдач" in text
     assert "Показывать меня всем" in text
@@ -341,7 +341,7 @@ def test_operator_wording():
 @pytest.mark.asyncio
 async def test_api_rating(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import ratelimit
+    from kapibara.core import ratelimit
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

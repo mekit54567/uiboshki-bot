@@ -19,7 +19,7 @@ ERASE_DAYS дней (purge); до этого староста может вос�
 import logging
 import os
 
-from config import STAROSTA_IDS
+from kapibara.core.config import STAROSTA_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ CONTACT_URL = "https://t.me/Partykq"
 def backup_days() -> int:
     """Сколько живёт ночная копия базы: хранилище — 7 дней по кругу, Telegram —
     оператор удаляет старше 30 дней (Никита 18.10: Telegram — ненадолго, до S3)."""
-    import s3_store
+    from kapibara.ops import s3_store
     return 7 if s3_store.configured() else 30
 
 
@@ -115,7 +115,7 @@ def backup_texts() -> dict:
     legal_texts: своё хранилище в России (BACKUP_S3_*, s3_store.py) или файлом
     оператору в Telegram (ОАЭ); туннель Xray (XRAY_CONFIG, страна —
     PROXY_COUNTRY) или сеть хостинга. Копии — не дольше 30 дней (ст. 21 ч. 5)."""
-    import s3_store
+    from kapibara.ops import s3_store
     if os.getenv("XRAY_CONFIG", "").strip() or os.getenv("OUT_PROXY", "").strip():
         country = os.getenv("PROXY_COUNTRY", "").strip()
         proxy = ("Запросы к Telegram и ИИ уходят с сервера через зашифрованный туннель на сервер оператора"
@@ -134,7 +134,7 @@ def backup_texts() -> dict:
                          "оператора;",
             "BACKUP_ERASE": "когда копия сменится новой, не позже чем через 7 дней",
         }
-    import backup
+    from kapibara.ops import backup
     # 20.10: с BACKUP_KEY копия зашифрована ключом, который есть только у оператора
     enc = (", зашифрованная ключом, который есть только у оператора (AES-256-GCM): Telegram хранит "
            "нечитаемый файл") if backup.backup_key() else ""
@@ -282,7 +282,7 @@ async def erase(user_id: int) -> dict:
     сменятся (backup_texts, политика это говорит)."""
     from database.privacy import erase_user
     try:
-        import apple_signin
+        from kapibara.features.identity import apple as apple_signin
         await apple_signin.revoke_for(user_id)    # вход через Apple — отозвать у Apple (их правило)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"отзыв входа Apple: {e}")
@@ -295,7 +295,7 @@ async def erase(user_id: int) -> dict:
     _given.difference_update({g for g in _given if g[0] == user_id})
     _open.discard(user_id)
     try:
-        import sdo_grades
+        from kapibara.features.sdo import grades as sdo_grades
         sdo_grades.forget(user_id)
     except Exception:
         pass
@@ -328,20 +328,20 @@ async def request_erase(user_id: int, bot=None) -> str:
     from datetime import timedelta
 
     from database.privacy import request_erase as _request
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     due = await erasing(user_id) or (today_msk() + timedelta(days=ERASE_DAYS)).isoformat()
     await _request(user_id, due)
     _given.difference_update({g for g in _given if g[0] == user_id})
     _open.discard(user_id)
     try:
-        import sdo_grades
+        from kapibara.features.sdo import grades as sdo_grades
         sdo_grades.forget(user_id)
     except Exception:
         pass
     logger.info(f"запрос на удаление данных, полностью — {due}")
     if bot and STAROSTA_IDS:
         from database import get_user
-        from utils import esc
+        from kapibara.core.utils import esc
         u = await get_user(user_id) or {}
         name = esc(u.get("full_name") or u.get("username") or "без имени")
         try:
@@ -381,7 +381,7 @@ async def purge():
     """Раз в сутки (scheduler): попросил удалить и прошло ERASE_DAYS — стереть
     полностью; год без заходов — тоже; старые запросы решалки."""
     from database.privacy import due_erasures, inactive_users, purge_solver_history
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     for uid in await due_erasures(today_msk().isoformat()):
         await erase(uid)
     gone = [u for u in await inactive_users(INACTIVE_DAYS) if u not in STAROSTA_IDS]

@@ -8,8 +8,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
-from file_names import split_title, text_titles, tidy_titles
-from lecture_topic import topic_from_text
+from kapibara.features.lectures.names import split_title, text_titles, tidy_titles
+from kapibara.features.lectures.topic import topic_from_text
 from tests.conftest import STAROSTA_ID
 
 HEADER = ("МИНОБРНАУКИ РОССИИ\nФедеральное государственное бюджетное образовательное учреждение\n"

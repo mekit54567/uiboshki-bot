@@ -60,7 +60,7 @@ def _b64e(data: bytes) -> str:
 
 
 async def _get(url: str) -> dict:
-    import net
+    from kapibara.core import net
     async with net.client(timeout=15) as c:
         r = await c.get(url)
         r.raise_for_status()
@@ -68,7 +68,7 @@ async def _get(url: str) -> dict:
 
 
 async def _post(url: str, data: dict) -> tuple[int, dict]:
-    import net
+    from kapibara.core import net
     async with net.client(timeout=15) as c:
         r = await c.post(url, data=data)
         try:
@@ -143,7 +143,7 @@ async def exchange(code: str) -> str:
 
 
 async def save_token(user_id: int, refresh_token: str):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database._conn import connect
     if not refresh_token:
         return
@@ -170,7 +170,7 @@ async def revoke_for(user_id: int) -> bool:
     """Отозвать вход через Apple (удаление аккаунта, отвязка). → был ли токен.
     Apple не ответил — токен (шифровкой) уходит в apple_revoke_queue, повтор —
     retry_revokes по расписанию; у человека запись стирается сразу."""
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database._conn import connect
     async with connect() as db:
         row = await (await db.execute("SELECT token FROM apple_tokens WHERE user_id = ?", (user_id,))).fetchone()
@@ -191,7 +191,7 @@ RETRY_MAX = 48  # раз в час — двое суток, потом сдаё�
 
 async def retry_revokes() -> int:
     """Повторить отзыв токенов, на которых Apple не ответил. → сколько отозвано."""
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database._conn import connect
     if not enabled():
         return 0

@@ -15,7 +15,7 @@ def test_snippet_around_query_word():
 @pytest.mark.asyncio
 async def test_lecture_search_route(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import semantic_search
+    from kapibara.features.ai import semantic_search
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

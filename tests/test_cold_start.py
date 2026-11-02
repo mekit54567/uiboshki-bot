@@ -13,5 +13,5 @@ async def test_files_with_text_use_index_not_texts(db):
 
 
 def test_first_index_pass_waits_after_start():
-    import scheduler
+    from kapibara.jobs import scheduler
     assert scheduler.INDEX_FIRST_DELAY >= 10

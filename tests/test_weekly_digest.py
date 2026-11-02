@@ -4,8 +4,8 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-import weekly_digest
-from utils import TZ
+from kapibara.features.notifications import weekly_digest
+from kapibara.core.utils import TZ
 
 MON = date(2026, 10, 5)
 
@@ -21,7 +21,7 @@ def _lessons(by_day):
 
 @pytest.fixture
 def week(monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     def set_days(by_day):
         monkeypatch.setattr(schedule_parser, "lessons_for_date", _lessons(by_day))
@@ -65,7 +65,7 @@ def test_next_monday():
 
 @pytest.mark.asyncio
 async def test_send_respects_toggle(db, week, monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     week({0: [("09:00", "А-1 (В-78)")]})
 
     async def raw():
@@ -103,11 +103,11 @@ def test_build_with_week_grades(week):
 @pytest.mark.asyncio
 async def test_week_grades_from_history(db, monkeypatch):
     """Только у кого свой вход; только рост; по убыванию; СДО упал — пусто."""
-    import sdo_accounts
-    import sdo_grades
-    import utils
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.core import utils
     monkeypatch.setattr(utils, "today_msk", lambda: date(2026, 10, 4))
-    import sdo_history
+    from kapibara.features.sdo import history as sdo_history
     monkeypatch.setattr(sdo_history, "today_msk", lambda: date(2026, 10, 4))
     assert await weekly_digest.week_grades(222) == []                       # входа нет
     await db.save_sdo_session(222, sdo_accounts.encrypt("abcdef0123456789abcdef0123"))
@@ -133,8 +133,8 @@ async def test_week_grades_from_history(db, monkeypatch):
 async def test_send_grades_only_for_real_week_and_without_optional(db, week, monkeypatch):
     """Баллы в обзор — только если обзор уйдёт (пустая неделя — без запросов в
     СДО) и без предметов по выбору, куда человек не ходит."""
-    import config
-    import schedule_parser
+    from kapibara.core import config
+    from kapibara.features.schedule import parser as schedule_parser
     calls = []
 
     async def raw():

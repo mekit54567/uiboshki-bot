@@ -59,8 +59,8 @@ def test_env_example_has_no_empty_optional_values():
 
 
 def test_privacy_names_hosting_from_env(monkeypatch):
-    import legal_texts
-    import privacy
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     assert privacy.VERSION == "2" and privacy.HOST["name"] == "Amvera"     # без HOSTING — как было
     monkeypatch.setenv("HOSTING", "timeweb")
     monkeypatch.setenv("HOSTING_ORG", "ООО «Облако» (ИНН 123, Санкт-Петербург)")     # старый адрес с сервера

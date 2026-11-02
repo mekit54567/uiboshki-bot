@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import notify_prefs
+from kapibara.features.notifications import prefs as notify_prefs
 
 RAW = ("BEGIN:VCALENDAR\r\n" + "".join(
     f"BEGIN:VEVENT\r\nLOCATION:{loc}\r\nEND:VEVENT\r\n" for loc in
@@ -36,7 +36,7 @@ def test_campus():
 
 async def _morning(monkeypatch, events, weekday_date=datetime(2026, 10, 1, 7, 0)):
     """Прогнать утреннюю рассылку (четверг) и вернуть, что ушло в личку."""
-    import scheduler
+    from kapibara.jobs import scheduler
     import handlers.weather as weather
 
     class FakeDatetime(datetime):
@@ -66,7 +66,7 @@ async def _morning(monkeypatch, events, weekday_date=datetime(2026, 10, 1, 7, 0)
 
 @pytest.mark.asyncio
 async def test_morning_follows_prefs(db, monkeypatch):
-    import scheduler
+    from kapibara.jobs import scheduler
     from database import set_notify, upsert_user
     start = datetime(2026, 10, 1, 9, 0, tzinfo=scheduler.TZ)
     mp = [{"summary": "ЛК Физика", "location": "И-201 (МП-1)", "teacher": "", "time": "09:00–10:30",
@@ -95,7 +95,7 @@ async def test_morning_skip_empty(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_lesson_reminder_respects_days(db, monkeypatch):
-    import scheduler
+    from kapibara.jobs import scheduler
     from database import set_notify, upsert_user
     now = datetime(2026, 10, 1, 8, 45, tzinfo=scheduler.TZ)   # четверг
 
@@ -132,7 +132,7 @@ async def test_lesson_reminder_respects_days(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_api_notify(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
 
@@ -183,7 +183,7 @@ def test_reminder_scenarios():
 
 @pytest.mark.asyncio
 async def test_first_pair_reminder_hour_before(db, monkeypatch):
-    import scheduler
+    from kapibara.jobs import scheduler
     from database import upsert_user
     now = datetime(2026, 10, 1, 8, 0, tzinfo=scheduler.TZ)   # пара в 9:00, по умолчанию — за 1 ч
 
@@ -217,7 +217,7 @@ async def test_reminders_batch_and_quiet_without_pairs(db, monkeypatch):
     пользователи двумя запросами на всех, расписание разбирается по разу на
     набор скрытых предметов, у каждого свой фильтр предметов по выбору."""
     import database
-    import scheduler
+    from kapibara.jobs import scheduler
     from database import set_optional_answer, upsert_user
     now = datetime(2026, 10, 1, 8, 0, tzinfo=scheduler.TZ)
 
@@ -232,7 +232,7 @@ async def test_reminders_batch_and_quiet_without_pairs(db, monkeypatch):
     parses = []
 
     def events(raw, day):
-        from optional_subjects import HIDE
+        from kapibara.features.groups.optional_subjects import HIDE
         parses.append(HIDE.get())
         day_ = _day(("ЛК Военная кафедра", 9, 0, 10, 30), tz=scheduler.TZ)
         return [e for e in day_ if not any(h in e["summary"] for h in HIDE.get())]

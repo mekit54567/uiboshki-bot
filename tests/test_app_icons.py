@@ -69,7 +69,7 @@ def test_dart_list_matches():
 
 def test_unlock_rules_valid():
     """unlock (5.91): известные иконки (и нарисованные кодом) и понятные правила."""
-    import achievements
+    from kapibara.features.social import achievements
     drawn = {"classic", "depth", "indigo", "terracotta", "page", "sunset", "library"}
     names = drawn | {i["name"] for i in ICONS["icons"]}
     for name, rule in ICONS.get("unlock", {}).items():

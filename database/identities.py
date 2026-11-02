@@ -85,7 +85,7 @@ async def unlink(user_id: int, provider: str) -> bool:
 async def new_local_user(name: str) -> int:
     """Новый человек без Telegram: следующий свободный номер ниже LOCAL_BASE
     (под замком — два входа сразу не получат один номер)."""
-    import locks
+    from kapibara.core import locks
     async with locks.lock("local_user"), connect() as db:
         row = await (await db.execute("SELECT MIN(user_id) FROM users WHERE user_id <= ?", (LOCAL_BASE,))).fetchone()
         uid = (row[0] - 1) if row and row[0] is not None else LOCAL_BASE

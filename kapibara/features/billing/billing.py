@@ -36,7 +36,7 @@ import time
 import uuid
 from datetime import date, timedelta
 
-import config
+from kapibara.core import config
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def test_only(uid: int | None) -> bool:
 
 
 def missing_requisites() -> list[str]:
-    import privacy
+    from kapibara.features.privacy import privacy
     return [k for k in privacy.operator_missing() if k != "PD_CITY"]
 
 
@@ -170,8 +170,8 @@ async def gift_until() -> str | None:
 
 async def gift_for(uid: int) -> str | None:
     """Подарок действует для него (своя группа и срок не прошёл) → последний день."""
-    import plans
-    from utils import today_msk
+    from kapibara.features.billing import plans
+    from kapibara.core.utils import today_msk
     until = await gift_until()
     if not until or until < today_msk().isoformat():
         return None
@@ -182,7 +182,7 @@ async def unlimited_for(uid: int) -> dict | None:
     """Безлимит, выданный Никитой (/grant), действует → {"until": день или
     None — навсегда}; иначе None."""
     from database.billing import get_unlimited
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     un = await get_unlimited(uid)
     if not un or (un["until"] and un["until"] < today_msk().isoformat()):
         return None
@@ -194,7 +194,7 @@ async def status(uid: int) -> dict:
     что дольше; безлимит навсегда — until может быть None), paid_until, gift,
     unlimited (bool) и unlimited_until, founder, цены для него."""
     from database.billing import get_sub
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     today = today_msk().isoformat()
     sub = await get_sub(uid)
     paid_until = sub["until"] if sub and sub["until"] >= today else None
@@ -225,7 +225,7 @@ async def prices(uid: int) -> list[dict]:
 async def extend_from(uid: int, last: str | None, days: int) -> str:
     """Последний день, если прибавить days дней (без лета) к сроку last —
     после него и после подарка группе, если они ещё идут, иначе с сегодня."""
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     start = today_msk()
     for end in (last, await gift_for(uid)):
         if end and end >= start.isoformat():
@@ -399,7 +399,7 @@ async def _new_inv_id() -> int:
 
 def _yk_client():
     import httpx
-    import net
+    from kapibara.core import net
     return net.client(timeout=20, auth=httpx.BasicAuth(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY))
 
 
@@ -504,7 +504,7 @@ async def donation_paid(pid: str, bot=None) -> bool:
 
 
 async def _who(uid: int | None) -> str:
-    import plus_grant
+    from kapibara.features.billing import grants as plus_grant
     from database import get_user
     u = await get_user(uid) if uid else None
     return plus_grant.who_text(u) if u else "кого-то без аккаунта"
@@ -541,7 +541,7 @@ async def donate_status_line() -> str:
 
 
 async def notify(bot, uid: int, text: str):
-    import delivery
+    from kapibara.features.notifications import delivery
     try:
         await delivery.deliver(bot, uid, text, kind="plus", tab="more", always_tg=True)
     except Exception as e:

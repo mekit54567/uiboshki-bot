@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-import health as bot_health
+from kapibara.ops import health as bot_health
 from webapp import deps
 from webapp.routes import (account, achievements, aitest, auth, billing, channel, chat, deadlines, files, legal, meta,
                            push, rating, reactions, reports, roadmap_page, schedule, sdo, site)
@@ -127,7 +127,7 @@ class ApiV1:
         await self.app(scope, receive, send)
 
 
-from review_demo import ReviewDemo  # noqa: E402 — демо-вход проверяющих магазинов: ответы из записи стенда
+from kapibara.features.content.review_demo import ReviewDemo  # noqa: E402 — демо-вход проверяющих магазинов: ответы из записи стенда
 
 app.add_middleware(ReviewDemo)      # внутри ApiV1: пути уже без /v1
 app.add_middleware(ApiV1)
@@ -146,7 +146,7 @@ async def security_headers(request: Request, call_next):
         if int(length) > body_limit(request.url.path):
             return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
     started = time.monotonic()
-    import timing
+    from kapibara.core import timing
     spent = timing.start()          # база и СДО за этот запрос (timing.py)
     resp = await call_next(request)
     if request.url.path.startswith("/api/"):
@@ -221,9 +221,9 @@ async def _guide_link() -> str:
     """Ссылка на выпущенный пост-гайд по СДО в канале — для экрана «Подключить
     СДО». Номер сообщения — из channel:published (после /channel redo он
     другой), канал — из CHANNEL_URL (t.me/<имя> или @имя). Нет — пусто."""
-    import config
+    from kapibara.core import config
     try:
-        from channel_posts import published
+        from kapibara.features.content.channel_posts import published
         ids = ((await published()).get(GUIDE_SLUG) or {}).get("ids") or []
     except Exception:
         return ""
@@ -261,7 +261,7 @@ async def index_page(request: Request):
     # годится для копии бота у другой группы
     import json
     from html import escape
-    import config
+    from kapibara.core import config
     # канал бота и «написать нам» — для плиток меню «Ещё» (дизайн-ревью, п. 18)
     cfg = json.dumps({"group": config.GROUP_NAME, "bot": config.BOT_USERNAME,
                       "channel": config.CHANNEL_URL, "contact": config.CONTACT_URL,

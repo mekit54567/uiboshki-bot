@@ -14,10 +14,10 @@ from database import (
     add_deadline, get_active_deadlines, mark_deadline_done, set_deadline_done,
     delete_deadline, upsert_user, get_deadline_stats, get_deadline, is_shared_deadline,
 )
-from config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
-from scheduler import DEADLINE_POST_QUESTION
-from keyboards import MAIN_KB, CANCEL_KB
-from utils import esc, parse_day_month, today_msk, esc_attr
+from kapibara.core.config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
+from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
+from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
+from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -72,7 +72,7 @@ WEEKDAY_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 def due_label(due: date, today: date, due_time: str | None = None) -> str:
     """«🔴 сегодня в 23:59», «🟠 завтра», «🟡 пт, 2 октября», «💀 просрочен (29.09)»."""
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     delta = (due - today).days
     tp = f" в {due_time}" if due_time else ""
     if delta < 0:
@@ -189,7 +189,7 @@ async def add_subject(message: Message, state: FSMContext):
 
 @router.message(AddDeadline.description, F.photo)
 async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
-    from ai_solver import extract_text_from_image
+    from kapibara.features.ai.solver import extract_text_from_image
     from html import escape as html_escape
 
     wait = await message.answer("🔎 Распознаю текст с фото...")
@@ -359,11 +359,11 @@ async def cmd_sync_sdo(message: Message):
         await message.answer("❌ Только для старосты.")
         return
 
-    from sdo_parser import sync_deadlines
+    from kapibara.features.sdo.parser import sync_deadlines
 
     wait = await message.answer("⏳ Синхронизирую дедлайны из СДО...")
     result = await sync_deadlines()
-    import sdo_check
+    from kapibara.features.sdo import check as sdo_check
     await sdo_check.note_home(result)       # «СДО проверено в …» во вкладке «Сдать»
 
     if result.get("expired"):
@@ -406,8 +406,8 @@ async def cmd_sync_sdo(message: Message):
 async def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
     """Прошлый семестр по метке в названии курса или курса нет в нынешнем
     расписании группы (sdo_parser.not_this_semester)."""
-    from schedule_parser import get_group_subjects
-    from sdo_parser import SEMESTER_WINDOW, not_this_semester
+    from kapibara.features.schedule.parser import get_group_subjects
+    from kapibara.features.sdo.parser import SEMESTER_WINDOW, not_this_semester
     subjects = await get_group_subjects(**SEMESTER_WINDOW)
     return [d for d in items if not_this_semester(d, subjects)]
 
@@ -418,7 +418,7 @@ async def cmd_sdo_clean(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     from database import get_sdo_deadlines
-    from sdo_parser import current_semester_tag
+    from kapibara.features.sdo.parser import current_semester_tag
     old = await _old_sdo_deadlines(await get_sdo_deadlines())
     if not old:
         await message.answer(f"✅ Дедлайнов не этого семестра нет (нынешний — [{current_semester_tag()}], курсы сверяю с расписанием).")

@@ -17,7 +17,7 @@ def test_start_and_help_mention_pwa():
 def test_rustore_everywhere():
     """Android-приложение в RuStore (27.10.2026) — в /start, /help, /app, описании бота,
     на сайте, в «Установить» Mini App и в /api/meta (links.rustore)."""
-    import config
+    from kapibara.core import config
     from pathlib import Path
     from handlers.start import help_text
     url = config.RUSTORE_URL
@@ -32,7 +32,7 @@ def test_rustore_everywhere():
 def test_news_channel_everywhere(monkeypatch):
     """Открытый канал Капибары (LOGIN_CHANNEL, Никита 19.10) — в /start, /help и
     описании бота; не задан — строки нет. Имя бота — «Капибара МИРЭА»."""
-    import config
+    from kapibara.core import config
     from handlers.start import help_text
     monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
     assert "Новости Капибары" not in start_text("Аня") + help_text() + bot.bot_description("УИБО-03-24")
@@ -53,7 +53,7 @@ def test_start_not_one_group_bot(monkeypatch):
 
 def test_appstore_only_when_live(monkeypatch):
     """App Store — только когда задан APPSTORE_URL (приложение вышло), до этого — молчим."""
-    import config
+    from kapibara.core import config
     from handlers.start import help_text, stores_line
     monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
     monkeypatch.setattr(config, "APPSTORE_URL", "")

@@ -22,7 +22,7 @@ class _Session(_BotSession):
 
 @pytest.mark.asyncio
 async def test_backup_is_a_working_copy_of_the_db(db, tmp_path):
-    import backup
+    from kapibara.ops import backup
     await db.add_deadline("СР-2", "", "2099-10-01", None, 0)
     fid = await db.add_file("Лекция 1", "ОБА", "a", "l1.pdf", 1)
     await db.save_file_text(fid, "текст лекции")
@@ -42,7 +42,7 @@ async def test_backup_is_a_working_copy_of_the_db(db, tmp_path):
 
 
 def test_backup_job_is_scheduled():
-    import scheduler
+    from kapibara.jobs import scheduler
     jobs = {j.func.__name__: j for j in scheduler.start_scheduler(object()).get_jobs()}
     assert "send_backup" in jobs
 
@@ -51,7 +51,7 @@ def test_backup_job_is_scheduled():
 async def test_backup_encrypted_with_key(db, monkeypatch, tmp_path):
     """20.10: с BACKUP_KEY в Telegram уходит только шифротекст; /restore и
     tools/backup_decrypt.py открывают его тем же ключом, чужой ключ — нет."""
-    import backup
+    from kapibara.ops import backup
     monkeypatch.setenv("BACKUP_KEY", "секрет-" + "x" * 40)
     await db.add_deadline("СР-3", "", "2099-10-01", None, 0)
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_Session())
@@ -82,8 +82,8 @@ async def test_backup_encrypted_with_key(db, monkeypatch, tmp_path):
 
 
 def test_policy_says_backup_encrypted(monkeypatch):
-    import privacy
-    import s3_store
+    from kapibara.features.privacy import privacy
+    from kapibara.ops import s3_store
     monkeypatch.setattr(s3_store, "configured", lambda: False)
     monkeypatch.delenv("BACKUP_KEY", raising=False)
     assert "зашифр" not in privacy.backup_texts()["BACKUP_WHERE"]
@@ -94,8 +94,8 @@ def test_policy_says_backup_encrypted(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_status_warns_unencrypted_backup(db, monkeypatch):
-    import health
-    import s3_store
+    from kapibara.ops import health
+    from kapibara.ops import s3_store
     monkeypatch.setattr(s3_store, "configured", lambda: False)
     monkeypatch.delenv("BACKUP_KEY", raising=False)
     assert "задай BACKUP_KEY" in await health.report()
@@ -123,8 +123,8 @@ class _FlakySession(_Session):
 
 @pytest.mark.asyncio
 async def test_backup_retries_send(db, monkeypatch):
-    import backup
-    import health
+    from kapibara.ops import backup
+    from kapibara.ops import health
     monkeypatch.setattr(backup, "SEND_PAUSE", 0)
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_FlakySession(2))
     assert await backup.send_backup(bot, STAROSTA_ID)
@@ -135,8 +135,8 @@ async def test_backup_retries_send(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_backup_send_failure_is_reported(db, monkeypatch):
     """Все попытки упали — староста получает сообщение с причиной, /status — отметку."""
-    import backup
-    import health
+    from kapibara.ops import backup
+    from kapibara.ops import health
     monkeypatch.setattr(backup, "SEND_PAUSE", 0)
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=_FlakySession(99))
     assert not await backup.send_backup(bot, STAROSTA_ID)

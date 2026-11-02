@@ -16,7 +16,7 @@ import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from config import OPTIONAL_SUBJECTS
+from kapibara.core.config import OPTIONAL_SUBJECTS
 
 HIDE: ContextVar[frozenset] = ContextVar("hide_subjects", default=frozenset())
 
@@ -37,8 +37,8 @@ async def pending_for(user_id: int) -> list[str]:
     """Предметы по выбору, которые есть в расписании группы и на которые
     человек ещё не ответил."""
     from database import get_optional_answers
-    from schedule_parser import get_group_subjects
-    from sdo_parser import SEMESTER_WINDOW
+    from kapibara.features.schedule.parser import get_group_subjects
+    from kapibara.features.sdo.parser import SEMESTER_WINDOW
     answers = await get_optional_answers(user_id)
     subjects = set(await get_group_subjects(**SEMESTER_WINDOW))
     return [s for s in OPTIONAL_SUBJECTS if s not in answers and s in subjects]

@@ -49,7 +49,7 @@ def _rss_mb() -> float:
 
 async def _sample() -> tuple[list[tuple], list[tuple]]:
     """(цели, стог): [(id, текст, название файла)]; цели входят в стог."""
-    import semantic_index as si
+    from kapibara.features.ai import semantic_index as si
     async with si.open_index() as db:
         rows = await (await db.execute(
             "SELECT c.id, c.text, COALESCE(f.title, ''), c.file_id FROM chunks c JOIN m.files f ON f.id = c.file_id "
@@ -69,7 +69,7 @@ async def _sample() -> tuple[list[tuple], list[tuple]]:
 
 
 async def _questions(targets: list[tuple]) -> list[str]:
-    import gemini_solver
+    from kapibara.features.ai import gemini as gemini_solver
     blocks = "\n\n".join(f"[{i}] {t[1][:900]}" for i, t in enumerate(targets, 1))
     prompt = (
         "Ниже — фрагменты лекций. К каждому напиши один вопрос, который мог бы задать студент, "
@@ -104,8 +104,8 @@ def _score(qv, hv, hay_ids: list[int], target_ids: list[int], off_v) -> dict:
 
 
 async def _gemini_run(hay, targets, questions) -> dict:
-    import embedder
-    import semantic_index as si
+    from kapibara.features.ai import embedder
+    from kapibara.features.ai import semantic_index as si
     ids = [h[0] for h in hay]
     async with si.open_index() as db:
         rows = await (await db.execute(
@@ -122,7 +122,7 @@ async def _gemini_run(hay, targets, questions) -> dict:
 
 
 async def _local_run(key: str, hay, targets, questions) -> dict:
-    import local_embed
+    from kapibara.features.ai import local_embed
     await local_embed.download(key)
     local_embed.unload_idle(idle=-1)
     before = _rss_mb()
@@ -139,7 +139,7 @@ async def _local_run(key: str, hay, targets, questions) -> dict:
 
 
 async def run(keys: list[str] | None = None) -> str:
-    import local_embed
+    from kapibara.features.ai import local_embed
     keys = keys or list(local_embed.MODELS)
     targets, hay = await _sample()
     if len(targets) < 10:

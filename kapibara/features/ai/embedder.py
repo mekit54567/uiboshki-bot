@@ -12,7 +12,7 @@ local_embed.MODELS (`rubert-mini-frida`, можно с приставкой `loc
 
 import os
 
-import local_embed
+from kapibara.features.ai import local_embed
 
 GEMINI = "gemini"
 
@@ -41,7 +41,7 @@ def precompute() -> str | None:
 
 def dims(p: str) -> int:
     if p == GEMINI:
-        from config import GEMINI_EMBED_DIMS
+        from kapibara.core.config import GEMINI_EMBED_DIMS
         return GEMINI_EMBED_DIMS
     return local_embed.MODELS[p]["dims"]
 
@@ -71,7 +71,7 @@ async def embed(texts: list[str], *, query: bool = False, titles: list[str] | No
     """Векторы единичной длины. Куски лекций — с названием файла (так точнее)."""
     p = p or provider()
     if p == GEMINI:
-        import gemini_solver
+        from kapibara.features.ai import gemini as gemini_solver
         try:
             return await gemini_solver.embed(texts, "RETRIEVAL_QUERY" if query else "RETRIEVAL_DOCUMENT", titles=titles)
         except gemini_solver.GeminiError as e:

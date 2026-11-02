@@ -26,7 +26,7 @@ def _site_dir():
 
 
 def _allow(action: str, request: Request):
-    import ratelimit
+    from kapibara.core import ratelimit
     # сначала свой лимит по IP: отбитые запросы одного адреса не тратят общий потолок
     if not (ratelimit.allow(action, _client_key(request)) and ratelimit.allow("site_all", 0)):
         raise HTTPException(status_code=429, detail="слишком часто — подожди минуту")
@@ -77,8 +77,8 @@ async def about_page(request: Request):
     from webapp import deps
     from webapp.server import _digest
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-    import config
-    import privacy
+    from kapibara.core import config
+    from kapibara.features.privacy import privacy
     from html import escape
     html = ((_site_dir() / "index.html").read_text(encoding="utf-8")
             .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
@@ -98,7 +98,7 @@ async def history_page(request: Request):
     экраны приложения сейчас (демо-данные). Ниже — лента по датам и цифры."""
     from webapp import deps
     from webapp.server import _digest
-    import config
+    from kapibara.core import config
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     html = ((_site_dir() / "history.html").read_text(encoding="utf-8")
             .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
@@ -150,7 +150,7 @@ async def about_search(request: Request, q: str = "", type: int = 0):
 
 @router.get("/about/api/target/{target_type}/{target_id}", include_in_schema=False)
 async def about_target(request: Request, target_type: int, target_id: int):
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     from webapp.routes.schedule import api_target
     _allow("site_target", request)
     # только то, что есть в справочнике (его и показывает поиск): случайный id

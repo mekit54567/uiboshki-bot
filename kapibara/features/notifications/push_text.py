@@ -27,7 +27,7 @@ def split_subject(subject: str) -> tuple[str, str]:
 
 def when(due_date: str, due_time: str | None, today: date) -> str:
     """«сегодня до 23:59», «завтра», «в чт до 18:00», «8 октября»."""
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     d = date.fromisoformat(due_date)
     delta = (d - today).days
     tail = f" до {due_time}" if due_time else ""

@@ -10,7 +10,7 @@ import os
 import numpy as np
 import pytest
 
-import local_embed
+from kapibara.features.ai import local_embed
 
 pytest.importorskip("tokenizers")
 

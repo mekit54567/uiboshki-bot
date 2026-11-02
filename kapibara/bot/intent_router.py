@@ -23,7 +23,7 @@ Fail-safe: при любой ошибке (нет ключа, таймаут, н
 
 import logging
 
-import gemini_solver
+from kapibara.features.ai import gemini as gemini_solver
 
 logger = logging.getLogger(__name__)
 

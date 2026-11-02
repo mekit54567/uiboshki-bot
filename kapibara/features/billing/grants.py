@@ -83,7 +83,7 @@ async def find_user(who: str) -> dict:
 
 
 def who_text(u: dict) -> str:
-    from utils import esc
+    from kapibara.core.utils import esc
     name = esc(u.get("full_name") or "")
     nick = f"@{esc(u['username'])}" if u.get("username") else ""
     parts = [p for p in (name, nick) if p]
@@ -92,15 +92,15 @@ def who_text(u: dict) -> str:
 
 async def extend(uid: int, days: int, by: int, note: str | None = None) -> str:
     """Продлить подписку на days дней вручную → последний день."""
-    import billing
-    import locks
+    from kapibara.features.billing import billing
+    from kapibara.core import locks
     async with locks.lock("plus_grant", uid):
         return await billing.grant(uid, days, "manual", by=by, note=note)
 
 
 async def unlimited(uid: int, until: str | None, by: int, note: str | None = None):
     """Безлимит навсегда (until=None) или до дня включительно."""
-    import locks
+    from kapibara.core import locks
     from database.billing import get_unlimited, log_grant, put_unlimited
     async with locks.lock("plus_grant", uid):
         prev = await get_unlimited(uid)
@@ -112,10 +112,10 @@ async def unlimited(uid: int, until: str | None, by: int, note: str | None = Non
 async def off(uid: int, what: str, by: int) -> dict:
     """Снять ручное: what — all, sub или unlimited. → {"unlimited": снят ли,
     "sub": (было, стало) или None — ручных дней не было}."""
-    import billing
-    import locks
+    from kapibara.features.billing import billing
+    from kapibara.core import locks
     from database.billing import del_unlimited, get_sub, grant_log, log_grant, put_sub, revoke_grants
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     out = {"unlimited": False, "sub": None}
     async with locks.lock("plus_grant", uid):
         if what in ("all", "unlimited") and await del_unlimited(uid):
@@ -144,8 +144,8 @@ async def off(uid: int, what: str, by: int) -> dict:
 
 async def describe(u: dict) -> str:
     """Что у человека сейчас — для /grant <кто>."""
-    import billing
-    import plans
+    from kapibara.features.billing import billing
+    from kapibara.features.billing import plans
     from database.billing import grant_log
     uid = u["user_id"]
     st = await billing.status(uid)
@@ -164,7 +164,7 @@ async def describe(u: dict) -> str:
 
 
 def _log_line(e: dict) -> str:
-    from utils import esc
+    from kapibara.core.utils import esc
     day = (e["at"] or "")[:10]
     when = fmt(day) if day else ""
     src = {"manual": "вручную", "pay": "оплата"}.get(e["source"] or "", e["source"] or "")
@@ -206,8 +206,8 @@ def _tail(raw: str, n: int) -> str:
 async def command(bot, by: int, args: list[str] | str) -> str:
     """Разбор /grant → ответ Никите (HTML). Человеку пишет сам. args — слова
     или весь текст после «/grant» (так приписка сохранит переносы строк)."""
-    import billing
-    import plus_welcome
+    from kapibara.features.billing import billing
+    from kapibara.features.billing import welcome as plus_welcome
     raw = args if isinstance(args, str) else " ".join(args)
     words = raw.split()
     if not words:
@@ -263,10 +263,10 @@ async def command(bot, by: int, args: list[str] | str) -> str:
 
 def _wrote(note: str) -> str:
     """Что ушло человеку — Никите видно, как выглядит приписка."""
-    import plus_welcome
+    from kapibara.features.billing import welcome as plus_welcome
     return ("Ему написал с припиской:\n" + plus_welcome.note_line(note)) if note else "Ему написал."
 
 
 def _today() -> str:
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     return today_msk().isoformat()

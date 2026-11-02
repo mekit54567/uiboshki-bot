@@ -24,9 +24,9 @@ NAMES = {OWN: "своя группа", UNL: "безлимит", SUB: "подпи
 async def plan_of(user_id: int) -> str:
     """Никита → own (без лимитов), выданный безлимит → unl, «Капибара+» (и
     подарок своей группе) → sub, своя группа → own, остальные → base."""
-    import billing
-    import config
-    import groups
+    from kapibara.features.billing import billing
+    from kapibara.core import config
+    from kapibara.features.groups import groups
     if config.is_starosta(user_id):
         return OWN
     if await billing.unlimited_for(user_id):
@@ -44,23 +44,23 @@ async def has_plus(user_id: int) -> bool:
     """Есть ли «Капибара+»: оплачена, бонусом, подарком своей группе до
     billing.GIFT_UNTIL или безлимитом от Никиты — для платных мелочей:
     иконки и скины «по подписке», значок, и для лимитов ИИ (sub)."""
-    import billing
+    from kapibara.features.billing import billing
     from database import get_subscription
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     until = await get_subscription(user_id)
     return (bool(until and until >= today_msk().isoformat()) or bool(await billing.gift_for(user_id))
             or bool(await billing.unlimited_for(user_id)))
 
 
 async def _own(user_id: int) -> bool:
-    import config
-    import groups
+    from kapibara.core import config
+    from kapibara.features.groups import groups
     from database import get_user_group
     if config.is_starosta(user_id):
         return True
     if not groups.home_id():
         return False
-    import members
+    from kapibara.features.groups import members
     member = await members.known(user_id)
     if member:              # в чате своей группы — своя, какую бы группу ни выбрал (владелец 09.10)
         return True

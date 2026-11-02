@@ -3,7 +3,7 @@
 import httpx
 import pytest
 
-import sdo_net
+from kapibara.features.sdo import net as sdo_net
 
 
 @pytest.fixture(autouse=True)

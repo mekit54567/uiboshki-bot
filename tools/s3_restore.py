@@ -17,10 +17,10 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import backup  # noqa: E402
+from kapibara.ops import backup  # noqa: E402
 import database  # noqa: E402
-import s3_store  # noqa: E402
-from utils import TZ  # noqa: E402
+from kapibara.ops import s3_store  # noqa: E402
+from kapibara.core.utils import TZ  # noqa: E402
 
 
 def people(path: str) -> int:

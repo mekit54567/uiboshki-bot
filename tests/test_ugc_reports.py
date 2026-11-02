@@ -18,7 +18,7 @@ DAY = "2099-09-29"
 
 @pytest.fixture
 def env(db, monkeypatch):
-    import config
+    from kapibara.core import config
     import webapp.server as server
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
     monkeypatch.setattr(config, "STAROSTA_ID", OWNER)
@@ -72,7 +72,7 @@ async def test_report_note_goes_to_owner_and_delete_removes_it(env, db):
     c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
     assert len(bot.session.sent_texts) == 1
 
-    import ugc
+    from kapibara.features.social import ugc
     from database import get_lesson_note
     rid = (await ugc.get_report(1))["id"]
     await _press(bot, f"rep:del:{rid}", uid=ME)                      # не владелец — ничего
@@ -89,7 +89,7 @@ async def test_keep_closes_report_only(env, db):
     hid = await db.add_hw("Анализ", "задачи 1–5", "", "", AUTHOR, DAY)
     assert c.post("/api/report", json={"kind": "hw", "id": hid}, headers=h).json() == {"ok": True}
     await _press(bot, "rep:keep:1")
-    import ugc
+    from kapibara.features.social import ugc
     from database.homework import get_hw
     assert await get_hw(hid) and (await ugc.get_report(1))["status"] == "kept"
 
@@ -134,8 +134,8 @@ async def test_owner_cannot_be_hidden(env, db):
 
 @pytest.mark.asyncio
 async def test_erase_forgets_reports_and_blocks(env, db):
-    import privacy
-    import ugc
+    from kapibara.features.privacy import privacy
+    from kapibara.features.social import ugc
     c, h, _ = env
     nid = await db.add_lesson_note(DAY, "", "спам", AUTHOR)
     c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
@@ -189,7 +189,7 @@ async def test_removed_author_can_dispute_and_owner_restores(env, db):
     assert to_author and "убрали по жалобе" in to_author[-1] and "Лекция 3" in to_author[-1]
 
     await _dispute(bot, uid=ME)                                          # не автор — не оспорить
-    import ugc
+    from kapibara.features.social import ugc
     assert (await ugc.get_report(1))["status"] == "removed"
     await _dispute(bot, "Это моя лекция с пары, не спам & не реклама")
     assert (await ugc.get_report(1))["status"] == "disputed"
@@ -216,14 +216,14 @@ async def test_dispute_upheld_keeps_hidden(env, db):
     assert await get_lesson_note(nid) is None
     assert "остаётся скрытой" in [t for chat, t in bot.session.sent_texts if chat == AUTHOR][-1]
     await _dispute(bot)                                                   # второй раз — уже пересмотрели
-    import ugc
+    from kapibara.features.social import ugc
     assert (await ugc.get_report(1))["status"] == "upheld"
 
 
 @pytest.mark.asyncio
 async def test_dispute_asks_why_with_limits_and_cancel(env, db):
     # Никита 18.10: «пусть в оспаривании человек пишет, что и почему не согласен с удалением»
-    import ugc
+    from kapibara.features.social import ugc
     c, h, bot = env
     nid = await db.add_lesson_note(DAY, "", "перенос пары", AUTHOR)
     c.post("/api/report", json={"kind": "note", "id": nid}, headers=h)
@@ -253,8 +253,8 @@ async def test_dispute_asks_why_with_limits_and_cancel(env, db):
 
 @pytest.mark.asyncio
 async def test_pending_dispute_outlives_purge_and_erase_drops_appeal(env, db):
-    import privacy
-    import ugc
+    from kapibara.features.privacy import privacy
+    from kapibara.features.social import ugc
     from database._conn import connect
     c, h, bot = env
     nid = await db.add_lesson_note(DAY, "", "перенос пары", AUTHOR)
@@ -276,11 +276,11 @@ async def test_pending_dispute_outlives_purge_and_erase_drops_appeal(env, db):
 @pytest.mark.asyncio
 async def test_note_spam_limits(env, db, monkeypatch):
     # Никита 18.10: «чтоб не спамили» — повтор того же текста и не больше 10 за сутки
-    import ratelimit
-    import ugc
+    from kapibara.core import ratelimit
+    from kapibara.features.social import ugc
     c, h, _ = env
     monkeypatch.setitem(ratelimit.LIMITS, "note", (100, 600))
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     body = {"date": today_msk().isoformat(), "text": "контрольная"}
     assert c.post("/api/notes", json=body, headers=h).status_code == 200
     r = c.post("/api/notes", json={**body, "text": "  Контрольная "}, headers=h)
@@ -292,7 +292,7 @@ async def test_note_spam_limits(env, db, monkeypatch):
 
 
 def test_rules_say_forbidden_and_dispute(db):
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     d = legal_texts.doc("rules")
     assert d["sections"][0]["title"] == "Запрещено" and "Нельзя" not in str(d)
     assert "Оспорить" in str(d)

@@ -78,7 +78,7 @@ def dp(monkeypatch):
     """Как в bot.py: middleware + все роутеры (register_handlers)."""
     import handlers.solver
     from handlers import register_handlers
-    from middleware import MenuInterruptMiddleware, StatsMiddleware
+    from kapibara.bot.middleware import MenuInterruptMiddleware, StatsMiddleware
 
     async def no_intent(text):
         return "none"
@@ -225,7 +225,7 @@ async def test_feed_author_is_not_stored(db, monkeypatch):
     assert await social.get_last_feed_post_time(UID) is not None
     assert await social.get_last_feed_post_time(333) is None
     # другой токен — другой хэш (по копии базы без токена автора не подобрать)
-    monkeypatch.setattr("config.BOT_TOKEN", "999:OTHER")
+    monkeypatch.setattr("kapibara.core.config.BOT_TOKEN", "999:OTHER")
     assert social.feed_author_hash(UID) != author
 
 
@@ -248,7 +248,7 @@ async def test_old_feed_rows_are_anonymized(db):
 async def test_anonymous_flows_are_not_in_stats(db, dp, bot, monkeypatch):
     import handlers.feed
     import handlers.social
-    import stats
+    from kapibara.ops import stats
     monkeypatch.setattr(stats, "_last", {})
     monkeypatch.setattr(handlers.feed, "GROUP_CHAT_ID", GROUP)
     await send(dp, bot, "/feed")

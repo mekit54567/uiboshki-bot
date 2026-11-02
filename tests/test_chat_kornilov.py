@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-import config
+from kapibara.core import config
 
 
 @pytest.mark.asyncio
@@ -13,7 +13,7 @@ async def test_start_is_one_short_message_with_app_button(db, monkeypatch):
     from aiogram import Bot, Dispatcher
     from aiogram.fsm.storage.memory import MemoryStorage
     from aiogram.types import Chat, Message, Update, User
-    import keyboards
+    from kapibara.bot import keyboards
     from handlers import start
     from tests.test_solver_render import RecordingSession
 

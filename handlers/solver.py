@@ -8,15 +8,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, Message,
                            ReplyKeyboardMarkup)
 
-from ai_solver import solve_text, solve_image, solve_with_history, SUBJECTS
-from gemini_solver import solve_with_lecture_context
+from kapibara.features.ai.solver import solve_text, solve_image, solve_with_history, SUBJECTS
+from kapibara.features.ai.gemini import solve_with_lecture_context
 from database import (
     upsert_user, add_solver_history, get_solver_history,
     get_subjects_with_lecture_text, get_subject_lecture_context,
 )
-from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
-from intent_router import classify_intent, dispatch_intent
-from utils import esc, md_to_tg_html_parts, utc_to_msk_date
+from kapibara.bot.keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
+from kapibara.bot.intent_router import classify_intent, dispatch_intent
+from kapibara.core.utils import esc, md_to_tg_html_parts, utc_to_msk_date
 from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
@@ -32,18 +32,18 @@ async def _ai_block(message: Message, day: bool = True) -> str | None:
     """Лимит запросов к ИИ, как в WebApp (ai_quota): бесплатный лимит Gemini
     один человек сжечь не должен. Почему нельзя — текст ответа, или None.
     day=False — только минутный (классификатор намерений — не вопрос к ИИ)."""
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     return _why_text(await ai_quota.gate(message.from_user.id, day=day))
 
 
 async def _ai_day(message: Message) -> str | None:
     """Только дневной счёт — минутный уже проверен перед классификатором."""
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     return _why_text(await ai_quota.day_only(message.from_user.id))
 
 
 def _why_text(why: str | None) -> str | None:
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     if why and why != "minute":
         return "⏳ " + ai_quota.text(why, capital=True) + "."
     return TOO_MANY if why else None
@@ -61,7 +61,7 @@ async def solve_subject_kb() -> ReplyKeyboardMarkup:
     из расписания, в конце «Другое». Раньше был фиксированный список
     «Математика/Экономика/…», который не совпадал ни с одним предметом, по
     которому есть лекции, — и лекции в обычной решалке не участвовали."""
-    from schedule_parser import get_group_subjects
+    from kapibara.features.schedule.parser import get_group_subjects
     with_lectures = await get_subjects_with_lecture_text()
     rest = [s for s in await get_group_subjects() if s not in with_lectures]
     if not with_lectures and not rest:
@@ -79,11 +79,11 @@ async def _lectures_for(data: dict, query: str = "") -> str:
     «объясни 3 лекцию», пустой индекс, пустой вопрос. Пусто — если лекций нет."""
     if not data.get("has_lectures"):
         return ""
-    import lecture_picker
+    from kapibara.features.lectures import picker as lecture_picker
     subject = data.get("subject", "")
     if query.strip() and not lecture_picker.wants_course(query):
         try:
-            import semantic_search
+            from kapibara.features.ai import semantic_search
             if await semantic_search.ready():
                 hits = await semantic_search.search(query, subject)
                 if hits:
@@ -104,7 +104,7 @@ def with_sources(answer: str, lectures: str) -> str:
     в приложении это чипы, в боте — строка. Только номера, на которые ИИ сослался."""
     if not answer or not lectures.lstrip().startswith("=== [1]"):
         return answer
-    from semantic_search import short_title
+    from kapibara.features.ai.semantic_search import short_title
     heads = {}
     for n, head in _CHUNK_HEAD.findall(lectures):
         title = head.split(": ", 1)[-1]
@@ -333,7 +333,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(SolverState.in_dialog, F.text, PRIVATE)
 async def handle_dialog(message: Message, state: FSMContext):
-    import lecture_picker
+    from kapibara.features.lectures import picker as lecture_picker
     data    = await state.get_data()
     subject = data.get("subject", "")
     backend = data.get("backend", "gemini")
@@ -484,13 +484,13 @@ GONE_TEXT = "Этот вопрос уже не найти — задай его 
 
 def think_kb(left: int | None) -> InlineKeyboardMarkup:
     """left=None — безлимит, без счётчика."""
-    import think
+    from kapibara.features.ai import think
     return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text=f"🧠 {think.LABEL}" + ("" if left is None else f" · {left}"), callback_data=THINK_CB)]])
 
 
 async def offer_think(uid: int, state: FSMContext, sent: list[Message], question: list, data: dict):
-    import think
+    from kapibara.features.ai import think
     if not sent or not question or question[-1]["role"] != "user" \
             or question[-1]["content"].startswith("Задание на фото"):
         return
@@ -507,8 +507,8 @@ async def offer_think(uid: int, state: FSMContext, sent: list[Message], question
 
 @router.callback_query(F.data == THINK_CB)
 async def think_again(callback: CallbackQuery, state: FSMContext):
-    import lecture_picker
-    import think
+    from kapibara.features.lectures import picker as lecture_picker
+    from kapibara.features.ai import think
     data = await state.get_data()
     question, d = data.get("think_q"), data.get("think_d") or {}
     if not question:
@@ -574,7 +574,7 @@ def arm_kb(left: int | None, on: bool) -> InlineKeyboardMarkup:
 async def offer_arm(message: Message) -> Message | None:
     """Переключатель «Подумать» под «Пришли задачу» — подписчику, пока на
     сегодня не кончилось (кончилось — не предлагаем вовсе)."""
-    import think
+    from kapibara.features.ai import think
     offer = await think.offer(message.from_user.id)
     if not offer or offer["left"] == 0:
         return None
@@ -594,7 +594,7 @@ async def drop_arm(message: Message, state: FSMContext, data: dict):
 
 @router.callback_query(F.data == THINK_ARM_CB)
 async def toggle_arm(callback: CallbackQuery, state: FSMContext):
-    import think
+    from kapibara.features.ai import think
     data = await state.get_data()
     if await state.get_state() != SolverState.waiting_task.state or data.get("think_arm") != callback.message.message_id:
         await callback.answer(ARM_GONE, show_alert=True)
@@ -619,7 +619,7 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
 async def _think_first(message: Message, question: list, subject: str = "", lectures: str = "") -> str | None:
     """Вопрос сразу моделью второго уровня: ответ или None (причина уже
     написана человеку; попытка при сбое не списана)."""
-    import think
+    from kapibara.features.ai import think
     wait = await message.answer("🧠 Думаю как следует…")
     try:
         answer = await think.solve(message.from_user.id, question, subject, lectures, first=True)
@@ -659,7 +659,7 @@ async def _think_free(message: Message, state: FSMContext, text: str):
 @router.message(Command("think"), PRIVATE)
 async def cmd_think(message: Message, state: FSMContext):
     """/think вопрос — сразу «подумав»; /think — следующий вопрос «подумав»."""
-    import think
+    from kapibara.features.ai import think
     why = await think.why_not(message.from_user.id)
     if why:
         await message.answer("⏳ " + why)
@@ -686,8 +686,8 @@ async def think_waiting_photo(message: Message):
 @router.message(Command("aithink"), PRIVATE)
 async def cmd_aithink(message: Message):
     """/aithink on|off — выключатель «Подумать ещё» для отката (у старосты)."""
-    import think
-    from config import is_starosta
+    from kapibara.features.ai import think
+    from kapibara.core.config import is_starosta
     from database import set_setting
     if not is_starosta(message.from_user.id):
         return
@@ -771,7 +771,7 @@ async def lecture_handle_task(message: Message, state: FSMContext):
     subject = data.get("subject", "")
     wait = await message.answer("📖 Читаю лекции и решаю — с большим контекстом это может занять чуть больше времени...")
     try:
-        import lecture_picker
+        from kapibara.features.lectures import picker as lecture_picker
         context_text = lecture_picker.pick(await get_subject_lecture_context(subject), message.text)
         answer = await solve_with_lecture_context(message.text, subject, context_text)
         await wait.delete()

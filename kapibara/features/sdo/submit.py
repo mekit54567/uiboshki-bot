@@ -29,8 +29,8 @@ import re
 import httpx
 from bs4 import BeautifulSoup
 
-import sdo_net
-from config import SDO_BASE_URL
+from kapibara.features.sdo import net as sdo_net
+from kapibara.core.config import SDO_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,7 @@ def only_text(accepted: list[str]) -> str:
 async def submission_rules(cookie: str, cmid: int) -> dict:
     """Что принимает задание — до выбора файлов: {"accepted", "labels",
     "maxfiles", "maxbytes"} или {"closed": почему нельзя сдать}."""
-    from sdo_parser import get_checked
+    from kapibara.features.sdo.parser import get_checked
     url = f"{SDO_BASE_URL}/mod/assign/view.php?id={cmid}"
     async with sdo_net.client(cookie) as client:
         try:
@@ -318,7 +318,7 @@ async def submit_file(cookie: str, cmid: int, name: str = "", data: bytes = b"",
     """Загрузить файл(ы) в задание cmid одним ответом (до MAX_FILES за раз, но
     не больше, чем разрешает задание); replace — прежние файлы ответа убрать
     («Редактировать ответ»). → {"status": текст статуса в СДО, "url": ...}"""
-    from sdo_parser import SdoSessionExpired, get_checked
+    from kapibara.features.sdo.parser import SdoSessionExpired, get_checked
     files = files or [(name, data)]
     if not files or any(not d for _, d in files):
         raise SubmitError("пустой файл")
@@ -378,8 +378,8 @@ async def submit_file(cookie: str, cmid: int, name: str = "", data: bytes = b"",
 async def remove_submission(cookie: str, cmid: int) -> dict:
     """«Удалить ответ» в задании cmid: страница подтверждения → её форма
     (action=removesubmission, sesskey). → {"status": состояние ответа после}."""
-    from sdo_grades import parse_assign_page
-    from sdo_parser import SdoSessionExpired, get_checked
+    from kapibara.features.sdo.grades import parse_assign_page
+    from kapibara.features.sdo.parser import SdoSessionExpired, get_checked
     url = f"{SDO_BASE_URL}/mod/assign/view.php?id={cmid}"
     async with sdo_net.client(cookie) as client:
         try:

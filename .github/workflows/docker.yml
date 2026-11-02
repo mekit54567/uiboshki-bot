@@ -26,6 +26,6 @@ jobs:
       - name: Проверка внутри образа
         run: |
           docker run --rm uiboshki xray version
-          docker run --rm uiboshki python -c "import bot, net, local_embed, s3_store; print('модули ok')"
+          docker run --rm uiboshki python -c "import bot, kapibara.core.net, kapibara.features.ai.local_embed, kapibara.ops.s3_store; print('модули ok')"
           docker run --rm -e XRAY_CONFIG='vless://00000000-1111-2222-3333-444444444444@example.org:443?security=tls&sni=example.org' \
             uiboshki sh -c 'python tools/xray_conf.py /tmp/x.json && xray run -test -c /tmp/x.json'

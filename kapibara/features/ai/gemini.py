@@ -33,9 +33,9 @@ from collections import Counter
 
 import httpx
 
-import net
+from kapibara.core import net
 
-from config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL,
+from kapibara.core.config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL,
                     OPENROUTER_API_KEY)
 
 logger = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ async def ai_main() -> str:
 
 async def _has_plus(uid: int) -> bool:
     """Оплачена или подарена «Капибара+» (plans.has_plus, подписка #199)."""
-    import plans
+    from kapibara.features.billing import plans
     if hasattr(plans, "has_plus"):
         return await plans.has_plus(uid)
     return await plans.plan_of(uid) == plans.SUB
@@ -211,7 +211,7 @@ async def ling_first() -> bool:
     mode = await ai_main()
     if mode in ("gemini", "all"):
         return mode == "all"
-    from config import is_starosta
+    from kapibara.core.config import is_starosta
     from database.groups import current_user
     uid = current_user.get()
     if not uid:
@@ -487,7 +487,7 @@ async def embed(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", titles: list
     для кусков лекций (с заголовком файла — так точнее), RETRIEVAL_QUERY для
     вопроса. Длина вектора урезается (Matryoshka) до dims и нормируется:
     у урезанных векторов Gemini длина не единичная."""
-    from config import GEMINI_EMBED_DIMS, GEMINI_EMBED_MODEL
+    from kapibara.core.config import GEMINI_EMBED_DIMS, GEMINI_EMBED_MODEL
     if not GEMINI_API_KEY:
         raise GeminiError("GEMINI_API_KEY не настроен на сервере")
     dims = dims or GEMINI_EMBED_DIMS

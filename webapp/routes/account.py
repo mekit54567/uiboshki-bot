@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from config import design2_on, is_starosta
+from kapibara.core.config import design2_on, is_starosta
 from webapp.deps import CurrentUser
 
 router = APIRouter()
@@ -15,8 +15,8 @@ router = APIRouter()
 
 @router.get("/api/me")
 async def api_me(user: dict = CurrentUser):
-    import groups
-    import plans
+    from kapibara.features.groups import groups
+    from kapibara.features.billing import plans
     return {"id": user["id"], "first_name": user.get("first_name", ""), "username": user.get("username", ""),
             "group": await groups.of_user(user["id"]), "plan": await plans.plan_of(user["id"]),
             "plus": await plans.has_plus(user["id"]),     # «Капибара+» (иконки «по подписке» и т. п.)
@@ -29,7 +29,7 @@ async def consent_state(uid: int) -> dict:
     был до согласий — один раз, закрывается: показал — POST /api/consent/asked.
     Попросил удалить данные — erasing (день и текст), вместо согласия.
     /api/me ничего не отмечает — его зовут несколько экранов сразу."""
-    import privacy
+    from kapibara.features.privacy import privacy
     blocked = await privacy.blocked(uid)
     due = await privacy.erasing(uid) if blocked else None
     return {"consent_needed": blocked or await privacy.should_ask(uid), "consent_blocked": blocked,
@@ -39,7 +39,7 @@ async def consent_state(uid: int) -> dict:
 @router.get("/api/groups/search")
 async def api_groups_search(q: str = "", user: dict = CurrentUser):
     """Группы по названию — для выбора своей (этап 1: любая группа института)."""
-    import groups
+    from kapibara.features.groups import groups
     return {"items": await groups.search(q[:40])}
 
 
@@ -51,8 +51,8 @@ class GroupBody(BaseModel):
 async def api_group_admin_request(user: dict = CurrentUser):
     """«Я староста этой группы» — запрос владельцу бота (handlers/group_pick)."""
     from types import SimpleNamespace
-    import groups
-    import ratelimit
+    from kapibara.features.groups import groups
+    from kapibara.core import ratelimit
     from handlers.group_pick import request_admin
     from webapp.deps import tg_bot
     g = await groups.of_user(user["id"])
@@ -67,7 +67,7 @@ async def api_group_admin_request(user: dict = CurrentUser):
 
 @router.post("/api/me/group")
 async def api_set_group(body: GroupBody, user: dict = CurrentUser):
-    import groups
+    from kapibara.features.groups import groups
     from webapp import deps
     g = await groups.choose(user["id"], body.id, deps.tg_bot())
     if not g:
@@ -80,9 +80,9 @@ async def api_set_group(body: GroupBody, user: dict = CurrentUser):
 @router.get("/api/security")
 async def api_security(user: dict = CurrentUser):
     """Экран «Безопасность»: как защищены данные (без самих ключей)."""
-    import ratelimit
-    import s3_store
-    import sdo_accounts
+    from kapibara.core import ratelimit
+    from kapibara.ops import s3_store
+    from kapibara.features.sdo import accounts as sdo_accounts
     from webapp.auth import MAX_AUTH_AGE_SECONDS
     return {
         "backup_s3": s3_store.configured(),
@@ -107,10 +107,10 @@ EVENING_KEYS = ("evening", "evening_time")
 
 
 async def _notify_view(uid: int) -> dict:
-    import notify_prefs
-    from config import DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE, SCHEDULE_HOUR, SCHEDULE_MINUTE
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.core.config import DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE, SCHEDULE_HOUR, SCHEDULE_MINUTE
     from database import get_user
-    from schedule_parser import raw_for_user
+    from kapibara.features.schedule.parser import raw_for_user
     user = await get_user(uid) or {}
     try:
         home = notify_prefs.home_campus(await raw_for_user(uid))
@@ -137,7 +137,7 @@ async def api_notify(user: dict = CurrentUser):
 
 @router.post("/api/notify")
 async def api_notify_save(body: NotifyBody, user: dict = CurrentUser):
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     from database import get_user, set_notify, set_reminder_minutes, set_subscription
     uid = user["id"]
     if body.subscribed is not None:
@@ -147,7 +147,7 @@ async def api_notify_save(body: NotifyBody, user: dict = CurrentUser):
             raise HTTPException(status_code=400, detail="такого времени напоминания нет")
         await set_reminder_minutes(uid, body.reminder_minutes)
     if body.prefs is not None:
-        from locks import lock
+        from kapibara.core.locks import lock
         async with lock("notify", uid):          # два быстрых нажатия не перетирают друг друга
             current = notify_prefs.merge((await get_user(uid) or {}).get("notify"))
             new = dict(body.prefs)
@@ -163,7 +163,7 @@ async def api_pulsecheck(user: dict = CurrentUser):
     """Пускает ли pulse.mirea.ru сервер бота — кнопка старосты в листе «СДО»."""
     if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="только для старосты")
-    import pulse_check
+    from kapibara.features.pulse import check as pulse_check
     return await pulse_check.check()
 
 
@@ -173,7 +173,7 @@ async def api_pulse_lab_kit(user: dict = CurrentUser):
     разведки без новой сборки. Пусто — у приложения свои."""
     if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="только для старосты")
-    import pulse_lab
+    from kapibara.features.pulse import lab as pulse_lab
     return pulse_lab.kit()
 
 
@@ -186,7 +186,7 @@ async def api_pulse_lab(request: Request, user: dict = CurrentUser):
 
     from aiogram.types import BufferedInputFile
 
-    import pulse_lab
+    from kapibara.features.pulse import lab as pulse_lab
     from webapp.deps import tg_bot
     raw = await request.body()
     if len(raw) > pulse_lab.MAX_BODY:
@@ -218,7 +218,7 @@ async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser):
     с сервера (пускает ли DDoS-Guard) и хранение зашифрованным. Пока — эксперимент старосты."""
     if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="только для старосты")
-    import pulse_accounts
+    from kapibara.features.pulse import accounts as pulse_accounts
     return await pulse_accounts.connect_from_app(user["id"], body.cookie[:16384])
 
 
@@ -226,13 +226,13 @@ async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser):
 async def api_pulse_status(user: dict = CurrentUser):
     if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="только для старосты")
-    import pulse_accounts
+    from kapibara.features.pulse import accounts as pulse_accounts
     return await pulse_accounts.status_for(user["id"])
 
 
 @router.post("/api/pulse/disconnect")
 async def api_pulse_disconnect(user: dict = CurrentUser):
-    import pulse_accounts
+    from kapibara.features.pulse import accounts as pulse_accounts
     await pulse_accounts.forget(user["id"])
     return {"ok": True}
 
@@ -258,7 +258,7 @@ async def ics_feed(token: str):
     owner = await get_user_by_calendar_token(token)
     if not owner:
         raise HTTPException(status_code=404, detail="ссылка недействительна")
-    from optional_subjects import apply_for
+    from kapibara.features.groups.optional_subjects import apply_for
     await apply_for(owner["user_id"])
     body = await build_ics_for_user(token, owner.get("group_id"))
     return Response(

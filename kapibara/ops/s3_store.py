@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timezone
 from urllib.parse import quote, urlsplit
 
-import net
+from kapibara.core import net
 
 DEFAULT_ENDPOINT = "https://storage.yandexcloud.net"
 

@@ -167,7 +167,7 @@ def render_week(title: str, subtitle: str, days: list[tuple[date, list[dict]]], 
     if not busy:
         dr.text((PAD, y + 20), "Пар нет — можно отдохнуть", font=_font(38, True), fill=TEXT)
         y += 120
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     for d, rows, bh in blocks:
         dr.rounded_rectangle((PAD, y, W - PAD, y + bh), 28, fill=CARD)
         n = sum(l.get("pairs", 1) for l, _, _ in rows)
@@ -198,7 +198,7 @@ def render_week(title: str, subtitle: str, days: list[tuple[date, list[dict]]], 
 # времени — Telegram кэширует картинки по URL, а расписание меняется.
 
 def sign(key: str) -> str:
-    from config import BOT_TOKEN
+    from kapibara.core.config import BOT_TOKEN
     return hmac.new(BOT_TOKEN.encode(), f"card:{key}".encode(), hashlib.sha256).hexdigest()[:24]
 
 
@@ -235,7 +235,7 @@ def _monday_for(today: date) -> date:
 
 
 def week_title(raw: bytes, monday: date) -> tuple[str, str]:
-    from schedule_parser import MONTHS_GEN, week_number
+    from kapibara.features.schedule.parser import MONTHS_GEN, week_number
     sunday = monday + timedelta(days=6)
     num = week_number(raw, monday) or week_number(raw, monday + timedelta(days=1))
     span = (f"{monday.day}–{sunday.day} {MONTHS_GEN[sunday.month - 1]}" if monday.month == sunday.month
@@ -244,7 +244,7 @@ def week_title(raw: bytes, monday: date) -> tuple[str, str]:
 
 
 def build_own(raw: bytes, kind: str, now: datetime, group: str, bot: str) -> bytes:
-    from schedule_parser import DAY_NAMES, MONTHS_GEN, lessons_for_date
+    from kapibara.features.schedule.parser import DAY_NAMES, MONTHS_GEN, lessons_for_date
     footer = f"{group} · @{bot}"
     if kind == "week":
         monday = _monday_for(now.date())
@@ -259,7 +259,7 @@ def build_own(raw: bytes, kind: str, now: datetime, group: str, bot: str) -> byt
 
 
 def build_target(raw: bytes, title: str, now: datetime, bot: str) -> bytes:
-    from schedule_parser import target_weeks
+    from kapibara.features.schedule.parser import target_weeks
     monday = _monday_for(now.date())
     week = target_weeks(raw, monday, weeks=1)[0]
     days = [(date.fromisoformat(x["date"]), x["lessons"]) for x in week["days"]]

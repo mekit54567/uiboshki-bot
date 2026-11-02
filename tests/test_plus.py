@@ -8,8 +8,8 @@ from datetime import date
 import aiosqlite
 import pytest
 
-import billing
-import referrals
+from kapibara.features.billing import billing
+from kapibara.features.billing import referrals
 from tests.test_review_bot import send
 from tests.test_review_bot import bot, dp  # noqa: F401 — фикстуры
 from tests.test_webapp_home import _headers_for, client  # noqa: F401 — фикстура
@@ -23,13 +23,13 @@ def robokassa(monkeypatch):
     monkeypatch.setattr(billing, "ROBOKASSA_PASS1", "p1")
     monkeypatch.setattr(billing, "ROBOKASSA_PASS2", "p2")
     monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "")
-    import privacy
+    from kapibara.features.privacy import privacy
     for k, v in (("FIO", "Иванов Никита"), ("INN", "123456789012"), ("EMAIL", "a@b.ru")):
         monkeypatch.setattr(privacy, k, v)
 
 
 def _today(monkeypatch, d: date):
-    import utils
+    from kapibara.core import utils
     monkeypatch.setattr(utils, "today_msk", lambda: d)
 
 
@@ -81,7 +81,7 @@ async def test_grant_extends_and_founders_forever(db, monkeypatch, robokassa):
 
 @pytest.mark.asyncio
 async def test_gift_for_own_group(db, monkeypatch):
-    import plans
+    from kapibara.features.billing import plans
     from database import set_setting
     _today(monkeypatch, date(2026, 10, 20))
     await db.upsert_user(ME, "", "u")
@@ -205,7 +205,7 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
     await _events(db.DATABASE_PATH, ME, 7)
     import time
 
-    import achievements                                                       # ачивки на сервере (#202)
+    from kapibara.features.social import achievements                                                       # ачивки на сервере (#202)
     now_ms = int(time.time() * 1000)
     await achievements.add(ME, {a: now_ms for a in achievements.RANKS["noon"]}, now_ms)
     r = c.post("/api/plus/rank", headers=h, json={"rank": "noon"})
@@ -217,13 +217,12 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_rank_bonus_waits_for_server_achievements(db, monkeypatch):
-    import sys
-    import types
     closed = {"v": False}
 
     async def rank_closed(uid, rank):
         return closed["v"]
-    monkeypatch.setitem(sys.modules, "achievements", types.SimpleNamespace(rank_closed=rank_closed))
+    from kapibara.features.social import achievements
+    monkeypatch.setattr(achievements, "rank_closed", rank_closed)
     await db.upsert_user(ME, "", "u")
     await _events(db.DATABASE_PATH, ME, 1)
     with pytest.raises(referrals.BonusError) as e:
@@ -283,7 +282,7 @@ async def test_starosta_switches_and_launch_news(db, bot, dp, monkeypatch):  # n
     from database import get_setting
     from tests.conftest import STAROSTA_ID
     from tests.test_review_bot import press
-    import scheduler
+    from kapibara.jobs import scheduler
     monkeypatch.setattr(scheduler, "PACE_SECONDS", 0)
     await send(dp, bot, "/plus stage full", uid=ME)                          # не староста — обычный /plus
     assert await get_setting("plus:stage") is None
@@ -307,7 +306,7 @@ async def test_starosta_switches_and_launch_news(db, bot, dp, monkeypatch):  # n
 
 @pytest.mark.asyncio
 async def test_launch_text_gift_and_where_to_pay(db, monkeypatch, robokassa):
-    import plans
+    from kapibara.features.billing import plans
     from handlers.plus import launch_text, plus_text
     await db.upsert_user(ME, "", "u")
 
@@ -333,7 +332,7 @@ async def test_start_plus_deeplink(db, bot, dp):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_erase_keeps_payments_without_person(db):
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.billing import add_payment, add_referral, get_referral
     await db.upsert_user(ME, "", "u")
     await add_payment("p-1", "robokassa", ME, "month", 249, 30)
@@ -346,8 +345,8 @@ async def test_erase_keeps_payments_without_person(db):
 
 
 def test_no_requisites_no_payment(monkeypatch, robokassa):
-    import legal_texts
-    import privacy
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     assert billing.provider() == "robokassa"
     assert "Робокасса" in str(legal_texts.doc("privacy")) and "ЮKassa" not in str(legal_texts.doc("privacy"))
     monkeypatch.setattr(privacy, "INN", "")                                   # оферта без ИНН — оплату не открываем
@@ -439,7 +438,7 @@ async def test_invite_limit_shown_everywhere(db, bot, dp, client, robokassa):  #
     assert c.get("/api/plus", headers=h).json()["invite"]["ref_max"] == 3
     assert "ref_max" not in c.get("/api/invite", headers={**h, "X-App": "ios"}).json()
     assert "максимум за 3 друзей" in c.get(f"/plus?k={billing.make_key(ME)}").text      # сайт /plus
-    import offer_text
+    from kapibara.features.privacy import offer_text
     assert any("не больше чем за 3 друзей" in b for sec in offer_text.OFFER["sections"]
                for b in sec["blocks"] if isinstance(b, str))
     await send(dp, bot, "/plus", uid=ME)
@@ -483,8 +482,8 @@ def test_offer_contractor_has_npd_status(monkeypatch):
     # исполнитель в оферте — всегда со статусом плательщика НПД (нужен по смыслу договора),
     # отдельно от оператора в текстах про персональные данные
     import json
-    import legal_texts
-    import privacy
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     for fio, inn in (("", ""), ("Иванов Никита Сергеевич", "771234567890")):
         monkeypatch.setattr(privacy, "FIO", fio)
         monkeypatch.setattr(privacy, "INN", inn)
@@ -498,7 +497,7 @@ def test_offer_contractor_has_npd_status(monkeypatch):
 def test_public_plus_page_for_robokassa(client, robokassa, monkeypatch):  # noqa: F811
     """Robokassa 21.10: на сайте — описание, цены, заказ, оплата, оказание
     услуги, отказ и возврат по шагам, ФИО и ИНН, контакты, политика."""
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "CONTACT", "Telegram @Partykq или почта a@b.ru")
     c, _ = client
     r = c.get("/plus")
@@ -516,7 +515,7 @@ def test_public_plus_page_for_robokassa(client, robokassa, monkeypatch):  # noqa
 def test_no_kassa_yet_names_yookassa(client, monkeypatch):  # noqa: F811
     """28.10: Robokassa отказала, подключаем ЮKassa — пока кассы нет, на /plus,
     в оферте и политике называем ЮKassa, а не Robokassa (её проверяющий смотрит сайт)."""
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     for k in ("ROBOKASSA_LOGIN", "YOOKASSA_SHOP_ID"):
         monkeypatch.setattr(billing, k, "")
     c, _ = client

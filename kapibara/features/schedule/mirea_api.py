@@ -62,7 +62,7 @@ async def search_targets(query: str, target_type: int, limit: int = 8) -> list[d
     """[{"id", "fullTitle", "scheduleTarget"}]. Сначала свой справочник, если
     в нём пусто — официальный поиск. SearchUnavailable — если справочник ещё
     не собран и официальный поиск не ответил."""
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     query = query.strip()
     if not query:
         return []
@@ -82,8 +82,8 @@ def teaches(raw: bytes, subject: str, days: int = 120) -> bool:
     """Ведёт ли этот преподаватель (или есть ли у этой цели) пары предмета
     subject в пределах ±days дней — по названию без «ЛК/ПР»."""
     from datetime import datetime, timedelta
-    from schedule_events import TZ, _calendar_query
-    from schedule_format import _split_kind
+    from kapibara.features.schedule.events import TZ, _calendar_query
+    from kapibara.features.schedule.format import _split_kind
     now = datetime.now(TZ)
     want = subject.strip().lower()
     for comp in _calendar_query(raw).between(now - timedelta(days=days), now + timedelta(days=days)):
@@ -102,7 +102,7 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
     results — [{"id", "fullTitle", "scheduleTarget"}]; остальные не трогаются."""
     import asyncio
     from collections import Counter
-    from schedule_parser import summarize_target
+    from kapibara.features.schedule.parser import summarize_target
     counts = Counter(r["fullTitle"] for r in results)
     dupes = [r for r in results if counts[r["fullTitle"]] > 1][:limit]
     if not dupes:
@@ -135,7 +135,7 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
 
 
 async def get_baseinfo(target_id: int, target_type: int) -> dict | None:
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     title = await schedule_index.get_title(target_type, target_id)
     if title:
         return {"id": target_id, "fullTitle": title}

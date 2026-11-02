@@ -1,7 +1,7 @@
 """Сдал в СДО — дедлайн у себя отмечен сам (sdo_done.py)."""
 import pytest
 
-import sdo_done
+from kapibara.features.sdo import done as sdo_done
 
 URL = "https://online-edu.mirea.ru/mod/{m}/view.php?id={i}"
 
@@ -36,8 +36,8 @@ async def test_mark_only_own_and_never_unmarks(db):
 async def test_course_detail_marks_finished_works(db, monkeypatch):
     """Открыл предмет в СДО — задание «сдано, ждёт оценки» у себя в дедлайнах сданным."""
     from fastapi.testclient import TestClient
-    import sdo_accounts
-    import sdo_grades
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -55,7 +55,7 @@ async def test_course_detail_marks_finished_works(db, monkeypatch):
 
 
 def test_is_submitted_and_shared_cmid_parser():
-    import sdo_submit
+    from kapibara.features.sdo import submit as sdo_submit
     assert sdo_done.is_submitted("Отправлено для оценивания") and sdo_done.is_submitted("Submitted for grading")
     assert not sdo_done.is_submitted("Черновик (не отправлено)") and not sdo_done.is_submitted("Нет ответа")
     assert not sdo_done.is_submitted(None)

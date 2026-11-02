@@ -50,8 +50,8 @@ def _pick(cands: list[tuple[int, int]], prev: tuple[int, int] | None) -> tuple[i
 
 def lecture_dates(raw: bytes, subject: str, today: date | None = None) -> list[date]:
     """Даты лекций (ЛК) предмета за семестр — из календаря группы."""
-    from schedule_events import TZ, _calendar_query
-    from schedule_format import _split_kind
+    from kapibara.features.schedule.events import TZ, _calendar_query
+    from kapibara.features.schedule.format import _split_kind
     today = today or datetime.now(TZ).date()
     start = datetime.combine(today - timedelta(days=200), datetime.min.time(), TZ)
     end = datetime.combine(today + timedelta(days=200), datetime.min.time(), TZ)
@@ -160,10 +160,10 @@ async def for_course(user_id: int, course: dict, manual: dict[str, str] | None =
     """Посещения для экрана предмета: course — ответ /api/sdo/grades/{id}.
     None — у предмета нет строки «Посещаемость» или его нет в расписании."""
     from database import get_attendance_marks, get_attendance_points
-    from schedule_events import TZ
-    from schedule_parser import fetch_schedule_raw, get_group_subjects
-    from sdo_files import match_subject
-    from sdo_parser import SEMESTER_WINDOW
+    from kapibara.features.schedule.events import TZ
+    from kapibara.features.schedule.parser import fetch_schedule_raw, get_group_subjects
+    from kapibara.features.sdo.files import match_subject
+    from kapibara.features.sdo.parser import SEMESTER_WINDOW
     cat = next((k for k in course.get("categories") or [] if "посещ" in (k.get("name") or "").lower()), None)
     if not cat or not cat.get("max"):
         return None
@@ -185,9 +185,9 @@ async def for_course(user_id: int, course: dict, manual: dict[str, str] | None =
 
 async def _pulse(user_id: int, subject: str, subjects: list[str]) -> tuple[dict[str, str], str]:
     """Отметки Пульса по лекциям предмета и состояние входа (pulse_accounts)."""
-    import pulse_accounts
-    import pulse_attendance
-    from sdo_files import match_subject
+    from kapibara.features.pulse import accounts as pulse_accounts
+    from kapibara.features.pulse import attendance as pulse_attendance
+    from kapibara.features.sdo.files import match_subject
     rows = await pulse_attendance.stored(user_id)
     state = (await pulse_accounts.status_for(user_id)).get("state", "off")
     return pulse_attendance.lecture_marks(rows, subject, lambda n: match_subject(n, subjects)), state

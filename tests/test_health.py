@@ -4,24 +4,25 @@ import time
 
 import pytest
 
-import health
+from kapibara.ops import health
 
 
 def test_areas_and_version():
-    assert health.area_of("ai_solver") == "ИИ" and health.area_of("webapp.routes.chat") == "ИИ"
-    assert health.area_of("sdo_parser") == "СДО" and health.area_of("schedule_parser") == "Расписание"
+    assert health.area_of("kapibara.features.ai.solver") == "ИИ" and health.area_of("webapp.routes.chat") == "ИИ"
+    assert health.area_of("kapibara.features.sdo.parser") == "СДО"
+    assert health.area_of("kapibara.features.schedule.parser") == "Расписание"
     assert health.area_of("handlers.files") == "Прочее"
     assert health.version().startswith("v5.")
 
 
 def test_error_counter_by_area(monkeypatch):
     c = health.ErrorCounter()
-    log = logging.getLogger("gemini_solver")
+    log = logging.getLogger("kapibara.features.ai.gemini")
     log.addHandler(c)
     try:
         log.error("лимит запросов")
         log.warning("медленно")
-        logging.getLogger("gemini_solver").info("не считается")
+        logging.getLogger("kapibara.features.ai.gemini").info("не считается")
     finally:
         log.removeHandler(c)
     day = c.last_day()
@@ -32,7 +33,7 @@ def test_error_counter_by_area(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_report_shows_notes_and_errors(db, monkeypatch):
-    import config
+    from kapibara.core import config
     monkeypatch.setattr(config, "SDO_SESSION_COOKIE", "x")
     monkeypatch.setattr(health, "counter", health.ErrorCounter())
     await health.note("sdo_cookie", True)          # на свежей базе отметка не теряется
@@ -78,7 +79,7 @@ def test_error_spike_alert(monkeypatch):
     """Всплеск ошибок — старосте сам: ≥5 ERROR за час, не чаще раза в 3 часа;
     предупреждения и старые ошибки не считаются."""
     import logging
-    import health
+    from kapibara.ops import health
     monkeypatch.setattr(health, "_alerted_at", 0.0)
     monkeypatch.setattr(health.counter, "records", health.deque(maxlen=2000))
     now = 1_000_000.0
@@ -100,10 +101,10 @@ def test_error_spike_alert(monkeypatch):
 async def test_report_ai_section(db, monkeypatch):
     """/status: вопросы ИИ сегодня и «основная модель отдыхает — отвечают запасные»."""
     import time
-    import ai_quota
-    import config
-    import gemini_solver
-    import health
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.core import config
+    from kapibara.features.ai import gemini as gemini_solver
+    from kapibara.ops import health
     monkeypatch.setattr(config, "AI_DAILY_LIMIT", 0)
     await ai_quota.take(1)
     await ai_quota.take(1)
@@ -122,8 +123,8 @@ async def test_report_ai_section(db, monkeypatch):
 async def test_report_no_spare_no_resting_line(db, monkeypatch):
     """Без запасных моделей основная не «отдыхает» — и в /status про это ни слова."""
     import time
-    import gemini_solver
-    import health
+    from kapibara.features.ai import gemini as gemini_solver
+    from kapibara.ops import health
     monkeypatch.setattr(gemini_solver, "GEMINI_FALLBACK_MODELS", [gemini_solver.GEMINI_MODEL])
     monkeypatch.setattr(gemini_solver, "_primary_rest_until", time.monotonic() + 600)
     assert gemini_solver.rest_status()[0] == 0
@@ -133,7 +134,7 @@ async def test_report_no_spare_no_resting_line(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_status_shows_sdo_idle_timeout(db, monkeypatch):
     """Срок жизни сессии СДО без запросов (core_session_time_remaining) — в /status."""
-    import health
+    from kapibara.ops import health
     from database import set_setting
     await set_setting("sdo:idle_timeout", "5400")
     assert await health._idle_timeout() == "1 ч 30 мин"
@@ -144,7 +145,7 @@ async def test_status_shows_sdo_idle_timeout(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_keepalive_learns_idle_timeout(monkeypatch):
     import httpx
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
 
     def moodle(request):
         if "service.php" in str(request.url):
@@ -164,7 +165,7 @@ async def test_keepalive_network_is_not_dead_cookie(monkeypatch):
     """16.10: СДО не открывался с сервера, а /status писал «возможно, кука
     протухла». Сеть — None (про куку не знаем), вход-редирект — False."""
     import httpx
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
 
     def down(request):
         raise httpx.ConnectTimeout("висит", request=request)
@@ -178,7 +179,7 @@ async def test_keepalive_network_is_not_dead_cookie(monkeypatch):
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x" * 26)
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(down), **kw))
     assert await sdo_parser.keepalive() is None
-    import sdo_net
+    from kapibara.features.sdo import net as sdo_net
     sdo_net.reset()
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(login), **kw))
     assert await sdo_parser.keepalive() is False

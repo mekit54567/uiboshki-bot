@@ -6,8 +6,8 @@ import json
 import httpx
 import pytest
 
-import gemini_solver
-import think
+from kapibara.features.ai import gemini as gemini_solver
+from kapibara.features.ai import think
 from tests.test_review_bot import bot, dp, press, send  # noqa: F401 — фикстуры
 from tests.test_webapp_home import _headers_for, client  # noqa: F401 — фикстура
 
@@ -16,7 +16,7 @@ ME, OTHER = 701, 702
 
 @pytest.fixture
 def on(monkeypatch):
-    import config
+    from kapibara.core import config
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "or")
     monkeypatch.setattr(gemini_solver, "OPENROUTER_API_KEY", "or")
     monkeypatch.setattr(think, "DAILY", 2)
@@ -84,7 +84,7 @@ async def test_offer_only_for_plus_not_ios_and_switch(db, monkeypatch, on):
 @pytest.mark.asyncio
 async def test_day_budget_closes_for_everyone(db, monkeypatch, on):
     from database import set_setting
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     await _plus(db)
     await set_setting(f"ai_think:{today_msk().isoformat()}", json.dumps({"n": {}, "cost": think.DAY_USD}))
     with pytest.raises(think.ThinkError, match="желающих"):
@@ -93,8 +93,8 @@ async def test_day_budget_closes_for_everyone(db, monkeypatch, on):
 
 @pytest.mark.asyncio
 async def test_webapp_chat_button_and_think_request(db, client, monkeypatch, on):  # noqa: F811
-    import ai_quota
-    import ai_solver
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.ai import solver as ai_solver
     c, _ = client
     await _plus(db)
 
@@ -149,7 +149,7 @@ async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on
 
 @pytest.mark.asyncio
 async def test_unlimited_grant_has_no_think_limit(db, monkeypatch, on):
-    import plus_grant
+    from kapibara.features.billing import grants as plus_grant
     await db.upsert_user(OTHER, "", "u")
     await plus_grant.unlimited(OTHER, None, 1)                # /grant … unlimited
     assert (await think.offer(OTHER))["left"] is None         # кнопка без счётчика
@@ -164,7 +164,7 @@ async def test_bot_no_button_when_none_left(db, dp, bot, monkeypatch, on):  # no
     import handlers.solver as solver
     from database import set_setting
     from tests.test_review_bot import UID
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     await _plus(db, UID)
     await set_setting(f"ai_think:{today_msk().isoformat()}", json.dumps({"n": {str(UID): think.DAILY}}))
 
@@ -194,7 +194,7 @@ async def test_solve_first_has_own_note_and_footer(db, monkeypatch, on):
 @pytest.mark.asyncio
 async def test_why_not(db, monkeypatch, on):
     from database import set_setting
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     await _plus(db)
     await db.upsert_user(OTHER, "", "u")
     assert await think.why_not(ME) is None
@@ -221,9 +221,9 @@ async def test_webapp_subjects_offer_toggle(db, client, monkeypatch, on):  # noq
 
 @pytest.mark.asyncio
 async def test_webapp_think_first_answers_without_ordinary_answer(db, client, monkeypatch, on):  # noqa: F811
-    import ai_quota
-    import ai_solver
-    import ratelimit
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.core import ratelimit
     c, _ = client
     await _plus(db)
     systems = []
@@ -274,7 +274,7 @@ def _arm(bot):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_bot_solve_toggle_think_before_answer(db, dp, bot, monkeypatch, on):  # noqa: F811
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     import handlers.solver as solver
     from tests.test_review_bot import UID, ctx
     await _plus(db, UID)
@@ -317,7 +317,7 @@ async def test_bot_toggle_off_and_hidden_without_left(db, dp, bot, monkeypatch, 
     import handlers.solver as solver
     from database import set_setting
     from tests.test_review_bot import UID, ctx
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     await _plus(db, UID)
     ordinary = []
 
@@ -376,9 +376,9 @@ async def test_bot_think_command(db, dp, bot, monkeypatch, on):  # noqa: F811
 @pytest.mark.asyncio
 async def test_think_first_for_unlimited_without_counter(db, dp, bot, monkeypatch, on):  # noqa: F811
     # безлимит (/grant … unlimited): «Подумать» до вопроса — без счётчика и после DAILY
-    import plus_grant
+    from kapibara.features.billing import grants as plus_grant
     from tests.test_review_bot import UID
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     from database import set_setting
     await db.upsert_user(UID, "", "u")
     await plus_grant.unlimited(UID, None, 1)

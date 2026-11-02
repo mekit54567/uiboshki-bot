@@ -15,9 +15,9 @@ router = Router()
 
 
 async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
-    import billing
-    import config
-    import referrals
+    from kapibara.features.billing import billing
+    from kapibara.core import config
+    from kapibara.features.billing import referrals
     st = await billing.status(uid)
     inv = await referrals.summary(uid)
     if st["unlimited"]:
@@ -63,7 +63,7 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
 
 
 async def admin_text() -> str:
-    import billing
+    from kapibara.features.billing import billing
     gift = await billing.gift_until()
     stage = ("цена первых (месяц 149 ₽) — <code>/plus stage full</code> переключит новых на полную"
              if await billing.early() else
@@ -79,7 +79,7 @@ async def admin_text() -> str:
 async def admin_cmd(uid: int, args: list[str]) -> str | None:
     """/plus stage full|early, /plus gift ДД.ММ.ГГГГ|off — только староста.
     None — это не команда старосты."""
-    import config
+    from kapibara.core import config
     from datetime import datetime
 
     from database import set_setting
@@ -114,7 +114,7 @@ async def cmd_plus(message: Message):
 # ── «Поддержать проект»: донат на сайте, не подписка ───────────────────────
 
 def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
-    import billing
+    from kapibara.features.billing import billing
     amounts = " · ".join(f"{a} ₽" for a in billing.DONATE_AMOUNTS)
     lines = ["💛 <b>Поддержать проект</b>", "",
              "Если Капибара помогает тебе учиться — можно сказать спасибо рублём: деньги идут на сервер, "
@@ -145,7 +145,7 @@ async def cmd_donate(message: Message):
 @router.message(Command("roadmap"))
 async def cmd_roadmap(message: Message):
     """Роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть."""
-    import roadmap
+    from kapibara.features.content import roadmap
     if await roadmap.can_see(message.from_user.id):
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
             text="🗺 Открыть роадмап", url=roadmap.page_link(message.from_user.id))]])
@@ -167,8 +167,8 @@ async def donate_button(callback: CallbackQuery):
 async def cmd_grant(message: Message):
     """/grant — ручные выдачи «Капибары+» и безлимита (plus_grant.py). Только
     Никита (config.is_starosta), старостам групп и замам — нет."""
-    import config
-    import plus_grant
+    from kapibara.core import config
+    from kapibara.features.billing import grants as plus_grant
     if not config.is_starosta(message.from_user.id):
         await message.answer("Эта команда только для владельца бота.")
         return
@@ -183,8 +183,8 @@ async def launch_text(uid: int) -> str:
     """Сообщение всем при запуске: своей группе — про подарок, остальным —
     что бесплатное остаётся бесплатным. Где платить — сайт; на iPhone внутри
     приложения об оплате ни слова (App Store 3.1.1), поэтому говорим здесь."""
-    import billing
-    import referrals
+    from kapibara.features.billing import billing
+    from kapibara.features.billing import referrals
     st = await billing.status(uid)
     inv = await referrals.summary(uid)
     m = next(p for p in st["prices"] if p["plan"] == "month")
@@ -194,7 +194,7 @@ async def launch_text(uid: int) -> str:
                   "платить ничего не нужно.", ""]
     else:
         lines += ["Расписание, дедлайны, баллы СДО, файлы и напоминания остаются бесплатными.", ""]
-    import config
+    from kapibara.core import config
     lines += [f"Что даёт: ИИ — до {config.AI_SUB_DAILY} вопросов в день для любой группы, иконки и наряды "
               "капибары «по подписке», значок «друг Капибары».",
               (f"Цена первых пользователей — {m['price']} ₽ в месяц, и кто оплатит по ней, так и платит "
@@ -215,7 +215,7 @@ def _launch_kb() -> InlineKeyboardMarkup:
 @router.message(Command("plusnews"))
 async def cmd_plusnews(message: Message):
     """Староста: показать рассылку о запуске (как её увидит он сам) и кнопку «Разослать»."""
-    import config
+    from kapibara.core import config
     from database import get_setting
     if not config.is_starosta(message.from_user.id):
         return
@@ -230,13 +230,13 @@ async def cmd_plusnews(message: Message):
 
 @router.callback_query(F.data == "plus:news:go")
 async def plusnews_go(callback: CallbackQuery):
-    import config
-    import delivery
-    import scheduler
+    from kapibara.core import config
+    from kapibara.features.notifications import delivery
+    from kapibara.jobs import scheduler
     from database import get_all_subscribed_users, set_setting
     from datetime import datetime
 
-    from utils import TZ
+    from kapibara.core.utils import TZ
     if not config.is_starosta(callback.from_user.id):
         await callback.answer()
         return
@@ -263,14 +263,14 @@ async def plus_show(callback: CallbackQuery):
 
 
 async def share_kb(uid: int) -> InlineKeyboardMarkup:
-    import referrals
+    from kapibara.features.billing import referrals
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text=referrals.share_button(), url=await referrals.link(uid))]])
 
 
 async def send_invite(message: Message, uid: int):
     """Готовое сообщение — переслать другу; и кнопка выбрать чат (инлайн)."""
-    import referrals
+    from kapibara.features.billing import referrals
     kb = await share_kb(uid)
     try:
         await message.answer_photo(referrals.share_image(), caption=referrals.share_text(), reply_markup=kb)
@@ -299,7 +299,7 @@ async def invite_button(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("plus:stars:"))
 async def cb_stars(cb: CallbackQuery):
-    import billing
+    from kapibara.features.billing import billing
     try:
         inv = await billing.stars_invoice(cb.from_user.id, cb.data.split(":", 2)[2])
     except billing.PayError as e:
@@ -312,14 +312,14 @@ async def cb_stars(cb: CallbackQuery):
 
 @router.pre_checkout_query()
 async def stars_pre_checkout(q: PreCheckoutQuery):
-    import billing
+    from kapibara.features.billing import billing
     err = await billing.stars_check(q.invoice_payload, q.from_user.id, q.total_amount, q.currency)
     await q.answer(ok=not err, error_message=err or None)
 
 
 @router.message(F.successful_payment)
 async def stars_done(message: Message):
-    import billing
+    from kapibara.features.billing import billing
     sp = message.successful_payment
     if sp.currency != "XTR":
         return

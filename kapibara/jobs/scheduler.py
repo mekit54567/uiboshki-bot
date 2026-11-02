@@ -7,14 +7,14 @@ from aiogram import Bot
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from config import (
+from kapibara.core.config import (
     TIMEZONE, SCHEDULE_HOUR, SCHEDULE_MINUTE, DEADLINE_REMINDER_HOUR, DEADLINE_REMINDER_MINUTE,
     SDO_SYNC_INTERVAL_HOURS, STAROSTA_ID, SCHEDULE_DIFF_CHECK_MINUTES, GROUP_CHAT_ID,
 )
 from database import get_all_subscribed_users, get_deadlines_soon
-from schedule_parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
-from utils import esc, today_msk, esc_attr
-from keyboards import app_button
+from kapibara.features.schedule.parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
+from kapibara.core.utils import esc, today_msk, esc_attr
+from kapibara.bot.keyboards import app_button
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -48,18 +48,18 @@ async def _group_raws(fetch_home=None):
     """Календари групп для рассылки: {группа: (raw, свой корпус)} — каждый
     качается один раз на рассылку; своя группа — прежним вызовом (с кэшем и
     запасной копией), чужие — через общий кэш календарей МИРЭА."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     cache: dict = {}
 
     async def get(gid):
-        import groups
+        from kapibara.features.groups import groups
         key = None if not gid or gid == groups.home_id() else gid
         if key not in cache:
             try:
                 if key is None:
                     raw = await (fetch_home or fetch_schedule_raw)()
                 else:
-                    import schedule_parser
+                    from kapibara.features.schedule import parser as schedule_parser
                     raw = await schedule_parser.fetch_schedule_raw(group_id=key)
                 cache[key] = (raw, notify_prefs.home_campus(raw))
             except Exception as e:
@@ -71,7 +71,7 @@ async def _group_raws(fetch_home=None):
 
 async def deliver(bot, user_id: int, html: str, **kw):
     """Рассылка через слой доставки (delivery.py): Telegram + пуш PWA."""
-    import delivery
+    from kapibara.features.notifications import delivery
     return await delivery.deliver(bot, user_id, html, **kw)
 
 
@@ -87,10 +87,10 @@ INDEX_FIRST_DELAY = 10          # мин после запуска до перв
 
 
 async def send_morning_schedule(bot: Bot):
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     from database import get_user_group
-    from optional_subjects import apply_for
-    from schedule_parser import format_day
+    from kapibara.features.groups.optional_subjects import apply_for
+    from kapibara.features.schedule.parser import format_day
 
     now = datetime.now(TZ)
     weather_text = None          # погоду берём один раз и только если кому-то нужна
@@ -136,8 +136,8 @@ def morning_push(events: list[dict], home: str | None, prefs: dict, weather: str
     """Пуш утра (Никита 25.10): «Сегодня: 5 пар с 09:00, В-78» и «Первая — …
     · ☁️ +3°, пасмурно». events — пары дня (parse_events_for_date, без
     предметов по выбору, куда человек не ходит)."""
-    from evening_digest import day_title, first_pair
-    from schedule_format import _split_kind
+    from kapibara.features.notifications.evening_digest import day_title, first_pair
+    from kapibara.features.schedule.format import _split_kind
     lessons = []
     for e in sorted((e for e in events if e.get("time_start")), key=lambda e: e["time_start"]):
         name, kind, _ = _split_kind(e.get("summary") or "")
@@ -159,9 +159,9 @@ async def send_group_morning_digest(bot: Bot):
     if not GROUP_CHAT_ID:
         return
     try:
-        from config import OPTIONAL_SUBJECTS
+        from kapibara.core.config import OPTIONAL_SUBJECTS
         from handlers.schedule import _notes_block
-        from optional_subjects import HIDE
+        from kapibara.features.groups.optional_subjects import HIDE
         HIDE.set(frozenset(OPTIONAL_SUBJECTS))   # в общем чате — без предметов по выбору
         text = await get_today_schedule()
         text += await _notes_block(today_msk().isoformat())
@@ -189,7 +189,7 @@ def _format_deadline_reminders(deadlines: list[dict]) -> str:
 def deadlines_push(deadlines: list[dict], today: date | None = None) -> tuple[str, str]:
     """Пуш о сроках (Никита 25.10): один — «Завтра до 23:59: Практика 2»,
     несколько — «3 срока за 3 дня, ближайший завтра»; ниже — что и когда."""
-    from push_text import cap, split_subject, when, word
+    from kapibara.features.notifications.push_text import cap, split_subject, when, word
     today = today or today_msk()
     items = sorted(deadlines, key=lambda d: (d["due_date"], d.get("due_time") or "99"))
     first = items[0]
@@ -218,7 +218,7 @@ async def send_deadline_reminders(bot: Bot):
     # Дедлайны теперь бывают личные (видны только автору) — рассылка каждому
     # подписчику собирается персонально (общие + его личные, не отмеченные им
     # самим), а не одним и тем же текстом всем подряд.
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     weekday = today_msk().weekday()
     users = await get_all_subscribed_users()
     for uid in users:
@@ -255,7 +255,7 @@ async def send_deadline_reminders(bot: Bot):
 
 async def _any_other_group() -> bool:
     """Есть ли люди из других групп (этап 1) — тогда напоминания смотрят и их календари."""
-    import groups
+    from kapibara.features.groups import groups
     from database import group_counts
     return any(g["id"] and g["id"] != groups.home_id() for g in await group_counts())
 
@@ -267,10 +267,10 @@ async def check_lesson_reminders(bot: Bot):
     каждый набор скрытых предметов, а не на каждого человека."""
     global _sent_reminders
     try:
-        import notify_prefs
-        from config import OPTIONAL_SUBJECTS
+        from kapibara.features.notifications import prefs as notify_prefs
+        from kapibara.core.config import OPTIONAL_SUBJECTS
         from database import get_all_optional_answers, get_reminder_users
-        from optional_subjects import HIDE, no_filter
+        from kapibara.features.groups.optional_subjects import HIDE, no_filter
         now   = datetime.now(TZ)
         today = now.date()
         _sent_reminders = {k for k in _sent_reminders if k[0] == today}
@@ -352,8 +352,8 @@ async def check_lesson_reminders(bot: Bot):
 def lesson_push(e: dict, minutes: int) -> tuple[str, str]:
     """Пуш перед парой (Никита 25.10): «Через 15 мин: Анализ данных»,
     ниже «А-1 (В-78) · лекция · Иванов И. И.»."""
-    import notify_prefs
-    from schedule_format import _short_teacher, _split_kind
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.schedule.format import _short_teacher, _split_kind
     name, kind, _ = _split_kind(e.get("summary") or "")
     title = f"Через {notify_prefs.minutes_text(minutes)}: {name or 'пара'}"
     parts = [e.get("location") or "", kind, _short_teacher(e.get("teacher") or "")]
@@ -368,8 +368,8 @@ _sdo_error_notified = False    # то же для сетевой недосту�
 
 async def _note_sync(result: dict):
     """Чем кончился синк — для /status (health.py) и вкладки «Сдать» (sdo_check.py)."""
-    import health
-    import sdo_check
+    from kapibara.ops import health
+    from kapibara.features.sdo import check as sdo_check
     await sdo_check.note_home(result)
     if result.get("missing"):
         return
@@ -386,29 +386,29 @@ async def sdo_keepalive(bot: Bot | None = None):
     """Лёгкий запрос в СДО раз в час (сессия не гаснет) + отметка для /status.
     Заодно той же сессией — календарь текущего месяца (quiz_alerts.peek):
     тест внезапно открыли — полный синк сейчас, а не через 6 часов."""
-    import health
-    from sdo_parser import keepalive
-    from config import SDO_SESSION_COOKIE
+    from kapibara.ops import health
+    from kapibara.features.sdo.parser import keepalive
+    from kapibara.core.config import SDO_SESSION_COOKIE
     if not SDO_SESSION_COOKIE:
         return
     changed = []
 
     async def peek(client, html):
-        import quiz_alerts
+        from kapibara.features.notifications import quiz_alerts
         changed.append(await quiz_alerts.peek(client, html))
     ok = await keepalive(peek=peek if bot else None)
     await health.note("sdo_cookie", bool(ok), "" if ok else
                       "СДО не ответил — про куку не знаю" if ok is None else "СДО не пустил — кука протухла")
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     if ok and sdo_parser.IDLE_TIMEOUT:
         from database import set_setting
         await set_setting("sdo:idle_timeout", str(sdo_parser.IDLE_TIMEOUT))
     if ok and any(changed):
         await sync_sdo_deadlines(bot)
-    import grade_alerts
+    from kapibara.features.notifications import grade_alerts
     if ok and bot and grade_alerts.daytime():
         # староста без своего входа ходит этой кукой — его новые баллы проверяем здесь
-        from config import STAROSTA_IDS
+        from kapibara.core.config import STAROSTA_IDS
         from database import get_sdo_session
         try:
             for uid in STAROSTA_IDS:
@@ -420,7 +420,7 @@ async def sdo_keepalive(bot: Bot | None = None):
 
 async def sync_sdo_deadlines(bot: Bot):
     global _sdo_expired_notified
-    from sdo_parser import sync_deadlines
+    from kapibara.features.sdo.parser import sync_deadlines
 
     result = await sync_deadlines()
     await _note_sync(result)
@@ -466,7 +466,7 @@ async def sync_sdo_deadlines(bot: Bot):
     _sdo_expired_notified = False  # сессия снова живая — сбрасываем флаг
 
     try:            # время новых тестов (quiz_time.py) — для подписи в «Сдать»
-        import quiz_time
+        from kapibara.features.deadlines import quiz_time
         await quiz_time.learn_missing()
     except Exception as e:
         logger.warning(f"время тестов: не вышло узнать: {e}")
@@ -488,31 +488,31 @@ async def sync_sdo_deadlines(bot: Bot):
             logger.warning(f"Не смог уведомить старосту об автосинке СДО: {e}")
     # каждому — что появилось нового (у кого включено «Новые задания»)
     try:
-        import new_tasks
+        from kapibara.features.notifications import new_tasks
         await new_tasks.announce(bot, result.get("new_ids") or [], result.get("moved") or {})
     except Exception as e:
         logger.warning(f"новые задания: рассылка не вышла: {e}")
 
 
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
-    from schedule_diff import check_schedule_changes
+    from kapibara.features.schedule.diff import check_schedule_changes
 
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(send_morning_schedule,       "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
     scheduler.add_job(send_group_morning_digest,   "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])
     scheduler.add_job(send_deadline_reminders, "cron", hour=DEADLINE_REMINDER_HOUR, minute=DEADLINE_REMINDER_MINUTE, args=[bot])
     scheduler.add_job(check_lesson_reminders,  "cron", minute="*",                  args=[bot])
-    from weekly_digest import send_all as send_weekly_digest      # обзор недели — воскресенье, 19:00
+    from kapibara.features.notifications.weekly_digest import send_all as send_weekly_digest      # обзор недели — воскресенье, 19:00
     scheduler.add_job(send_weekly_digest,      "cron", day_of_week="sun", hour=19, minute=0, args=[bot])
-    from evening_digest import send_all as send_evening_digest    # сводка на завтра — во время, выбранное человеком
+    from kapibara.features.notifications.evening_digest import send_all as send_evening_digest    # сводка на завтра — во время, выбранное человеком
     scheduler.add_job(send_evening_digest,     "cron", minute="0,30", args=[bot])
     # новые баллы СДО — не отдельным расписанием, а у каждого вместе с проверкой
     # его входа (sdo_accounts._check_one, grade_alerts.check_soon; Никита 02.11)
-    from deadline_reminders import send_due as send_deadline_custom_reminders   # свои напоминания о дедлайне
+    from kapibara.features.deadlines.reminders import send_due as send_deadline_custom_reminders   # свои напоминания о дедлайне
     scheduler.add_job(send_deadline_custom_reminders, "cron", minute="*",        args=[bot])
-    import quiz_alerts                    # тесты СДО: до закрытия и «открыли тест» (Уведомления → Тесты СДО)
+    from kapibara.features.notifications import quiz_alerts                    # тесты СДО: до закрытия и «открыли тест» (Уведомления → Тесты СДО)
     scheduler.add_job(quiz_alerts.send_due,    "cron", minute="*",             args=[bot])
-    import deadline_soon                  # «срок скоро, а ты не сдал» (Уведомления → Срок скоро)
+    from kapibara.features.deadlines import soon as deadline_soon                  # «срок скоро, а ты не сдал» (Уведомления → Срок скоро)
     scheduler.add_job(deadline_soon.send_due,  "cron", minute="*/5",           args=[bot])
     from database.sdo import purge_quiz_alerts
     scheduler.add_job(purge_quiz_alerts,       "cron", hour=4, minute=22)
@@ -526,38 +526,38 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # каждый час, чтобы сессия не гасла без обращений (sdo_parser.keepalive).
     scheduler.add_job(sync_sdo_deadlines,      "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot],
                       next_run_time=datetime.now(ZoneInfo(TIMEZONE)) + timedelta(minutes=1))
-    import group_sync                     # СДО других групп по входам, которыми поделились (этап 1 (в))
+    from kapibara.features.groups import sync as group_sync                     # СДО других групп по входам, которыми поделились (этап 1 (в))
     scheduler.add_job(group_sync.sync_all,     "interval", hours=SDO_SYNC_INTERVAL_HOURS, args=[bot],
                       next_run_time=datetime.now(TZ) + timedelta(minutes=5))
     scheduler.add_job(sdo_keepalive,           "interval", minutes=55, args=[bot])
     # Входы студентов в СДО — вразнобой: раз в минуту проверяются те, чья
     # очередь (50–59 мин случайно, потом 55), а не все разом (sdo_accounts.py)
-    from sdo_accounts import keepalive_due
+    from kapibara.features.sdo.accounts import keepalive_due
     scheduler.add_job(keepalive_due,           "interval", minutes=1, args=[bot])
-    import pulse_accounts                      # вход в Пульс — так же, как СДО (pulse_accounts.py)
+    from kapibara.features.pulse import accounts as pulse_accounts                      # вход в Пульс — так же, как СДО (pulse_accounts.py)
     scheduler.add_job(pulse_accounts.keepalive_due, "interval", minutes=1)
     from database import purge_events          # статистика старше 180 дней не нужна
     scheduler.add_job(purge_events,            "cron", hour=4, minute=20)
-    import privacy                             # 152-ФЗ: год без заходов — данные стираются
-    import apple_signin                        # отзыв входа Apple, если Apple не ответил при удалении
+    from kapibara.features.privacy import privacy                             # 152-ФЗ: год без заходов — данные стираются
+    from kapibara.features.identity import apple as apple_signin                        # отзыв входа Apple, если Apple не ответил при удалении
     scheduler.add_job(privacy.purge,           "cron", hour=4, minute=25)
     scheduler.add_job(apple_signin.retry_revokes, "cron", minute=37)      # отзыв входа Apple, который не прошёл
-    import referrals                           # «пригласи друга»: друг пользуется — обоим дни подписки
+    from kapibara.features.billing import referrals                           # «пригласи друга»: друг пользуется — обоим дни подписки
     scheduler.add_job(referrals.check_all,     "cron", hour=12, minute=17, args=[bot])
-    import group_award                         # группа месяца: 1-го числа — 7 дней «Капибары+» (5.100.7)
+    from kapibara.features.social import group_award                         # группа месяца: 1-го числа — 7 дней «Капибары+» (5.100.7)
     scheduler.add_job(group_award.award,       "cron", day=1, hour=12, minute=5, args=[bot])
-    import health
+    from kapibara.ops import health
     scheduler.add_job(health.alert_errors,     "interval", minutes=15, args=[bot])   # всплеск ошибок — старосте
-    import stats
+    from kapibara.ops import stats
     scheduler.add_job(stats.send_evening,      "cron", hour=21, minute=3, args=[bot])  # +N новых за день — старосте
     scheduler.add_job(check_schedule_changes,  "interval", minutes=SCHEDULE_DIFF_CHECK_MINUTES, args=[bot])
     # Справочник для поиска преподавателей/групп/аудиторий: достроить, если
     # обход прервался (редеплой), и обновлять раз в месяц (см. schedule_index).
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     scheduler.add_job(schedule_index.ensure_fresh, "cron", hour=4, minute=10)
     # Поиск по смыслу: нарезать лекции по страницам и досчитать векторы —
     # понемногу, в пределах бесплатных лимитов Gemini (semantic_index.py).
-    import semantic_index
+    from kapibara.features.ai import semantic_index
 
     async def index_lectures():
         try:
@@ -567,10 +567,10 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # первый проход — не сразу: после выкладки все разом открывают приложение,
     # а на Amvera пол-ядра (17.10: в первые минуты ответы по 35 с)
     scheduler.add_job(index_lectures, "interval", minutes=20, next_run_time=datetime.now(TZ) + timedelta(minutes=INDEX_FIRST_DELAY))
-    import local_embed
+    from kapibara.features.ai import local_embed
     scheduler.add_job(local_embed.unload_idle, "interval", minutes=5)    # своя модель векторов — из памяти после простоя
     # Копия базы старосте каждую ночь, без звука (backup.py).
     if STAROSTA_ID:
-        from backup import send_backup
+        from kapibara.ops.backup import send_backup
         scheduler.add_job(send_backup, "cron", hour=4, minute=40, args=[bot, STAROSTA_ID])
     return scheduler

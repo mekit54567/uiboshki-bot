@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-import net
+from kapibara.core import net
 
 TIMEOUT = 10
 
@@ -57,7 +57,7 @@ async def _http(name: str, url: str, blocked_codes: tuple, headers: dict | None 
 
 
 async def _gemini() -> dict:
-    from config import GEMINI_API_KEY, GEMINI_MODEL
+    from kapibara.core.config import GEMINI_API_KEY, GEMINI_MODEL
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:countTokens"
     res = await _http("Gemini", url, (), headers={"x-goog-api-key": GEMINI_API_KEY},
                       method="POST", json={"contents": [{"parts": [{"text": "проверка"}]}]})

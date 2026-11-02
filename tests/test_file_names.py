@@ -1,8 +1,8 @@
 """Понятные названия файлов (/tidyfiles): «ЛК3_бизнес» → «Лекция 3. Бизнес»."""
 import pytest
 
-import file_names
-from file_names import tidy_titles, topic_of
+from kapibara.features.lectures import names as file_names
+from kapibara.features.lectures.names import tidy_titles, topic_of
 
 
 def _f(i, title, subject="ООП", file_name="x.pdf", category=None):
@@ -139,8 +139,8 @@ def test_translit_lectures_back_to_russian():
 
 
 def test_translit_only_lesson_titles():
-    from file_categories import detect_category
-    from translit import from_translit
+    from kapibara.features.lectures.categories import detect_category
+    from kapibara.core.translit import from_translit
     assert detect_category("Lektsiya 05 Protsessnaya arhitektura") == "lecture"
     for t in ["Lecture 1 Intro", "ArchiMate 3.1 Specification", "Лекция 5. Презентация", "Roadmap"]:
         assert from_translit(t) == t

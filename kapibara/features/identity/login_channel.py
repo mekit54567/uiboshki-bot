@@ -29,7 +29,7 @@ BUTTON = "Я в канале, дальше"
 
 def channel() -> str:
     """@имя канала (или id -100…) из LOGIN_CHANNEL; пусто — проверки нет."""
-    import config
+    from kapibara.core import config
     v = (config.LOGIN_CHANNEL or "").strip()
     m = re.search(r"t\.me/([A-Za-z0-9_]{4,})/?$", v)
     if m:
@@ -103,7 +103,7 @@ async def subscribed(bot, user_id: int) -> bool | None:
 
 async def needed(bot, user_id: int) -> bool:
     """Показать ли человеку канал перед входом."""
-    import config
+    from kapibara.core import config
     from database import get_user
     if not channel() or config.is_starosta(user_id) or await _passed(user_id):
         return False

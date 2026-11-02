@@ -30,8 +30,8 @@ from database import (
     get_last_feed_post_time, add_feed_post, set_feed_post_message_id,
     get_feed_post, delete_feed_post, set_feed_reaction, get_feed_reaction_counts,
 )
-from config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
-from utils import esc
+from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
+from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)

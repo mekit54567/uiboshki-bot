@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Потоки numpy/OpenBLAS — по одному (16.10, Amvera): своя модель векторов
-# (local_embed.py) иначе запускает поток на каждое ядро машины, а контейнеру
+# (kapibara/features/ai/local_embed.py) иначе запускает поток на каждое ядро машины, а контейнеру
 # дана доля одного ядра — процесс душит сам себя, и бот с приложением отвечают
 # по полминуты, пока считаются векторы.
 ENV PYTHONUNBUFFERED=1 \

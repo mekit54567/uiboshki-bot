@@ -4,8 +4,8 @@ from datetime import datetime
 
 import pytest
 
-import deadline_reminders as dr
-from utils import TZ
+from kapibara.features.deadlines import reminders as dr
+from kapibara.core.utils import TZ
 
 NOW = datetime(2026, 10, 2, 12, 0, tzinfo=TZ)
 D = {"id": 1, "due_date": "2026-10-05", "due_time": "18:00"}
@@ -71,7 +71,7 @@ async def test_api_remind(db, monkeypatch):
 
 
 def test_scheduler_runs_every_minute():
-    import scheduler
+    from kapibara.jobs import scheduler
     src = open(scheduler.__file__, encoding="utf-8").read()       # где бы ни лежал (kapibara/jobs/)
     assert "send_deadline_custom_reminders" in src
 
@@ -79,7 +79,7 @@ def test_scheduler_runs_every_minute():
 @pytest.mark.asyncio
 async def test_reminder_goes_through_delivery(db, monkeypatch):
     """Своё напоминание — через слой доставки (пуш в приложение), а не только в Telegram."""
-    import delivery
+    from kapibara.features.notifications import delivery
     a = await db.add_deadline("Практика 2 · Анализ данных", "", "2026-10-05", "18:00", 0)
     await db.add_deadline_reminder(7, a, "2026-10-04 18:00")
     got = []

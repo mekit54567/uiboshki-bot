@@ -17,17 +17,17 @@ from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config import TIMEZONE
+from kapibara.core.config import TIMEZONE
 
 TZ = ZoneInfo(TIMEZONE)
 STARTED = datetime.now(TZ)
 DAY = 24 * 3600
 
 # Раздел по имени логгера (модуля): первое совпадение по началу имени
-AREAS = [("ai_solver", "ИИ"), ("kapibara.features.ai", "ИИ"), ("gemini_solver", "ИИ"), ("lecture_summary", "ИИ"), ("kapibara.features.lectures.summary", "ИИ"), ("handlers.solver", "ИИ"),
-         ("webapp.routes.chat", "ИИ"), ("sdo", "СДО"), ("kapibara.features.sdo", "СДО"), ("grade_alerts", "СДО"), ("kapibara.features.notifications.grade_alerts", "СДО"), ("webapp.routes.sdo", "СДО"),
-         ("schedule", "Расписание"), ("kapibara.features.schedule", "Расписание"), ("mirea_schedule_api", "Расписание"), ("backup", "Бэкап"),
-         ("kapibara.ops.backup", "Бэкап"),
+AREAS = [("kapibara.features.ai", "ИИ"), ("kapibara.features.lectures.summary", "ИИ"), ("handlers.solver", "ИИ"),
+         ("webapp.routes.chat", "ИИ"), ("kapibara.features.sdo", "СДО"),
+         ("kapibara.features.notifications.grade_alerts", "СДО"), ("webapp.routes.sdo", "СДО"),
+         ("kapibara.features.schedule", "Расписание"), ("kapibara.ops.backup", "Бэкап"),
          ("kapibara.jobs.scheduler", "Расписание")]   # как было: префикс «schedule» ловил и scheduler
 
 
@@ -100,14 +100,14 @@ def error_spike(now: float | None = None) -> str | None:
     for r in errs:
         by_area[r[2]] = by_area.get(r[2], 0) + 1
     areas = " · ".join(f"{a} — {n}" for a, n in sorted(by_area.items(), key=lambda x: -x[1]))
-    from utils import esc
+    from kapibara.core.utils import esc
     return (f"⚠️ <b>За час {len(errs)} ошибок</b>: {esc(areas)}\n"
             f"Последняя: <code>{esc(errs[-1][3])}</code>\nПодробнее — /status")
 
 
 async def alert_errors(bot):
     """Раз в 15 минут (scheduler): всплеск ошибок — старосте."""
-    from config import STAROSTA_ID
+    from kapibara.core.config import STAROSTA_ID
     text = error_spike()
     if text and STAROSTA_ID:
         try:
@@ -163,7 +163,7 @@ def _ago(seconds: float) -> str:
 
 
 def _line(n: dict | None, title: str, now: datetime, never: str) -> str:
-    from utils import esc
+    from kapibara.core.utils import esc
     if not n:
         return f"▫️ {title} — {never}"
     mark = "✅" if n["ok"] else "⚠️"
@@ -265,9 +265,9 @@ async def db_probe() -> tuple[str, float, float]:
 
 
 async def report() -> str:
-    from config import SDO_SESSION_COOKIE
+    from kapibara.core.config import SDO_SESSION_COOKIE
     from database import get_sdo_sessions
-    from schedule_parser import stale_label
+    from kapibara.features.schedule.parser import stale_label
     now = datetime.now(TZ)
     up = (now - STARTED).total_seconds()
     from webapp.routes.meta import build_info
@@ -276,14 +276,14 @@ async def report() -> str:
     build += f" · {b['commit']}" if b["commit"] else ""
     lines = [f"🩺 <b>Состояние бота</b> · {version()}{build}",
              f"Работает {_ago(up)} (запущен {_when(STARTED.isoformat(), now)})", ""]
-    import privacy
+    from kapibara.features.privacy import privacy
     if missing := privacy.operator_missing():      # тексты /consent и /privacy без оператора (152-ФЗ)
         lines += [f"⚠️ В согласии и политике нет данных оператора: задай {', '.join(missing)}", ""]
-    import backup
-    import s3_store
+    from kapibara.ops import backup
+    from kapibara.ops import s3_store
     if not s3_store.configured() and not backup.backup_key():     # копия уходит в Telegram (ОАЭ)
         lines += ["⚠️ Ночная копия базы уходит в Telegram без шифрования: задай BACKUP_KEY", ""]
-    import billing
+    from kapibara.features.billing import billing
     if billing.provider(configured_only=True) and billing.missing_requisites():
         lines += ["⚠️ Касса задана, но оплата «Капибары+» закрыта: в оферте нет реквизитов — задай "
                   + ", ".join(billing.missing_requisites()), ""]
@@ -312,7 +312,7 @@ async def report() -> str:
         lines.append(_line(await _get("sdo_sync"), "Синк дедлайнов", now, "ещё не было"))
     ok, expired = len(await get_sdo_sessions("ok")), len(await get_sdo_sessions("expired"))
     lines.append(f"Входы студентов: {ok} работают" + (f" · {expired} устарели" if expired else ""))
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     if (ok or expired) and sdo_accounts.key_source() == "bot_token":   # 152-ФЗ: ключ отдельно от токена бота
         lines.append("⚠️ Входы зашифрованы ключом от BOT_TOKEN — задай на хостинге SDO_CRYPT_PASSPHRASE "
                      "(длинная фраза) или SDO_CRYPT_KEY")
@@ -324,7 +324,7 @@ async def report() -> str:
 
     lines += ["", "<b>Поиск по смыслу</b>"]
     try:
-        import semantic_index
+        from kapibara.features.ai import semantic_index
         st = await semantic_index.stats()
         lines.append(f"Лекций в индексе: {st['files']}" + (f" · ждут {st['waiting']}" if st["waiting"] else "") +
                      f" · фрагментов {st['chunks']}, с векторами {st['embedded']}"
@@ -336,18 +336,18 @@ async def report() -> str:
 
     lines += ["", "<b>ИИ</b>"]
     try:
-        import ai_quota
-        import config
-        import gemini_solver
-        from utils import esc
+        from kapibara.features.ai import quota as ai_quota
+        from kapibara.core import config
+        from kapibara.features.ai import gemini as gemini_solver
+        from kapibara.core.utils import esc
         total, top = await ai_quota.summary()
         limit = f" · лимит {config.AI_DAILY_LIMIT} на человека" if config.AI_DAILY_LIMIT else " · дневного лимита нет"
         lines.append(f"Вопросов сегодня: {total}, у самого активного — {top}{limit}")
         from database.billing import manual_active
-        from utils import today_msk
+        from kapibara.core.utils import today_msk
         subs, unl = await manual_active(today_msk().isoformat())
         lines.append(f"Ручные выдачи (/grant): подписок {subs} · безлимитов {unl}")
-        import billing
+        from kapibara.features.billing import billing
         lines.append(await billing.donate_status_line())
         if config.OPENROUTER_API_KEY and gemini_solver.AI_SPARE_MODEL:
             mode = await gemini_solver.ai_main()
@@ -361,7 +361,7 @@ async def report() -> str:
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "
                          f"запасные: {esc(', '.join(spare))}")
-        import think
+        from kapibara.features.ai import think
         lines.append(esc(await think.status_line()))
     except Exception as e:
         lines.append(f"⚠️ не узнал: {type(e).__name__}")
@@ -375,7 +375,7 @@ async def report() -> str:
         lines.append("✅ Ни одной")
     else:
         from collections import Counter
-        from utils import esc
+        from kapibara.core.utils import esc
         by_area = Counter(r[2] for r in errors)
         if errors:
             lines.append("❌ Ошибки: " + " · ".join(f"{a} {n}" for a, n in by_area.most_common()))

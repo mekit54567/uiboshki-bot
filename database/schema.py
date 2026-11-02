@@ -3,7 +3,7 @@
 import logging
 import sqlite3
 
-from config import STAROSTA_ID
+from kapibara.core.config import STAROSTA_ID
 from database._conn import connect
 
 
@@ -73,7 +73,7 @@ async def init_db():
         # расписания МИРЭА. Колонка новая — всех, кто уже есть, записываем в
         # свою группу (до этого бот был только для неё); новые выбирают сами.
         if await _add_column(db, "users", "group_id INTEGER"):          # колонка новая — один раз
-            from config import HOME_GROUP_ID
+            from kapibara.core.config import HOME_GROUP_ID
             if HOME_GROUP_ID:
                 await db.execute("UPDATE users SET group_id = ?", (HOME_GROUP_ID,))
         await db.execute("""

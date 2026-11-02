@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from fastapi.testclient import TestClient
 
-import config
+from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 from tests.test_deadlines_routing import FakeSession
 
@@ -62,7 +62,7 @@ async def test_other_group_admin_cannot_touch_home_deadlines(people, monkeypatch
 @pytest.mark.asyncio
 async def test_other_group_admin_cannot_delete_home_homework(people):
     import handlers.announce as announce          # handlers.homework — вложенный роутер announce
-    from middleware import GroupContextMiddleware
+    from kapibara.bot.middleware import GroupContextMiddleware
     db = people
     hid = await db.add_hw("Анализ", "задачи", "", "", STAROSTA_ID)            # ДЗ своей группы (NULL)
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=FakeSession())
@@ -85,8 +85,8 @@ async def test_other_group_admin_cannot_delete_home_homework(people):
 
 @pytest.mark.asyncio
 async def test_files_of_other_group_not_reachable_by_id(people, monkeypatch):
-    import lecture_summary
-    import semantic_index as si
+    from kapibara.features.lectures import summary as lecture_summary
+    from kapibara.features.ai import semantic_index as si
     import webapp.deps as deps
     db = people
     mine = await db.add_file("Лекция 1", "Анализ", "tg1", "l1.pdf", STAROSTA_ID)
@@ -135,7 +135,7 @@ async def test_files_of_other_group_not_reachable_by_id(people, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_home_group_cannot_share_sdo(people, monkeypatch):
-    import group_sync
+    from kapibara.features.groups import sync as group_sync
     c, h = _client(monkeypatch, HOME_USER)
     assert c.post("/api/sdo/share", headers=h, json={"share": True}).status_code == 400
     assert (await group_sync.sync_group(HOME)).get("error")
@@ -157,8 +157,8 @@ async def test_push_subs_capped(people):
 
 @pytest.mark.asyncio
 async def test_submit_checks_size_before_decoding(people, monkeypatch):
-    import sdo_accounts
-    import sdo_submit
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import submit as sdo_submit
     called = []
 
     async def cookie_for(uid):

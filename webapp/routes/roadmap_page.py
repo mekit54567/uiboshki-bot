@@ -75,7 +75,7 @@ def _card(i: dict) -> str:
 
 
 def render(data: dict) -> str:
-    import roadmap
+    from kapibara.features.content import roadmap
     done, total = roadmap.score(data)
     res = roadmap.results(data)
     line = res + [i for i in data["items"] if i["status"] == "now" and i not in res]
@@ -101,9 +101,9 @@ def render(data: dict) -> str:
 
 @router.get("/roadmap", response_class=HTMLResponse, include_in_schema=False)
 async def roadmap_page(k: str = ""):
-    import billing
-    import config
-    import roadmap
+    from kapibara.features.billing import billing
+    from kapibara.core import config
+    from kapibara.features.content import roadmap
     uid = billing.read_key(k)
     if not uid:
         return _page(_head("Роадмап", "Что я делаю сейчас и что дальше")

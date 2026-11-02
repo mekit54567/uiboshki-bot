@@ -5,10 +5,10 @@ from datetime import date
 
 import pytest
 
-import billing
-import config
-import plus_grant
-import ratelimit
+from kapibara.features.billing import billing
+from kapibara.core import config
+from kapibara.features.billing import grants as plus_grant
+from kapibara.core import ratelimit
 from tests.conftest import STAROSTA_ID
 from tests.test_review_bot import send
 from tests.test_review_bot import bot, dp  # noqa: F401 — фикстуры
@@ -18,7 +18,7 @@ OTHER_GROUP = 5001
 
 
 def _today(monkeypatch, d: date):
-    import utils
+    from kapibara.core import utils
     box = [d]
     monkeypatch.setattr(utils, "today_msk", lambda: box[0])
     return box
@@ -86,8 +86,8 @@ async def test_off_without_paid_ends_now(db, bot, monkeypatch):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_unlimited_bypasses_quota(db, bot, monkeypatch, no_minute_limit):  # noqa: F811
-    import ai_quota
-    import plans
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.billing import plans
     day = _today(monkeypatch, date(2026, 10, 16))
     await db.upsert_user(ME, "vasya", "Вася")
     await db.set_user_group(ME, OTHER_GROUP)                                 # чужая группа — проба
@@ -122,8 +122,8 @@ async def test_unlimited_bypasses_quota(db, bot, monkeypatch, no_minute_limit): 
 async def test_own_group_gift_has_sub_limits_then_own(db, monkeypatch, no_minute_limit):
     """Своя группа с подарком — лимиты подписки; подарок кончился — свой
     бесплатный лимит группы. Никита — без лимитов, старосты групп — как все."""
-    import ai_quota
-    import plans
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.billing import plans
     from database.groups import add_group_admin
     day = _today(monkeypatch, date(2026, 10, 20))
     monkeypatch.setattr(config, "AI_SUB_DAILY", 2)
@@ -175,8 +175,8 @@ async def test_grant_command_only_for_nikita(db, bot, dp, monkeypatch):  # noqa:
 
 @pytest.mark.asyncio
 async def test_welcome_once_and_status_line(db, bot, dp, monkeypatch):  # noqa: F811
-    import health
-    import plus_welcome
+    from kapibara.ops import health
+    from kapibara.features.billing import welcome as plus_welcome
     _today(monkeypatch, date(2026, 10, 20))
     await db.upsert_user(ME, "", "Вася")
     await db.set_user_group(ME, config.HOME_GROUP_ID)                        # своя группа — подарок
@@ -203,7 +203,7 @@ async def test_welcome_once_and_status_line(db, bot, dp, monkeypatch):  # noqa: 
 
 @pytest.mark.asyncio
 async def test_erase_removes_grants(db, bot, monkeypatch):  # noqa: F811
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.billing import get_unlimited, grant_log, welcomed
     _today(monkeypatch, date(2026, 10, 16))
     await db.upsert_user(ME, "", "Вася")

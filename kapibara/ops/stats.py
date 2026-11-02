@@ -28,7 +28,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from config import TIMEZONE
+from kapibara.core.config import TIMEZONE
 from kapibara.core.paths import ROOT
 
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ async def track(user_id: int, kind: str | None):
     статистики никогда не ломают сам запрос."""
     if not kind or not user_id:
         return
-    import privacy
+    from kapibara.features.privacy import privacy
     try:
         if await privacy.blocked(user_id):
             return                  # до согласия на обработку данных — без событий (152-ФЗ)
@@ -140,7 +140,7 @@ async def collect(days: int = 30) -> dict:
         if kind in dict(ACTIONS):
             actions[kind] += 1
     joined = [_msk(u["joined_at"]).date() for u in await get_all_users() if u.get("joined_at")]
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     ai_total, ai_top = await ai_quota.summary()
     return {
         "days": days, "since": since, "today": today,
@@ -210,7 +210,7 @@ def _when(t: datetime, today) -> str:
 
 
 def _person(p: dict) -> str:
-    from utils import esc
+    from kapibara.core.utils import esc
     name = esc(p["name"] or (f"@{p['username']}" if p["username"] else f"id {p['id']}"))
     nick = f" @{esc(p['username'])}" if p["username"] and p["name"] else ""
     from database.identities import is_local
@@ -237,7 +237,7 @@ def people_text(p: dict) -> str:
 def evening_text(new: int, from_site: int, total: int, sdo: int, ai: int, errors: int) -> str | None:
     """Вечерняя сводка старосте — только если за сутки пришли новые люди
     (неделя анонса: рост видно без /stats; в обычный день — тишина)."""
-    from utils import plural
+    from kapibara.core.utils import plural
     if not new:
         return None
     site = f" ({from_site} с сайта)" if from_site else ""
@@ -252,9 +252,9 @@ async def send_evening(bot, now: datetime | None = None):
     сводки, так что пришедшие поздно вечером попадут в завтрашнюю. «С сайта» —
     только среди новых (старые жмут /start site тоже)."""
     import logging as _logging
-    import ai_quota
-    import health
-    from config import STAROSTA_ID
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.ops import health
+    from kapibara.core.config import STAROSTA_ID
     from database import count_sdo_connected, count_users, events_since, get_all_users
     if not STAROSTA_ID:
         return
@@ -295,7 +295,7 @@ def platforms_line(rows: list[tuple[str, int]]) -> str:
 
 def groups_line(rows: list[dict], top: int = 6) -> str:
     """«Группы: УИБО-03-24 — 25 · УИБО-01-24 — 3 · без группы — 2» (этап 1)."""
-    from utils import esc
+    from kapibara.core.utils import esc
     if len(rows) < 2:
         return ""
     parts = [f"{esc(r['name'] or ('без группы' if not r['id'] else str(r['id'])))} — {r['users']}" for r in rows[:top]]

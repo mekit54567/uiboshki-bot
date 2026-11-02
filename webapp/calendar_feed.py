@@ -19,10 +19,10 @@ from zoneinfo import ZoneInfo
 
 from icalendar import Calendar, Event
 
-from config import TIMEZONE, GROUP_NAME
+from kapibara.core.config import TIMEZONE, GROUP_NAME
 from database import get_lesson_notes
 from database import get_hw_for_date
-from schedule_parser import fetch_schedule_raw, list_upcoming_events
+from kapibara.features.schedule.parser import fetch_schedule_raw, list_upcoming_events
 
 TZ = ZoneInfo(TIMEZONE)
 
@@ -53,7 +53,7 @@ def _event_uid(token: str, ev: dict) -> str:
 
 
 async def build_ics_for_user(token: str, group_id: int | None = None) -> bytes:
-    import groups
+    from kapibara.features.groups import groups
     other = bool(group_id) and group_id != groups.home_id()
     raw = await (fetch_schedule_raw(group_id=group_id) if other else fetch_schedule_raw())
     events = list_upcoming_events(raw, days_ahead=DAYS_AHEAD)

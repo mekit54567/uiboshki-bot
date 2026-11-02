@@ -6,8 +6,8 @@ import io
 
 import pytest
 
-import semantic_index as si
-import semantic_search as ss
+from kapibara.features.ai import semantic_index as si
+from kapibara.features.ai import semantic_search as ss
 
 DIMS = 8
 # «смыслы» для подменённых эмбеддингов: текст с любым из слов → своя ось
@@ -27,8 +27,8 @@ def fake_vec(text: str) -> list[float]:
 
 @pytest.fixture
 def embed(monkeypatch):
-    import config
-    import gemini_solver
+    from kapibara.core import config
+    from kapibara.features.ai import gemini as gemini_solver
     calls = []
 
     async def fake(texts, task="RETRIEVAL_DOCUMENT", titles=None, dims=None, timeout=60):
@@ -131,7 +131,7 @@ async def test_hybrid_search_finds_by_meaning(db, embed):
     assert ctx.startswith("=== [1] Анализ данных: Лекция 5. Инвестиции · слайд 2 ===")
     assert sources[0] == {"n": 1, "id": f1, "title": "Лекция 5. Инвестиции", "page": 2, "kind": "слайд",
                           "label": "Лекция 5. Инвестиции · слайд 2"}
-    from ai_solver import lecture_system_prompt
+    from kapibara.features.ai.solver import lecture_system_prompt
     assert "[1], [2]" in lecture_system_prompt("", ctx)                    # ИИ просят ссылаться на номера
 
     # файл удалили — его куски уходят из поиска при следующем проходе
@@ -169,7 +169,7 @@ async def test_index_pending_downloads_for_pages(db, embed):
 @pytest.mark.asyncio
 async def test_chat_cites_pages_and_page_view(db, embed, monkeypatch):
     from fastapi.testclient import TestClient
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -225,7 +225,7 @@ async def test_local_model_own_vectors_and_switch_back(db, embed, monkeypatch):
     не трогаем; заранее считаются фоном (EMBED_PRECOMPUTE), переключение
     EMBED_PROVIDER туда и обратно — без пересчёта; удалённый файл уходит
     из векторов всех моделей."""
-    import local_embed
+    from kapibara.features.ai import local_embed
     calls = []
 
     async def fake_local(key, texts, query=False):
@@ -271,7 +271,7 @@ def test_cited_numbers():
 
 def test_prompt_follows_current_subject():
     # предмет сменили посреди чата — ИИ держится нового выбора (Никита 20.10)
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     assert "не выбран" in ai_solver.build_system_prompt("") and "больше им не ограничивайся" in ai_solver.build_system_prompt("")
     assert "Сейчас выбран предмет «Анализ данных»" in ai_solver.build_system_prompt("Анализ данных")
     assert "без диапазонов" in ai_solver.lecture_system_prompt("", "=== [1] ЛК1 ===\nтекст")
@@ -279,8 +279,8 @@ def test_prompt_follows_current_subject():
 
 def test_prompt_honest_and_without_home_group():
     # «погоду глянешь?» — не выдумывать; группа — из профиля (контекст), не зашитая (Никита 20.10)
-    import ai_solver
-    import config
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.core import config
     for prompt in (ai_solver.build_system_prompt("Анализ данных"),
                    ai_solver.lecture_system_prompt("Анализ данных", "=== [1] ЛК1 ===\nтекст")):
         assert config.GROUP_NAME not in prompt and "погоды" in prompt
@@ -291,7 +291,7 @@ def test_prompt_honest_and_without_home_group():
 async def test_relevance_gate_with_subject(db, embed, monkeypatch):
     # Никита 20.10: при выбранном предмете на «Буря мглою… оценка» тянулся кусок
     # по одному общему слову — у модели с порогом rel_min он отсекается
-    import embedder
+    from kapibara.features.ai import embedder
     fid = await db.add_file("Лекция 5. Инвестиции", "Анализ данных", "tg1", "лк5.pptx", 1)
     await db.save_file_text(fid, "текст")
     await si.index_file(fid, pptx_bytes(["Оценка проектов. Дисконтирование и NPV. " * 7]), "лк5.pptx")
@@ -306,8 +306,8 @@ async def test_relevance_gate_with_subject(db, embed, monkeypatch):
 async def test_chat_offtopic_gets_no_lectures(db, embed, monkeypatch):
     # поиск отсёк всё — целые лекции «по словам» тоже не подмешиваем (Никита 20.10)
     from fastapi.testclient import TestClient
-    import ai_solver
-    import embedder
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.features.ai import embedder
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

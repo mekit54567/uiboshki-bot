@@ -1088,9 +1088,9 @@ def test_share_bot_sends_site_link():
 async def test_sdo_guide_link_from_published_post(db, monkeypatch):
     """Экран «Подключить СДО» — ссылка на гайд в канале: номер сообщения из
     channel:published, канал из CHANNEL_URL; не выпущен — кнопки нет."""
-    import config
+    from kapibara.core import config
     import webapp.server as server
-    from channel_posts import mark_published
+    from kapibara.features.content.channel_posts import mark_published
     monkeypatch.setattr(config, "CHANNEL_URL", "https://t.me/uiboshki_dev")
     assert await server._guide_link() == ""
     await mark_published(server.GUIDE_SLUG, [23])
@@ -1137,7 +1137,7 @@ def test_server_pages_wrap_long_text():
     """Страницы, которые сервер отдаёт сам: длинное имя аккаунта VK/Яндекс и
     длинный вопрос/код в слепом тесте ИИ не дают прокрутки вбок на телефоне;
     страница входа — в теме телефона (тёмная — не белый экран)."""
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     from webapp.routes.auth import _page
     html = _page("Привязать VK ID?", "А" * 200).body.decode()
     assert "overflow-wrap:anywhere" in html and "name='color-scheme' content='light dark'" in html

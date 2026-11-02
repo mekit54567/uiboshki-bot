@@ -5,7 +5,7 @@ Gemini. Чистая функция, без сети — но именно ту�
 возвращала её целиком с truncated=False, что рисковало отправить запрос
 больше лимита без предупреждения.
 """
-from gemini_solver import _fit_context_budget
+from kapibara.features.ai.gemini import _fit_context_budget
 
 
 def _lecture(name: str, size: int) -> str:

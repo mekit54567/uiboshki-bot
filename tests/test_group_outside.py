@@ -2,7 +2,7 @@
 группам; описание бота и сайт — для любой группы."""
 import pytest
 
-import config
+from kapibara.core import config
 
 OTHER = 5001
 
@@ -22,7 +22,7 @@ async def test_inline_cards_of_users_group(db, monkeypatch):
 
 
 def test_stats_groups_line():
-    import stats
+    from kapibara.ops import stats
     assert stats.groups_line([{"id": 4928, "name": "УИБО-03-24", "users": 25}]) == ""     # одна группа — молчим
     line = stats.groups_line([{"id": 4928, "name": "УИБО-03-24", "users": 25},
                               {"id": OTHER, "name": "УИБО-01-24", "users": 3}, {"id": None, "name": "", "users": 2}])

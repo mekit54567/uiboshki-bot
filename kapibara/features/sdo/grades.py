@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 import httpx
 from bs4 import BeautifulSoup
 
-from config import SDO_BASE_URL
+from kapibara.core.config import SDO_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -459,15 +459,15 @@ def forget(user_id: int):
 
 
 async def _report(client: httpx.AsyncClient, course_id: int) -> dict:
-    from sdo_parser import get_checked
+    from kapibara.features.sdo.parser import get_checked
     resp = await get_checked(client, f"{SDO_BASE_URL}/grade/report/user/index.php?id={course_id}")
     return parse_report(resp.text)
 
 
 async def this_semester_courses(client: httpx.AsyncClient) -> list[dict]:
-    from schedule_parser import get_group_subjects
-    from sdo_files import clean_course_name, list_courses
-    from sdo_parser import KEEP_COURSES, SEMESTER_WINDOW, is_old_semester, off_schedule
+    from kapibara.features.schedule.parser import get_group_subjects
+    from kapibara.features.sdo.files import clean_course_name, list_courses
+    from kapibara.features.sdo.parser import KEEP_COURSES, SEMESTER_WINDOW, is_old_semester, off_schedule
     subjects = await get_group_subjects(**SEMESTER_WINDOW)
     out = []
     for c in await list_courses(client):
@@ -517,7 +517,7 @@ async def _overview(user_id: int, cookie: str, fresh: bool) -> dict:
     if fresh:                  # «обновить» — и экраны предметов тоже, иначе там до 10 минут старое
         for k in [k for k in _cache if k[0] == "detail" and k[1] == user_id]:
             _cache.pop(k, None)
-    from sdo_files import make_client
+    from kapibara.features.sdo.files import make_client
     failed = object()
     async with make_client(cookie) as client:
         courses = await this_semester_courses(client)
@@ -591,7 +591,7 @@ _inflight_detail: dict[tuple, asyncio.Future] = {}
 
 async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
     key = ("detail", user_id, course_id)
-    from sdo_files import make_client
+    from kapibara.features.sdo.files import make_client
     async with make_client(cookie) as client:
         base = _cached(("course", user_id, course_id))
         if base:
@@ -608,7 +608,7 @@ async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
                 return None
             async with sem:
                 try:
-                    from sdo_parser import get_checked
+                    from kapibara.features.sdo.parser import get_checked
                     r = await get_checked(client, f"{SDO_BASE_URL}/mod/{w['module']}/view.php?id={w['cmid']}")
                     return parse_assign_page(r.text)
                 except httpx.HTTPError:
@@ -629,7 +629,7 @@ async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
     for t, w, p in zip(tasks, s["works"], pages):
         if p is not None and t.done() and not t.cancelled():
             _pages[(user_id, w["cmid"])] = (time.time(), p)
-    import quiz_time        # время тестов — одно на всех, видно в «Сдать»
+    from kapibara.features.deadlines import quiz_time        # время тестов — одно на всех, видно в «Сдать»
     await quiz_time.remember({w["cmid"]: p for w, p in zip(s["works"], pages) if w["module"] == "quiz"})
     s = recount(s, pages)
     works = []
@@ -731,9 +731,9 @@ def parse_quiz_page(html: str) -> dict:
 
 
 async def task_detail(cookie: str, cmid: int, module: str = "assign") -> dict:
-    from sdo_files import make_client
-    from sdo_parser import get_checked
-    import sdo_submit
+    from kapibara.features.sdo.files import make_client
+    from kapibara.features.sdo.parser import get_checked
+    from kapibara.features.sdo import submit as sdo_submit
     url = f"{SDO_BASE_URL}/mod/{module}/view.php?id={cmid}"
     async with make_client(cookie) as client:
         html = (await get_checked(client, url)).text
@@ -741,7 +741,7 @@ async def task_detail(cookie: str, cmid: int, module: str = "assign") -> dict:
         page["maxfiles"] = 0
         if module == "quiz":
             page.update(parse_quiz_page(html), can_submit=False)
-            import quiz_time
+            from kapibara.features.deadlines import quiz_time
             await quiz_time.remember({cmid: page})
         if page["can_submit"]:
             try:

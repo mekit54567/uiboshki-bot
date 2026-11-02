@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import pytest
 
-import config
+from kapibara.core import config
 from tests.test_lesson_reactions import ME, MATE, STRANGER, _start, client  # noqa: F401 — фикстура
 
 ICAL = (b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:test\r\nBEGIN:VEVENT\r\nUID:1\r\n"
@@ -51,7 +51,7 @@ async def test_group_comments_filter_and_delete(client):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_comment_report_and_hide_author(client, monkeypatch):  # noqa: F811
-    import ugc
+    from kapibara.features.social import ugc
     c, h = client
     s = _start()
     first = c.post("/api/lesson/comments", json={"start": s, "title": "Анализ данных", "text": "где аудитория?"},
@@ -74,8 +74,8 @@ async def test_comment_report_and_hide_author(client, monkeypatch):  # noqa: F81
 
 @pytest.mark.asyncio
 async def test_teacher_rating_only_numbers_from_own_schedule(client, monkeypatch, db):  # noqa: F811
-    import schedule_parser
-    import teacher_rating
+    from kapibara.features.schedule import parser as schedule_parser
+    from kapibara.features.social import teacher_rating
     c, h = client
     monkeypatch.setattr(schedule_parser, "raw_for_user", lambda uid, force=False: _raw(uid))
 

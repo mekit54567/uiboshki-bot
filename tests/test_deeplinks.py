@@ -88,7 +88,7 @@ async def test_webapp_send_file_goes_to_chat_without_start(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_site_deeplink_counts_in_stats(db, monkeypatch):
     # кнопки сайта /about ведут на ?start=site — в /stats видно, сколько пришло с сайта
-    import stats
+    from kapibara.ops import stats
     from handlers.start import router
     monkeypatch.setattr(stats, "_last", {})
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=DocSession())

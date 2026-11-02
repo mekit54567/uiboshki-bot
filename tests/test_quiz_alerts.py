@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import notify_prefs
-import quiz_alerts as qa
-from utils import TZ
+from kapibara.features.notifications import prefs as notify_prefs
+from kapibara.features.notifications import quiz_alerts as qa
+from kapibara.core.utils import TZ
 
 QUIZ = "https://online-edu.mirea.ru/mod/quiz/view.php?id=501"
 CLOSE = datetime(2099, 3, 10, 12, 0, tzinfo=TZ)
@@ -42,7 +42,7 @@ def test_next_open():
 
 
 def test_calendar_attaches_open_time():
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     ts = lambda d: int(d.timestamp())       # noqa: E731
     ev = [{"id": 1, "name": "Тест 3 открывается", "component": "mod_quiz", "eventtype": "open",
            "timestart": ts(CLOSE - timedelta(hours=2)), "url": QUIZ},
@@ -131,7 +131,7 @@ async def test_new_open_quiz_announced_once(db):
     """Новый тест, уже открытый: у кого «Тест открылся» — строкой «Открыли
     тест» вместо нового задания, и минутная проверка его не повторит."""
     from database.sdo import get_quiz_opens
-    import new_tasks
+    from kapibara.features.notifications import new_tasks
     await _setup(db)
     await db.upsert_user(5, "", "")
     await db.set_notify(5, {"quiz_open": False})              # только «новые задания»
@@ -163,7 +163,7 @@ async def test_new_open_quiz_announced_once(db):
 
 @pytest.mark.asyncio
 async def test_hidden_and_optional_not_sent(db, monkeypatch):
-    import config
+    from kapibara.core import config
     did = await _setup(db)
     from database.deadlines import hide_deadline_for
     await hide_deadline_for(1, did)
@@ -178,7 +178,7 @@ async def test_hidden_and_optional_not_sent(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_peek_triggers_sync_only_on_change(db, monkeypatch):
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     items = [{"external_id": "sdo:2", "description": QUIZ, "calendar": True, "opens": "2099-03-10 10:00"}]
     await qa.remember(items)
     state = {"events": items}
@@ -200,10 +200,10 @@ async def test_peek_triggers_sync_only_on_change(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_keepalive_peek_runs_sync(monkeypatch):
-    import health
-    import quiz_alerts
-    import scheduler
-    import sdo_parser
+    from kapibara.ops import health
+    from kapibara.features.notifications import quiz_alerts
+    from kapibara.jobs import scheduler
+    from kapibara.features.sdo import parser as sdo_parser
     calls = []
 
     async def keepalive(peek=None):
@@ -221,7 +221,7 @@ async def test_keepalive_peek_runs_sync(monkeypatch):
 
     monkeypatch.setattr(sdo_parser, "keepalive", keepalive)
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
-    monkeypatch.setattr("config.SDO_SESSION_COOKIE", "x")
+    monkeypatch.setattr("kapibara.core.config.SDO_SESSION_COOKIE", "x")
     monkeypatch.setattr(quiz_alerts, "peek", peek)
     monkeypatch.setattr(scheduler, "sync_sdo_deadlines", sync)
     monkeypatch.setattr(health, "note", note)
@@ -232,9 +232,9 @@ async def test_keepalive_peek_runs_sync(monkeypatch):
 
 def test_jobs_registered():
     """Минутная проверка тестов и keepalive с ботом (для внеочередного синка)."""
-    import deadline_reminders
-    import quiz_alerts
-    import scheduler
+    from kapibara.features.deadlines import reminders as deadline_reminders
+    from kapibara.features.notifications import quiz_alerts
+    from kapibara.jobs import scheduler
     jobs = {(j.func.__module__, j.func.__name__): j for j in scheduler.start_scheduler(object()).get_jobs()}
     # переехали в kapibara/ (ADR 0003) — имя модуля берём у самого модуля
     reminders, quizzes = deadline_reminders.__name__, quiz_alerts.__name__
@@ -246,7 +246,7 @@ def test_jobs_registered():
 @pytest.mark.asyncio
 async def test_api_notify_quiz(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
 
@@ -271,7 +271,7 @@ async def test_sync_records_opens_and_peek_signature(db):
     """Синк своей группы: время открытия теста — в quiz_opens, что видел о
     тестах — для peek; синк чужой группы peek не трогает."""
     import json
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     from database.sdo import get_quiz_opens
     item = {"title": "Тест 3", "course": "", "external_id": "sdo:2", "subject": "Тест 3", "description": QUIZ,
             "due_date": "2099-03-10", "due_time": "12:00", "calendar": True, "opens": "2099-03-10 10:00"}

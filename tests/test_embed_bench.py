@@ -4,15 +4,15 @@ import json
 
 import pytest
 
-import embed_bench
-import semantic_index as si
+from kapibara.features.ai import embed_bench
+from kapibara.features.ai import semantic_index as si
 from tests.test_semantic_search import fake_vec, embed  # noqa: F401 — фикстура
 
 
 @pytest.mark.asyncio
 async def test_embedtest_report(db, embed, monkeypatch):  # noqa: F811
-    import gemini_solver
-    import local_embed
+    from kapibara.features.ai import gemini as gemini_solver
+    from kapibara.features.ai import local_embed
     topics = ["дисконт npv прибыль", "регресс коэффициент", "баланс актив"] * 2
     for i, t in enumerate(topics):
         fid = await db.add_file(f"Лекция {i}", "Анализ данных", f"tg{i}", f"л{i}.txt", 1)

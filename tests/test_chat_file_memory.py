@@ -21,7 +21,7 @@ def _client(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_chat_returns_file_text_and_it_works_in_next_question(db, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.routes.chat as chat
     seen = []
 
@@ -55,7 +55,7 @@ async def test_chat_returns_file_text_and_it_works_in_next_question(db, monkeypa
 
 @pytest.mark.asyncio
 async def test_photo_answer_has_no_file_text(db, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
 
     async def fake_image(image_bytes, mime="image/jpeg", subject="", lectures="", prompt=""):
         return "x = 2"

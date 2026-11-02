@@ -13,14 +13,14 @@ sdo_parser.sync_deadlines). Другой группе хватает одног�
 
 import logging
 
-import sdo_net
+from kapibara.features.sdo import net as sdo_net
 
 logger = logging.getLogger(__name__)
 
 
 async def _calendar_items(cookie: str) -> list[dict]:
-    import sdo_parser
-    from config import SDO_BASE_URL  # noqa: F401 — тот же СДО, что у своей группы
+    from kapibara.features.sdo import parser as sdo_parser
+    from kapibara.core.config import SDO_BASE_URL  # noqa: F401 — тот же СДО, что у своей группы
     async with sdo_net.client(cookie) as client:
         events = await sdo_parser.fetch_calendar_events(client)
     if events is None:
@@ -30,13 +30,13 @@ async def _calendar_items(cookie: str) -> list[dict]:
 
 async def sync_group(group_id: int) -> dict:
     """Синк одной группы по её донорам. → итог apply_items или {"error"}."""
-    import sdo_accounts
-    import sdo_parser
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import parser as sdo_parser
     from database import get_group_donors
     from database.groups import home
     if group_id == home():
         return {"error": "своя группа синкается общим входом"}
-    import sdo_check
+    from kapibara.features.sdo import check as sdo_check
     last = "нет входа, которым поделились"
     tried = False
     for donor in await get_group_donors(group_id):
@@ -64,7 +64,7 @@ async def sync_group(group_id: int) -> dict:
 
 async def sync_all(bot=None) -> dict[int, dict]:
     """Все группы, где кто-то делится СДО; новые задания — людям группы."""
-    import new_tasks
+    from kapibara.features.notifications import new_tasks
     from database import get_sharing_groups
     out = {}
     for gid in await get_sharing_groups():

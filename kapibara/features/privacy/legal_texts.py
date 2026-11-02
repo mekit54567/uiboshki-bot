@@ -15,7 +15,7 @@
 Поменял согласие по смыслу — подними privacy.VERSION и DATE: у всех
 спросят согласие заново."""
 
-import privacy  # хостинг (privacy.HOST): версия и дата политики, получатель данных
+from kapibara.features.privacy import privacy  # хостинг (privacy.HOST): версия и дата политики, получатель данных
 
 CONSENT = {
     "title": "Согласие на обработку персональных данных",
@@ -304,7 +304,7 @@ RATING_ALL = {
 }
 
 
-from offer_text import OFFER  # noqa: E402 — оферта подписки, своя версия (offer_text.py)
+from kapibara.features.privacy.offer_text import OFFER  # noqa: E402 — оферта подписки, своя версия (offer_text.py)
 
 DOCS = {"consent": CONSENT, "privacy": PRIVACY, "offer": OFFER, "rules": RULES, "rating_all": RATING_ALL}
 
@@ -312,15 +312,15 @@ DOCS = {"consent": CONSENT, "privacy": PRIVACY, "offer": OFFER, "rules": RULES, 
 def payment_names() -> str:
     """Касса, которая правда включена (billing.provider); не включена — ЮKassa
     (Robokassa отказала 26.10, подключаем ЮKassa)."""
-    import billing
+    from kapibara.features.billing import billing
     names = {"yookassa": "ЮKassa (ООО НКО «ЮMoney», Россия)", "robokassa": "Robokassa (ООО «Робокасса», Россия)"}
     return names.get(billing.provider(configured_only=True)) or names["yookassa"]
 
 
 def doc(name: str) -> dict:
     """Текст с подстановками — для страницы и для /api/legal/<имя>."""
-    import privacy
-    import ugc
+    from kapibara.features.privacy import privacy
+    from kapibara.features.social import ugc
     values = {"OPERATOR": privacy.OPERATOR, "CONTRACTOR": privacy.contractor(), "CONTACT": privacy.CONTACT,
               "INACTIVE_DAYS": str(privacy.INACTIVE_DAYS), "SOLVER_DAYS": str(privacy.SOLVER_DAYS),
               "ANSWER_DAYS": str(privacy.ANSWER_DAYS), "ERASE_DAYS": str(privacy.ERASE_DAYS),

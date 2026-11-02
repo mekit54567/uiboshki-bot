@@ -51,7 +51,7 @@ PASS = ("/api/meta", "/api/legal/", "/api/auth/review", "/api/auth/providers")
 
 
 def code() -> str:
-    import config
+    from kapibara.core import config
     return config.REVIEW_CODE
 
 
@@ -213,8 +213,8 @@ def lecture_page(file_id: int, page: int) -> dict | None:
 def demo_lectures(query: str, subject: str = "", top: int = 4) -> tuple[str, list[dict] | None]:
     """Куски демо-лекций под вопрос — в том же виде, что поиск по смыслу
     (semantic_search.build_context: [n] и источники); по словам, без индекса."""
-    from lecture_picker import _stems, expand
-    from semantic_search import build_context
+    from kapibara.features.lectures.picker import _stems, expand
+    from kapibara.features.ai.semantic_search import build_context
     q = _stems(expand(query or ""))
     if not q:
         return "", None
@@ -248,7 +248,7 @@ def _day_lines(label: str, day: dict) -> list[str]:
 def demo_context(now: datetime) -> str:
     """Контекст группы для ИИ — как group_context.build_group_context у
     настоящего студента, но из записи стенда: пары недели, дедлайны, ДЗ, баллы БРС."""
-    from lecture_day import NIGHT_UNTIL
+    from kapibara.features.lectures.day import NIGHT_UNTIL
     fx = fixtures()
     today = now.date()
     lines = [
@@ -302,11 +302,11 @@ async def demo_chat(raw: bytes, now: datetime) -> tuple[int, dict]:
     настоящего чата (webapp.routes.chat.reply), но контекст и лекции — из
     записи стенда: база, лимиты людей, поиск по смыслу и group_context не
     трогаются. Сбой модели — прежний ответ из записи, не 500."""
-    import ai_quota
-    import ratelimit
-    import think
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.core import ratelimit
+    from kapibara.features.ai import think
     from fastapi import HTTPException
-    from lecture_picker import search_query
+    from kapibara.features.lectures.picker import search_query
     from pydantic import ValidationError
     from webapp.routes.chat import ChatBody, clean_history, reply
     try:
@@ -363,7 +363,7 @@ class ReviewDemo:
             more = msg.get("more_body", False)
         method, path = scope["method"], scope["path"]
         query = scope.get("query_string", b"").decode()
-        from utils import TZ
+        from kapibara.core.utils import TZ
         if method == "GET" and (path == "/api/search" or path.startswith("/api/target/")):
             status, data = await _schedule(path, query)
         elif method == "POST" and path == "/api/chat":

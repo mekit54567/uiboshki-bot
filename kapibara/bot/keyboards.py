@@ -23,7 +23,7 @@ def webapp_keyboard(text: str = "🚀 Открыть приложение") -> I
     Telegram не даёт зарегистрировать WebAppInfo с пустым/не-https url, поэтому
     вызывающий код должен сам проверить на None перед показом кнопки."""
     from aiogram.types import WebAppInfo
-    from config import WEBAPP_URL
+    from kapibara.core.config import WEBAPP_URL
     if not WEBAPP_URL:
         return None
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -36,7 +36,7 @@ def app_button(text: str = "🚀 Открыть приложение", tab: str 
     js/main.js): уведомление «дедлайн завтра» → «Открыть дедлайны». None без
     WEBAPP_URL — тогда уведомление уходит без кнопки."""
     from aiogram.types import WebAppInfo
-    from config import WEBAPP_URL
+    from kapibara.core.config import WEBAPP_URL
     if not WEBAPP_URL:
         return None
     url = WEBAPP_URL + (("&" if "?" in WEBAPP_URL else "?") + "tab=" + tab if tab else "")

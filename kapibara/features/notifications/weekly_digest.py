@@ -9,7 +9,7 @@
 import logging
 from datetime import date, datetime, timedelta
 
-from utils import TZ, esc
+from kapibara.core.utils import TZ, esc
 
 logger = logging.getLogger(__name__)
 DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -24,9 +24,9 @@ async def week_grades(user_id: int) -> list[tuple[str, float]]:
     """Прирост баллов за неделю по предметам — у кого подключён свой вход в
     СДО: [(«Анализ данных», 5.0), …], по убыванию, только рост. Сбой СДО —
     пусто (обзор недели уходит и без этой строки)."""
-    import sdo_grades
-    import sdo_history
-    from sdo_accounts import cookie_for
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.features.sdo import history as sdo_history
+    from kapibara.features.sdo.accounts import cookie_for
     cookie = await cookie_for(user_id)
     if not cookie:
         return []
@@ -51,8 +51,8 @@ def _num(x: float) -> str:
 
 def _week(raw: bytes, monday: date, deadlines: list[dict], home: str | None):
     """Разбор недели: (дни [(день, пар, начало, чужие корпуса)], всего, свободные, сроки недели)."""
-    import notify_prefs
-    from schedule_parser import lessons_for_date
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.schedule.parser import lessons_for_date
     days, total, free = [], 0, []
     for i in range(6):
         d = monday + timedelta(days=i)
@@ -76,7 +76,7 @@ def headline(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
     «Неделя 9: 21 пара» читается как две недели, свободные дни и корпус в
     пуше не нужны, названия работ — тоже: нажал — открылись дедлайны.
     None — неделя пустая. grades — только для сообщения в Telegram."""
-    from push_text import word
+    from kapibara.features.notifications.push_text import word
     _, total, _, week_dl = _week(raw, monday, deadlines, home)
     if not total and not week_dl:
         return None
@@ -91,7 +91,7 @@ def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
     """Сообщение в Telegram; None — неделя пустая. Первой строкой — то же,
     что в заголовке пуша, дальше сроки (что делать), потом дни.
     grades — прирост баллов за прошедшую неделю (week_grades)."""
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     head = headline(raw, monday, deadlines, home, grades)
     if not head:
         return None
@@ -99,7 +99,7 @@ def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
     sunday = monday + timedelta(days=6)
     span = (f"{monday.day}–{sunday.day} {MONTHS_GEN[sunday.month - 1]}" if monday.month == sunday.month
             else f"{monday.day} {MONTHS_GEN[monday.month - 1]} – {sunday.day} {MONTHS_GEN[sunday.month - 1]}")
-    from schedule_parser import week_number
+    from kapibara.features.schedule.parser import week_number
     num = week_number(raw, monday)
     out = [f"🗓 <b>{esc(head[0])}</b>", (f"Неделя {num} · " if num else "") + span]
     if week_dl:
@@ -124,15 +124,15 @@ def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
 
 async def send_all(bot, now: datetime | None = None):
     """Воскресенье вечером: обзор следующей недели каждому, у кого включено."""
-    import notify_prefs
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_active_deadlines, get_all_optional_answers, get_reminder_users
-    from keyboards import app_button
-    from optional_subjects import HIDE
-    from scheduler import _group_raws, pace
+    from kapibara.bot.keyboards import app_button
+    from kapibara.features.groups.optional_subjects import HIDE
+    from kapibara.jobs.scheduler import _group_raws, pace
     now = now or datetime.now(TZ)
     monday = next_monday(now.date())
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     # у каждого — неделя его группы (этап 1 (г)); своя — schedule_parser.fetch_schedule_raw
     raw_of = await _group_raws(lambda: schedule_parser.fetch_schedule_raw())
     answers = await get_all_optional_answers()
@@ -163,7 +163,7 @@ async def send_all(bot, now: datetime | None = None):
         if not text:
             continue
         try:
-            import delivery
+            from kapibara.features.notifications import delivery
             title, body = head
             await delivery.deliver(bot, uid, text, kind="weekly", tab="today", title=title, body=body,
                                    reply_markup=app_button("📅 Открыть неделю", "today"))

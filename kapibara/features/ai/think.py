@@ -25,7 +25,7 @@ import json
 import logging
 import os
 
-import config
+from kapibara.core import config
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ThinkError(RuntimeError):
 
 
 def _key(day=None) -> str:
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     return f"ai_think:{(day or today_msk()).isoformat()}"
 
 
@@ -96,14 +96,14 @@ async def left(uid: int) -> int:
 async def _unlimited(uid: int) -> bool:
     """Безлимит от Никиты (/grant … unlimited) — и здесь без дневного лимита
     (общий потолок трат за день остаётся)."""
-    import plans
+    from kapibara.features.billing import plans
     return await plans.plan_of(uid) == plans.UNL
 
 
 async def offer(uid: int, app: str = "") -> dict | None:
     """Кнопка под ответом: {"label", "left", "daily"} или None — не показывать
     (не подписчик, выключено, iPhone). left=None — без лимита (безлимит)."""
-    import plans
+    from kapibara.features.billing import plans
     if (app or "").lower() == "ios" or not await enabled() or not await plans.has_plus(uid):
         return None
     return {"label": LABEL, "left": None if await _unlimited(uid) else await left(uid), "daily": DAILY}
@@ -112,7 +112,7 @@ async def offer(uid: int, app: str = "") -> dict | None:
 async def why_not(uid: int) -> str | None:
     """Почему «Подумать» сейчас нельзя (для бота: /think, кнопка в решалке) —
     текст для человека; None — можно."""
-    import plans
+    from kapibara.features.billing import plans
     if not await enabled():
         return OFF_TEXT
     if not await plans.has_plus(uid):
@@ -134,7 +134,7 @@ def _cost(usage: dict) -> float:
 
 
 async def _reserve(uid: int, unlimited: bool = False):
-    import locks
+    from kapibara.core import locks
     async with locks.lock("ai_think"):
         data = await _load()
         n = int(data["n"].get(str(uid), 0))
@@ -148,7 +148,7 @@ async def _reserve(uid: int, unlimited: bool = False):
 
 async def _settle(uid: int, usage: dict | None):
     """usage=None — модель не ответила: попытку возвращаем."""
-    import locks
+    from kapibara.core import locks
     async with locks.lock("ai_think"):
         data = await _load()
         if usage is None:
@@ -167,10 +167,10 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
     """Тот же вопрос (history кончается вопросом) — моделью MODEL. Кидает
     ThinkError с текстом для человека; не ответила — попытка не списана.
     first — «Подумать» включили до вопроса: первого ответа не было."""
-    import ai_solver
-    import gemini_solver
-    import plans
-    import ratelimit
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.features.ai import gemini as gemini_solver
+    from kapibara.features.billing import plans
+    from kapibara.core import ratelimit
     if not await enabled():
         raise ThinkError(OFF_TEXT)
     if not await plans.has_plus(uid):

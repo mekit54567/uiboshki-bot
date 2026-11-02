@@ -8,19 +8,19 @@ import httpx
 import logging
 from datetime import date, datetime, timedelta
 
-from config import ICAL_URL, SCHEDULE_CACHE_TTL_SECONDS
+from kapibara.core.config import ICAL_URL, SCHEDULE_CACHE_TTL_SECONDS
 
-from optional_subjects import unfiltered
+from kapibara.features.groups.optional_subjects import unfiltered
 logger = logging.getLogger(__name__)
 
 # Разбор и оформление — в schedule_events.py и schedule_format.py (v5.0.2);
 # здесь — загрузка календаря с кэшем и сборка готовых ответов. Снаружи всё
 # по-старому: from schedule_parser import lessons_for_date, MONTHS_GEN, …
-from schedule_format import (  # noqa: F401
+from kapibara.features.schedule.format import (  # noqa: F401
     TZ, DAY_NAMES, MONTHS_GEN, DAY_SHORT, PAIR_SLOTS, format_day, format_lesson, is_self_study,
     _human_date, _keycap, _split_kind,
 )
-from schedule_events import (  # noqa: F401
+from kapibara.features.schedule.events import (  # noqa: F401
     TEACHER_RE, parse_events_for_date, lessons_for_date, week_number, week_overview, target_weeks,
     summarize_target, list_upcoming_events, _calendar_query,
 )
@@ -143,7 +143,7 @@ def _other_group(group_id: int | None) -> bool:
     """Чужая группа (этап 1: любая группа института) — не своя из ICAL_URL."""
     if not group_id:
         return False
-    import groups
+    from kapibara.features.groups import groups
     return group_id != groups.home_id()
 
 
@@ -152,7 +152,7 @@ async def fetch_schedule_raw(force: bool = False, group_id: int | None = None) -
     single-flight ниже; другой — через общий кэш календарей МИРЭА
     (mirea_schedule_api.fetch_ical, 10 минут, при сбое — последний удачный)."""
     if _other_group(group_id):
-        from mirea_schedule_api import fetch_ical
+        from kapibara.features.schedule.mirea_api import fetch_ical
         raw = await fetch_ical(int(group_id), 1)
         if raw is None:
             raise RuntimeError("расписание группы не загрузилось")

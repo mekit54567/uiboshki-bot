@@ -42,8 +42,8 @@ def target(slug: str) -> str:
     """Куда выходит пост: «news» в имени папки (`25-news-hello-pinned`) —
     открытый канал Капибары для всех (LOGIN_CHANNEL, Никита 19.10), остальные —
     канал разработки (CHANNEL_ID). Не задан — пусто."""
-    import config
-    import login_channel
+    from kapibara.core import config
+    from kapibara.features.identity import login_channel
     return login_channel.channel() if "news" in slug.split("-") else config.CHANNEL_ID
 
 
@@ -213,9 +213,9 @@ async def forget_published():
 async def mark_published(slug: str, ids: list[int]):
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    from config import TIMEZONE
+    from kapibara.core.config import TIMEZONE
     from database import set_setting
-    from locks import lock
+    from kapibara.core.locks import lock
     async with lock("channel:published"):      # две публикации подряд — в списке обе
         done = await published()
         done[slug] = {"ids": ids, "at": datetime.now(ZoneInfo(TIMEZONE)).isoformat(timespec="minutes")}

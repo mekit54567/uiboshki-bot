@@ -5,7 +5,7 @@ import pytest
 @pytest.fixture
 def client(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import ratelimit
+    from kapibara.core import ratelimit
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

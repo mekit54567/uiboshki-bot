@@ -54,7 +54,7 @@ def bot():
 @pytest.fixture
 def dp():
     from handlers.deadlines import router as deadlines_router
-    from middleware import MenuInterruptMiddleware
+    from kapibara.bot.middleware import MenuInterruptMiddleware
 
     # Роутер в handlers/deadlines.py — модульный синглтон (как и в проде,
     # он один на всё приложение). aiogram не даёt прикрепить один Router-
@@ -83,7 +83,7 @@ async def _feed(dp, bot, msg):
 
 @pytest.mark.asyncio
 async def test_add_flow_with_photo_description_and_strict_time(db, dp, bot, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
 
     async def fake_ocr(image_bytes, mime="image/jpeg"):
         return "Распознанный текст с фото задания"

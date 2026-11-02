@@ -10,8 +10,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from fastapi.testclient import TestClient
 
-import config
-import ratelimit
+from kapibara.core import config
+from kapibara.core import ratelimit
 from tests.conftest import STAROSTA_ID
 from tests.test_deadlines_routing import FakeSession
 
@@ -22,7 +22,7 @@ OTHER = 5001
 @pytest.fixture
 def index(monkeypatch):
     """Справочник расписания без сети: две группы."""
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     names = {HOME: config.GROUP_NAME, OTHER: "УИБО-01-24"}
 
     async def search(q, types=(1, 2, 3), limit=20):
@@ -60,8 +60,8 @@ async def test_old_users_land_in_home_group(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_choose_and_plans(db, index):
-    import groups
-    import plans
+    from kapibara.features.groups import groups
+    from kapibara.features.billing import plans
     await db.upsert_user(10, "a", "A")
     assert await plans.plan_of(10) == plans.BASE                            # группы ещё нет
     assert await groups.choose(10, 999999) is None                          # нет в справочнике
@@ -85,7 +85,7 @@ async def test_choose_and_plans(db, index):
 @pytest.mark.asyncio
 async def test_single_group_copy_has_no_plans(db, monkeypatch):
     """Копия бота на одну группу (ICAL_URL без id) — у всех ИИ как раньше."""
-    import plans
+    from kapibara.features.billing import plans
     monkeypatch.setattr(config, "HOME_GROUP_ID", 0)
     await db.upsert_user(11, "b", "B")
     assert await plans.plan_of(11) == plans.OWN
@@ -93,10 +93,10 @@ async def test_single_group_copy_has_no_plans(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ai_limits_by_plan(db, index, monkeypatch):
-    import ai_quota
-    import groups
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.groups import groups
     day = [date(2026, 10, 8)]
-    monkeypatch.setattr("utils.today_msk", lambda: day[0])
+    monkeypatch.setattr("kapibara.core.utils.today_msk", lambda: day[0])
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)
     for uid in (20, 21, 22):
         await db.upsert_user(uid, "u", "U")
@@ -129,8 +129,8 @@ async def test_ai_limits_by_plan(db, index, monkeypatch):
 async def test_ai_left_for_chat_screen(db, index, monkeypatch):
     """Сколько вопросов осталось сегодня — строка на пустом экране помощника
     в приложении (2.12); старосте лимит не действует — null."""
-    import ai_quota
-    import groups
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.groups import groups
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)
@@ -172,7 +172,7 @@ async def _feed(dp, bot, text):
 
 @pytest.mark.asyncio
 async def test_bot_asks_group_and_saves_choice(db, index, monkeypatch):
-    import groups
+    from kapibara.features.groups import groups
     import handlers.group_pick as gp
     import handlers.start as start
     monkeypatch.setattr(start, "app_button", lambda *a, **k: None)
@@ -202,7 +202,7 @@ async def test_bot_asks_group_and_saves_choice(db, index, monkeypatch):
 # ── WebApp: /api/me и выбор группы ───────────────────────────────────────────
 
 def test_webapp_group_api(db, index, monkeypatch):
-    import billing
+    from kapibara.features.billing import billing
     import webapp.server as server
     monkeypatch.setattr(billing, "GIFT_UNTIL", "2999-12-31")
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data

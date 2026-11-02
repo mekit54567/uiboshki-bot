@@ -5,7 +5,7 @@
 import asyncio
 import time
 
-import health
+from kapibara.ops import health
 
 
 async def test_connect_waits_and_skips_fsync_in_wal(db):

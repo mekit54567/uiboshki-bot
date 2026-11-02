@@ -5,7 +5,7 @@ is_editor — кто правит доску ДЗ и общие дедлайны
 import aiosqlite
 
 import database
-from config import is_starosta
+from kapibara.core.config import is_starosta
 from database._conn import connect
 
 # Базы, где таблицы уже проверены. Раньше init_hw_table шёл перед каждым

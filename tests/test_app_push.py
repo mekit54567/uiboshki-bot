@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from fastapi.testclient import TestClient
 
-import app_push
+from kapibara.features.notifications import app_push
 
 # Тот же пример зашит в app/test/push_crypto_test.dart: приложение должно его расшифровать.
 KEY_B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
@@ -107,7 +107,7 @@ def test_on_with_env(monkeypatch):
 # ── Отправка ─────────────────────────────────────────────────────────────────
 
 async def _register(uid, platform, token, key=KEY_B64):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database.app_push import save_app_push
     await save_app_push(uid, platform, token, sdo_accounts.encrypt(key))
 
@@ -218,7 +218,7 @@ async def test_unreadable_key_dropped(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_deliver_uses_app_push(db, monkeypatch):
-    import delivery
+    from kapibara.features.notifications import delivery
     _all_on(monkeypatch)
     fake = FakeHttp()
     monkeypatch.setattr(app_push, "_request", fake)
@@ -240,7 +240,7 @@ async def test_deliver_uses_app_push(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_rotate_keys(db, monkeypatch):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from cryptography.fernet import Fernet
     await _register(1, "fcm", "fcm-token-1234567890")
     assert await app_push.rotate_keys() == 0
@@ -262,7 +262,7 @@ def _client(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_subscribe_unsubscribe(db, monkeypatch):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database.app_push import get_app_pushes
     c, h = _client(monkeypatch)
     uid = 222

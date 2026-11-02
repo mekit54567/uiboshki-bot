@@ -10,7 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from database import get_all_subscribed_users
-from config import STAROSTA_ID, is_starosta
+from kapibara.core.config import STAROSTA_ID, is_starosta
 
 router = Router()
 
@@ -44,13 +44,13 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
     wait = await message.answer(f"⏳ Рассылаю {len(users)} пользователям...")
 
     from database.identities import is_local
-    import privacy
+    from kapibara.features.privacy import privacy
     for uid in users:
         if uid == message.from_user.id or await privacy.blocked(uid):   # без согласия — не шлём (152-ФЗ)
             continue
         if is_local(uid):                 # без Telegram — текст пушем, вложения не дойдут
             if message.text:
-                from delivery import push
+                from kapibara.features.notifications.delivery import push
                 try:
                     await push(uid, "announce", f"📢 {message.html_text}", None)
                     sent += 1

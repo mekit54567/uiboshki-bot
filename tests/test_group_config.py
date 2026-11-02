@@ -1,6 +1,6 @@
 """Имя группы и бота — из переменных (GROUP_NAME, BOT_USERNAME): страница
 приложения, промпты ИИ и подсказки бота подхватывают их, а не «УИБО-03-24»."""
-import config
+from kapibara.core import config
 
 
 def test_index_page_uses_config(monkeypatch):
@@ -30,8 +30,8 @@ def test_index_page_passes_channel_and_contact(monkeypatch):
 def test_prompts_use_group(monkeypatch):
     # группа — из профиля человека (контекст группы), а не GROUP_NAME сервера:
     # живой тест 20.10 — «полезен вам, студентам УИБО-03-24» человеку другой группы
-    import ai_solver
-    import config
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.core import config
     monkeypatch.setattr(config, "GROUP_NAME", "КМБО-01-25")
     p = ai_solver.build_system_prompt("Матан")
     assert "КМБО-01-25" not in p and "УИБО" not in p and "Матан" in p and "контексту группы" in p

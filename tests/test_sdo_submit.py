@@ -6,8 +6,8 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-import sdo_accounts
-import sdo_submit
+from kapibara.features.sdo import accounts as sdo_accounts
+from kapibara.features.sdo import submit as sdo_submit
 
 COOKIE = "abcdef0123456789abcdef0123"
 ASSIGN = "https://online-edu.mirea.ru/mod/assign/view.php?id=4242"

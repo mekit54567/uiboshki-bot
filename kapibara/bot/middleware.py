@@ -17,7 +17,7 @@ import re
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 
-from keyboards import MENU_BUTTON_TEXTS
+from kapibara.bot.keyboards import MENU_BUTTON_TEXTS
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class OptionalSubjectsMiddleware(BaseMiddleware):
     async def __call__(self, handler, event, data):
         user = data.get("event_from_user")
         if user:
-            from optional_subjects import apply_for
+            from kapibara.features.groups.optional_subjects import apply_for
             try:
                 await apply_for(user.id)
             except Exception as e:
@@ -87,7 +87,7 @@ class GroupContextMiddleware(BaseMiddleware):
         user = data.get("event_from_user")
         if user:
             from database.groups import enter
-            import members
+            from kapibara.features.groups import members
             try:
                 chat = data.get("event_chat")
                 if chat and chat.type != "private" and chat.id == await members.chat_id():
@@ -108,10 +108,10 @@ class StatsMiddleware(BaseMiddleware):
         chat = getattr(event, "chat", None)
         if user and chat and chat.type == "private" \
                 and not is_anonymous(getattr(event, "text", None), data.get("raw_state")):
-            import stats
+            from kapibara.ops import stats
             await stats.track(user.id, "bot")
             result = await handler(event, data)
-            import plus_welcome                 # подарок своей группе — одно сообщение при первом заходе
+            from kapibara.features.billing import welcome as plus_welcome                 # подарок своей группе — одно сообщение при первом заходе
             plus_welcome.later(data.get("bot"), user.id)
             return result
         return await handler(event, data)
@@ -139,7 +139,7 @@ class ConsentMiddleware(BaseMiddleware):
         user = data.get("event_from_user")
         if not user or user.is_bot:
             return await handler(event, data)
-        import privacy
+        from kapibara.features.privacy import privacy
         try:
             blocked = await privacy.blocked(user.id)
         except Exception:
@@ -155,7 +155,7 @@ class ConsentMiddleware(BaseMiddleware):
 
     async def _blocked(self, handler, event, data):
         from aiogram.types import CallbackQuery, InlineQuery, InlineQueryResultsButton
-        import privacy
+        from kapibara.features.privacy import privacy
         user = data.get("event_from_user")
         due = await privacy.erasing(user.id)
         if due:                                         # попросил удалить данные — только это
@@ -218,7 +218,7 @@ class ConsentMiddleware(BaseMiddleware):
                 or is_anonymous(text, data.get("raw_state")):
             return
         try:
-            import privacy
+            from kapibara.features.privacy import privacy
             if await privacy.ask_once(user_id):
                 from handlers.privacy import ask_consent
                 await ask_consent(data["bot"], chat.id)

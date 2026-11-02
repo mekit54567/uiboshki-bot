@@ -21,9 +21,9 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 import httpx
 
-import pulse_probe
+from kapibara.features.pulse import probe as pulse_probe
 from database._conn import connect
-from sdo_accounts import decrypt, encrypt, needs_rotation
+from kapibara.features.sdo.accounts import decrypt, encrypt, needs_rotation
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,7 @@ async def connect_from_app(user_id: int, raw_cookie: str) -> dict:
         await save(user_id, cookie)
         import asyncio
 
-        import pulse_attendance                 # первые посещения — сразу, фоном
+        from kapibara.features.pulse import attendance as pulse_attendance                 # первые посещения — сразу, фоном
         asyncio.get_running_loop().create_task(pulse_attendance.sync_due(user_id))
     return {"state": state}
 
@@ -189,6 +189,6 @@ async def keepalive_due(now: datetime | None = None):
         rows = [dict(r) for r in await cur.fetchall()]
     for row in rows:
         await _check_one(row, now)
-        import pulse_attendance                 # посещения лекций — заодно, не чаще раза в 3 ч
+        from kapibara.features.pulse import attendance as pulse_attendance                 # посещения лекций — заодно, не чаще раза в 3 ч
         if await cookie_for(row["user_id"]):
             await pulse_attendance.sync_due(row["user_id"])

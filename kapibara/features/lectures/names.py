@@ -21,9 +21,9 @@ split_title — «Лекция 8» и тема отдельно: приложе�
 
 import re
 
-from file_categories import category_of, natural_key
-from lecture_topic import topic_from_text
-from translit import from_translit
+from kapibara.features.lectures.categories import category_of, natural_key
+from kapibara.features.lectures.topic import topic_from_text
+from kapibara.core.translit import from_translit
 
 NUMBERED = ("lecture", "practice", "control")
 
@@ -233,7 +233,7 @@ def text_titles(files: list[dict], names: dict[int, str], texts: dict[int, str])
 def preview(files: list[dict], changes: dict[int, str], limit: int = 25, marked: set | None = None) -> list[str]:
     """Строки «было → стало» по предметам, для сообщения старосте; marked —
     темы из текста лекций (их проверить глазами), со значком 📄."""
-    from utils import esc
+    from kapibara.core.utils import esc
     by_id = {f["id"]: f for f in files}
     rows = sorted(changes.items(), key=lambda kv: (by_id[kv[0]].get("subject") or "", natural_key(kv[1])))
     lines, last = [], None

@@ -30,8 +30,8 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
-import sdo_net
-from config import BOT_TOKEN, SDO_BASE_URL, SDO_SESSION_COOKIE, is_starosta
+from kapibara.features.sdo import net as sdo_net
+from kapibara.core.config import BOT_TOKEN, SDO_BASE_URL, SDO_SESSION_COOKIE, is_starosta
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def client_for(cookie: str, **kwargs) -> httpx.AsyncClient:
 async def check(cookie: str) -> bool:
     """True — кука рабочая (СДО пускает на /my/). Сетевая ошибка —
     исключение: «СДО не отвечает» не значит «вход устарел»."""
-    from sdo_parser import SdoSessionExpired, get_checked
+    from kapibara.features.sdo.parser import SdoSessionExpired, get_checked
     async with client_for(cookie) as client:
         try:
             await get_checked(client, f"{SDO_BASE_URL}/my/")
@@ -154,7 +154,7 @@ async def status_for(user_id: int) -> dict:
     from database import get_sdo_session
     row = await get_sdo_session(user_id)
     if row:
-        import groups
+        from kapibara.features.groups import groups
         g = await groups.of_user(user_id)
         return {"state": "ok" if row["status"] == "ok" else "expired", "checked_at": row["checked_at"],
                 "share": bool(row.get("share")), "can_share": bool(g and not g["own"]),
@@ -236,12 +236,12 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
         return
     if alive:
         await set_sdo_next_check(uid, _utc(now + timedelta(minutes=next_interval(left))), max(0, left - 1))
-        import grade_alerts             # новые баллы — у каждого в его время (Никита 02.11)
+        from kapibara.features.notifications import grade_alerts             # новые баллы — у каждого в его время (Никита 02.11)
         grade_alerts.check_soon(bot, uid, cookie, now)
     elif bot:
         try:
-            from delivery import deliver
-            from keyboards import app_button
+            from kapibara.features.notifications.delivery import deliver
+            from kapibara.bot.keyboards import app_button
             await deliver(bot, uid, expired_text(row.get("via")), kind="sdo", tab="sdo",
                           title="Вход в СДО устарел", body=expired_push(row.get("via")), reply_markup=app_button("🎓 Подключить СДО", "sdo"))
         except Exception as e:

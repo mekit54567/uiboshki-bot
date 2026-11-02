@@ -28,7 +28,7 @@ MONTHS = ("январь", "февраль", "март", "апрель", "май"
 
 def _bounds(month: str) -> tuple[datetime, datetime]:
     """Начало месяца и начало следующего по Москве; month — «ГГГГ-ММ»."""
-    from xp import MSK
+    from kapibara.features.social.xp import MSK
     y, m = map(int, month.split("-"))
     start = datetime(y, m, 1, tzinfo=MSK)
     end = datetime(y + (m == 12), m % 12 + 1, 1, tzinfo=MSK)
@@ -36,7 +36,7 @@ def _bounds(month: str) -> tuple[datetime, datetime]:
 
 
 def prev_month(now: datetime | None = None) -> str:
-    from xp import MSK
+    from kapibara.features.social.xp import MSK
     now = (now or datetime.now(MSK)).astimezone(MSK)
     y, m = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
     return f"{y:04d}-{m:02d}"
@@ -45,7 +45,7 @@ def prev_month(now: datetime | None = None) -> str:
 async def standings(month: str) -> list[dict]:
     """Группы за месяц, лучшая первой: {"id", "name", "avg", "people", "xp"}.
     Только с опытом у ≥ MIN_PEOPLE человек, без своей группы."""
-    import xp
+    from kapibara.features.social import xp
     from database.groups import home
     data = await xp.board()
     raw = await xp._raw()
@@ -71,14 +71,14 @@ async def standings(month: str) -> list[dict]:
 
 async def members(group_id: int) -> list[int]:
     """Все в группе, кому можно обрабатывать данные (те же люди, что в рейтинге)."""
-    import xp
+    from kapibara.features.social import xp
     data = await xp.board()
     return sorted(uid for uid, p in data["people"].items() if p["group"] == group_id)
 
 
 def text(name: str, month: str, until: str) -> str:
-    import billing
-    from utils import esc
+    from kapibara.features.billing import billing
+    from kapibara.core.utils import esc
     title = MONTHS[int(month[5:]) - 1]
     return (f"<b>{esc(name)} — самая активная группа МИРЭА за {title}!</b>\n\n"
             f"Всем в группе — {DAYS} дней «Капибары+» в подарок, до {billing.fmt_day(until)}. "
@@ -88,9 +88,9 @@ def text(name: str, month: str, until: str) -> str:
 async def award(bot, month: str | None = None) -> dict | None:
     """Выдать награду за month (по умолчанию — прошлый месяц). Уже выдана или
     победителя нет — None (отметка всё равно ставится: месяц не пересчитываем)."""
-    import billing
-    import locks
-    from config import STAROSTA_ID
+    from kapibara.features.billing import billing
+    from kapibara.core import locks
+    from kapibara.core.config import STAROSTA_ID
     from database import get_setting, set_setting
     month = month or prev_month()
     key = f"award:{month}"
@@ -114,12 +114,12 @@ async def award(bot, month: str | None = None) -> dict | None:
         result = {"group": win["id"], "name": win["name"], "avg": win["avg"], "people": win["people"],
                   "granted": given}
         await set_setting(key, json.dumps(result, ensure_ascii=False))
-    import scheduler
+    from kapibara.jobs import scheduler
     for uid, until in sent:
         await billing.notify(bot, uid, text(win["name"], month, until))
         await scheduler.pace()
     if STAROSTA_ID:
-        from utils import esc
+        from kapibara.core.utils import esc
         runner = ", ".join(f"{esc(g['name'])} ({g['avg']})" for g in table[1:3])
         try:
             await bot.send_message(

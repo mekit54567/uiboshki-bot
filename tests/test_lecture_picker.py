@@ -4,7 +4,7 @@
 """
 import pytest
 
-import lecture_picker as lp
+from kapibara.features.lectures import picker as lp
 
 
 def _ctx(*lectures):
@@ -44,7 +44,7 @@ def test_auto_mode_needs_a_real_match():
 async def test_chat_without_subject_gets_matching_lectures(db, monkeypatch):
     from fastapi.testclient import TestClient
 
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from tests.test_webapp_auth import _make_init_data
 
@@ -63,7 +63,7 @@ async def test_chat_without_subject_gets_matching_lectures(db, monkeypatch):
         return ""
 
     monkeypatch.setattr(ai_solver, "chat_with_reasoning", fake_chat)
-    monkeypatch.setattr("group_context.build_group_context", no_context)
+    monkeypatch.setattr("kapibara.features.groups.context.build_group_context", no_context)
     client = TestClient(server.app)
     headers = {"X-Telegram-Init-Data": _make_init_data()}
 
@@ -85,7 +85,7 @@ async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
     from fastapi.testclient import TestClient
 
     import webapp.server as server
-    from gemini_solver import GeminiError
+    from kapibara.features.ai.gemini import GeminiError
     from tests.test_webapp_auth import _make_init_data
 
     fid = await db.add_file("Лекция 2. Дебет и кредит", "Учёт", "f", "l.pdf", 1)
@@ -101,8 +101,8 @@ async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
     async def no_context(user_id):
         return ""
 
-    monkeypatch.setattr("ai_solver.chat_with_reasoning", flaky_chat)
-    monkeypatch.setattr("group_context.build_group_context", no_context)
+    monkeypatch.setattr("kapibara.features.ai.solver.chat_with_reasoning", flaky_chat)
+    monkeypatch.setattr("kapibara.features.groups.context.build_group_context", no_context)
     client = TestClient(server.app)
     headers = {"X-Telegram-Init-Data": _make_init_data()}
     data = client.post("/api/chat", json={"history": [{"role": "user", "content": "Дебет и кредит счёта — что это?"}]},
@@ -113,7 +113,7 @@ async def test_chat_falls_back_without_lectures_and_says_why(db, monkeypatch):
     async def down(*a, **kw):
         raise GeminiError("Gemini: лимит запросов исчерпан")
 
-    monkeypatch.setattr("ai_solver.chat_with_reasoning", down)
+    monkeypatch.setattr("kapibara.features.ai.solver.chat_with_reasoning", down)
     resp = client.post("/api/chat", json={"history": [{"role": "user", "content": "Привет"}]}, headers=headers)
     # без названия провайдера и кода — «Повторить» (Никита 21.10: «причём тут Gemini?»)
     detail = resp.json()["detail"]
@@ -155,7 +155,7 @@ def test_subject_scores_and_wants_course():
 async def test_chat_asks_subject_when_lecture_question_is_ambiguous(db, monkeypatch):
     # вопрос явно про лекции, а подходят два предмета — не отвечаем наугад
     from fastapi.testclient import TestClient
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from database import add_file, save_file_text
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data

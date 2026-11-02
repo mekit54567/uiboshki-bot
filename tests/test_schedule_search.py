@@ -12,7 +12,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-import schedule_index
+from kapibara.features.schedule import index as schedule_index
 from tests.test_webapp_auth import _make_init_data
 
 TZ = ZoneInfo("Europe/Moscow")
@@ -90,7 +90,7 @@ async def _no_sleep(*_):
 
 @pytest.mark.asyncio
 async def test_search_targets_uses_index_and_reports_unavailable(db, monkeypatch):
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
 
     async def official_down(*_):
         raise httpx.ConnectError("schedule-of.mirea.ru не отвечает")
@@ -121,7 +121,7 @@ def _teacher_ical() -> bytes:
 
 
 def test_teacher_schedule_shows_groups_and_real_pair_number():
-    from schedule_parser import format_target_schedule
+    from kapibara.features.schedule.parser import format_target_schedule
     text = format_target_schedule(_teacher_ical(), 2)
     # 12:40 — это 3-я пара, хоть она у преподавателя в этот день и первая
     assert "3️⃣ 12:40–14:10 · Физика 1 п/г (лаб) · В-328 (В-78) · 👥 КСБО-11-26 1 п/г" in text
@@ -131,7 +131,7 @@ def test_teacher_schedule_shows_groups_and_real_pair_number():
 
 @pytest.mark.asyncio
 async def test_webapp_search_and_target_endpoints(db, monkeypatch):
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     import webapp.server as server
 
     await schedule_index._save([(2, 100, "Блеко В. В."), (1, 4928, "УИБО-03-24")])
@@ -204,7 +204,7 @@ async def test_graduated_groups_hidden_and_newest_first(db, monkeypatch):
 async def test_namesakes_get_hints_and_busy_one_first(monkeypatch):
     # Прод: «/teacher Морозов» — «Морозов В. А.» ×3, «Морозов Д. В.» ×3,
     # в справочнике только инициалы, выбрать нужного невозможно.
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     icals = {5: None, 6: _teacher_ical(), 7: b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"}
 
     async def fake_ical(target_id, target_type):
@@ -228,9 +228,9 @@ async def test_namesakes_get_hints_and_busy_one_first(monkeypatch):
 async def test_target_own_group_falls_back_to_saved_copy(db, monkeypatch):
     """МИРЭА лежит: своя группа открывается из сохранённой копии с пометкой,
     чужая — 502 (экран с «Повторить»). Дизайн-ревью, п. 6."""
-    import config
-    import mirea_schedule_api as api
-    import schedule_parser
+    from kapibara.core import config
+    from kapibara.features.schedule import mirea_api as api
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
 
     async def down(target_id, target_type):

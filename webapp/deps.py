@@ -9,7 +9,7 @@ BOT_TOKEN и WEBAPP_URL обработчики читают отсюда в мо
 
 from fastapi import Depends, Header, HTTPException, Request
 
-from config import BOT_TOKEN, WEBAPP_URL  # noqa: F401 — читают routes/* и server.py
+from kapibara.core.config import BOT_TOKEN, WEBAPP_URL  # noqa: F401 — читают routes/* и server.py
 from webapp.auth import InitDataError, validate_init_data
 
 
@@ -58,23 +58,23 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
         # заход в WebApp перетирал в users фамилию, записанную ботом.
         full_name = " ".join(p for p in (user.get("first_name", ""), user.get("last_name", "")) if p)
         await upsert_user(user["id"], user.get("username", ""), full_name, wait=False)
-    import privacy                # 152-ФЗ: без согласия — только согласие, тексты и удаление
+    from kapibara.features.privacy import privacy                # 152-ФЗ: без согласия — только согласие, тексты и удаление
     if await privacy.blocked(user["id"]):
         path = request.url.path.replace("/api/v1/", "/api/", 1)
         if path not in CONSENT_FREE:
             due = await privacy.erasing(user["id"])
             raise HTTPException(status_code=403, detail=privacy.erasing_text(due) if due else CONSENT_NEEDED)
         return user
-    from optional_subjects import apply_for
+    from kapibara.features.groups.optional_subjects import apply_for
     await apply_for(user["id"])   # пары предметов по выбору, на которые не ходит — скрыть
-    import members                # своя группа — по чату группы в Telegram (members.py)
+    from kapibara.features.groups import members                # своя группа — по чату группы в Telegram (members.py)
     await members.refresh_later(tg_bot() if BOT_TOKEN else None, user["id"])
     from database.groups import enter
     await enter(user["id"])       # его группа — для файлов, ДЗ, заметок, контекста ИИ (этап 1 (б))
-    import stats                  # «кто, что, когда» для /stats старосты (без содержимого)
+    from kapibara.ops import stats                  # «кто, что, когда» для /stats старосты (без содержимого)
     await stats.track(user["id"], stats.kind_for(request.method, request.url.path))
     await stats.track(user["id"], stats.via(bool(x_telegram_init_data), request.headers.get("x-app", "")))
-    import plus_welcome           # подарок своей группе — одно сообщение при первом заходе (в Telegram и пушем)
+    from kapibara.features.billing import welcome as plus_welcome           # подарок своей группе — одно сообщение при первом заходе (в Telegram и пушем)
     plus_welcome.later(tg_bot() if BOT_TOKEN else None, user["id"])
     return user
 
@@ -90,6 +90,6 @@ def tg_bot():
     global _tg_bot
     if _tg_bot is None:
         from aiogram import Bot
-        import net
+        from kapibara.core import net
         _tg_bot = Bot(BOT_TOKEN, session=net.tg_session())
     return _tg_bot

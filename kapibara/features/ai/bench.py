@@ -41,7 +41,7 @@ from collections import Counter
 
 import httpx
 
-import net
+from kapibara.core import net
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +260,7 @@ async def ask(client: httpx.AsyncClient, key: str, model: str, system: str, user
 
 async def ask_gemini(system: str, user: str, max_tokens: int, temperature: float | None = None) -> dict:
     """Ответ нынешней модели своим ключом (gemini_solver) — в том же виде, что ask."""
-    import gemini_solver
+    from kapibara.features.ai import gemini as gemini_solver
     started = time.monotonic()
     for attempt in range(GEMINI_TRIES):     # бесплатный лимит в минуту: подождать и ещё раз
         try:
@@ -366,10 +366,10 @@ async def _lectures(n: int = LECTURES) -> list[dict]:
 async def _question_prompt(question: str, subject: str) -> tuple[str, str, str]:
     """Тот же промпт, что у чата WebApp: куски лекций от поиска по смыслу.
     → (system, user, лекции)."""
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     lectures = ""
     try:
-        import semantic_search
+        from kapibara.features.ai import semantic_search
         if await semantic_search.ready():
             hits = await semantic_search.search(question, subject)
             if hits:
@@ -383,9 +383,9 @@ async def _question_prompt(question: str, subject: str) -> tuple[str, str, str]:
 
 
 async def build_tasks(intents: bool = True) -> list[dict]:
-    import gemini_solver
-    import intent_router
-    import lecture_summary
+    from kapibara.features.ai import gemini as gemini_solver
+    from kapibara.bot import intent_router
+    from kapibara.features.lectures import summary as lecture_summary
     tasks = []
     for q, subject in await _questions():
         system, user, lectures = await _question_prompt(q, subject)
@@ -535,7 +535,7 @@ async def prepare(key: str, wanted: list[str] | None = None, *, intents: bool = 
         models = parse_models(await _get(client, key, "/models"))
         left = await balance(client, key)
     judge = pick_judge(models)
-    from config import GEMINI_API_KEY
+    from kapibara.core.config import GEMINI_API_KEY
     if GEMINI_API_KEY:                      # нынешняя модель — своим ключом, бесплатно
         models[GEMINI_DIRECT] = {"id": GEMINI_DIRECT, "name": "Gemini 3.1 Flash-Lite · наш ключ, бесплатно",
                                  "in": 0.0, "out": 0.0, "ctx": 1_000_000, "text": True, "image": True}
@@ -561,7 +561,7 @@ async def prepare(key: str, wanted: list[str] | None = None, *, intents: bool = 
 
 
 async def _answer_all(client, key: str, tasks: list[dict], ids: list[str]) -> None:
-    import intent_router
+    from kapibara.bot import intent_router
     sem = asyncio.Semaphore(PARALLEL)
 
     gemini_sem = asyncio.Semaphore(2)        # бесплатный лимит Gemini — по чуть-чуть
@@ -632,7 +632,7 @@ async def vote(key: str, plan: dict) -> tuple[str, str]:
 # ── Страницы ────────────────────────────────────────────────────────────────
 
 def _answer_html(text: str) -> str:
-    from utils import md_to_tg_html_chunks
+    from kapibara.core.utils import md_to_tg_html_chunks
     return "\n".join(md_to_tg_html_chunks(text)).replace("\n", "<br>")
 
 
@@ -656,7 +656,7 @@ button{font:600 14px system-ui;border:0;border-radius:10px;padding:10px 16px;bac
 
 def report_page(rows: list[dict], tasks: list[dict], judge: str | None, cost: float) -> str:
     """Страница отбора: модели с баллами и ценой, под ней — ответы по задачам."""
-    from utils import esc
+    from kapibara.core.utils import esc
     out = []
     for r in rows:
         flags = ", ".join(f"{k} ×{v}" for k, v in sorted(r["flags"].items(), key=lambda kv: -kv[1]))
@@ -735,7 +735,7 @@ def page(items: list[dict], names: dict[str, str]) -> str:
     """Страница голосования: ответы без имён моделей, длинные — свёрнуты;
     выбор уходит на сервер (POST /aitest/pick по той же подписанной ссылке,
     в браузере — запасная копия); имена, победы и цена — по кнопке в конце."""
-    from utils import esc
+    from kapibara.core.utils import esc
     blocks = []
     for n, it in enumerate(items):
         answers = "".join(
@@ -819,7 +819,7 @@ async def _key() -> dict:
 
 async def vote_pick(i: int, j: int) -> dict[str, int] | None:
     """Выбор в блоке i: ответ j, -1 — снять. None — нет такого блока/ответа."""
-    import locks
+    from kapibara.core import locks
     from database import set_setting
     async with locks.lock("aitest", "picks"):
         blocks = (await _key()).get("blocks", [])
