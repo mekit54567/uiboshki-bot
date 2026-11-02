@@ -15,6 +15,14 @@ MOVED = {
     "deadline_reminders": "kapibara.features.deadlines.reminders",
     "deadline_soon": "kapibara.features.deadlines.soon",
     "quiz_time": "kapibara.features.deadlines.quiz_time",
+    "achievements": "kapibara.features.social.achievements",
+    "group_award": "kapibara.features.social.group_award",
+    "lesson_comments": "kapibara.features.social.comments",
+    "lesson_reactions": "kapibara.features.social.reactions",
+    "nick_filter": "kapibara.features.social.nick_filter",
+    "teacher_rating": "kapibara.features.social.teacher_rating",
+    "ugc": "kapibara.features.social.ugc",
+    "xp": "kapibara.features.social.xp",
 }
 
 
@@ -42,3 +50,17 @@ def test_old_files_are_only_redirects():
         text = (ROOT / f"{old}.py").read_text(encoding="utf-8")
         assert f"import {new} as _m" in text and "sys.modules[__name__] = _m" in text
         assert len(text.splitlines()) <= 8, f"{old}.py — только переадресация, код живёт в {new}"
+
+
+def test_nobody_holds_the_redirect_itself():
+    """Если модули импортируют друг друга по кругу на верхнем уровне, кто-то мог
+    бы получить сам файл-переадресацию (пустой) вместо модуля. Поднимаем всё
+    приложение в чистом процессе и ищем такие ссылки."""
+    code = (
+        "import sys, types, bot, webapp.server\n"
+        f"moved = {sorted(MOVED)!r}\n"
+        "bad = [f'{n}.{k} -> {v.__name__}' for n, m in list(sys.modules.items()) if m\n"
+        "       for k, v in list(vars(m).items()) if isinstance(v, types.ModuleType) and v.__name__ in moved]\n"
+        "print(bad); sys.exit(1 if bad else 0)\n")
+    r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr[-2000:]
