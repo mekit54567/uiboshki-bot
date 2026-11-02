@@ -51,6 +51,11 @@ jobs:
       - name: Храповик качества
         run: python tools/ratchet.py
 
+      # Охранник слоёв (docs/adr/0002-layers.md, .importlinter): прямые импорты
+      # только сверху вниз; старые нарушения — в ignore_imports, только меньше
+      - name: Слои (import-linter)
+        run: PYTHONPATH=. lint-imports
+
       - name: Run tests
         run: python -m pytest -v
 
