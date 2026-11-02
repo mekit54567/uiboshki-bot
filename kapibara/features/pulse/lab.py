@@ -20,10 +20,11 @@ import time
 import zipfile
 
 import pulse_probe
+from kapibara.core.paths import ROOT
 
 MAX_BODY = 40 * 1024 * 1024      # = предел пути в webapp/server.BODY_LIMITS
 # Подмена скриптов обхода в приложении (ключи — как в PulseKit, app/lib/screens/pulse_lab.dart)
-KIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pulse_lab_kit")
+KIT_DIR = str(ROOT / "pulse_lab_kit")           # данные в корне проекта (kapibara/core/paths.py)
 KIT_PATH = os.path.join(KIT_DIR, "kit.json")
 KIT_KEYS = {"hook", "scan", "links", "go", "drain", "routes", "dump", "seeds", "skip", "wait_sec", "max_pages"}
 _SECRET_NAME = re.compile(r"authorization|cookie|token|session|secret|password|passwd|key", re.I)

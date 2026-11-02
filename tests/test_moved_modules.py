@@ -31,6 +31,11 @@ MOVED = {
     "lecture_picker": "kapibara.features.lectures.picker",
     "lecture_summary": "kapibara.features.lectures.summary",
     "lecture_topic": "kapibara.features.lectures.topic",
+    "pulse_accounts": "kapibara.features.pulse.accounts",
+    "pulse_attendance": "kapibara.features.pulse.attendance",
+    "pulse_check": "kapibara.features.pulse.check",
+    "pulse_lab": "kapibara.features.pulse.lab",
+    "pulse_probe": "kapibara.features.pulse.probe",
 }
 
 
@@ -80,3 +85,14 @@ def test_status_area_survives_the_move(old, new):
     пути модуля: после переезда «ИИ» не должен стать «Прочим»."""
     import health
     assert health.area_of(new) == health.area_of(old)
+
+
+def test_data_files_found_from_project_root():
+    """Файлы данных — от корня проекта (kapibara/core/paths.py), а не от файла
+    модуля: после переезда Пульс по-прежнему видит pulse_lab_kit/."""
+    import os
+
+    import pulse_lab
+    from kapibara.core.paths import ROOT
+    assert (ROOT / "bot.py").is_file()
+    assert os.path.isfile(pulse_lab.KIT_PATH)
