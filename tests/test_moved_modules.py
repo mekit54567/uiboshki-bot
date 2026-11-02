@@ -95,4 +95,4 @@ def test_data_files_found_from_project_root():
     import pulse_lab
     from kapibara.core.paths import ROOT
     assert (ROOT / "bot.py").is_file()
-    assert os.path.isfile(pulse_lab.KIT_PATH)
+    assert os.path.isfile(os.path.join(pulse_lab.KIT_DIR, "hook.js"))      # kit.json — необязательный
