@@ -722,7 +722,8 @@ Future<T?> appSheet<T>(BuildContext context, WidgetBuilder builder) => showModal
 );
 
 /// «Точно?» листом снизу вместо системного окна: заголовок, пояснение,
-/// главная кнопка с действием и «Отмена». true — согласился.
+/// главная кнопка с действием и «Отмена» ([child] — картинка или поля под
+/// пояснением). true — согласился.
 Future<bool> confirmSheet(
   BuildContext context, {
   required String title,
@@ -730,6 +731,7 @@ Future<bool> confirmSheet(
   required String action,
   String cancel = 'Отмена',
   bool danger = false,
+  Widget? child,
 }) async =>
     await appSheet<bool>(
       context,
@@ -739,6 +741,7 @@ Future<bool> confirmSheet(
         action: action,
         cancel: cancel,
         danger: danger,
+        child: child,
         onAction: () => Navigator.pop(ctx, true),
       ),
     ) ??

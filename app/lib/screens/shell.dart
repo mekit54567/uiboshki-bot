@@ -23,6 +23,7 @@ import 'group_pick.dart';
 import 'legal.dart';
 import 'more.dart';
 import 'pulse_scan.dart';
+import 'push_ask.dart';
 import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'sdo_relogin.dart';
 import 'study.dart';
@@ -165,6 +166,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       unawaited(PlusBonus.sendRef(widget.api)); // после согласия: до него API закрыт
       unawaited(AppPush.start(widget.api)); // нажатое уведомление, новый токен телефона
       await _maybeTour();
+      if (mounted) await maybeAskPush(context, widget.api); // один раз, после тура
       if (mounted) await _sdoRefresh();
     });
   }
