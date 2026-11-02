@@ -9,8 +9,6 @@ from pathlib import Path
 
 import pytest
 
-import bot
-
 SCRIPT = Path(__file__).resolve().parent.parent / "deploy" / "timeweb" / "update.sh"
 pytestmark = pytest.mark.skipif(sys.platform == "win32" or not shutil.which("flock"),
                                 reason="нужны sh и flock, как на сервере")
@@ -104,6 +102,7 @@ def test_script_stays_under_shell_read_buffer():
 
 
 async def test_bot_tells_starosta_about_rollback(db, monkeypatch, tmp_path):
+    import bot
     import database
     sent = []
 
