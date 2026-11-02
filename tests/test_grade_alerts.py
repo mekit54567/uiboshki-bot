@@ -100,3 +100,54 @@ async def test_check_user_sends_checked_once(db, monkeypatch):
     assert await grade_alerts.check_user(Bot(), 1, "c")
     assert "Проверили работу" in sent[-1]
     assert not await grade_alerts.check_user(Bot(), 1, "c")             # второй раз — тишина
+
+
+@pytest.mark.asyncio
+async def test_alert_after_app_opened_grades(db, monkeypatch):
+    """Никита 02.11: открыл баллы в приложении (оно пишет точку истории) — пуш
+    о новых баллах всё равно приходит: сравниваем с тем, что уже сообщали."""
+    import sdo_grades
+    import sdo_history
+    await db.upsert_user(1, "", "X")
+    score = {"v": 30}
+
+    async def overview(uid, cookie, fresh=False):
+        return {"courses": [{"id": 7, "name": "Моделирование", "score": score["v"]}]}
+
+    monkeypatch.setattr(sdo_grades, "overview", overview)
+    sent = []
+
+    class Bot:
+        async def send_message(self, uid, text, **kw):
+            sent.append(text)
+
+    assert not await grade_alerts.check_user(Bot(), 1, "c")              # первый раз — запомнили
+    score["v"] = 36
+    await sdo_history.record(1, (await overview(1, "c"))["courses"])     # приложение открыло баллы
+    assert await grade_alerts.check_user(Bot(), 1, "c")
+    assert "30 → <b>36</b> (+6)" in sent[-1]
+    assert not await grade_alerts.check_user(Bot(), 1, "c")              # второй раз — тишина
+
+
+@pytest.mark.asyncio
+async def test_starosta_with_shared_cookie_checked(db, monkeypatch):
+    """Староста без своего входа ходит общей кукой — его баллы тоже проверяются."""
+    import config
+    import sdo_grades
+    monkeypatch.setattr(config, "SDO_SESSION_COOKIE", "shared")
+    monkeypatch.setattr(config, "STAROSTA_IDS", [5])
+    await db.upsert_user(5, "", "Никита")
+    seen = []
+
+    async def overview(uid, cookie, fresh=False):
+        seen.append((uid, cookie))
+        return {"courses": []}
+
+    monkeypatch.setattr(sdo_grades, "overview", overview)
+
+    class Bot:
+        async def send_message(self, uid, text, **kw):
+            pass
+
+    await grade_alerts.check_all(Bot(), pause=0)
+    assert seen == [(5, "shared")]
