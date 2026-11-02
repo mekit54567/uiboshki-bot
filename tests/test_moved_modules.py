@@ -80,6 +80,18 @@ MOVED = {
     "webpush": "kapibara.features.notifications.webpush",
     "app_push": "kapibara.features.notifications.app_push",
     "push_text": "kapibara.features.notifications.push_text",
+    "groups": "kapibara.features.groups.groups",
+    "institutes": "kapibara.features.groups.institutes",
+    "group_context": "kapibara.features.groups.context",
+    "group_sync": "kapibara.features.groups.sync",
+    "members": "kapibara.features.groups.members",
+    "optional_subjects": "kapibara.features.groups.optional_subjects",
+    "apple_signin": "kapibara.features.identity.apple",
+    "oauth": "kapibara.features.identity.oauth",
+    "login_channel": "kapibara.features.identity.login_channel",
+    "privacy": "kapibara.features.privacy.privacy",
+    "legal_texts": "kapibara.features.privacy.legal_texts",
+    "offer_text": "kapibara.features.privacy.offer_text",
 }
 
 
