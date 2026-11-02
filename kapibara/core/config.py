@@ -162,7 +162,7 @@ GEMINI_EMBED_DIMS = int(os.getenv("GEMINI_EMBED_DIMS", "768"))
 # это не критическая функция, ничего не падает без неё.
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 # Порт HTTP-сервера WebApp внутри того же процесса, что и бот (см. bot.py).
-# Хостинг кладёт PORT в окружение (на Amvera — 8080 из Dockerfile, amvera.yml)
+# Хостинг кладёт PORT в окружение (Timeweb — 8080, deploy/timeweb/docker-compose.yml)
 # и проксирует на него публичный домен. 0 — WebApp не поднимаем (локальный запуск без WEBAPP_URL и PORT).
 WEBAPP_PORT = int(os.getenv("PORT") or os.getenv("WEBAPP_PORT") or (8080 if WEBAPP_URL else 0))
 

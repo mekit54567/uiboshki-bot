@@ -1,13 +1,13 @@
 # Капибара — учёба МИРЭА
 
 [![CI](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![aiogram](https://img.shields.io/badge/aiogram-3-2CA5E0?logo=telegram&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Mini_App-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-FTS5_+_sqlite--vec-003B57?logo=sqlite&logoColor=white)
 ![Flutter](https://img.shields.io/badge/Flutter-Android_·_iOS-02569B?logo=flutter&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-uiboshki.ru%2Fapp-5A0FC8?logo=pwa&logoColor=white)
-![tests](https://img.shields.io/badge/tests-770+-brightgreen)
+![tests](https://img.shields.io/badge/tests-1100+-brightgreen)
 
 **Вся учёба — в Telegram, в браузере и в своём приложении.** Расписание всего
 университета, баллы и сдача работ из СДО, дедлайны с напоминаниями, файлы
@@ -23,20 +23,18 @@
 **[Без Telegram — uiboshki.ru/app](https://www.uiboshki.ru/app)** ·
 **[Канал о разработке](https://t.me/uiboshki_dev)**
 
-<p align="center"><a href="https://www.uiboshki.ru">
-<img src="webapp/static/site/og.jpg" width="720" alt="Сайт бота: живое приложение и поиск расписания"></a></p>
-
 > **In English.** «Kapibara» — an unofficial, student-made Telegram bot,
 > Mini App and mobile app for RTU MIREA (Moscow), not affiliated with the university: schedule search across the whole university, grades
 > and assignment submission scraped from Moodle, deadline reminders, course
 > files with full-text and semantic search, and an AI assistant grounded in the
 > group's own lecture slides (hybrid RAG: SQLite FTS5/BM25 + sqlite-vec,
-> RRF + MMR, answers cite the exact slide). Works in Telegram, as an
-> installable PWA with web push (uiboshki.ru/app, login via Telegram, VK ID or Yandex ID)
-> and as a native Flutter app for Android and iOS on the same versioned API.
-> Python · aiogram 3 · FastAPI · SQLite · Gemini · Flutter. Solo project:
-> ~20k lines of Python, ~6k of web frontend, ~10k of Dart, 770+ tests,
-> CI on every PR, deployed on Amvera (Moscow).
+> RRF + MMR, answers cite the exact slide). Works in Telegram, as an installable PWA
+> with web push (uiboshki.ru/app, login via Telegram, VK ID or Yandex ID) and as
+> a native Flutter app for Android (RuStore) and iOS on the same versioned API.
+> Python · aiogram 3 · FastAPI · SQLite · Flutter. Solo project: ~36k lines of
+> Python, ~17k of web frontend, ~28k of Dart, 1100+ backend tests, CI on every
+> PR, deploys only after green CI, with a readiness check and automatic rollback,
+> self-hosted on Timeweb Cloud (Moscow).
 
 <table>
 <tr>
@@ -71,11 +69,10 @@
 | | |
 |---|---|
 | Срок | апрель 2026 → сейчас, один разработчик |
-| Код | ~20 тыс. строк Python, ~6 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~10 тыс. — приложение на Flutter |
+| Код | ~36 тыс. строк Python, ~17 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~28 тыс. — приложение на Flutter |
 | Платформы | Telegram (бот + Mini App), PWA с веб-пушами, Android и iOS (Flutter) — одно API `/api/v1` |
-| Тесты | 770+ автотестов бэкенда и фронта, 50+ тестов приложения, CI (GitHub Actions) на каждый pull request |
-| История | 470+ коммитов, 150 pull request'ов, 280+ версий в [CHANGELOG](CHANGELOG.md) |
-| Данные | ~600 файлов курсов, у 535 — текст для поиска и ИИ |
+| Тесты | 1100+ автотестов бэкенда и фронта, 350+ тестов приложения, CI (GitHub Actions) на каждый pull request |
+| История | 1100+ коммитов, 300+ pull request'ов, 500+ версий в [CHANGELOG](CHANGELOG.md) |
 
 ## Что умеет
 
@@ -92,7 +89,8 @@
 - баллы БРС по каждому предмету: категории, пороги, график роста;
 - цель по предмету: выбрал зачёт или «3/4/5» — сколько не хватает, откуда
   взять и хватает ли зачтённых работ (правило 75 %);
-- посещения лекций — восстановлены из баллов за посещаемость;
+- посещения лекций — восстановлены из баллов за посещаемость, а с
+  подключённым Пульсом (пока в пробном режиме) — его отметки;
 - сдача работ прямо из Telegram: бот заранее показывает, какие файлы примет
   задание; сдал — дедлайн отмечается сам;
 - бот пишет сам: изменились баллы, появилось новое задание, перенесли срок.
@@ -151,11 +149,12 @@ SQL по своей базе.
 MMR убирает повторы, ИИ получает куски с номерами и ссылается на них — под
 ответом «Лекция 5 · слайд 12», а страница PDF рисуется на сервере.
 
-**Посещаемость без доступа к журналу посещений.** Пульс университета не
-пускает сервер, поэтому посещения восстанавливаются из баллов: баллы за
-посещаемость делятся поровну на лекции семестра, бот решает, сколько
-посещено и сколько отработок, а по ежедневной истории баллов видно, какие
-именно лекции засчитаны.
+**Посещаемость по СДО и Пульсу.** Посещения восстанавливаются из
+баллов СДО: баллы за посещаемость делятся поровну на лекции семестра, бот
+решает, сколько посещено и сколько отработок, а по ежедневной истории баллов
+видно, какие именно лекции засчитаны. Если подключён Пульс университета
+(пока в пробном режиме), отметки по лекциям берутся оттуда и хранятся у себя:
+Пульс отвалился — прошлые лекции остаются такими, как он сказал.
 
 **Безопасность.** Вход в Mini App — по подписи Telegram `initData` (HMAC),
 входы студентов в СДО зашифрованы (Fernet, ключ отдельно от базы), ссылки на
@@ -167,6 +166,11 @@ MMR убирает повторы, ИИ получает куски с номе�
 календарей, запасная копия расписания, запасные модели ИИ при исчерпанном
 лимите, дневной лимит вопросов на человека (выключатель), тревога старосте
 при всплеске ошибок, ночной бэкап базы с восстановлением одной командой.
+
+**Выкладка без страха.** Сервер берёт свежий `main` только после зелёного
+CI. Перед запуском новой версии бот сохраняет копию базы, после запуска
+сервер спрашивает `/ready` (база, схема и роутеры поднялись), и если ответа
+нет, сам возвращает прошлую сборку кода и пишет старосте.
 
 ## Как устроено
 
@@ -181,11 +185,11 @@ flowchart LR
     BOT & API & SCH --> DB[("SQLite<br/>+ FTS5 + sqlite-vec")]
     API & SCH --> SDO["СДО Moodle<br/>sdo_*.py"]
     API & BOT --> MIREA["Расписание МИРЭА<br/>ical-зеркало"]
-    API & BOT --> AI["Gemini / DeepSeek"]
+    API & BOT --> AI["ИИ: OpenRouter · Gemini"]
 ```
 
-Бот и Mini App — один процесс и одна база (Amvera, Москва). Фронтенд — обычные
-скрипты без сборки; авторизация — по `initData` Telegram, вне Telegram —
+Бот и Mini App — один процесс и одна база: Docker-контейнер и Caddy (HTTPS) на
+своём сервере Timeweb Cloud в Москве. Фронтенд — обычные скрипты без сборки; авторизация — по `initData` Telegram, вне Telegram —
 токен сессии устройства (вход через бота, VK ID или Яндекс ID). PWA и своё
 приложение ходят в версионированное API `/api/v1` (снимок контракта в тестах).
 
@@ -193,12 +197,14 @@ flowchart LR
 |---|---|
 | Бот | aiogram 3, APScheduler, inline-режим, Mini App кнопкой меню |
 | Бэкенд | FastAPI + uvicorn в процессе бота, aiosqlite |
-| Поиск | SQLite FTS5 (BM25), sqlite-vec, эмбеддинги Gemini, RRF + MMR |
+| ИИ | OpenRouter и Gemini (запасные модели при лимите), DeepSeek необязательно |
+| Поиск | SQLite FTS5 (BM25), sqlite-vec, эмбеддинги — локальная модель или Gemini, RRF + MMR |
 | Данные | httpx, BeautifulSoup (Moodle), icalendar, pypdf / python-pptx / python-docx, pypdfium2 |
 | Картинки | Pillow — карточки расписания, статистика, обложки постов |
 | Вне Telegram | PWA (service worker, веб-пуши RFC 8291 + VAPID без внешних библиотек), OAuth VK ID и Яндекс ID |
 | Приложение | Flutter (Android и iOS), общие дизайн-токены с вебом, сборки APK/IPA в GitHub Actions |
-| Качество | pytest (770+), ruff, flutter test, GitHub Actions, дымовой тест Mini App в Chromium |
+| Качество | pytest (1100+), ruff, flutter test, робот-проверка приложения в Chromium, GitHub Actions |
+| Сервер | Timeweb Cloud, Docker Compose, Caddy; выкладка после зелёного CI, `/ready` и автооткат |
 
 Подробно для разработки — [CLAUDE.md](CLAUDE.md), история версий —
 [CHANGELOG.md](CHANGELOG.md), план — [PLAN.md](PLAN.md).
@@ -207,8 +213,10 @@ flowchart LR
 
 - каждое изменение — отдельная ветка и pull request, CI зелёный до мержа;
 - на каждый найденный баг — тест, который его ловит;
-- у каждого коммита своя версия в [CHANGELOG](CHANGELOG.md) (`эпоха.фича.фикс`)
-  с кодовым именем;
+- PR кладёт короткую заметку в `changelog.d/next/`, а раз в ~10 PR релиз
+  собирает их в версию [CHANGELOG](CHANGELOG.md) (`эпоха.фича.фикс`) с кодовым
+  именем;
+- сервер сам выкладывает свежий `main` после зелёного CI;
 - большие выпуски проходят ревью кода, найденное чинится тем же PR;
 - о том, как и почему делается бот, — [канал @uiboshki_dev](https://t.me/uiboshki_dev).
 
@@ -219,14 +227,16 @@ pip install -r requirements.txt
 python bot.py          # бот; с WEBAPP_URL — и Mini App в том же процессе (порт PORT, по умолчанию 8080)
 ```
 
-Главные переменные окружения (полный список — `config.py`):
+Главные переменные окружения (основные — в `config.py`, остальные — в модулях,
+которые их читают; шаблон для сервера — `deploy/timeweb/env.example`):
 
 | Переменная | Зачем |
 |---|---|
 | `BOT_TOKEN` | токен бота (обязателен) |
 | `STAROSTA_ID` | Telegram ID старосты, можно несколько через запятую |
 | `WEBAPP_URL` | адрес Mini App (кнопки «Открыть приложение», сайт) |
-| `GEMINI_API_KEY`, `DEEPSEEK_API_KEY` | ИИ; DeepSeek необязателен (запасной) |
+| `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY` | ИИ; DeepSeek необязателен |
+| `EMBED_PROVIDER` | чем считать векторы для поиска по смыслу: локальная модель или Gemini |
 | `GEMINI_FALLBACK_MODELS`, `AI_DAILY_LIMIT` | запасные модели при лимите; вопросов к ИИ в сутки на человека (0 — без лимита) |
 | `SDO_SESSION_COOKIE` | вход старосты в СДО (дедлайны и файлы курсов) |
 | `SDO_CRYPT_PASSPHRASE` | секретная фраза — ключ шифрования входов студентов |
@@ -238,7 +248,7 @@ python bot.py          # бот; с WEBAPP_URL — и Mini App в том же п
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 700+ тестов, без сети
+pytest          # 1100+ тестов, без сети
 ruff check .    # линтер
 ```
 
@@ -255,7 +265,9 @@ ruff check .    # линтер
 
 ## Мониторинг
 
-`GET /health` — для внешнего аптайм-чекера; `/status` у старосты — синк СДО,
+`GET /health` — жив ли процесс (для аптайм-чекера), `GET /ready` — поднялись ли
+база, схема и роутеры (его спрашивает выкладка); `/api/meta` → `build` — какая
+сборка сейчас на сервере; `/status` у старосты — синк СДО,
 кука, бэкап, индекс поиска, ИИ и ошибки за сутки; при всплеске ошибок бот
 пишет старосте сам.
 

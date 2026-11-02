@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from webapp.deps import CurrentUser
 
+from kapibara.core.errors import log_failure
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -149,7 +151,7 @@ async def api_today(user: dict = CurrentUser):
         campus = re.sub(r"<[^>]+>|📍 ", "", notify_prefs.campus_note(parse_events_for_date(raw, today),
                                                                     notify_prefs.home_campus(raw)))
     except Exception as e:
-        logger.warning(f"api_today: расписание недоступно: {e}")
+        log_failure(logger, "api_today: расписание недоступно", e)
         schedule_ok = False
 
     try:
@@ -227,7 +229,8 @@ async def api_day(date: str, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
     try:
         raw = await raw_for_user(user["id"])
-    except Exception:
+    except Exception as e:
+        log_failure(logger, "расписание группы", e)
         raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
     now = datetime.now(TZ)
     lessons = lessons_for_date(raw, d, now=now if d == now.date() else None)
@@ -265,7 +268,8 @@ async def api_week(start: str, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
     try:
         raw = await raw_for_user(user["id"])
-    except Exception:
+    except Exception as e:
+        log_failure(logger, "расписание группы", e)
         raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
     return week_overview(raw, monday)
 
@@ -336,7 +340,7 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
     try:
         weeks = target_weeks(ical, monday, TARGET_WEEKS, now=now)
     except Exception as e:      # обрывок календаря — не 500, а «недоступно»
-        logger.warning(f"api_target: календарь {target_type}/{target_id} не разобрался: {e!r}")
+        log_failure(logger, f"api_target: календарь {target_type}/{target_id} не разобрался", e)
         raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
     pinned = any(p["type"] == target_type and p["id"] == target_id for p in await get_pins(user["id"]))
     return {
