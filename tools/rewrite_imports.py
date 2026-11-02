@@ -50,6 +50,27 @@ def _offset(lines: list[str], lineno: int, col: int) -> int:
     return sum(len(x) for x in lines[: lineno - 1]) + len(line.encode("utf-8")[:col].decode("utf-8"))
 
 
+_NAMES: dict[str, set[str]] = {}
+
+
+def top_names(module: str) -> set[str]:
+    """Имена верхнего уровня модуля (функции, классы, переменные, импорты)."""
+    if module not in _NAMES:
+        path = ROOT.joinpath(*module.split(".")).with_suffix(".py")
+        names = set()
+        if path.exists():
+            for n in ast.parse(path.read_text(encoding="utf-8")).body:
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    names.add(n.name)
+                elif isinstance(n, (ast.Assign, ast.AnnAssign)):
+                    for t in (n.targets if isinstance(n, ast.Assign) else [n.target]):
+                        names |= {x.id for x in ast.walk(t) if isinstance(x, ast.Name)}
+                elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                    names |= {(a.asname or a.name).split(".")[0] for a in n.names}
+        _NAMES[module] = names
+    return _NAMES[module]
+
+
 def rewrite(text: str, moved: dict[str, str]) -> str:
     tree = ast.parse(text)
     lines = text.splitlines(keepends=True)
@@ -75,8 +96,9 @@ def rewrite(text: str, moved: dict[str, str]) -> str:
             new = re.sub(rf"^from\s+{re.escape(node.module)}\b", f"from {moved[node.module]}", seg, count=1)
             edits.append((start, end, new))
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            head = node.value.split(".", 1)[0]
-            if head in moved and "." in node.value and re.fullmatch(r"[\w.]+", node.value):
+            head, _, rest = node.value.partition(".")
+            # только «модуль.имя_в_модуле»: «config.json» или «roadmap.json» — имена файлов, не трогаем
+            if head in moved and rest and re.fullmatch(r"[\w.]+", node.value)                     and rest.split(".")[0] in top_names(moved[head]):
                 start = _offset(lines, node.lineno, node.col_offset)
                 end = _offset(lines, node.end_lineno, node.end_col_offset)
                 seg = text[start:end]

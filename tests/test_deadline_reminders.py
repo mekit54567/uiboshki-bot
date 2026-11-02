@@ -71,7 +71,8 @@ async def test_api_remind(db, monkeypatch):
 
 
 def test_scheduler_runs_every_minute():
-    src = open("kapibara.jobs.scheduler.py", encoding="utf-8").read()
+    from kapibara.jobs import scheduler
+    src = open(scheduler.__file__, encoding="utf-8").read()       # где бы ни лежал (kapibara/jobs/)
     assert "send_deadline_custom_reminders" in src
 
 

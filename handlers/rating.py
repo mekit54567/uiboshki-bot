@@ -67,6 +67,6 @@ async def cmd_institutes(message: Message):
     unknown = [r["prefix"] for r in rows if not r["institute"]]
     text = "шифр\tинститут\tгрупп\tпример\n" + "\n".join(lines)
     await message.answer_document(
-        BufferedInputFile(text.encode("utf-8"), filename="kapibara.features.groups.institutes.tsv"),
+        BufferedInputFile(text.encode("utf-8"), filename="institutes.tsv"),
         caption=(f"Шифров: {len(rows)}. Без института: {', '.join(unknown[:30]) or 'нет'}.\n"
                  "Поправь, что не так, — пришли «ШИФР → институт», я внесу."))

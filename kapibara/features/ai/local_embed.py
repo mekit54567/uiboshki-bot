@@ -39,7 +39,7 @@ MODELS = {
     "e5-small": {"repo": "intfloat/multilingual-e5-small", "dims": 384, "query": "query: ", "doc": "passage: ",
                  "min_sim": 0.80},
 }
-FILES = ("kapibara.core.config.json", "tokenizer.json", "model.safetensors")
+FILES = ("config.json", "tokenizer.json", "model.safetensors")
 OPTIONAL = ("1_Pooling/config.json",)
 MAX_TOKENS = 512
 IDLE_UNLOAD = 600               # сек без запросов — модель выгружается
@@ -146,9 +146,9 @@ class Encoder:
 
     def __init__(self, folder: str):
         from tokenizers import Tokenizer
-        with open(os.path.join(folder, "kapibara.core.config.json"), encoding="utf-8") as f:
+        with open(os.path.join(folder, "config.json"), encoding="utf-8") as f:
             cfg = json.load(f)
-        pool_path = os.path.join(folder, "1_Pooling", "kapibara.core.config.json")
+        pool_path = os.path.join(folder, "1_Pooling", "config.json")
         pool = {}
         if os.path.exists(pool_path):
             with open(pool_path, encoding="utf-8") as f:

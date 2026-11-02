@@ -19,7 +19,7 @@ M». post — пост в канале разработки, как сделан
 import json
 from kapibara.core.paths import ROOT
 
-PATH = ROOT / "kapibara.features.content.roadmap.json"   # от корня проекта (kapibara/core/paths.py)
+PATH = ROOT / "roadmap.json"   # от корня проекта (kapibara/core/paths.py)
 STATUSES = {"now": "Делаю сейчас", "next": "Следующее", "idea": "Попробую", "done": "Вышло",
             "failed": "Не получилось"}
 RESULT = ("done", "failed", "now")       # чем кончились пункты прошлого номера

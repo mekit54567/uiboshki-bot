@@ -27,7 +27,8 @@ DAY = 24 * 3600
 AREAS = [("kapibara.features.ai", "ИИ"), ("kapibara.features.lectures.summary", "ИИ"), ("handlers.solver", "ИИ"),
          ("webapp.routes.chat", "ИИ"), ("kapibara.features.sdo", "СДО"),
          ("kapibara.features.notifications.grade_alerts", "СДО"), ("webapp.routes.sdo", "СДО"),
-         ("kapibara.features.schedule", "Расписание"), ("kapibara.ops.backup", "Бэкап")]
+         ("kapibara.features.schedule", "Расписание"), ("kapibara.ops.backup", "Бэкап"),
+         ("kapibara.jobs.scheduler", "Расписание")]   # как было: префикс «schedule» ловил и scheduler
 
 
 # Готовность к работе (/ready; по нему deploy/timeweb/update.sh решает, удалась

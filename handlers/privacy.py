@@ -70,7 +70,7 @@ async def consent_given(callback: CallbackQuery, state: FSMContext | None = None
         await callback.answer(str(e)[:200], show_alert=True)
         return
     consent, policy = links()
-    with cosmetic("kapibara.features.privacy.privacy.consent_given"):
+    with cosmetic("privacy.consent_given"):
         await callback.message.edit_text(
             f"✅ Спасибо! Ты дал {consent}.\nПодробнее — в {policy}. "
             "Удалить всё о себе — /deleteme.",
@@ -168,7 +168,7 @@ async def cmd_undelete(message: Message):
     await message.answer(
         f"✅ Вернул <code>{uid}</code>: профиль и данные на месте. Входы на устройствах и в СДО были "
         "удалены сразу — войдёт заново; согласие бот спросит снова.", parse_mode="HTML")
-    with cosmetic("kapibara.features.privacy.privacy.cmd_undelete"):
+    with cosmetic("privacy.cmd_undelete"):
         await message.bot.send_message(uid, "↩️ Твои данные вернули. Войди в приложение и СДО заново "
                                             "и дай согласие на обработку данных — бот спросит.")
 

@@ -356,10 +356,10 @@ def test_webapp_consent_wiring():
     html = (static / "index.html").read_text(encoding="utf-8")
     js = {p.name: p.read_text(encoding="utf-8") for p in (static / "js").glob("*.js")}
     assert 'id="consent-sheet"' in html and 'id="legal-sheet"' in html and "js/privacy.js" in html
-    assert "checked" not in js["kapibara.features.privacy.privacy.js"].split("function consentRow")[1].split("\n}\n")[0]
+    assert "checked" not in js["privacy.js"].split("function consentRow")[1].split("\n}\n")[0]
     assert '"sdo-save" disabled' in js["more.js"] and "agree: true" in js["more.js"]
     assert "maybeConsent(m)" in js["home.js"] and "deleteMyData()" in js["more.js"]
-    assert "/api/legal/" in js["kapibara.features.privacy.privacy.js"] and "preventDefault" in js["kapibara.features.privacy.privacy.js"]
+    assert "/api/legal/" in js["privacy.js"] and "preventDefault" in js["privacy.js"]
 
 
 # ── Без согласия — ничего (ревьюер 152-ФЗ, 11.10) ───────────────────────────
