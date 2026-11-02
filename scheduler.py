@@ -405,6 +405,17 @@ async def sdo_keepalive(bot: Bot | None = None):
         await set_setting("sdo:idle_timeout", str(sdo_parser.IDLE_TIMEOUT))
     if ok and any(changed):
         await sync_sdo_deadlines(bot)
+    import grade_alerts
+    if ok and bot and grade_alerts.daytime():
+        # староста без своего входа ходит этой кукой — его новые баллы проверяем здесь
+        from config import STAROSTA_IDS
+        from database import get_sdo_session
+        try:
+            for uid in STAROSTA_IDS:
+                if uid and not await get_sdo_session(uid):
+                    grade_alerts.check_soon(bot, uid, SDO_SESSION_COOKIE)
+        except Exception as e:
+            logger.warning(f"новые баллы старосты: {type(e).__name__}: {e}")
 
 
 async def sync_sdo_deadlines(bot: Bot):
@@ -495,11 +506,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_weekly_digest,      "cron", day_of_week="sun", hour=19, minute=0, args=[bot])
     from evening_digest import send_all as send_evening_digest    # сводка на завтра — во время, выбранное человеком
     scheduler.add_job(send_evening_digest,     "cron", minute="0,30", args=[bot])
-    # новые баллы СДО — днём каждый час (Никита 02.11: раз в 3 часа — поздно); ночью
-    # не проверяем, чтобы не будить пушем; не успели за час — следующий запуск пропускается
-    from grade_alerts import check_all as check_new_grades
-    scheduler.add_job(check_new_grades,        "cron", hour="8-22", minute=7, args=[bot],
-                      max_instances=1, coalesce=True)
+    # новые баллы СДО — не отдельным расписанием, а у каждого вместе с проверкой
+    # его входа (sdo_accounts._check_one, grade_alerts.check_soon; Никита 02.11)
     from deadline_reminders import send_due as send_deadline_custom_reminders   # свои напоминания о дедлайне
     scheduler.add_job(send_deadline_custom_reminders, "cron", minute="*",        args=[bot])
     import quiz_alerts                    # тесты СДО: до закрытия и «открыли тест» (Уведомления → Тесты СДО)
