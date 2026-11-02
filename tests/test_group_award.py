@@ -4,9 +4,9 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-import group_award
-import scheduler
-import xp
+from kapibara.features.social import group_award
+from kapibara.jobs import scheduler
+from kapibara.features.social import xp
 from database.billing import get_sub
 from tests.conftest import STAROSTA_ID
 from tests.test_review_bot import bot, dp  # noqa: F401 — фикстуры
@@ -85,7 +85,7 @@ async def test_award_once_to_whole_group(db, bot):  # noqa: F811
 @pytest.mark.asyncio
 async def test_award_skips_blocked(db, bot, monkeypatch):  # noqa: F811
     """Ждёт удаления или без согласия — ни в счёт, ни в награду."""
-    import privacy
+    from kapibara.features.privacy import privacy
 
     async def blocked(uid):
         return uid in (13, 14)

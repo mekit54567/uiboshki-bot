@@ -20,7 +20,7 @@ DONE_STATUSES = ("ok", "wait")
 
 def cmid_of(text: str) -> int | None:
     """Задание или тест из описания дедлайна СДО (разбор — sdo_submit.cmid_of)."""
-    from sdo_submit import cmid_of as _cmid
+    from kapibara.features.sdo.submit import cmid_of as _cmid
     return _cmid(text, quiz=True)
 
 

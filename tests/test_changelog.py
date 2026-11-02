@@ -68,7 +68,7 @@ def test_fragments_then_collect(tmp_path, monkeypatch):
     её сразу, collect переносит записи в CHANGELOG.md по порядку версий."""
     import io
 
-    import health
+    from kapibara.ops import health
     import tools.changelog as cl
     from webapp.routes import meta
     f = tmp_path / "CHANGELOG.md"

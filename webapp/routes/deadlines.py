@@ -16,10 +16,10 @@ router = APIRouter()
 async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
     from database import get_active_deadlines, get_deadline_stats, is_shared_deadline
     from database import is_editor
-    from sdo_submit import can_submit
+    from kapibara.features.sdo.submit import can_submit
     from database import get_user_deadline_reminders
-    from deadline_reminders import label as dl_label
-    import ugc
+    from kapibara.features.deadlines.reminders import label as dl_label
+    from kapibara.features.social import ugc
     hidden = await ugc.hidden(user["id"])
     items = [d for d in await get_active_deadlines(user["id"], include_done=include_done)
              if not (hidden and is_shared_deadline(d) and d.get("created_by") in hidden)]
@@ -38,11 +38,11 @@ async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
         d["reportable"] = (not d["personal"] and not d["mine"] and bool(d.get("created_by"))
                            and not (d.get("external_id") or "").startswith("sdo:"))
         d["reminders"] = [{"at": at, "label": dl_label(at)} for at in reminders.get(d["id"], [])]
-    import quiz_time    # у тестов — ограничение по времени из СДО (минуты или None)
+    from kapibara.features.deadlines import quiz_time    # у тестов — ограничение по времени из СДО (минуты или None)
     await quiz_time.attach(items)
     stats = await get_deadline_stats(user["id"])
     # последняя проверка СДО группы: «СДО проверено в 12:40» / «СДО не ответил»
-    import sdo_check
+    from kapibara.features.sdo import check as sdo_check
     from database.groups import g_or_home
     return {"items": items, "stats": stats, "sdo": await sdo_check.state(g_or_home(None))}
 
@@ -84,7 +84,7 @@ async def api_deadline_add(body: NewDeadline, user: dict = CurrentUser):
     """Свой (личный) дедлайн из WebApp — как /add в боте: виден только
     автору. Общие дедлайны группы по-прежнему заводит староста/СДО."""
     from database import add_deadline
-    import ratelimit
+    from kapibara.core import ratelimit
     if not ratelimit.allow("deadline", user["id"]):
         raise HTTPException(429, "Слишком много дедлайнов подряд — подожди пару минут")
     subject, due, due_time, desc = _validate_deadline(body)
@@ -135,9 +135,9 @@ async def api_deadline_reset_mine(deadline_id: int, user: dict = CurrentUser):
 async def api_homework(user: dict = CurrentUser):
     """Доска ДЗ (/addhw в боте): свежие сверху. Файл ДЗ WebApp открывает
     диплинком в бота (t.me/<бот>?start=hw_<id>) — file_id наружу не отдаём."""
-    from group_context import list_homework
+    from kapibara.features.groups.context import list_homework
     from database.groups import viewer_group
-    import ugc
+    from kapibara.features.social import ugc
     items = ugc.without_hidden(await list_homework(60, await viewer_group(user["id"])),
                                await ugc.hidden(user["id"]), "created_by")
     return {"items": [
@@ -151,7 +151,7 @@ async def api_homework(user: dict = CurrentUser):
 @router.post("/api/homework/{hw_id}/send")
 async def api_send_hw(hw_id: int, user: dict = CurrentUser):
     from handlers.start import send_hw_to
-    import ratelimit
+    from kapibara.core import ratelimit
     if not ratelimit.allow("send", user["id"]):
         raise HTTPException(429, "Много файлов подряд — подожди минутку")
     if not await send_hw_to(deps.tg_bot(), user["id"], hw_id):
@@ -179,7 +179,7 @@ async def _visible_deadline(deadline_id: int, user_id: int) -> dict:
 @router.post("/api/deadlines/{deadline_id}/remind")
 async def api_deadline_remind(deadline_id: int, body: RemindBody, user: dict = CurrentUser):
     """Своё напоминание о дедлайне (deadline_reminders.py)."""
-    import deadline_reminders
+    from kapibara.features.deadlines import reminders as deadline_reminders
     from database import add_deadline_reminder, get_user_deadline_reminders
     d = await _visible_deadline(deadline_id, user["id"])
     try:

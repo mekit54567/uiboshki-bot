@@ -3,11 +3,11 @@ from datetime import date, datetime, timedelta
 
 import httpx
 
-import attendance
-import pulse_accounts
-import pulse_attendance as pa
-import pulse_probe
-from pulse_attendance import _field as F
+from kapibara.features.schedule import attendance
+from kapibara.features.pulse import accounts as pulse_accounts
+from kapibara.features.pulse import attendance as pa
+from kapibara.features.pulse import probe as pulse_probe
+from kapibara.features.pulse.attendance import _field as F
 
 NOW = datetime(2026, 11, 1, 10, 0, tzinfo=pa.MSK)
 OK = b"\x80" + len(b"grpc-status:0\r\n").to_bytes(4, "big") + b"grpc-status:0\r\n"

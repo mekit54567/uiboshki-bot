@@ -8,7 +8,7 @@ import pytest
 from aiogram import Bot
 from aiogram.methods import SendMessage
 
-from long_messages import LIMIT, SplitLongMessages, split_text
+from kapibara.bot.long_messages import LIMIT, SplitLongMessages, split_text
 
 
 def test_split_by_lines_and_long_line():
@@ -50,7 +50,7 @@ async def test_deadlines_list_of_40_goes_out_in_parts(db):
     from aiogram.types import Chat, Message, Update, User
     from handlers.deadlines import router
     from tests.test_solver_render import RecordingSession
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
 
     for i in range(40):
         await db.add_deadline(f"Практическая работа №{i} - срок сдачи (Анализ и диагностика финансово-хозяйственной "

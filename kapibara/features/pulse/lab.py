@@ -19,7 +19,7 @@ import re
 import time
 import zipfile
 
-import pulse_probe
+from kapibara.features.pulse import probe as pulse_probe
 from kapibara.core.paths import ROOT
 
 MAX_BODY = 40 * 1024 * 1024      # = предел пути в webapp/server.BODY_LIMITS

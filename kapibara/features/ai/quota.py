@@ -21,7 +21,7 @@
 
 import json
 
-import ratelimit
+from kapibara.core import ratelimit
 
 MINUTE_TEXT = "слишком много вопросов подряд — подожди минуту"
 DAY_TEXT = ("на сегодня вопросы к ИИ кончились ({n} в сутки) — бесплатный лимит ИИ один на всю "
@@ -38,17 +38,17 @@ SUMMARY_TEXT = ("новые конспекты на этой неделе кон
 
 
 def _key(day=None) -> str:
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     return f"ai_day:{(day or today_msk()).isoformat()}"
 
 
 def _trial_key() -> str:
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     return f"ai_trial:{today_msk().isoformat()}"
 
 
 def _week_key() -> str:
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     y, w, _ = today_msk().isocalendar()
     return f"ai_sum:{y}-{w:02d}"
 
@@ -76,9 +76,9 @@ async def take(user_id: int, kind: str = "ask") -> str | None:
     """Записать вопрос (kind="ask") или новый конспект (kind="summary").
     None — можно; иначе причина: "day", "trial", "trial_all", "sub", "summary"
     (тогда ничего не пишем)."""
-    import config
-    import locks
-    import plans
+    from kapibara.core import config
+    from kapibara.core import locks
+    from kapibara.features.billing import plans
     from database import set_setting
     plan = await plans.plan_of(user_id)
     async with locks.lock("ai_day"):
@@ -117,8 +117,8 @@ async def left(user_id: int) -> dict | None:
     """Сколько вопросов к ИИ осталось сегодня: {"left", "limit"}; None —
     дневного лимита нет (Никита, безлимит, AI_DAILY_LIMIT=0). Для строки на пустом
     экране помощника в приложении — та же логика, что в take()."""
-    import config
-    import plans
+    from kapibara.core import config
+    from kapibara.features.billing import plans
     plan = await plans.plan_of(user_id)
     n = (await today()).get(user_id, 0)
     if plan == plans.UNL:
@@ -154,7 +154,7 @@ async def day_only(user_id: int) -> str | None:
 
 def text(why: str, capital: bool = False, app: str = "") -> str:
     """Причина отказа человеку; app — заголовок X-App клиента."""
-    import config
+    from kapibara.core import config
     t = {
         "day": DAY_TEXT.format(n=config.AI_DAILY_LIMIT),
         "trial": (TRIAL_IOS_TEXT if (app or "").lower() == "ios" else TRIAL_TEXT).format(n=config.AI_TRIAL_DAILY),

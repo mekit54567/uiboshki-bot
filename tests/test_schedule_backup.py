@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-import schedule_parser
+from kapibara.features.schedule import parser as schedule_parser
 
 ICS = (b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nX-WR-CALNAME:test\r\n"
        b"BEGIN:VEVENT\r\nDTSTART;TZID=Europe/Moscow:20261001T090000\r\n"

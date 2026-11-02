@@ -19,7 +19,7 @@ M». post — пост в канале разработки, как сделан
 import json
 from kapibara.core.paths import ROOT
 
-PATH = ROOT / "roadmap.json"   # от корня проекта (kapibara/core/paths.py)
+PATH = ROOT / "kapibara.features.content.roadmap.json"   # от корня проекта (kapibara/core/paths.py)
 STATUSES = {"now": "Делаю сейчас", "next": "Следующее", "idea": "Попробую", "done": "Вышло",
             "failed": "Не получилось"}
 RESULT = ("done", "failed", "now")       # чем кончились пункты прошлого номера
@@ -49,7 +49,7 @@ def score(data: dict) -> tuple[int, int]:
 async def with_links(data: dict) -> dict:
     """post → ссылка: готовая https — как есть, имя поста — t.me/<канал>/<id>
     из выпущенных (не выпущен или канал без @имени — без ссылки)."""
-    import channel_posts
+    from kapibara.features.content import channel_posts
     done = await channel_posts.published()
     for i in data["items"]:
         post = (i.get("post") or "").strip()
@@ -62,20 +62,20 @@ async def with_links(data: dict) -> dict:
 
 def page_link(uid: int) -> str:
     """Личная ссылка на страницу роадмапа — тот же ключ, что у /plus и /donate."""
-    import billing
+    from kapibara.features.billing import billing
     return f"{billing.site()}/roadmap?k={billing.make_key(uid)}"
 
 
 async def can_see(uid: int) -> bool:
     """Поддержал проект (оплаченный донат) — или это Никита."""
-    import config
+    from kapibara.core import config
     from database.billing import has_donated
     return config.is_starosta(uid) or await has_donated(uid)
 
 
 def text() -> str:
     """Роадмап для бота (HTML Telegram) — коротко; красиво — на странице."""
-    from utils import esc
+    from kapibara.core.utils import esc
     data = load()
     done, total = score(data)
     out = [f"🗺 <b>Роадмап Капибары №{data['edition']}</b>", "<i>Что я делаю сейчас и что дальше.</i>"]

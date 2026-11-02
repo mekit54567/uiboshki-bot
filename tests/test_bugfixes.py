@@ -15,7 +15,7 @@ from aiogram.types import Message, Chat, User, Update
 import handlers.announce as announce
 from tests.conftest import STAROSTA_ID
 from tests.test_deadlines_routing import FakeSession
-from utils import esc, parse_day_month, split_by_lines, utc_to_msk_date
+from kapibara.core.utils import esc, parse_day_month, split_by_lines, utc_to_msk_date
 
 USER = User(id=222, is_bot=False, first_name="Alice")
 STAROSTA = User(id=STAROSTA_ID, is_bot=False, first_name="Starosta")
@@ -76,7 +76,7 @@ def test_format_deadlines_escapes_user_text():
 
 
 def test_deadline_reminders_escape_user_text():
-    from scheduler import _format_deadline_reminders
+    from kapibara.jobs.scheduler import _format_deadline_reminders
     text = _format_deadline_reminders([{
         "subject": "<b>", "description": "a & b", "due_date": "2099-01-01", "due_time": None,
     }])
@@ -89,8 +89,8 @@ def test_no_triple_newlines_under_headers():
     # /deadlines и утренней рассылки — две.
     from datetime import date
     from handlers.deadlines import format_deadlines
-    from schedule_parser import format_day
-    from scheduler import _format_deadline_reminders
+    from kapibara.features.schedule.parser import format_day
+    from kapibara.jobs.scheduler import _format_deadline_reminders
 
     day = format_day([{"time": "09:00–10:30", "summary": "ЛК Матан", "location": "А-18"}], date(2026, 9, 26))
     assert day.startswith("📅 <b>Суббота, 26 сентября</b>\n1 пара · 09:00–10:30\n\n1️⃣ <b>09:00–10:30</b>")
@@ -111,7 +111,7 @@ async def test_notes_block_escapes_notes(db):
 
 
 def test_schedule_diff_escapes_summary():
-    from schedule_diff import diff_events
+    from kapibara.features.schedule.diff import diff_events
     changes = diff_events([], [{"summary": "R&D <лаб>", "time": "09:00–10:30", "location": "А-1"}])
     assert changes and "R&amp;D &lt;лаб&gt;" in changes[0]
 
@@ -143,7 +143,7 @@ async def test_lesson_reminder_dedupe_resets_next_day(monkeypatch):
     пропущенный полуночный запуск навсегда глушил напоминание о паре в то же
     время на следующий день."""
     from datetime import datetime, timedelta
-    import scheduler
+    from kapibara.jobs import scheduler
 
     fake_now = {"value": datetime(2099, 1, 10, 8, 45, tzinfo=scheduler.TZ)}
 
@@ -196,7 +196,7 @@ async def test_lesson_reminder_not_repeated_after_restart(db, monkeypatch):
     пара» пришло дважды (16:09 старым процессом, 16:10 новым): отметка
     «уже напомнил» жила только в памяти."""
     from datetime import datetime, timedelta
-    import scheduler
+    from kapibara.jobs import scheduler
 
     fake_now = {"value": datetime(2099, 1, 10, 16, 9, 0, 300000, tzinfo=scheduler.TZ)}
 
@@ -255,7 +255,7 @@ async def test_no_reminder_for_self_study(monkeypatch):
     """Производственная практика «СР» на удалёнке — без фиксированного
     времени, напоминать «через 15 мин пара» не нужно (просьба владельца)."""
     from datetime import datetime, timedelta
-    import scheduler
+    from kapibara.jobs import scheduler
 
     class FakeDatetime(datetime):
         @classmethod
@@ -308,7 +308,7 @@ def _sdo_html(unix_ts: int) -> str:
 
 @pytest.mark.asyncio
 async def test_sdo_sync_updates_moved_deadline(db, monkeypatch):
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
 
     html = {"value": _sdo_html(4102444800)}  # 2100-01-01 03:00 МСК
 
@@ -499,7 +499,7 @@ async def test_feed_post_published_but_reactions_failed_is_not_marked_deleted(db
 async def test_sdo_sync_tells_missing_cookie_from_expired(db, monkeypatch):
     # Живой тест: /syncsdo отвечал «кука протухла», хотя её просто не задали —
     # а «протухла» значит, что СДО с сервера открылся и попросил вход.
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "")
     res = await sdo_parser.sync_deadlines()
     assert res["expired"] and res["missing"]
@@ -515,8 +515,8 @@ async def test_sdo_sync_tells_missing_cookie_from_expired(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sdo_job_silent_without_cookie_and_reports_network_once(monkeypatch):
-    import scheduler
-    import sdo_parser
+    from kapibara.jobs import scheduler
+    from kapibara.features.sdo import parser as sdo_parser
     sent = []
 
     class FakeBot:

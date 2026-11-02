@@ -33,7 +33,7 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
     имени и ника (152-ФЗ); имя запишется при следующем заходе после согласия.
     wait=False (запросы WebApp): уже есть в базе — запись в фоне
     (_conn.write_later), новый — сразу: дальше запрос читает его строку."""
-    import privacy
+    from kapibara.features.privacy import privacy
     if not named or await privacy.blocked(user_id):
         username = full_name = ""
     key, now = (database.DATABASE_PATH, user_id), time.monotonic()

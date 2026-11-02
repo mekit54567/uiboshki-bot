@@ -15,7 +15,7 @@ evening_time; по умолчанию выключено, 20:00). Одним к�
 import logging
 from datetime import date, datetime, timedelta
 
-from utils import TZ, esc
+from kapibara.core.utils import TZ, esc
 
 logger = logging.getLogger(__name__)
 DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
@@ -59,7 +59,7 @@ def _deadlines_text(deadlines: list[dict], tomorrow: date) -> str:
 def day_title(lessons: list[dict], day: str, home: str | None, campus: bool = True) -> str:
     """«Завтра: 3 пары с 09:00, В-78» / «Сегодня: 5 пар с 09:00, МП-1 (не В-78)».
     lessons — lessons_for_date, отсортированы по началу."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     pairs = sum(l.get("pairs") or 1 for l in lessons)
     title = f"{day}: {pairs} {_word(pairs)} с {lessons[0]['start']}"
     if campus:
@@ -84,7 +84,7 @@ def build(raw: bytes, tomorrow: date, deadlines: list[dict], home: str | None, w
           campus: bool = True) -> tuple[str, str] | None:
     """(заголовок для пуша, HTML для Telegram) или None — завтра пусто.
     deadlines — не сданные сроки с завтрашнего дня на DEADLINE_DAYS дней."""
-    from schedule_parser import lessons_for_date
+    from kapibara.features.schedule.parser import lessons_for_date
     lessons = [l for l in lessons_for_date(raw, tomorrow) if l.get("start") and l.get("kind") != "сам. работа"]
     dl = _deadlines_text(deadlines, tomorrow)
     if not lessons and not dl:
@@ -106,16 +106,16 @@ def slot(now: datetime) -> str:
 
 async def send_all(bot, now: datetime | None = None):
     """Раз в 30 минут: сводка на завтра тем, у кого включена и выбрано это время."""
-    import config
+    from kapibara.core import config
     if not config.design2_on():
         return                                    # DESIGN2=0 — откат нового дизайна целиком
-    import delivery
-    import notify_prefs
-    import schedule_parser
+    from kapibara.features.notifications import delivery
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.schedule import parser as schedule_parser
     from database import get_all_optional_answers, get_deadlines_soon, get_reminder_users
-    from keyboards import app_button
-    from optional_subjects import HIDE
-    from scheduler import _group_raws, pace
+    from kapibara.bot.keyboards import app_button
+    from kapibara.features.groups.optional_subjects import HIDE
+    from kapibara.jobs.scheduler import _group_raws, pace
     now = now or datetime.now(TZ)
     at = slot(now)
     users = []
@@ -129,7 +129,7 @@ async def send_all(bot, now: datetime | None = None):
     raw_of = await _group_raws(lambda: schedule_parser.fetch_schedule_raw())
     answers = await get_all_optional_answers()
     weather = None                                # погоду берём один раз и только если кому-то нужна
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     for user, prefs in users:
         uid = user["user_id"]
         try:

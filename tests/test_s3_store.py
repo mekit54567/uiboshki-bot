@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-import s3_store
+from kapibara.ops import s3_store
 
 
 def test_sigv4_matches_aws_example():
@@ -28,7 +28,7 @@ def test_backup_keys_rotate():
 
 @pytest.mark.asyncio
 async def test_backup_goes_to_s3_not_telegram(db, monkeypatch):
-    import backup
+    from kapibara.ops import backup
     for k, v in {"BACKUP_S3_BUCKET": "b", "BACKUP_S3_KEY_ID": "id", "BACKUP_S3_SECRET": "sec"}.items():
         monkeypatch.setenv(k, v)
     sent = []

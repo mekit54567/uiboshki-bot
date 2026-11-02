@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from schedule_diff import annotate, merge_marks
+from kapibara.features.schedule.diff import annotate, merge_marks
 
 
 def ev(summary, time, location):
@@ -55,7 +55,7 @@ def test_annotate_marks_lessons_and_lists_cancelled():
 @pytest.mark.asyncio
 async def test_day_changes_only_home_group(db):
     from database import set_setting
-    from schedule_diff import MARKS_PREFIX, day_changes
+    from kapibara.features.schedule.diff import MARKS_PREFIX, day_changes
     d = date(2026, 9, 26)
     await set_setting(MARKS_PREFIX + d.isoformat(), json.dumps([
         {"summary": "ЛК Анализ данных", "time": "09:00–10:30", "location": "А-1", "cancelled": True, "at": "08:00"},
@@ -66,9 +66,9 @@ async def test_day_changes_only_home_group(db):
 @pytest.mark.asyncio
 async def test_check_records_marks(db, monkeypatch):
     """Проверка расписания записывает отметки: снимок был — пару убрали."""
-    import schedule_diff
+    from kapibara.features.schedule import diff as schedule_diff
     from database import save_schedule_snapshot
-    from schedule_diff import MARKS_PREFIX, marks_for
+    from kapibara.features.schedule.diff import MARKS_PREFIX, marks_for
     monkeypatch.setattr(schedule_diff, "parse_events_for_date",
                         lambda raw, d: [{"summary": A["summary"], "time": A["time"], "location": A["location"],
                                          "time_start": None}])

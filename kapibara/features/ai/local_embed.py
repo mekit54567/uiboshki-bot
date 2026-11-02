@@ -39,7 +39,7 @@ MODELS = {
     "e5-small": {"repo": "intfloat/multilingual-e5-small", "dims": 384, "query": "query: ", "doc": "passage: ",
                  "min_sim": 0.80},
 }
-FILES = ("config.json", "tokenizer.json", "model.safetensors")
+FILES = ("kapibara.core.config.json", "tokenizer.json", "model.safetensors")
 OPTIONAL = ("1_Pooling/config.json",)
 MAX_TOKENS = 512
 IDLE_UNLOAD = 600               # сек без запросов — модель выгружается
@@ -62,7 +62,7 @@ def model_dir(key: str) -> str:
 
 async def download(key: str) -> str:
     """Скачать файлы модели, если их ещё нет. → папка модели."""
-    import net
+    from kapibara.core import net
     base = (os.getenv("EMBED_HF_BASE") or "https://huggingface.co").rstrip("/")
     repo, folder = MODELS[key]["repo"], model_dir(key)
     for name in FILES + OPTIONAL:
@@ -146,9 +146,9 @@ class Encoder:
 
     def __init__(self, folder: str):
         from tokenizers import Tokenizer
-        with open(os.path.join(folder, "config.json"), encoding="utf-8") as f:
+        with open(os.path.join(folder, "kapibara.core.config.json"), encoding="utf-8") as f:
             cfg = json.load(f)
-        pool_path = os.path.join(folder, "1_Pooling", "config.json")
+        pool_path = os.path.join(folder, "1_Pooling", "kapibara.core.config.json")
         pool = {}
         if os.path.exists(pool_path):
             with open(pool_path, encoding="utf-8") as f:

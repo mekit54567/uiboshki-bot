@@ -27,7 +27,7 @@ def is_open(start: datetime, now: datetime) -> bool:
 
 def problem(text: str) -> str | None:
     """Почему комментарий не принять (текст для человека) или None."""
-    import nick_filter
+    from kapibara.features.social import nick_filter
     if not text:
         return "напиши комментарий"
     if len(text) > TEXT_MAX:
@@ -63,8 +63,8 @@ async def delete(comment_id: int):
 async def items(group_id: int, key: str, viewer_id: int) -> list[dict]:
     """Комментарии пары по порядку, без скрытых зрителем авторов и без тех, кто
     удаляет данные (privacy). Автор — ник рейтинга или «Имя Ф.»."""
-    import nick_filter
-    import ugc
+    from kapibara.features.social import nick_filter
+    from kapibara.features.social import ugc
     from database.privacy import NOT_ERASING_FOR
     async with connect() as db:
         db.row_factory = aiosqlite.Row

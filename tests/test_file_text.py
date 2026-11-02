@@ -2,7 +2,7 @@
 file_text.extract_text: реальный round-trip кодировок (не моки decode),
 плюс базовое поведение на неподдерживаемых/битых файлах.
 """
-import file_text
+from kapibara.features.lectures import text as file_text
 
 
 def test_txt_utf8():

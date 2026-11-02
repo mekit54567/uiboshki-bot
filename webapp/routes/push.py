@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/api/push/key")
 async def push_key(user: dict = CurrentUser):
-    import webpush
+    from kapibara.features.notifications import webpush
     return {"key": webpush.public_key_b64()}
 
 
@@ -71,7 +71,7 @@ APNS_TOKEN_RE = re.compile(r"^[0-9a-fA-F]{64,200}$")     # идёт в адре�
 @router.get("/api/push/app")
 async def app_push_config(user: dict = CurrentUser):
     """Какие каналы включены на сервере: нет ни одного — тумблера в приложении нет."""
-    import app_push
+    from kapibara.features.notifications import app_push
     return {"platforms": app_push.platforms(), "version": app_push.VERSION}
 
 
@@ -91,8 +91,8 @@ def _check_token(platform: str, token: str):
 
 @router.post("/api/push/app/subscribe")
 async def app_push_subscribe(body: AppPushSub, request: Request, user: dict = CurrentUser):
-    import app_push
-    import sdo_accounts
+    from kapibara.features.notifications import app_push
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database.app_push import save_app_push
     from webapp.routes.auth import _device
     _check_token(body.platform, body.token)

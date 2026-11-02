@@ -24,8 +24,8 @@ from datetime import date, datetime, timedelta, timezone
 import aiosqlite
 import httpx
 
-import pulse_accounts
-import pulse_probe
+from kapibara.features.pulse import accounts as pulse_accounts
+from kapibara.features.pulse import probe as pulse_probe
 from database._conn import connect
 
 logger = logging.getLogger(__name__)

@@ -25,7 +25,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import net  # noqa: E402
+from kapibara.core import net  # noqa: E402
 
 TIMEOUT = 15
 ROOT = Path(__file__).resolve().parent.parent
@@ -306,7 +306,7 @@ async def check_sdo_cookie() -> Result:
     cookie = env("SDO_SESSION_COOKIE")
     if not cookie:
         return Result(OFF, "не задана — общий синк дедлайнов не идёт")
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     try:
         alive = await sdo_accounts.check(cookie)
     except Exception as e:
@@ -317,7 +317,7 @@ async def check_sdo_cookie() -> Result:
 def check_crypt_key() -> Result:
     if not env("SDO_CRYPT_KEY") and not env("SDO_CRYPT_PASSPHRASE"):
         return Result(WARN, "не задан — входы СДО шифруются ключом от BOT_TOKEN")
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     if env("SDO_CRYPT_KEY") and not sdo_accounts._key_ok(env("SDO_CRYPT_KEY")):
         return Result(BAD, "SDO_CRYPT_KEY — не ключ Fernet (44 знака base64)")
     probe = sdo_accounts.decrypt(sdo_accounts.encrypt("проверка"))
@@ -328,7 +328,7 @@ def check_backup_key() -> Result:
     v = env("BACKUP_KEY")
     if not v:
         return Result(WARN, "не задан — ночная копия базы уходит в Telegram без шифрования")
-    import backup
+    from kapibara.ops import backup
     key = backup.backup_key()
     raw = backup.encrypt(b"probe", key)
     if backup.decrypt(raw, key) != b"probe":
@@ -345,7 +345,7 @@ async def check_s3() -> Result:
         return Result(OFF, "не задано (копия — в Telegram, решение 19.10)")
     if len(have) < 3:
         return Result(BAD, "нужны все три: " + ", ".join(n for n in names if n not in have) + " не заданы")
-    import s3_store
+    from kapibara.ops import s3_store
     try:
         code, _ = await s3_store.get("kap-check/no-such-file")
     except Exception as e:
@@ -460,7 +460,7 @@ async def check_apple() -> Result:
         return Result(OFF, "не задан — кнопки «Войти через Apple» нет")
     if len(have) < 3:
         return Result(BAD, ", ".join(n for n in names if n not in have) + " не заданы")
-    import apple_signin
+    from kapibara.features.identity import apple as apple_signin
     try:
         secret = apple_signin.client_secret()
     except Exception as e:
@@ -492,7 +492,7 @@ def check_review_code() -> Result:
 async def check_fcm() -> Result:
     if not env("FCM_SERVICE_ACCOUNT"):
         return Result(OFF, "не задан — пушей на Android через Google нет")
-    import app_push
+    from kapibara.features.notifications import app_push
     acc = app_push._fcm_account()
     if acc is None:
         return Result(BAD, "не JSON сервисного аккаунта Firebase (или нет полей)")
@@ -509,7 +509,7 @@ async def check_rustore() -> Result:
         return Result(OFF, "не задан — пушей через RuStore нет")
     if len(have) < 2:
         return Result(BAD, "нужны оба: RUSTORE_PROJECT_ID и RUSTORE_SERVICE_TOKEN")
-    import app_push
+    from kapibara.features.notifications import app_push
     try:
         code, body = await app_push._request(
             app_push.RUSTORE_URL.format(project=env("RUSTORE_PROJECT_ID")),
@@ -527,7 +527,7 @@ async def check_rustore() -> Result:
 async def check_apns() -> Result:
     if not env("APNS_KEY_ID") and not env("APNS_PRIVATE_KEY"):
         return Result(OFF, "не задан — пушей на iPhone нет")
-    import app_push
+    from kapibara.features.notifications import app_push
     if not app_push._apns_ok():
         return Result(BAD, "нужны APNS_KEY_ID, APNS_PRIVATE_KEY и APNS_TEAM_ID (или APPLE_TEAM_ID)")
     try:
@@ -555,7 +555,7 @@ async def check_apns() -> Result:
 def check_vapid() -> Result:
     if not env("VAPID_PRIVATE_KEY"):
         return Result(NOTE, "не задан — ключ веб-пушей берётся от BOT_TOKEN (сменишь токен — подписки слетят)")
-    import webpush
+    from kapibara.features.notifications import webpush
     try:
         webpush.private_key()
     except Exception as e:
@@ -567,7 +567,7 @@ def check_vapid() -> Result:
 
 def check_embed() -> Result:
     raw = os.getenv("EMBED_PROVIDER", "gemini").strip()
-    import local_embed
+    from kapibara.features.ai import local_embed
     key = raw[len("local:"):] if raw.startswith("local:") else raw
     if key not in ("gemini", *local_embed.MODELS):
         return Result(BAD, f"«{raw}» — нет такой модели, поиск уйдёт в Gemini")
@@ -575,7 +575,7 @@ def check_embed() -> Result:
 
 
 def check_hosting() -> Result:
-    import privacy
+    from kapibara.features.privacy import privacy
     h = privacy._host()
     if h["name"] != "Amvera" and h["org"] == h["name"]:
         return Result(BAD, f"юрлица хостинга {h['name']} нет ни в коде, ни в HOSTING_ORG — в политике пусто")

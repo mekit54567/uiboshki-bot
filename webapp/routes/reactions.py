@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 def _when(start: str) -> datetime:
-    from utils import TZ
+    from kapibara.core.utils import TZ
     start = start.strip()
     try:   # «…Z» из приложения: fromisoformat до Python 3.11 его не понимает
         when = datetime.fromisoformat(start[:-1] + "+00:00" if start[-1:] in ("Z", "z") else start)
@@ -35,8 +35,8 @@ def _check(title: str):
 
 @router.get("/api/lesson/reactions")
 async def api_reactions(start: str, title: str, user: dict = CurrentUser):
-    import lesson_reactions as lr
-    from utils import TZ
+    from kapibara.features.social import reactions as lr
+    from kapibara.core.utils import TZ
     when = _when(start)
     _check(title)
     out = await lr.get(await _group(user), lr.lesson_key(when, title), user["id"])
@@ -52,9 +52,9 @@ class ReactionBody(BaseModel):
 
 @router.post("/api/lesson/reactions")
 async def api_reaction_set(body: ReactionBody, user: dict = CurrentUser):
-    import lesson_reactions as lr
-    import ratelimit
-    from utils import TZ
+    from kapibara.features.social import reactions as lr
+    from kapibara.core import ratelimit
+    from kapibara.core.utils import TZ
     when = _when(body.start)
     _check(body.title)
     if body.kind and body.kind not in lr.KINDS:
@@ -75,9 +75,9 @@ async def api_reaction_set(body: ReactionBody, user: dict = CurrentUser):
 
 @router.get("/api/lesson/comments")
 async def api_comments(start: str, title: str, user: dict = CurrentUser):
-    import lesson_comments as lc
-    import lesson_reactions as lr
-    from utils import TZ
+    from kapibara.features.social import comments as lc
+    from kapibara.features.social import reactions as lr
+    from kapibara.core.utils import TZ
     when = _when(start)
     _check(title)
     items = await lc.items(await _group(user), lr.lesson_key(when, title), user["id"])
@@ -92,10 +92,10 @@ class CommentBody(BaseModel):
 
 @router.post("/api/lesson/comments")
 async def api_comment_add(body: CommentBody, user: dict = CurrentUser):
-    import lesson_comments as lc
-    import lesson_reactions as lr
-    import ratelimit
-    from utils import TZ
+    from kapibara.features.social import comments as lc
+    from kapibara.features.social import reactions as lr
+    from kapibara.core import ratelimit
+    from kapibara.core.utils import TZ
     when = _when(body.start)
     _check(body.title)
     if not lc.is_open(when, datetime.now(TZ)):
@@ -114,7 +114,7 @@ async def api_comment_add(body: CommentBody, user: dict = CurrentUser):
 @router.delete("/api/lesson/comments/{comment_id}")
 async def api_comment_delete(comment_id: int, user: dict = CurrentUser):
     """Убрать комментарий: свой — автор, любой своей группы — её староста."""
-    import lesson_comments as lc
+    from kapibara.features.social import comments as lc
     from database import is_editor
     c = await lc.get(comment_id)
     gid = await _group(user)
@@ -137,7 +137,7 @@ def _teacher(name: str) -> str:
 
 @router.get("/api/teacher/rating")
 async def api_teacher_rating(name: str, user: dict = CurrentUser):
-    import teacher_rating as tr
+    from kapibara.features.social import teacher_rating as tr
     name = _teacher(name)
     out = await tr.summary(name, user["id"])
     out["can_rate"] = out["mine"] is not None or await tr.can_rate(user["id"], name)
@@ -151,8 +151,8 @@ class RatingBody(BaseModel):
 
 @router.post("/api/teacher/rating")
 async def api_teacher_rate(body: RatingBody, user: dict = CurrentUser):
-    import ratelimit
-    import teacher_rating as tr
+    from kapibara.core import ratelimit
+    from kapibara.features.social import teacher_rating as tr
     name = _teacher(body.name)
     if body.score and body.score not in tr.SCORES:
         raise HTTPException(status_code=400, detail="оценка — от 1 до 5")

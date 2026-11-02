@@ -77,7 +77,7 @@ def _browse(url: str, init_data: str):
 async def test_home_opens_without_js_errors(db, monkeypatch):
     import bot
     import handlers.weather
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.deps as deps
 
     async def mirea_down(*a, **k):
@@ -87,7 +87,7 @@ async def test_home_opens_without_js_errors(db, monkeypatch):
         return ""
 
     monkeypatch.setattr(deps, "BOT_TOKEN", BOT_TOKEN)
-    import config
+    from kapibara.core import config
     await db.upsert_user(222, "", "Alice")
     await db.set_user_group(222, config.HOME_GROUP_ID)          # группа уже выбрана — лист выбора не мешает
     monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", mirea_down)
@@ -249,8 +249,8 @@ async def test_site_narrow_layout(db, monkeypatch):
     вбок, кнопка «демо в отдельной вкладке» пряталась под телефоном, фамилия в
     заголовке расписания рвалась посреди слова."""
     import bot
-    import ratelimit
-    import schedule_index
+    from kapibara.core import ratelimit
+    from kapibara.features.schedule import index as schedule_index
     import webapp.routes.schedule as sched
 
     async def search(q="", type=0, user=None):
@@ -317,8 +317,8 @@ async def test_narrow_phone_chat_code_and_onboarding(db, monkeypatch):
     """Блок кода в ответе ИИ раздвигал страницу вбок; на 320×568 в полном
     экране кнопка «Дальше» знакомства уезжала за нижний край."""
     import bot
-    import config
-    import schedule_parser
+    from kapibara.core import config
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.deps as deps
 
     async def mirea_down(*a, **k):
@@ -393,9 +393,9 @@ async def test_layout_safe_area_narrow_and_wide(db, monkeypatch):
     времени вылезало за лист на 320px, «Поиск» ездил вбок, на компьютере всё
     тянулось на 1280px."""
     import bot
-    import config
+    from kapibara.core import config
     import handlers.weather
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.deps as deps
 
     async def mirea_down(*a, **k):
@@ -555,7 +555,7 @@ def _vote_page(url: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_ai_vote_page_keeps_picks_on_server(db, monkeypatch):
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     import bot
     import webapp.deps as deps
     from webapp.routes import aitest

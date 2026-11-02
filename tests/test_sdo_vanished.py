@@ -3,13 +3,13 @@
 (решение владельца 08.10)."""
 import pytest
 
-import sdo_parser
+from kapibara.features.sdo import parser as sdo_parser
 from tests.test_group_sdo import DONOR, OTHER, _events, group  # noqa: F401 — фикстура
 
 
 @pytest.mark.asyncio
 async def test_vanished_task_goes_after_two_syncs(group, monkeypatch):  # noqa: F811
-    import group_sync
+    from kapibara.features.groups import sync as group_sync
     db = group
     shown = [_events(7, 8)]
 
@@ -20,7 +20,7 @@ async def test_vanished_task_goes_after_two_syncs(group, monkeypatch):  # noqa: 
         return ["Финансовый анализ"]
 
     monkeypatch.setattr(sdo_parser, "fetch_calendar_events", calendar)
-    monkeypatch.setattr("schedule_parser.get_group_subjects", subjects)
+    monkeypatch.setattr("kapibara.features.schedule.parser.get_group_subjects", subjects)
     await db.set_sdo_share(DONOR, True)
     home = await db.add_deadline(subject="Своё задание", description="", due_date="2099-01-01",
                                  due_time="23:59", created_by=0, external_id="sdo:999")

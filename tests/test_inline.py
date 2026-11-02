@@ -38,7 +38,7 @@ async def _ask(text: str):
 
 @pytest.fixture
 def schedule(monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     async def today():
         return "📅 <b>Сегодня</b>\nМатан"
@@ -72,7 +72,7 @@ async def test_day_word_filters(schedule):
 
 @pytest.mark.asyncio
 async def test_teacher_search_skips_slow(monkeypatch):
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     from handlers import inline, schedule as sched
 
     async def search(q, types=(1, 2, 3), limit=20):

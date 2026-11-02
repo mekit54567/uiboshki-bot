@@ -10,7 +10,7 @@ files (и тексты лекций); sdo (входы и история балл
 Подключение — database._conn.connect().
 """
 
-from config import DATABASE_PATH
+from kapibara.core.config import DATABASE_PATH
 
 from database.schema import (
     init_db,

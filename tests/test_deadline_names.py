@@ -3,8 +3,8 @@
 [I.26-27])» → «Практика 2 · Анализ данных (Экз)»."""
 import pytest
 
-import deadline_names
-import sdo_parser
+from kapibara.features.deadlines import names as deadline_names
+from kapibara.features.sdo import parser as sdo_parser
 
 AD = "Анализ данных_Экзамен (часть 1/1) [I.26-27]"
 MBP = "Моделирование бизнес-процессов_Зачет (часть 1/2) [I.26-27]"

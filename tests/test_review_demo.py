@@ -6,16 +6,16 @@ from datetime import date, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-import review_demo
-from utils import TZ
+from kapibara.features.content import review_demo
+from kapibara.core.utils import TZ
 
 CODE = "kapibara-review-2026"
 
 
 @pytest.fixture
 def client(db, monkeypatch):
-    import config
-    import ratelimit
+    from kapibara.core import config
+    from kapibara.core import ratelimit
     import webapp.server as server
     monkeypatch.setattr(config, "REVIEW_CODE", CODE)
     ratelimit.reset()
@@ -38,7 +38,7 @@ def test_code_login_and_flag(client):
 
 
 def test_off_without_code(db, monkeypatch):
-    import config
+    from kapibara.core import config
     import webapp.server as server
     monkeypatch.setattr(config, "REVIEW_CODE", "")
     c = TestClient(server.app)
@@ -49,7 +49,7 @@ def test_off_without_code(db, monkeypatch):
 def test_short_code_is_ignored(monkeypatch):
     import importlib
 
-    import config
+    from kapibara.core import config
     monkeypatch.setenv("REVIEW_CODE", "123")
     try:
         assert importlib.reload(config).REVIEW_CODE == ""
@@ -121,9 +121,9 @@ def test_real_users_are_not_intercepted(client, monkeypatch):
 def model(monkeypatch):
     """Подменённая модель: запоминает историю и системный контекст, отвечает
     разным текстом на разные вопросы (со ссылкой [1], если есть лекции)."""
-    import ai_solver
-    import group_context
-    import semantic_search
+    from kapibara.features.ai import solver as ai_solver
+    from kapibara.features.groups import context as group_context
+    from kapibara.features.ai import semantic_search
     calls = []
 
     async def fake(history, subject="", extra_system="", lectures=""):
@@ -171,7 +171,7 @@ def test_demo_chat_asks_real_model(client, model):
 
 async def test_demo_context_from_fixtures_not_db(client, model):
     from database import add_deadline
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     await add_deadline("Настоящий дедлайн из базы", "", today_msk().isoformat(), "23:59", 1)
     h = _login(client)
     assert _ask(client, h, "что сдавать?").status_code == 200
@@ -179,12 +179,12 @@ async def test_demo_context_from_fixtures_not_db(client, model):
     assert "Настоящий дедлайн" not in ctx
     assert "Моделирование бизнес-процессов" in ctx and "Баллы БРС" in ctx
     assert "Ближайшие дедлайны" in ctx or "дедлайнов на ближайшие" in ctx
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     assert await ai_quota.today() == {}                         # счёт людей не тронут
 
 
 def test_demo_chat_model_error_gives_fixture(client, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
 
     async def broken(*a, **k):
         raise RuntimeError("модель упала")
@@ -196,7 +196,7 @@ def test_demo_chat_model_error_gives_fixture(client, monkeypatch):
 
 
 def test_demo_chat_limits_and_think(client, model, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     h = _login(client)
     r = client.post("/api/chat", json={"history": [{"role": "user", "content": "x"}], "think": True}, headers=h)
     assert r.status_code == 403
@@ -208,7 +208,7 @@ def test_demo_chat_limits_and_think(client, model, monkeypatch):
 
 
 def test_trial_text_on_ios_without_subscription():
-    import ai_quota
+    from kapibara.features.ai import quota as ai_quota
     assert "подписк" in ai_quota.text("trial")
     assert "подписк" not in ai_quota.text("trial", app="ios")
     assert "подписк" not in ai_quota.text("trial", app="IOS")

@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/api/rating")
 async def api_rating(user: dict = CurrentUser):
-    import xp
+    from kapibara.features.social import xp
     from database.groups import get_user_group, home, viewer_group
     gid = await get_user_group(user["id"]) or home()
     # люди «своей» группы с тумблером «группе» — только тем, кто правда в ней
@@ -21,7 +21,7 @@ async def api_rating(user: dict = CurrentUser):
 
 @router.get("/api/rating/group/{group_id}")
 async def api_rating_group(group_id: int, user: dict = CurrentUser):
-    import xp
+    from kapibara.features.social import xp
     from database.groups import viewer_group
     data = await xp.group_view(user["id"], await viewer_group(user["id"]), group_id)
     if data is None:
@@ -39,8 +39,8 @@ class ProfileBody(BaseModel):
 @router.put("/api/rating/me")
 async def api_rating_me(body: ProfileBody, user: dict = CurrentUser,
                         x_telegram_init_data: str = Header(default=""), x_app: str = Header(default="")):
-    import ratelimit
-    import xp
+    from kapibara.core import ratelimit
+    from kapibara.features.social import xp
     from webapp.routes.legal import _via
     if body.nick is not None and not ratelimit.allow("nick", user["id"]):
         raise HTTPException(429, "Много смен ника подряд — подожди немного")

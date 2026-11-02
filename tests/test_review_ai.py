@@ -10,8 +10,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, PhotoSize, Update, User
 
-import ai_solver
-import gemini_solver
+from kapibara.features.ai import solver as ai_solver
+from kapibara.features.ai import gemini as gemini_solver
 from tests.test_solver_render import RecordingSession
 
 USER = User(id=777, is_bot=False, first_name="Bob")
@@ -79,7 +79,7 @@ async def test_download_name_and_type_not_from_path(db, monkeypatch):
     ("скинь лекцию по финансовому менеджменту", ["Финансовый менеджмент"]),
 ])
 def test_file_request_ignores_short_function_words(text, expected):
-    import file_request
+    from kapibara.features.lectures import request as file_request
     subjects = ["Программирование на Python", "Финансовый менеджмент", "Анализ данных"]
     assert file_request.match_subjects(text, subjects) == expected
 
@@ -87,7 +87,7 @@ def test_file_request_ignores_short_function_words(text, expected):
 # ── 4. Быстрые ответы — поиск по теме прошлых вопросов ──────────────────────
 
 def test_search_query_for_follow_ups():
-    import lecture_picker
+    from kapibara.features.lectures import picker as lecture_picker
     q = "Что такое дисконтирование денежных потоков?"
     hist = [{"role": "user", "content": q}, {"role": "assistant", "content": "Это…"}]
     for quick in ("Объясни то же самое короче, в 3–4 предложениях.", "Разбери подробнее, по шагам.",
@@ -101,8 +101,8 @@ def test_search_query_for_follow_ups():
 @pytest.mark.asyncio
 async def test_webapp_quick_reply_searches_previous_question(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import lecture_picker
-    import semantic_search
+    from kapibara.features.lectures import picker as lecture_picker
+    from kapibara.features.ai import semantic_search
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     fid = await db.add_file("ЛК1", "Финансы", "TG1", "lk1.pdf", 0)
@@ -215,7 +215,7 @@ def ai(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_bot_solver_rate_limited(db, dp, bot, ai, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     monkeypatch.setitem(ratelimit.LIMITS, "ai", (1, 60))
     await _feed(dp, bot, "Найди производную функции x в кубе плюс два")
     await _feed(dp, bot, "Найди производную функции x в квадрате плюс три")
@@ -252,7 +252,7 @@ async def test_photo_in_dialog_not_lost(db, dp, bot, ai):
 
 @pytest.mark.asyncio
 async def test_bot_dialog_follow_up_searches_by_task(db, dp, bot, ai, monkeypatch):
-    import lecture_picker
+    from kapibara.features.lectures import picker as lecture_picker
     fid = await db.add_file("ЛК1", "Финансы", "TG1", "lk1.pdf", 0)
     await db.save_file_text(fid, "Дисконтирование денежных потоков")
     queries = []
@@ -264,7 +264,7 @@ async def test_bot_dialog_follow_up_searches_by_task(db, dp, bot, ai, monkeypatc
     async def subjects(**_):
         return ["Финансы"]
 
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     monkeypatch.setattr(schedule_parser, "get_group_subjects", subjects)
     monkeypatch.setattr(lecture_picker, "pick", fake_pick)
     await _feed(dp, bot, "/solve")
@@ -344,8 +344,8 @@ def _balanced(html: str) -> bool:
     "Строка: " + "a<b&c " * 2000,                        # одна огромная строка
 ], ids=["code", "long-line"])
 def test_md_chunks_fit_after_escaping(text):
-    from long_messages import LIMIT
-    from utils import md_to_tg_html_chunks
+    from kapibara.bot.long_messages import LIMIT
+    from kapibara.core.utils import md_to_tg_html_chunks
     chunks = md_to_tg_html_chunks(text)
     assert len(chunks) > 1
     for ch in chunks:
@@ -357,7 +357,7 @@ def test_md_chunks_fit_after_escaping(text):
 
 @pytest.mark.asyncio
 async def test_fallback_summary_not_saved(db, monkeypatch):
-    import lecture_summary
+    from kapibara.features.lectures import summary as lecture_summary
     fid = await db.add_file("ЛК1", "Бухучёт", "TG1", "lk1.pdf", 0)
     await db.save_file_text(fid, "Дебет и кредит. " * 50)
     answers = ["**Учёт**\n- Дебет слева, кредит справа, баланс сходится" + ai_solver.FALLBACK_NOTE_DS,

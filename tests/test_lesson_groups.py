@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-import schedule_index
-from schedule_events import groups_at
+from kapibara.features.schedule import index as schedule_index
+from kapibara.features.schedule.events import groups_at
 from tests.test_webapp_auth import _make_init_data
-from utils import TZ
+from kapibara.core.utils import TZ
 
 DAY = (datetime.now(TZ) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
 
@@ -40,7 +40,7 @@ def test_groups_at_takes_codes_of_the_lesson_going_then():
 
 @pytest.mark.asyncio
 async def test_lesson_groups_endpoint(db, monkeypatch):
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     import webapp.server as server
 
     await schedule_index._save([(3, 501, "А-17 (В-78)"), (3, 502, "А-17 (МП-1)"), (2, 77, "Стебунова О. И.")])

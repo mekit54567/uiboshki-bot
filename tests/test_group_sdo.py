@@ -3,8 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-import config
-import sdo_parser
+from kapibara.core import config
+from kapibara.features.sdo import parser as sdo_parser
 
 HOME = config.HOME_GROUP_ID
 OTHER = 5001
@@ -13,7 +13,7 @@ DONOR, MATE, STRANGER = 401, 402, 403
 
 @pytest.fixture
 async def group(db):
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database.groups import upsert_group
     await upsert_group(OTHER, "УИБО-01-24")
     for uid, gid in ((DONOR, OTHER), (MATE, OTHER), (STRANGER, HOME)):
@@ -32,7 +32,7 @@ def _events(*ids):
 
 @pytest.mark.asyncio
 async def test_group_deadlines_come_only_with_consent(group, monkeypatch):
-    import group_sync
+    from kapibara.features.groups import sync as group_sync
     db = group
     got_cookie = []
 
@@ -44,7 +44,7 @@ async def test_group_deadlines_come_only_with_consent(group, monkeypatch):
         return ["Финансовый анализ"]
 
     monkeypatch.setattr(sdo_parser, "fetch_calendar_events", calendar)
-    monkeypatch.setattr("schedule_parser.get_group_subjects", subjects)
+    monkeypatch.setattr("kapibara.features.schedule.parser.get_group_subjects", subjects)
     assert await db.get_sharing_groups() == []                               # не согласился — синка нет
     assert (await group_sync.sync_group(OTHER))["error"]
     assert await db.set_sdo_share(DONOR, True)
@@ -87,7 +87,7 @@ async def test_uploaded_file_lands_in_uploaders_group(group):
 
 @pytest.mark.asyncio
 async def test_share_toggle_api(group, monkeypatch):
-    import group_sync
+    from kapibara.features.groups import sync as group_sync
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

@@ -82,7 +82,7 @@ def text_parts(text: str, size: int = 1500) -> list[str]:
 def pages_of(data: bytes, file_name: str) -> tuple[str, list[str]]:
     """(вид места, тексты по порядку): PDF — страницы, PPTX — слайды, прочее —
     части. Не разобралось — ("", [])."""
-    from file_text import extract_text
+    from kapibara.features.lectures.text import extract_text
     name = (file_name or "").lower()
     try:
         if name.endswith(".pdf"):
@@ -214,7 +214,7 @@ async def _schema(db, dims: int):
         await db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0("
                          f"embedding float[{int(dims)}] distance_metric=cosine)")
         await db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('dims', ?)", (str(dims),))
-        import embedder
+        from kapibara.features.ai import embedder
         for p in {embedder.provider(), embedder.precompute()} - {embedder.GEMINI, None}:
             # своя модель — свои таблицы: векторы Gemini не трогаем, переключение обратно мгновенное
             await db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS {embedder.vec_table(p)} USING vec0("
@@ -232,7 +232,7 @@ async def _vector_tables(db) -> list[str]:
 
 
 async def has_vectors(db, p: str) -> bool:
-    import embedder
+    from kapibara.features.ai import embedder
     if not VEC_OK:
         return False
     done = embedder.done_table(p)
@@ -248,7 +248,7 @@ async def open_index():
     """Подключение к индексу: sqlite-vec (если есть), схема, основная база
     как m — файлы и предметы берутся оттуда живыми."""
     import database
-    from config import GEMINI_EMBED_DIMS
+    from kapibara.core.config import GEMINI_EMBED_DIMS
     from database._conn import BUSY_SECONDS
     db = await aiosqlite.connect(index_path(), timeout=BUSY_SECONDS)
     try:
@@ -300,7 +300,7 @@ async def embed_pending(max_batches: int = 8, pause: float = 1.0, p: str | None 
     """Досчитать векторы кускам без них — пачками, пока не кончатся или Gemini
     не скажет «лимит» (тогда — в следующий проход). p — модель (embedder.py),
     по умолчанию та, что ищет сейчас. → сколько посчитано."""
-    import embedder
+    from kapibara.features.ai import embedder
     p = p or embedder.provider()
     table, done_t = embedder.vec_table(p), embedder.done_table(p)
     todo = f"c.id NOT IN (SELECT id FROM {done_t})" if done_t else "c.embedded = 0"
@@ -366,12 +366,12 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
         except Exception as e:
             logger.warning(f"индекс: файл {fid}: {type(e).__name__}: {e}")
     embedded = await embed_pending(max_batches)
-    import embedder
+    from kapibara.features.ai import embedder
     if embedder.precompute():           # векторы другой модели заранее (до переезда)
         embedded += await embed_pending(max_batches, pause=0, p=embedder.precompute())
     st = await stats()
     try:
-        import health
+        from kapibara.ops import health
         await health.note("semantic", True, f"{st['chunks']} фрагментов из {st['files']} файлов, "
                                             f"с векторами {st['embedded']}")
     except Exception:
@@ -382,7 +382,7 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
 async def stats() -> dict:
     async with open_index() as db:
         files = (await (await db.execute("SELECT COUNT(*) FROM indexed_files")).fetchone())[0]
-        import embedder
+        from kapibara.features.ai import embedder
         p = embedder.provider()
         if embedder.done_table(p):
             chunks = (await (await db.execute("SELECT COUNT(*) FROM chunks")).fetchone())[0]

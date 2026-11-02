@@ -1,7 +1,7 @@
 """Новые задания из СДО — каждому, у кого включено (new_tasks.py)."""
 import pytest
 
-import new_tasks
+from kapibara.features.notifications import new_tasks
 
 
 class FakeBot:
@@ -61,7 +61,7 @@ async def test_moved_deadline_announced(db):
 @pytest.mark.asyncio
 async def test_optional_subject_skipped_unless_attends(db, monkeypatch):
     """Задание по предмету по выбору — только тем, кто ответил «хожу»."""
-    import config
+    from kapibara.core import config
     monkeypatch.setattr(config, "OPTIONAL_SUBJECTS", ["Военная кафедра"])
     await db.upsert_user(1, "", "")
     await db.upsert_user(2, "", "")
@@ -74,10 +74,10 @@ async def test_optional_subject_skipped_unless_attends(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_scheduler_sync_announces(monkeypatch):
     """Синк СДО по расписанию передаёт рассылке новые id и перенесённые сроки."""
-    import health
-    import new_tasks as nt
-    import scheduler
-    import sdo_parser
+    from kapibara.ops import health
+    from kapibara.features.notifications import new_tasks as nt
+    from kapibara.jobs import scheduler
+    from kapibara.features.sdo import parser as sdo_parser
     got = []
 
     async def sync():

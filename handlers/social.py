@@ -6,8 +6,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from database import create_vote, get_active_vote, add_vote_answer, get_vote_results, close_vote
-from config import STAROSTA_ID, STAROSTA_IDS
-from utils import esc
+from kapibara.core.config import STAROSTA_ID, STAROSTA_IDS
+from kapibara.core.utils import esc
 
 router = Router()
 

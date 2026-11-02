@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-import pulse_accounts
-import pulse_attendance
-import pulse_probe
+from kapibara.features.pulse import accounts as pulse_accounts
+from kapibara.features.pulse import attendance as pulse_attendance
+from kapibara.features.pulse import probe as pulse_probe
 from tests.test_pulse_probe import ME
 
 

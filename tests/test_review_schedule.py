@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from fastapi.testclient import TestClient
 
-from schedule_format import TZ
+from kapibara.features.schedule.format import TZ
 from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
 
 DAY = date(2026, 10, 1)          # четверг
@@ -41,7 +41,7 @@ def _fake_now(now):
 # ── 1. склейка только соседних пар ─────────────────────────────────────────
 
 def test_same_pairs_with_window_are_not_merged():
-    from schedule_parser import format_day, lessons_for_date, parse_events_for_date, week_overview
+    from kapibara.features.schedule.parser import format_day, lessons_for_date, parse_events_for_date, week_overview
     raw = _cal(_ev(DAY, "090000", "103000", "ПР Матан", "А-1"), _ev(DAY, "142000", "155000", "ПР Матан", "А-1"))
     lessons = lessons_for_date(raw, DAY, now=datetime(2026, 10, 1, 12, 0, tzinfo=TZ))
     assert [(l["num"], l["start"], l["end"], l["status"], l["pairs"]) for l in lessons] == [
@@ -67,7 +67,7 @@ def test_same_pairs_with_window_are_not_merged():
 
 @pytest.mark.asyncio
 async def test_next_lesson_number_by_bell(monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     from datetime import timedelta
     raw = _cal(_ev(DAY, "124000", "141000", "ЛК Физика", "А-1"),
                _ev(DAY + timedelta(days=1), "142000", "155000", "ПР Матан", "А-2"))
@@ -87,8 +87,8 @@ async def test_next_lesson_number_by_bell(monkeypatch):
 # ── 5. напоминания: блок — одно напоминание, подгруппы — все аудитории ──────
 
 def test_reminders_once_per_block_and_parallel_rooms():
-    import notify_prefs
-    from schedule_parser import parse_events_for_date
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.schedule.parser import parse_events_for_date
     raw = _cal(*(_ev(DAY, s, e, "ПР Военная кафедра", "ВК-1") for s, e in (
         ("090000", "103000"), ("104000", "121000"), ("124000", "141000"), ("142000", "155000"))))
     plan = notify_prefs.plan_reminders(parse_events_for_date(raw, DAY), notify_prefs.merge({}))
@@ -112,7 +112,7 @@ class _Bot:
 
 @pytest.mark.asyncio
 async def test_schedule_diff_per_person_and_empty_day(db, monkeypatch):
-    import schedule_diff
+    from kapibara.features.schedule import diff as schedule_diff
     raw = [b""]
 
     async def fake_raw():
@@ -194,7 +194,7 @@ def feed():
 @pytest.mark.asyncio
 async def test_long_note_rejected_and_old_long_note_does_not_break_today(db, feed, monkeypatch):
     import handlers.schedule as hs
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     today = today_msk().isoformat()
 
     calls = await feed(5, "/note сегодня Матан: " + "а" * 600)
@@ -218,7 +218,7 @@ async def test_long_note_rejected_and_old_long_note_does_not_break_today(db, fee
 @pytest.mark.asyncio
 async def test_starosta_deletes_note(db, feed):
     from tests.conftest import STAROSTA_ID
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     today = today_msk().isoformat()
     note_id = await db.add_lesson_note(today, "Матан", "ерунда", 5)
 
@@ -256,7 +256,7 @@ async def test_weather_cached(monkeypatch):
 @pytest.mark.asyncio
 async def test_api_today_weather_in_parallel(db, monkeypatch):
     import handlers.weather as weather
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
 
     async def slow_raw():
@@ -280,7 +280,7 @@ async def test_api_today_weather_in_parallel(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fetch_ical_checks_calendar_and_short_fallback(db, monkeypatch):
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     import webapp.server as server
     timeouts = []
     real_client = httpx.AsyncClient
@@ -302,7 +302,7 @@ async def test_fetch_ical_checks_calendar_and_short_fallback(db, monkeypatch):
     async def cut(target_id, target_type):      # календарь оборван — 502, а не 500
         return b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nDTSTART;TZID=Europe/Mos"
 
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     await schedule_index._save([(2, 100, "Блеко В. В.")])     # без похода за baseinfo в сеть
     monkeypatch.setattr(api, "fetch_ical", cut)
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -314,7 +314,7 @@ async def test_fetch_ical_checks_calendar_and_short_fallback(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_index_refresh_resumes(db, monkeypatch):
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     await schedule_index._set_state("built_at", str(int(time.time()) - 40 * 86400))
     await schedule_index._set_state("next_id_1", "9000")
     seen = []
@@ -345,7 +345,7 @@ async def test_index_refresh_resumes(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_real_build_clears_refreshing_mark(db, monkeypatch):
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     from tests.test_schedule_search import _mirror
     monkeypatch.setattr(schedule_index, "STOP_AFTER_MISSES", 5)
     await schedule_index._set_state("refreshing", "123")
@@ -358,7 +358,7 @@ async def test_real_build_clears_refreshing_mark(db, monkeypatch):
 # ── 11. /card — ссылка не вечная ────────────────────────────────────────────
 
 def test_card_link_expires(monkeypatch):
-    import schedule_card
+    from kapibara.features.schedule import card as schedule_card
     url = schedule_card.card_url("https://x.app/", "today")
     key, sig = url.split("/card/")[1].split(".jpg?sig=")
     assert schedule_card.parse_key(key, sig) == ("today", 0, 0)
@@ -374,7 +374,7 @@ async def test_fetch_ical_cached_single_flight(monkeypatch):
     """Чужое расписание: десять человек открыли одну группу — одна загрузка с
     зеркала; через 10 минут — заново; сбой не запоминается."""
     import asyncio
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     calls = []
 
     async def slow(target_id, target_type):

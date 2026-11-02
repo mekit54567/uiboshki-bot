@@ -61,7 +61,7 @@ _HASH_FLAG = 1 << 55
 
 
 def feed_author_hash(user_id: int) -> int:
-    from config import BOT_TOKEN
+    from kapibara.core.config import BOT_TOKEN
     key = hashlib.sha256(b"feed-author:" + (BOT_TOKEN or "").encode()).digest()
     digest = hmac.new(key, str(int(user_id)).encode(), hashlib.sha256).digest()
     return int.from_bytes(digest[:7], "big") | _HASH_FLAG
@@ -70,7 +70,7 @@ def feed_author_hash(user_id: int) -> int:
 async def anonymize_feed_authors():
     """Обезличить уже записанное: старше суток — 0, свежие настоящие id — хэш.
     Зовётся при старте бота (handlers.register_handlers) и при каждом посте."""
-    from config import FEED_COOLDOWN_MINUTES
+    from kapibara.core.config import FEED_COOLDOWN_MINUTES
     keep = f"-{max(24 * 60, FEED_COOLDOWN_MINUTES)} minutes"
     async with connect() as db:
         await db.execute("UPDATE feed_posts SET author_id=0 "

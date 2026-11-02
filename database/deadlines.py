@@ -2,8 +2,8 @@
 
 import aiosqlite
 
-from config import STAROSTA_ID, STAROSTA_IDS
-from utils import today_msk
+from kapibara.core.config import STAROSTA_ID, STAROSTA_IDS
+from kapibara.core.utils import today_msk
 from database._conn import connect
 
 

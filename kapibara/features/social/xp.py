@@ -65,7 +65,7 @@ async def _table_exists(db, name: str) -> bool:
 def _ach_worth() -> dict[str, int]:
     """Опыт за каждую ачивку по её рангу."""
     try:
-        from achievements import RANKS
+        from kapibara.features.social.achievements import RANKS
     except ImportError:
         return {}
     return {a: ACH_RANK.get(rank, ACH) for rank, ids in RANKS.items() for a in ids}
@@ -87,7 +87,7 @@ async def _raw() -> dict:
             "WHERE dd.via = 'sdo' AND d.due_date >= date('now', ?)", (window,))).fetchall()
         achs = []
         if await _table_exists(db, "achievements"):
-            from config import STAROSTA_IDS
+            from kapibara.core.config import STAROSTA_IDS
             # создателю ачивки открыты все сразу (5.91.4) — в опыт не идут
             achs = [r for r in await (await db.execute("SELECT user_id, ach_id, at FROM achievements")).fetchall()
                     if r[0] not in STAROSTA_IDS]
@@ -153,7 +153,7 @@ _SHOW_ALL_SQL = ("(COALESCE(p.show_all, 0) AND EXISTS (SELECT 1 FROM consents c 
 
 
 def _all_args() -> tuple[str, str]:
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     return CONSENT_ALL_KIND, legal_texts.RATING_ALL_VERSION
 
 
@@ -171,7 +171,7 @@ async def _people() -> dict[int, dict]:
 
 
 async def _group_names(ids) -> dict[int, str]:
-    import config
+    from kapibara.core import config
     from database.groups import home
     ids = list(ids)
     if not ids:
@@ -201,7 +201,7 @@ def _rank(groups: dict[int, dict]) -> tuple[list, dict]:
 
 
 def _groups(xp: dict, people: dict, names: dict) -> dict[int, dict]:
-    import institutes
+    from kapibara.features.groups import institutes
     groups: dict[int, dict] = {}
     for uid, person in people.items():
         mine = xp.get(uid)
@@ -230,7 +230,7 @@ async def board() -> dict:
     now = time.monotonic()
     if _cache and now - _cache[0] < CACHE_SECONDS:
         return _cache[1]
-    import privacy
+    from kapibara.features.privacy import privacy
     raw, people = await _raw(), await _people()
     # Без согласия или в ожидании удаления (privacy.blocked) — ни в опыте
     # группы, ни среди людей (ревью 152-ФЗ 18.10).
@@ -263,7 +263,7 @@ def _row(g: dict, mine: int) -> dict:
 
 
 def nick_of(person: dict) -> str:
-    import nick_filter
+    from kapibara.features.social import nick_filter
     return person.get("nick") or nick_filter.default(person.get("name") or "")
 
 
@@ -297,7 +297,7 @@ def _people_of(b: dict, group_id: int, viewer_id: int, member: bool) -> tuple[li
 
 
 def _group_full(b: dict, g: dict, viewer_gid: int) -> dict:
-    import institutes
+    from kapibara.features.groups import institutes
     inst = g.get("institute") or ""
     return {**_row(g, viewer_gid), "people": g["people"], "need": max(0, MIN_PEOPLE - g["people"]),
             "institute_name": institutes.INSTITUTES.get(inst, ""),
@@ -371,8 +371,8 @@ async def save(user_id: int, *, nick: str | None = None, show: bool | None = Non
     """nick='' — вернуть ник по умолчанию. Плохой ник → ValueError с причиной.
     Включить show_all — только с галочкой отдельного согласия: consent —
     версия текста legal_texts.RATING_ALL, которую человек видел."""
-    import legal_texts
-    import nick_filter
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.social import nick_filter
     from database.privacy import give_consent, revoke_consent
     cur = await profile(user_id)
     new_nick = cur["nick"]

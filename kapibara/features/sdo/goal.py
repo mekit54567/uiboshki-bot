@@ -94,7 +94,7 @@ async def get_modes(user_id: int) -> dict[str, str]:
 
 async def set_goal(user_id: int, course_id: int, label: str | None, key: str = "goals") -> dict[str, str]:
     from database import set_setting
-    from locks import lock
+    from kapibara.core.locks import lock
     async with lock(key, user_id):           # две цели подряд по разным предметам — сохраняются обе
         goals = await get_goals(user_id, key)
         if label:

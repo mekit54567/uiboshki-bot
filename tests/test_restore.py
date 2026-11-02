@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-import backup
+from kapibara.ops import backup
 
 
 @pytest.mark.asyncio

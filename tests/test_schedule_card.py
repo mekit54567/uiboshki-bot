@@ -7,9 +7,9 @@ from datetime import date, datetime, timedelta
 import pytest
 from PIL import Image
 
-import schedule_card
+from kapibara.features.schedule import card as schedule_card
 from tests.test_inline import _ask
-from utils import TZ
+from kapibara.core.utils import TZ
 
 L = {"num": 1, "pairs": 1, "start": "09:00", "end": "10:30", "title": "Моделирование бизнес-процессов",
      "kind": "лекция", "room": "А-15 (В-78)", "teacher": "Иванов И."}
@@ -53,7 +53,7 @@ def test_signed_key():
 
 def test_card_endpoint(monkeypatch):
     from fastapi.testclient import TestClient
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
     calls = []
 
@@ -78,14 +78,14 @@ def test_card_endpoint(monkeypatch):
 
 
 def test_build_own_today(monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     monkeypatch.setattr(schedule_parser, "lessons_for_date", lambda raw, d, now=None: [L])
     _img(schedule_card.build_own(b"", "today", datetime(2026, 10, 5, 8, 0, tzinfo=TZ), "УИБО", "bot"))
 
 
 @pytest.mark.asyncio
 async def test_inline_sends_photos_when_server_known(monkeypatch):
-    import config
+    from kapibara.core import config
     monkeypatch.setattr(config, "WEBAPP_URL", "https://bot.example")
     ans = await _ask("")
     assert [type(r).__name__ for r in ans.results] == ["InlineQueryResultPhoto"] * 3

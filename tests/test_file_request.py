@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, Update
 
-import file_request
+from kapibara.features.lectures import request as file_request
 from tests.test_deeplinks import USER, DocSession
 
 OPD = "Основы предпринимательской деятельности"
@@ -148,7 +148,7 @@ async def test_view_never_inlines_html(db, monkeypatch):
 async def test_webapp_chat_answers_file_request_without_ai(db, monkeypatch):
     # живой тест: в чате WebApp «скинь 5 лк по уч деят» ИИ пересказал чужую лекцию
     from fastapi.testclient import TestClient
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from database import add_file
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
@@ -171,7 +171,7 @@ async def test_webapp_chat_answers_file_request_without_ai(db, monkeypatch):
 async def test_webapp_chat_returns_lecture_sources(db, monkeypatch):
     # «📖 по: …» под ответом — какие лекции ушли ИИ, с id для перехода к файлу
     from fastapi.testclient import TestClient
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from database import add_file, save_file_text
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data

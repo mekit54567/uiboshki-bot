@@ -7,8 +7,8 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from config import is_starosta
-from utils import esc
+from kapibara.core.config import is_starosta
+from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 
 router = Router(name="rating")
@@ -18,7 +18,7 @@ router = Router(name="rating")
 async def cmd_nicks(message: Message):
     if not is_starosta(message.from_user.id):
         return
-    import xp
+    from kapibara.features.social import xp
     rows = await xp.unreviewed()
     if not rows:
         await message.answer("Новых ников нет.")
@@ -40,7 +40,7 @@ async def nick_reset(callback: CallbackQuery):
     if not is_starosta(callback.from_user.id):
         await callback.answer("Это кнопка владельца бота", show_alert=True)
         return
-    import xp
+    from kapibara.features.social import xp
     await xp.reset_nick(int(callback.data.rsplit(":", 1)[1]))
     await callback.answer("Сброшено: теперь имя, свой ник поставить нельзя")
     with cosmetic("rating.nick_reset"):
@@ -51,7 +51,7 @@ async def nick_reset(callback: CallbackQuery):
 async def cmd_institutes(message: Message):
     if not is_starosta(message.from_user.id):
         return
-    import institutes
+    from kapibara.features.groups import institutes
     from database._conn import connect
     async with connect() as db:
         try:
@@ -67,6 +67,6 @@ async def cmd_institutes(message: Message):
     unknown = [r["prefix"] for r in rows if not r["institute"]]
     text = "шифр\tинститут\tгрупп\tпример\n" + "\n".join(lines)
     await message.answer_document(
-        BufferedInputFile(text.encode("utf-8"), filename="institutes.tsv"),
+        BufferedInputFile(text.encode("utf-8"), filename="kapibara.features.groups.institutes.tsv"),
         caption=(f"Шифров: {len(rows)}. Без института: {', '.join(unknown[:30]) or 'нет'}.\n"
                  "Поправь, что не так, — пришли «ШИФР → институт», я внесу."))

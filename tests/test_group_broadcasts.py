@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import config
+from kapibara.core import config
 
 HOME = config.HOME_GROUP_ID
 OTHER = 5001
@@ -22,8 +22,8 @@ def _ical(summary: str, start: datetime) -> bytes:
 
 @pytest.fixture
 async def two_groups(db, monkeypatch):
-    import mirea_schedule_api
-    import scheduler
+    from kapibara.features.schedule import mirea_api as mirea_schedule_api
+    from kapibara.jobs import scheduler
     from database.groups import upsert_group
     await upsert_group(OTHER, "УИБО-01-24")
     for uid, gid in ((HOME_USER, HOME), (OTHER_USER, OTHER)):
@@ -55,7 +55,7 @@ class FakeBot:
 @pytest.mark.asyncio
 async def test_morning_uses_each_users_group(two_groups, monkeypatch):
     import handlers.weather as weather
-    import scheduler
+    from kapibara.jobs import scheduler
 
     async def no_weather():
         return ""
@@ -70,7 +70,7 @@ async def test_morning_uses_each_users_group(two_groups, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_lesson_reminder_for_other_group(two_groups, monkeypatch):
-    import scheduler
+    from kapibara.jobs import scheduler
     day = two_groups
 
     class FakeDatetime(datetime):

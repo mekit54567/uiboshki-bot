@@ -11,7 +11,7 @@ router = APIRouter()
 @router.get("/chimg/{slug}.jpg")
 async def channel_cover(slug: str):
     import asyncio
-    import channel_posts
+    from kapibara.features.content import channel_posts
     post = next((p for p in channel_posts.load_posts() if p["slug"] == slug), None)
     if not post or not post["images"]:
         raise HTTPException(404)

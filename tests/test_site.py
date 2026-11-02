@@ -82,8 +82,8 @@ def test_site_scripts_parse_and_demo_data_is_complete():
 
 @pytest.mark.asyncio
 async def test_public_search_and_target(db, monkeypatch):
-    import ratelimit
-    import schedule_index
+    from kapibara.core import ratelimit
+    from kapibara.features.schedule import index as schedule_index
     import webapp.routes.schedule as sched
 
     async def search(q, types, limit=30):

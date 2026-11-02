@@ -2,7 +2,7 @@
 import httpx
 import pytest
 
-import sdo_grades
+from kapibara.features.sdo import grades as sdo_grades
 
 
 def _item(level, kind, name, grade, rng, href="", cls=""):
@@ -88,7 +88,7 @@ def test_assign_page_and_status():
 @pytest.mark.asyncio
 async def test_webapp_grades(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -147,7 +147,7 @@ async def test_list_and_course_count_passed_the_same(db, monkeypatch):
     правилом: оценка 6 при проходном 7 со страницы задания не зачтена и там,
     и там (страница — из кэша, когда экран предмета уже открывали)."""
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -186,7 +186,7 @@ async def test_list_and_course_count_passed_the_same(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_pulse_check(monkeypatch):
-    import pulse_check
+    from kapibara.features.pulse import check as pulse_check
     real = httpx.AsyncClient
 
     def use(handler):
@@ -205,7 +205,7 @@ async def test_pulsecheck_command_only_for_starosta(monkeypatch):
     from aiogram import Bot, Dispatcher
     from aiogram.fsm.storage.memory import MemoryStorage
     from aiogram.types import Chat, Message, Update, User
-    import pulse_check
+    from kapibara.features.pulse import check as pulse_check
     from handlers import announce
     from tests.conftest import STAROSTA_ID
     from tests.test_solver_render import RecordingSession
@@ -254,7 +254,7 @@ def test_overdue_without_grade_waits_15_days():
     off = dict(page, offline=True)
     assert sdo_grades.work_status(w, off, now=datetime(2026, 9, 30)) == "offline"
     assert sdo_grades.work_status(w, off, now=datetime(2026, 10, 20)) == "miss"
-    import sdo_goal
+    from kapibara.features.sdo import goal as sdo_goal
     assert "late" in sdo_goal.OPEN
 
 
@@ -367,7 +367,7 @@ async def test_overview_retry_partial_and_dedup(monkeypatch):
     не кладём в кэш; одновременные запросы одного человека — один обход."""
     import asyncio
     import contextlib
-    import sdo_files
+    from kapibara.features.sdo import files as sdo_files
     sdo_grades._cache.clear()
     courses = [{"id": i, "name": f"Курс {i} [I.26-27]", "title": f"Курс {i}"} for i in (1, 2, 3)]
     calls, broken = [], {2: 1, 3: 99}          # курс 2 падает один раз, курс 3 — всегда

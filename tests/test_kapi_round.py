@@ -9,9 +9,9 @@ from datetime import date, datetime
 
 import pytest
 
-import lecture_day
-import lecture_picker as lp
-from utils import TZ
+from kapibara.features.lectures import day as lecture_day
+from kapibara.features.lectures import picker as lp
+from kapibara.core.utils import TZ
 
 SUBJECTS = [
     "Анализ данных",
@@ -75,7 +75,7 @@ def test_numbered_blocks_pick_the_lecture_file():
 
 
 def test_chip_labels_are_human():
-    import semantic_search as ss
+    from kapibara.features.ai import semantic_search as ss
     subj = "Моделирование бизнес-процессов"
     assert ss.chip_label("!План и комплект оценочных материалов", subj, "часть 18", "часть") == "План и комплект оценочных…"
     assert ss.chip_label(subj, subj, "стр. 2", "стр.") == "Материалы курса · стр. 2"
@@ -104,7 +104,7 @@ END:VCALENDAR
 @pytest.mark.asyncio
 async def test_namesake_who_teaches_the_subject_is_marked(monkeypatch):
     # «Сиганьков А. А.» ×2: с экрана пары МБП сразу тот, кто ведёт МБП
-    import mirea_schedule_api as api
+    from kapibara.features.schedule import mirea_api as api
     icals = {1: _TEACHER_ICS.format(subject="Обеспечение безопасности").encode(),
              2: _TEACHER_ICS.format(subject="Моделирование бизнес-процессов").encode()}
 
@@ -128,7 +128,7 @@ async def test_namesake_who_teaches_the_subject_is_marked(monkeypatch):
 async def test_chat_abbrev_picks_subject_and_lecture_of_day(db, monkeypatch):
     from fastapi.testclient import TestClient
 
-    import attendance
+    from kapibara.features.schedule import attendance
     import webapp.server as server
     from tests.test_webapp_auth import _make_init_data
 
@@ -147,8 +147,8 @@ async def test_chat_abbrev_picks_subject_and_lecture_of_day(db, monkeypatch):
         return ""
 
     today = datetime.now(TZ).date()
-    monkeypatch.setattr("ai_solver.chat_with_reasoning", fake_chat)
-    monkeypatch.setattr("group_context.build_group_context", no_context)
+    monkeypatch.setattr("kapibara.features.ai.solver.chat_with_reasoning", fake_chat)
+    monkeypatch.setattr("kapibara.features.groups.context.build_group_context", no_context)
     monkeypatch.setattr(attendance, "lecture_dates", lambda raw, s, d=None: [date(2026, 9, 1), today] if s == subj else [])
     client = TestClient(server.app)
     headers = {"X-Telegram-Init-Data": _make_init_data()}

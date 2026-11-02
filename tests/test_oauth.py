@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-import oauth
+from kapibara.features.identity import oauth
 from tests.test_auth_sessions import client  # noqa: F401 — фикстура
 
 TG_USER = 777
@@ -106,7 +106,7 @@ async def test_link_needs_confirmation_and_owner(db, client, keys):  # noqa: F81
 
 @pytest.mark.asyncio
 async def test_local_user_keeps_last_login_and_gets_push_only(db, client, keys, monkeypatch):  # noqa: F811
-    import delivery
+    from kapibara.features.notifications import delivery
     state, _ = _start(client, provider="yandex")
     res = client.get(f"/api/auth/yandex/callback?code=good&state={state}", follow_redirects=False)
     h = {"Authorization": f"Bearer {_token(res.headers['location'])}"}

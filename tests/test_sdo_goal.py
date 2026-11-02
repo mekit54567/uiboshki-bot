@@ -3,7 +3,7 @@
 работ ТК и «что если пропущу лекцию». Без дат: когда делать — решает человек."""
 import pytest
 
-import sdo_goal
+from kapibara.features.sdo import goal as sdo_goal
 
 EXAM = [{"at": 40, "label": "3"}, {"at": 60, "label": "4"}, {"at": 80, "label": "5"}]
 

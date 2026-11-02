@@ -16,7 +16,7 @@ import struct
 import time
 from urllib.parse import urlsplit
 
-import net
+from kapibara.core import net
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
@@ -40,7 +40,7 @@ def private_key() -> ec.EllipticCurvePrivateKey:
     if raw:
         num = int.from_bytes(unb64u(raw), "big")
     else:
-        from config import BOT_TOKEN
+        from kapibara.core.config import BOT_TOKEN
         seed = hashlib.sha256(b"uiboshki-vapid:" + (BOT_TOKEN or "").encode()).digest()
         num = int.from_bytes(seed, "big") % (P256_ORDER - 1) + 1
     return ec.derive_private_key(num, ec.SECP256R1())

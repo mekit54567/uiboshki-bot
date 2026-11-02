@@ -38,7 +38,7 @@ _qcache: "OrderedDict[str, list[float] | None]" = OrderedDict()
 def fts_query(query: str) -> str:
     """Запрос FTS5: основы слов вопроса (и расшифровок сокращений) с любым
     окончанием — «"дисконт"* OR "проект"*». Пусто — путь по словам пропускаем."""
-    from lecture_picker import _stems, expand
+    from kapibara.features.lectures.picker import _stems, expand
     words = sorted(w for w in _stems(expand(query)) if len(w) >= 3 and '"' not in w)
     return " OR ".join(f'"{w}"*' for w in words[:24])
 
@@ -50,7 +50,7 @@ async def _query_vec(query: str, p: str) -> list[float] | None:
     if key in _qcache:
         _qcache.move_to_end(key)
         return _qcache[key]
-    import embedder
+    from kapibara.features.ai import embedder
     try:
         (vec,) = await embedder.embed([query], query=True, p=p)
     except embedder.EmbedError as e:
@@ -79,7 +79,7 @@ def mmr(cands: list[dict], k: int = TOP, lam: float = MMR_LAMBDA, per_file: int 
     """Жадный MMR: каждый следующий кусок — max(λ·релевантность −
     (1−λ)·похожесть на уже взятые). Похожесть — косинус векторов, а у
     кусков без вектора — доля общих основ слов."""
-    from lecture_picker import _stems
+    from kapibara.features.lectures.picker import _stems
     if not cands:
         return []
     top = max(c["score"] for c in cands) or 1.0
@@ -107,7 +107,7 @@ def mmr(cands: list[dict], k: int = TOP, lam: float = MMR_LAMBDA, per_file: int 
 
 async def ready() -> bool:
     """Есть ли что искать (индекс наполняется фоном после деплоя)."""
-    from semantic_index import open_index
+    from kapibara.features.ai.semantic_index import open_index
     try:
         async with open_index() as db:
             return (await (await db.execute("SELECT 1 FROM chunks LIMIT 1")).fetchone()) is not None
@@ -120,9 +120,9 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
     """Гибридный поиск: [{id, file_id, title, subject, page_from, page_to, kind,
     text, score, lex, sem, sim}] — лучшие и разные куски. lex/sem — место в
     списке «по словам» / «по смыслу» (None — не нашёлся этим путём)."""
-    import embedder
-    import semantic_index as si
-    from semantic_index import open_index, unpack
+    from kapibara.features.ai import embedder
+    from kapibara.features.ai import semantic_index as si
+    from kapibara.features.ai.semantic_index import open_index, unpack
     p = embedder.provider()
     vt = embedder.vec_table(p)
     query = (query or "").strip()

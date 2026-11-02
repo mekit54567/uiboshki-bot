@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
-import config
+from kapibara.core import config
 from webapp import deps
 from webapp.deps import CurrentUser
 
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 @router.get("/api/plus")
 async def api_plus(user: dict = CurrentUser, x_app: str = Header(default="")):
     """Подписка, цены, ссылка на оплату, приглашения и бонусы за ранги."""
-    import billing
-    import referrals
+    from kapibara.features.billing import billing
+    from kapibara.features.billing import referrals
     if x_app == "ios":
         # App Store вне США (3.1.1, 3.1.3): ни цен, ни экрана подписки, ни «купить» —
         # в iOS-сборке «Капибары+» не видно (тред «Выход в App Store», 16.10)
@@ -50,7 +50,7 @@ DONATE_NOTE = "Это не подписка — просто спасибо. В 
 async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
     """«Поддержать проект»: ссылка на страницу доната и суммы. На iPhone
     (X-App: ios) — hidden: донат не через Apple — против правил App Store."""
-    import billing
+    from kapibara.features.billing import billing
     if x_app == "ios":
         return {"hidden": True}
     return {"hidden": False, "url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "",
@@ -62,8 +62,8 @@ async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
 async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default="")):
     """Роадмап (roadmap.py) — тем, кто поддержал проект; остальным — locked и
     ссылка на донат. На iPhone (X-App: ios) — hidden, как и донат."""
-    import billing
-    import roadmap
+    from kapibara.features.billing import billing
+    from kapibara.features.content import roadmap
     if x_app == "ios":
         return {"hidden": True}
     if not await roadmap.can_see(user["id"]):
@@ -77,7 +77,7 @@ async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default=""))
 async def api_invite(user: dict = CurrentUser, x_app: str = Header(default="")):
     """«Позвать друга»: готовый текст, картинка и личная ссылка — на всех
     платформах; про дни подписки — только не в iOS-сборке."""
-    import referrals
+    from kapibara.features.billing import referrals
     d = await referrals.summary(user["id"])
     out = {"link": d["link"], "share_text": d["share_text"], "share_image": d["share_image"],
            "tg_share": referrals.tg_share_url(d["link"])}
@@ -93,7 +93,7 @@ class RankBody(BaseModel):
 @router.post("/api/plus/rank")
 async def api_plus_rank(body: RankBody, user: dict = CurrentUser):
     """Закрыл ранг ачивок на телефоне — забрать дни подписки (один раз)."""
-    import referrals
+    from kapibara.features.billing import referrals
     try:
         got = await referrals.claim_rank(user["id"], body.rank)
     except referrals.BonusError as e:
@@ -108,7 +108,7 @@ class RefBody(BaseModel):
 @router.post("/api/plus/ref")
 async def api_plus_ref(body: RefBody, user: dict = CurrentUser):
     """PWA и приложение: пришёл по /app?ref=<код> — запомнить, кто позвал."""
-    import referrals
+    from kapibara.features.billing import referrals
     return {"ok": await referrals.bind(user["id"], body.code)}
 
 
@@ -174,7 +174,7 @@ def _page(body: str, status: int = 200, title: str = "Капибара+") -> HTM
 
 
 def _no_key() -> HTMLResponse:
-    import config
+    from kapibara.core import config
     return _page(f'<p class="lead">Оплата — по личной ссылке, она живёт сутки. Её дают бот (команда /plus) '
                  f'и приложение: «Ещё → Капибара+» в Telegram, на Android и на сайте uiboshki.ru/app. '
                  f'Подписка работает везде, и на iPhone.</p>'
@@ -197,9 +197,9 @@ async def _public() -> HTMLResponse:
     """/plus без личной ссылки — открытая страница: что продаётся, цены, как
     заказать, оплатить, получить и вернуть, реквизиты и контакты (требования
     Robokassa к сайту магазина, 21.10). Купить — всё так же по личной ссылке."""
-    import billing
-    import legal_texts
-    import privacy
+    from kapibara.features.billing import billing
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     early = await billing.early()
     rows = "".join(
         f"<li>{escape(p['title'])} ({p['days']} дней) — <b>{p['early'] if early else p['price']}&nbsp;₽</b>"
@@ -253,7 +253,7 @@ async def _public() -> HTMLResponse:
 
 @router.get("/plus", response_class=HTMLResponse)
 async def plus_page(k: str = ""):
-    import billing
+    from kapibara.features.billing import billing
     if not k:
         return await _public()
     uid = billing.read_key(k)
@@ -272,7 +272,7 @@ async def plus_page(k: str = ""):
     elif st["prices"][0]["founder"]:
         state += " Сейчас действует цена первых пользователей: кто оплатит по ней, так и платит всегда."
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
-    import referrals
+    from kapibara.features.billing import referrals
     inv = {"ref_max": referrals.REF_MAX, "ref_counted": await referrals.counted(uid)}
     friend = (f'<p class="small">Позови друга — команда /invite в боте или «Позвать» в приложении. '
               f'{escape(referrals.invite_line(inv))}</p>')
@@ -289,7 +289,7 @@ async def plus_page(k: str = ""):
 
 @router.post("/plus/pay")
 async def plus_pay(request: Request):
-    import billing
+    from kapibara.features.billing import billing
     form = parse_qs((await request.body()).decode("utf-8", "replace"))
     key = (form.get("k") or [""])[0]
     plan = (form.get("plan") or [""])[0]
@@ -321,7 +321,7 @@ async def plus_done(k: str = ""):
 
 @router.get("/plus/state")
 async def plus_state(k: str = ""):
-    import billing
+    from kapibara.features.billing import billing
     from database.billing import user_payments
     uid = billing.read_key(k)
     if not uid:
@@ -354,7 +354,7 @@ def _donate_no_key() -> HTMLResponse:
 
 
 def _donate_form(key: str) -> str:
-    import billing
+    from kapibara.features.billing import billing
     rows = "".join(f'<button name="amount" value="{a}"><span>Сказать спасибо</span><b>{a}&nbsp;₽</b></button>'
                    for a in billing.DONATE_AMOUNTS)
     own = (f'<div class="own"><input type="number" name="own" inputmode="numeric" min="{billing.DONATE_MIN}" '
@@ -366,7 +366,7 @@ def _donate_form(key: str) -> str:
 
 @router.get("/donate", response_class=HTMLResponse)
 async def donate_page(k: str = ""):
-    import billing
+    from kapibara.features.billing import billing
     uid = billing.read_key(k)
     if not uid:
         return _donate_no_key()
@@ -386,7 +386,7 @@ async def donate_page(k: str = ""):
 
 @router.post("/donate/pay")
 async def donate_pay(request: Request):
-    import billing
+    from kapibara.features.billing import billing
     form = parse_qs((await request.body()).decode("utf-8", "replace"))
     key = (form.get("k") or [""])[0]
     amount = (form.get("amount") or [""])[0]
@@ -422,7 +422,7 @@ async def donate_done(k: str = ""):
 @router.get("/donate/state")
 async def donate_state(k: str = ""):
     """Последний донат человека: прошёл ли."""
-    import billing
+    from kapibara.features.billing import billing
     from database.billing import user_donations
     uid = billing.read_key(k)
     if not uid:
@@ -444,7 +444,7 @@ async def yookassa_hook(request: Request):
     """ЮKassa: payment.succeeded / payment.canceled. Телу не верим — статус
     спрашиваем у ЮKassa по id. Подписка это или донат — по нашей таблице
     (billing.settle): донат дней подписки не даёт."""
-    import billing
+    from kapibara.features.billing import billing
     try:
         data = await request.json()
         pid = str(data["object"]["id"])
@@ -466,7 +466,7 @@ async def yookassa_hook(request: Request):
 async def robokassa_hook(request: Request):
     """Robokassa ResultURL: OutSum, InvId, SignatureValue (Пароль №2). Номер
     счёта один на подписки и донаты — что это, решает billing.settle."""
-    import billing
+    from kapibara.features.billing import billing
     q = dict(request.query_params)
     if request.method == "POST":
         q.update({k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()})

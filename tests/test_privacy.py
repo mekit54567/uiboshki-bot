@@ -44,7 +44,7 @@ async def _fill_user_tables(path, uid):
 async def test_erase_leaves_nothing(db):
     from database.homework import init_hw_table
     await init_hw_table()
-    import privacy
+    from kapibara.features.privacy import privacy
     tables = await _fill_user_tables(db.DATABASE_PATH, ME)
     await _fill_user_tables(db.DATABASE_PATH, OTHER)
     assert {"users", "sessions", "identities", "sdo_sessions", "consents", "events",
@@ -85,7 +85,7 @@ async def test_erase_leaves_nothing(db):
 
 @pytest.mark.asyncio
 async def test_consent_versions(db, monkeypatch):
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "me", "Я")
     assert await privacy.needs(ME) and await privacy.needs(ME, "sdo")
     await privacy.give(ME, "pd", "bot")
@@ -98,7 +98,7 @@ async def test_consent_versions(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_retention_purge(db):
-    import privacy
+    from kapibara.features.privacy import privacy
     for uid in (ME, OTHER, STAROSTA_ID):
         await db.upsert_user(uid, "", "x")
     async with aiosqlite.connect(db.DATABASE_PATH) as conn:
@@ -118,13 +118,13 @@ async def test_retention_purge(db):
 
 @pytest.mark.asyncio
 async def test_seen_marks_last_visit(db):
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "", "x")
     async with aiosqlite.connect(db.DATABASE_PATH) as conn:
         await conn.execute("UPDATE users SET last_seen='2020-01-01 00:00:00' WHERE user_id=?", (ME,))
         await conn.commit()
     privacy._seen.pop(ME, None)
-    import stats
+    from kapibara.ops import stats
     await stats.track(ME, "bot")
     assert (await db.get_user(ME))["last_seen"] > "2026"
 
@@ -163,9 +163,9 @@ async def test_erase_after_seven_days(db, monkeypatch):
     вернуть (/undelete), согласие тогда спросят заново."""
     from datetime import timedelta
 
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
 
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.sessions import create_session
     c, h = _client(monkeypatch)
     await db.upsert_user(ME, "me", "Я")
@@ -191,7 +191,7 @@ async def test_erase_after_seven_days(db, monkeypatch):
     assert not await privacy.blocked(ME)
 
     c.post("/api/me/delete", json={"phrase": "удалить мои данные"}, headers=h)
-    import utils
+    from kapibara.core import utils
     later = today_msk() + timedelta(days=7)
     monkeypatch.setattr(utils, "today_msk", lambda: later)
     await privacy.purge()                                              # прошло 7 дней — насовсем
@@ -202,7 +202,7 @@ async def test_erase_after_seven_days(db, monkeypatch):
 async def test_erasing_hidden_everywhere(db):
     """Ревью 152-ФЗ 18.10: в эти 7 дней человек не попадает ни в рассылки, ни
     в /stats, ни в выборки по людям (NOT_ERASING)."""
-    import privacy
+    from kapibara.features.privacy import privacy
     from database import count_users, events_since, get_all_subscribed_users, get_all_users, get_reminder_users
     from database.service import add_event, flush_events
     for uid in (ME, OTHER):
@@ -227,8 +227,8 @@ async def test_refuse_consent_erases_now(db, monkeypatch):
 
 
 def test_legal_texts_and_pages(monkeypatch):
-    import legal_texts
-    import privacy
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     c, _ = _client(monkeypatch)
     # у согласия версия — privacy.VERSION (по ней спрашивают заново); у политики может быть своя,
     # не ниже: 2.1 — «Поддержка проекта» (донат — исполнение договора, согласие не меняется)
@@ -260,7 +260,7 @@ def test_legal_texts_and_pages(monkeypatch):
 def test_legal_short_and_more(monkeypatch):
     """Никита 18.10: в длинных разделах сразу главное, полный текст — по
     «Подробнее»; сам полный текст на месте."""
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     c, _ = _client(monkeypatch)
     want = {"consent": {"Срок и отзыв"}, "privacy": {"Что храним и сколько", "Твои права"}}
     for name, titles in want.items():
@@ -284,7 +284,7 @@ def test_legal_short_and_more(monkeypatch):
 def test_erasing_text_official():
     """Никита 18.10: строка «войдёшь заново» звучала как сленг — что будет до
     и после срока, официально."""
-    import privacy
+    from kapibara.features.privacy import privacy
     t = privacy.erasing_text("2026-10-25")
     assert "войдёшь заново" not in t and "ничего не делаем" not in t
     assert "Повторный вход до 25.10.2026 удаление не отменяет" in t
@@ -308,7 +308,7 @@ def test_erase_phrase_no_paste():
 async def test_bot_deleteme(db, dp, bot):  # noqa: F811
     """/deleteme — фразой руками; не та — ничего; та — через 7 дней, старосте
     сообщение с /undelete; /undelete — вернуть."""
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "", "x")
     await send(dp, bot, "/deleteme")
     assert "Удалить все твои данные" in bot.session.texts()[-1] and "удалить мои данные" in bot.session.texts()[-1]
@@ -329,7 +329,7 @@ async def test_bot_deleteme(db, dp, bot):  # noqa: F811
 async def test_bot_consent_prompt(db, bot):  # noqa: F811
     """Кто был до согласий: бот работает и спрашивает один раз — и после деплоя
     (новый процесс) не спрашивает снова (Никита, 11.10: «зачем каждый день»)."""
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "", "x")
     d = _gated_dp()
     try:
@@ -356,10 +356,10 @@ def test_webapp_consent_wiring():
     html = (static / "index.html").read_text(encoding="utf-8")
     js = {p.name: p.read_text(encoding="utf-8") for p in (static / "js").glob("*.js")}
     assert 'id="consent-sheet"' in html and 'id="legal-sheet"' in html and "js/privacy.js" in html
-    assert "checked" not in js["privacy.js"].split("function consentRow")[1].split("\n}\n")[0]
+    assert "checked" not in js["kapibara.features.privacy.privacy.js"].split("function consentRow")[1].split("\n}\n")[0]
     assert '"sdo-save" disabled' in js["more.js"] and "agree: true" in js["more.js"]
     assert "maybeConsent(m)" in js["home.js"] and "deleteMyData()" in js["more.js"]
-    assert "/api/legal/" in js["privacy.js"] and "preventDefault" in js["privacy.js"]
+    assert "/api/legal/" in js["kapibara.features.privacy.privacy.js"] and "preventDefault" in js["kapibara.features.privacy.privacy.js"]
 
 
 # ── Без согласия — ничего (ревьюер 152-ФЗ, 11.10) ───────────────────────────
@@ -369,7 +369,7 @@ def _gated_dp():
     from aiogram import Dispatcher
     from aiogram.fsm.storage.memory import MemoryStorage
     from handlers import register_handlers
-    from middleware import ConsentMiddleware, StatsMiddleware
+    from kapibara.bot.middleware import ConsentMiddleware, StatsMiddleware
     d = Dispatcher(storage=MemoryStorage())
     consent = ConsentMiddleware()
     d.message.outer_middleware(StatsMiddleware())
@@ -393,8 +393,8 @@ async def _events(path, uid):
 @pytest.mark.consent_real
 @pytest.mark.asyncio
 async def test_new_user_gets_only_consent(db, bot):  # noqa: F811
-    import privacy
-    import stats
+    from kapibara.features.privacy import privacy
+    from kapibara.ops import stats
     stats._last.clear()                                 # «не чаще раза в 30 минут» — с нуля
     d = _gated_dp()
     try:
@@ -450,7 +450,7 @@ async def _legacy(db, uid):
 @pytest.mark.asyncio
 async def test_old_users_never_blocked(db, monkeypatch):
     """Никита 11.10: кто уже пользуется — пусть пользуется, без срока."""
-    import privacy
+    from kapibara.features.privacy import privacy
     await _legacy(db, ME)
     assert not await privacy.blocked(ME)                  # был до согласий — можно
     assert await privacy.blocked(OTHER)                   # новый — нельзя
@@ -477,7 +477,7 @@ async def test_old_user_sheet_once(db, monkeypatch):
 @pytest.mark.consent_real
 @pytest.mark.asyncio
 async def test_blocked_get_no_broadcasts(db, bot):  # noqa: F811
-    import delivery
+    from kapibara.features.notifications import delivery
     assert await delivery.deliver(bot, OTHER, "утро", kind="morning") is None
     assert bot.session.texts() == []
 
@@ -516,8 +516,8 @@ def test_legal_texts_after_review(monkeypatch):
 @pytest.mark.asyncio
 async def test_status_warns_without_operator(db, monkeypatch):
     """Ревьюер 11.10: без ФИО и почты оператора тексты выкатывать нельзя — /status напоминает."""
-    import health
-    import privacy
+    from kapibara.ops import health
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "FIO", "")
     monkeypatch.setattr(privacy, "EMAIL", "")
     assert {"PD_FIO", "PD_EMAIL"} <= set(privacy.operator_missing())
@@ -532,7 +532,7 @@ async def test_status_warns_without_operator(db, monkeypatch):
 async def test_new_version_does_not_block_who_consented(db, monkeypatch):
     """Переезд 16.10, новая версия текста: давший прошлую версию не
     блокируется — его один раз спрашивают, как старых своих; новый — как раньше."""
-    import privacy
+    from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "me", "Я")
     await db.upsert_user(OTHER, "other", "Он")
     await privacy.give(ME, "pd", "bot")
@@ -578,7 +578,7 @@ async def test_blocked_cached_and_batch(db, monkeypatch):
     помнится до просьбы удалить, а рейтинг проверяет всех одним подключением."""
     import database._conn
     import database.privacy as dbp
-    import privacy
+    from kapibara.features.privacy import privacy
     from database.privacy import give_consent
     NEW, OLD_V, GONE = 444, 555, 666
     await _legacy(db, ME)
@@ -610,7 +610,7 @@ async def test_blocked_cached_and_batch(db, monkeypatch):
 def test_timeweb_not_processor(monkeypatch):
     """Поддержка Timeweb 20.10: поручений на обработку ПД не подписывают — в политике и
     согласии Timeweb только сдаёт сервер, «по поручению» про него не пишем."""
-    import privacy
+    from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "HOST", {**privacy.HOSTS["timeweb"]})
     role = privacy.hosting_texts()["HOST_ROLE"]
     assert "ТАЙМВЭБ.КЛАУД" in role and "не получает" in role and "по поручению" not in role
@@ -625,7 +625,7 @@ async def test_consent_check_failure_does_not_let_in(db, bot, monkeypatch):  # n
     человека как давшего согласие. Теперь не пускаем и просим подождать."""
     import sqlite3
 
-    import privacy
+    from kapibara.features.privacy import privacy
 
     async def broken(uid):
         raise sqlite3.OperationalError("database is locked")

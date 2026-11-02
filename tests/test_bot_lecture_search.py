@@ -3,7 +3,7 @@
 пустой индекс — по-старому, целыми лекциями. Под ответом — откуда куски."""
 import pytest
 
-import semantic_search
+from kapibara.features.ai import semantic_search
 from handlers import solver
 
 HIT = {"file_id": 7, "title": "Лекция 5. Оценка бизнеса", "subject": "Экономика", "page_from": 12,

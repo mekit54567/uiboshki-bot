@@ -132,8 +132,8 @@ def plan_reminders(events: list[dict], prefs: dict) -> list[tuple[dict, int, str
     и без времени; сценарий со значением 0 — без напоминания. Одинаковые
     пары подряд — одним блоком (как в расписании): одно напоминание перед
     первой, а не «через 5 мин пара» после каждой перемены внутри блока."""
-    from schedule_format import _merge_runs
-    from schedule_parser import is_self_study
+    from kapibara.features.schedule.format import _merge_runs
+    from kapibara.features.schedule.parser import is_self_study
     timed = sorted((e for e in events if e.get("time_start") and not is_self_study(e.get("summary", ""))),
                    key=lambda e: e["time_start"])
     out, prev_end = [], None
@@ -151,7 +151,7 @@ async def set_all_reminders(user_id: int, minutes: int):
     """Из чата (/settings, /setreminder) — одно время на все сценарии
     (в пределах каждого); тонко — в приложении."""
     from database import get_user, set_notify, set_reminder_minutes
-    from locks import lock
+    from kapibara.core.locks import lock
     await set_reminder_minutes(user_id, minutes)
     async with lock("notify", user_id):
         prefs = merge((await get_user(user_id) or {}).get("notify"))

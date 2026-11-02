@@ -7,7 +7,7 @@ import zipfile
 import httpx
 import pytest
 
-import pulse_probe
+from kapibara.features.pulse import probe as pulse_probe
 
 
 def _v(n):

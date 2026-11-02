@@ -25,8 +25,8 @@ def _ical() -> bytes:
 
 
 def test_parse_filter_and_search_unfiltered():
-    from optional_subjects import HIDE
-    from schedule_parser import lessons_for_date, target_weeks
+    from kapibara.features.groups.optional_subjects import HIDE
+    from kapibara.features.schedule.parser import lessons_for_date, target_weeks
     token = HIDE.set(frozenset({"Военная кафедра"}))
     try:
         assert [l["title"] for l in lessons_for_date(_ical(), DAY)] == ["Анализ данных"]
@@ -39,7 +39,7 @@ def test_parse_filter_and_search_unfiltered():
 
 @pytest.mark.asyncio
 async def test_webapp_asks_and_hides_until_attend(db, monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
 
     async def raw():

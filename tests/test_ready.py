@@ -2,7 +2,7 @@
 /health — «процесс жив», /ready — «все этапы запуска пройдены и база отвечает»."""
 import pytest
 
-import health
+from kapibara.ops import health
 
 
 @pytest.fixture

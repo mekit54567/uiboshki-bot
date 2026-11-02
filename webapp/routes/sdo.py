@@ -8,7 +8,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from config import is_starosta
+from kapibara.core.config import is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
@@ -47,17 +47,17 @@ class SdoRemove(BaseModel):
 
 @router.get("/api/sdo/status")
 async def api_sdo_status(user: dict = CurrentUser):
-    from sdo_accounts import status_for
+    from kapibara.features.sdo.accounts import status_for
     return dict(await status_for(user["id"]), starosta=is_starosta(user["id"]))
 
 
 @router.post("/api/sdo/connect")
 async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
                           x_telegram_init_data: str = Header(default=""), x_app: str = Header(default="")):
-    import privacy
-    import sdo_accounts
+    from kapibara.features.privacy import privacy
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database import save_sdo_session
-    import ratelimit
+    from kapibara.core import ratelimit
     if not body.agree and await privacy.needs(user["id"], "sdo"):
         raise HTTPException(status_code=400, detail="поставь галочку согласия на обработку данных из СДО")
     if not ratelimit.allow("sdo_connect", user["id"]):
@@ -77,7 +77,7 @@ async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
         await privacy.give(user["id"], "sdo", _via(x_telegram_init_data, x_app))
     via = body.via if body.via in sdo_accounts.VIA else "paste"
     await save_sdo_session(user["id"], sdo_accounts.encrypt(cookie), sdo_accounts.first_check_at(), via)
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     sdo_grades.forget(user["id"])
     return await sdo_accounts.status_for(user["id"])
 
@@ -93,7 +93,7 @@ async def api_sdo_share(body: SdoShare, user: dict = CurrentUser):
     не видит — только список заданий и сроки."""
     from database import set_sdo_share
     from database.groups import home, viewer_group
-    from sdo_accounts import status_for
+    from kapibara.features.sdo.accounts import status_for
     # своя группа берёт задания по общему входу старосты; «делиться» тут создавало
     # дубли всех дедлайнов СДО (sdo:<группа>:<id> рядом с sdo:<id>) — ревью 09.10
     if body.share and await viewer_group(user["id"]) == home():
@@ -102,7 +102,7 @@ async def api_sdo_share(body: SdoShare, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="сначала подключи СДО")
     if body.share:
         import asyncio
-        import group_sync
+        from kapibara.features.groups import sync as group_sync
         from database import get_user_group
         gid = await get_user_group(user["id"])
         if gid:
@@ -113,9 +113,9 @@ async def api_sdo_share(body: SdoShare, user: dict = CurrentUser):
 @router.post("/api/sdo/disconnect")
 async def api_sdo_disconnect(user: dict = CurrentUser):
     from database import delete_sdo_session
-    from sdo_accounts import status_for
+    from kapibara.features.sdo.accounts import status_for
     await delete_sdo_session(user["id"])
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     sdo_grades.forget(user["id"])
     return await status_for(user["id"])
 
@@ -124,10 +124,10 @@ async def api_sdo_disconnect(user: dict = CurrentUser):
 async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict = CurrentUser):
     """Что принимает задание — показать в листе «Сдать» до выбора файлов:
     типы («только .zip»), сколько файлов и какой размер."""
-    import sdo_accounts
-    import sdo_submit
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import submit as sdo_submit
     from database import get_deadline, set_sdo_status
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     if not cmid:
         d = await get_deadline(deadline_id)
         if not d or not sdo_submit.can_submit(d):
@@ -148,11 +148,11 @@ async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict =
 @router.post("/api/sdo/submit")
 async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     import base64
-    import sdo_accounts
-    import sdo_submit
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import submit as sdo_submit
     from database import get_deadline, set_sdo_status
-    from sdo_parser import SdoSessionExpired
-    import ratelimit
+    from kapibara.features.sdo.parser import SdoSessionExpired
+    from kapibara.core import ratelimit
     if not ratelimit.allow("submit", user["id"]):
         raise HTTPException(status_code=429, detail="слишком много сдач подряд — попробуй через 10 минут")
     if body.cmid:
@@ -194,9 +194,9 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
         log_failure(logger, f"СДО: сдача в задание {cmid} у {user['id']} упала", e)
         raise HTTPException(status_code=502, detail=sdo_submit.UNAVAILABLE)
     logger.info(f"СДО: {user['id']} сдал файл в задание {cmid}")
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     sdo_grades.forget(user["id"])    # статусы и баллы — заново
-    import sdo_done
+    from kapibara.features.sdo import done as sdo_done
     # приложение рисует «Сдано» только для submitted; черновик и непонятный
     # ответ СДО — другим экраном (аудит 21.10, R5)
     result = dict(result, state=sdo_done.submit_state(result.get("status")))
@@ -212,12 +212,12 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
 async def api_sdo_remove_submission(body: SdoRemove, user: dict = CurrentUser):
     """«Удалить ответ» на задание — своим входом, как кнопка в СДО (пока ответ
     не оценён и срок не прошёл — иначе СДО сам не даст)."""
-    import ratelimit
-    import sdo_accounts
-    import sdo_grades
-    import sdo_submit
+    from kapibara.core import ratelimit
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.features.sdo import submit as sdo_submit
     from database import set_sdo_status
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     if not ratelimit.allow("submit", user["id"]):
         raise HTTPException(status_code=429, detail="слишком много действий подряд — попробуй через 10 минут")
     cookie = await sdo_accounts.cookie_for(user["id"])
@@ -238,7 +238,7 @@ async def api_sdo_remove_submission(body: SdoRemove, user: dict = CurrentUser):
 # ── Баллы БРС из СДО (sdo_grades.py) ─────────────────────────────────────────
 
 async def _sdo_cookie(user_id: int) -> str:
-    from sdo_accounts import cookie_for
+    from kapibara.features.sdo.accounts import cookie_for
     cookie = await cookie_for(user_id)
     if not cookie:
         raise HTTPException(status_code=403, detail="подключи СДО, чтобы видеть свои баллы")
@@ -247,11 +247,11 @@ async def _sdo_cookie(user_id: int) -> str:
 
 @router.get("/api/sdo/grades")
 async def api_sdo_grades(fresh: bool = False, user: dict = CurrentUser):
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     from database import set_sdo_status
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
-    import ratelimit
+    from kapibara.core import ratelimit
     if fresh and not ratelimit.allow("sdo_fresh", user["id"]):
         fresh = False              # «обновить» чаще 3 раз за 5 минут — из кэша, СДО не долбим
     try:
@@ -263,19 +263,19 @@ async def api_sdo_grades(fresh: bool = False, user: dict = CurrentUser):
         log_failure(logger, "Баллы СДО", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     try:
-        import sdo_history          # точка истории баллов на сегодня (график на экране предмета)
+        from kapibara.features.sdo import history as sdo_history          # точка истории баллов на сегодня (график на экране предмета)
         await sdo_history.record(user["id"], data.get("courses") or [])
     except Exception as e:
         logger.info(f"история баллов: {e}")
-    import sdo_goal                 # свои цели по предметам («4» вместо ближайшей «3»)
+    from kapibara.features.sdo import goal as sdo_goal                 # свои цели по предметам («4» вместо ближайшей «3»)
     return {**data, "goals": await sdo_goal.get_goals(user["id"])}
 
 
 @router.get("/api/sdo/grades/{course_id}")
 async def api_sdo_course(course_id: int, user: dict = CurrentUser):
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     from database import set_sdo_status
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     try:
         data = await sdo_grades.course_detail(user["id"], cookie, course_id)
@@ -288,17 +288,17 @@ async def api_sdo_course(course_id: int, user: dict = CurrentUser):
         log_failure(logger, f"Баллы СДО, курс {course_id}", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     try:
-        import sdo_history
+        from kapibara.features.sdo import history as sdo_history
         data = {**data, "history": await sdo_history.series(user["id"], course_id, data.get("score"))}
     except Exception as e:
         logger.info(f"история баллов: {e}")
     try:
-        import sdo_done             # зачтено или ждёт оценки — дедлайн у себя сданным
+        from kapibara.features.sdo import done as sdo_done             # зачтено или ждёт оценки — дедлайн у себя сданным
         await sdo_done.mark(user["id"], sdo_done.finished(data))
     except Exception as e:
         logger.info(f"отметка «сдал» по журналу: {e}")
     try:
-        import attendance           # посещения лекций из баллов за посещаемость
+        from kapibara.features.schedule import attendance           # посещения лекций из баллов за посещаемость
         data = {**data, "attendance": await attendance.for_course(user["id"], data)}
     except Exception as e:
         logger.info(f"посещения: {type(e).__name__}: {e}")
@@ -307,7 +307,7 @@ async def api_sdo_course(course_id: int, user: dict = CurrentUser):
 
 async def _goal(user_id: int, course: dict) -> dict:
     """Цель по предмету: сколько не хватает, откуда взять, правило 75 % (sdo_goal.py)."""
-    import sdo_goal
+    from kapibara.features.sdo import goal as sdo_goal
     goals = await sdo_goal.get_goals(user_id)
     modes = await sdo_goal.get_modes(user_id)
     cid = str(course["id"])
@@ -322,10 +322,10 @@ class Goal(BaseModel):
 @router.post("/api/sdo/goal/{course_id}")
 async def api_sdo_goal(course_id: int, body: Goal, user: dict = CurrentUser):
     """Своя цель по предмету — только для подсчёта в боте, на СДО не влияет."""
-    import attendance
-    import sdo_goal
-    import sdo_grades
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.schedule import attendance
+    from kapibara.features.sdo import goal as sdo_goal
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     try:
         course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
@@ -365,10 +365,10 @@ async def api_attendance_mark(course_id: int, body: AttendanceMark, user: dict =
     """Своя отметка для лекции до начала истории посещаемости: какие именно
     лекции засчитаны, по баллам не видно — человек отмечает сам, но не больше,
     чем показывают баллы. Только для показа в боте, на СДО не влияет."""
-    import attendance
-    import sdo_grades
+    from kapibara.features.schedule import attendance
+    from kapibara.features.sdo import grades as sdo_grades
     from database import get_attendance_marks, set_attendance_mark
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     try:
         course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
@@ -425,9 +425,9 @@ def _sdl_parse(token: str) -> tuple[int, str] | None:
 async def api_sdo_task(cmid: int, request: Request, module: str = "assign", user: dict = CurrentUser):
     import time
     from urllib.parse import quote, urlparse
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     from database import set_sdo_status
-    from sdo_parser import SdoSessionExpired
+    from kapibara.features.sdo.parser import SdoSessionExpired
     if module not in ("assign", "quiz"):
         raise HTTPException(status_code=400, detail="неизвестный тип работы")
     cookie = await _sdo_cookie(user["id"])
@@ -452,9 +452,9 @@ async def sdo_download(token: str, name: str):
     """Файл из СДО входом того, кому выдана ссылка (через Telegram.WebApp.downloadFile)."""
     import mimetypes
     from urllib.parse import quote
-    from sdo_accounts import client_for, cookie_for
-    from sdo_parser import SdoSessionExpired, get_checked
-    from config import SDO_BASE_URL
+    from kapibara.features.sdo.accounts import client_for, cookie_for
+    from kapibara.features.sdo.parser import SdoSessionExpired, get_checked
+    from kapibara.core.config import SDO_BASE_URL
     parsed = _sdl_parse(token)
     if not parsed:
         raise HTTPException(403, "Ссылка устарела — нажми «📥» ещё раз")

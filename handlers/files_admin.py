@@ -11,8 +11,8 @@ from aiogram.types import (
 )
 
 from database import add_file, get_files, delete_file
-from config import STAROSTA_ID, is_starosta
-from utils import esc, today_msk
+from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.utils import esc, today_msk
 
 router = Router()
 
@@ -49,7 +49,7 @@ async def cmd_backup(message: Message):
     if STAROSTA_ID and not is_starosta(message.from_user.id):
         await message.answer("❌ Только для старосты.")
         return
-    from backup import send_backup
+    from kapibara.ops.backup import send_backup
     await send_backup(message.bot, message.chat.id, silent=False)
 
 
@@ -58,8 +58,8 @@ async def cmd_backup(message: Message):
 async def _tidy_plan() -> tuple[list[dict], dict[int, str], set[int]]:
     """Файлы, все переименования и какие из них — темы из текста лекций."""
     from database import get_text_heads
-    from file_categories import category_of
-    from file_names import text_titles, tidy_titles
+    from kapibara.features.lectures.categories import category_of
+    from kapibara.features.lectures.names import text_titles, tidy_titles
     files = await get_files()
     names = tidy_titles(files)
     lectures = [f["id"] for f in files if category_of(f) == "lecture"]
@@ -76,7 +76,7 @@ async def cmd_tidyfiles(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     from database import undo_file_renames
-    from file_names import preview
+    from kapibara.features.lectures.names import preview
     if (message.text or "").split()[1:2] == ["undo"]:
         n = await undo_file_renames()
         await message.answer(f"↩️ Вернул прежние названия: {n} файлов." if n else "Нечего возвращать.")
@@ -103,7 +103,7 @@ async def cmd_tidyfiles(message: Message):
         parse_mode="HTML", reply_markup=kb)
     if more > 0:
         from aiogram.types import BufferedInputFile
-        from file_names import full_list
+        from kapibara.features.lectures.names import full_list
         await message.answer_document(
             BufferedInputFile(full_list(files, changes, marked=from_text).encode("utf-8"), "tidyfiles.txt"),
             caption=f"Все {len(changes)} переименований: было → стало")
@@ -149,7 +149,7 @@ async def cmd_restore(message: Message, state: FSMContext):
 @router.message(RestoreDb.waiting_file, F.document)
 async def restore_file(message: Message, state: FSMContext):
     import os
-    from backup import MAX_RESTORE_BYTES, RestoreError, inspect_backup
+    from kapibara.ops.backup import MAX_RESTORE_BYTES, RestoreError, inspect_backup
     await state.clear()
     if not is_starosta(message.from_user.id):
         return
@@ -203,7 +203,7 @@ async def restore_confirm(callback: CallbackQuery):
         await callback.answer()
         return
     await callback.answer("Восстанавливаю…")
-    from backup import apply_backup, keep_local_copy, send_backup
+    from kapibara.ops.backup import apply_backup, keep_local_copy, send_backup
     note = "Копия прежней — сообщением выше."
     if not await send_backup(callback.bot, uid, silent=False):      # сначала — копия текущей
         # в Telegram не ушла (больше 50 МБ или база повреждена — как раз когда
@@ -340,7 +340,7 @@ async def handle_sync_json(message: Message):
             # выше) — при массовом импорте это может занять время (последовательно
             # качаем и парсим каждый файл), но синк — редкая ручная операция
             # старосты, а не то, что дёргается на каждый чих.
-            from file_text import extract_and_save
+            from kapibara.features.lectures.text import extract_and_save
             if await extract_and_save(bot, new_fid, f['file_id'], f.get('file_name', '')):
                 with_text += 1
 

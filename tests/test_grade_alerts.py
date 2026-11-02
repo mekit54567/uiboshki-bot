@@ -2,7 +2,7 @@
 молча, сообщение со всеми изменившимися предметами, тумблер в уведомлениях."""
 import pytest
 
-import grade_alerts
+from kapibara.features.notifications import grade_alerts
 
 
 def test_changes_only_with_history():
@@ -20,8 +20,8 @@ def test_message_signs():
 
 @pytest.mark.asyncio
 async def test_check_all(db, monkeypatch):
-    import sdo_accounts
-    import sdo_grades
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
     for uid in (1, 2, 3):
         await db.upsert_user(uid, "", "X")
         await db.save_sdo_session(uid, sdo_accounts.encrypt(f"c{uid}"))
@@ -53,7 +53,7 @@ async def test_check_all(db, monkeypatch):
 
 
 def test_toggle_in_app():
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     assert notify_prefs.merge(None)["grades"] is True
     assert "toggleNotify('grades')" in open("webapp/static/js/more.js", encoding="utf-8").read()
 
@@ -81,7 +81,7 @@ def test_checked_works():
 
 @pytest.mark.asyncio
 async def test_check_user_sends_checked_once(db, monkeypatch):
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     await db.upsert_user(1, "", "X")
     works = [{"cmid": 11, "name": "Практика 1", "grade": None, "max": 8.0, "graded": False, "passed": None}]
 
@@ -106,8 +106,8 @@ async def test_check_user_sends_checked_once(db, monkeypatch):
 async def test_alert_after_app_opened_grades(db, monkeypatch):
     """Никита 02.11: открыл баллы в приложении (оно пишет точку истории) — пуш
     о новых баллах всё равно приходит: сравниваем с тем, что уже сообщали."""
-    import sdo_grades
-    import sdo_history
+    from kapibara.features.sdo import grades as sdo_grades
+    from kapibara.features.sdo import history as sdo_history
     await db.upsert_user(1, "", "X")
     score = {"v": 30}
 
@@ -132,8 +132,8 @@ async def test_alert_after_app_opened_grades(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_starosta_with_shared_cookie_checked(db, monkeypatch):
     """Староста без своего входа ходит общей кукой — его баллы тоже проверяются."""
-    import config
-    import sdo_grades
+    from kapibara.core import config
+    from kapibara.features.sdo import grades as sdo_grades
     monkeypatch.setattr(config, "SDO_SESSION_COOKIE", "shared")
     monkeypatch.setattr(config, "STAROSTA_IDS", [5])
     await db.upsert_user(5, "", "Никита")
@@ -160,8 +160,8 @@ async def test_grades_checked_with_own_login_check(db, monkeypatch):
     import asyncio
     from datetime import datetime
 
-    import sdo_accounts
-    import sdo_grades
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import grades as sdo_grades
     await db.upsert_user(7, "", "Егор")
     await db.save_sdo_session(7, sdo_accounts.encrypt("cookie0123456789abcdef0123"))
     seen = []

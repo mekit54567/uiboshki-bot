@@ -86,8 +86,8 @@ def _html(d: dict) -> str:
 
 
 def render(name: str, embed: bool = False) -> str:
-    import legal_texts
-    import privacy
+    from kapibara.features.privacy import legal_texts
+    from kapibara.features.privacy import privacy
     d = legal_texts.doc(name)
     return _SHELL.format(title=escape(d["title"]), version=d["version"], date=d["date"], body=_html(d),
                          cls="embed" if embed else "", contact=escape(privacy.CONTACT),
@@ -119,7 +119,7 @@ async def rules_page(embed: int = 0):
 async def api_legal(name: str):
     """Текст согласия или политики — JSON: лист в приложении рисует его сам,
     в своём дизайне (без входа: это публичный текст)."""
-    import legal_texts
+    from kapibara.features.privacy import legal_texts
     if name not in legal_texts.DOCS:
         raise HTTPException(404, "нет такого документа")
     return legal_texts.doc(name)
@@ -134,7 +134,7 @@ def _via(init_data: str, x_app: str) -> str:
 @router.get("/api/consent")
 async def api_consent(user: dict = CurrentUser):
     """Что человек уже принял (текущей версии) — для листа согласия."""
-    import privacy
+    from kapibara.features.privacy import privacy
     return {"version": privacy.VERSION, "date": privacy.DATE,
             "pd": not await privacy.needs(user["id"], "pd"),
             "sdo": not await privacy.needs(user["id"], "sdo")}
@@ -147,7 +147,7 @@ class ConsentBody(BaseModel):
 @router.post("/api/consent")
 async def api_give_consent(body: ConsentBody, user: dict = CurrentUser,
                            x_telegram_init_data: str = Header(default=""), x_app: str = Header(default="")):
-    import privacy
+    from kapibara.features.privacy import privacy
     if body.kind not in privacy.KINDS:
         raise HTTPException(400, "нет такого согласия")
     try:
@@ -161,7 +161,7 @@ async def api_give_consent(body: ConsentBody, user: dict = CurrentUser,
 async def api_consent_asked(user: dict = CurrentUser):
     """Лист согласия показан тому, кто был до согласий, — больше не показывать
     (как и бот, один раз на версию текста — privacy.ask_once)."""
-    import privacy
+    from kapibara.features.privacy import privacy
     await privacy.ask_once(user["id"])
     return {"ok": True}
 
@@ -177,8 +177,8 @@ async def api_delete_me(body: DeleteBody, user: dict = CurrentUser):
     privacy.ERASE_PHRASE руками; сразу — входы и устройства (после ответа
     сессия недействительна), полностью — через ERASE_DAYS дней. Не давал
     согласия (отказ на листе согласия) — confirm и сразу насовсем."""
-    import privacy
-    import ratelimit
+    from kapibara.features.privacy import privacy
+    from kapibara.core import ratelimit
     uid = user["id"]
     due = await privacy.erasing(uid)
     if not due and await privacy.blocked(uid):

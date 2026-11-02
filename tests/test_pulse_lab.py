@@ -4,8 +4,8 @@ import io
 import json
 import zipfile
 
-import pulse_lab
-import pulse_probe
+from kapibara.features.pulse import lab as pulse_lab
+from kapibara.features.pulse import probe as pulse_probe
 from tests.test_pulse_probe import ME
 
 

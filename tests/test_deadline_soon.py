@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import deadline_soon as ds
-import notify_prefs
-from utils import TZ
+from kapibara.features.deadlines import soon as ds
+from kapibara.features.notifications import prefs as notify_prefs
+from kapibara.core.utils import TZ
 
 DUE = datetime(2099, 3, 10, 23, 59, tzinfo=TZ)
 QUIZ = "https://online-edu.mirea.ru/mod/quiz/view.php?id=501"

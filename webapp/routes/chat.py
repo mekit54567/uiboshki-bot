@@ -33,7 +33,7 @@ async def _chat_with_fallback(history: list, subject: str, context: str, lecture
     прошёл (живой тест: «Дебет и кредит — что это?» без предмета → «ИИ
     недоступен», а «Привет» без лекций — ок), отвечаем без лекций и честно
     пишем почему, а не оставляем человека без ответа."""
-    from ai_solver import chat_with_reasoning
+    from kapibara.features.ai.solver import chat_with_reasoning
     try:
         return await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
     except Exception as e:
@@ -84,10 +84,10 @@ async def api_subjects(user: dict = CurrentUser, x_app: str = Header(default="")
     сколько вопросов осталось сегодня (null — без лимита, например староста).
     think — переключатель «Подумать» у поля ввода ({label, left, daily};
     null — не подписчик, выключено, iPhone)."""
-    import ai_quota
-    import think
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.ai import think
     from database import get_subjects_with_lecture_text
-    from schedule_parser import get_group_subjects
+    from kapibara.features.schedule.parser import get_group_subjects
     with_lectures = await get_subjects_with_lecture_text()
     rest = [s for s in await get_group_subjects() if s not in with_lectures]
     return {"subjects": [{"name": s, "lectures": True} for s in with_lectures]
@@ -161,12 +161,12 @@ async def _lecture_of_day(user_id: int, subject: str, text: str, query: str) -> 
     («завтра», «сегодня на первой паре», «что будет на лекции») по предмету.
     Не про лекцию дня — ("", "")."""
     from datetime import datetime
-    import attendance
-    import lecture_day
-    import lecture_picker
+    from kapibara.features.schedule import attendance
+    from kapibara.features.lectures import day as lecture_day
+    from kapibara.features.lectures import picker as lecture_picker
     from database import get_subject_lecture_context
-    from schedule_parser import raw_for_user
-    from utils import TZ
+    from kapibara.features.schedule.parser import raw_for_user
+    from kapibara.core.utils import TZ
     if not lecture_day.asks_about_lecture(text):
         return "", ""
     now = datetime.now(TZ)
@@ -189,10 +189,10 @@ async def _chat_file_request(text: str) -> dict | None:
     """«Скинь 5 лк по уч деят на предпрят» в чате WebApp — файлы карточками
     (📥 / «В чат»), а не пересказ лекции от ИИ (живой тест). Не просьба о
     файле или предмет не угадан — None, отвечает ИИ."""
-    import file_request
+    from kapibara.features.lectures import request as file_request
     from database import get_file_ids_with_text, get_files
-    from file_categories import LABELS, category_of
-    from utils import esc
+    from kapibara.features.lectures.categories import LABELS, category_of
+    from kapibara.core.utils import esc
     if not file_request.is_request(text):
         return None
     subjects, items = file_request.find(text, await get_files())
@@ -230,8 +230,8 @@ async def _solve(history: list, subject: str, context: str, lectures: str,
     уходит в сообщение) → {"content", "reasoning"} от модели."""
     import asyncio
     import base64
-    from ai_solver import solve_image
-    from file_text import SUPPORTED_EXTENSIONS, extract_text
+    from kapibara.features.ai.solver import solve_image
+    from kapibara.features.lectures.text import SUPPORTED_EXTENSIONS, extract_text
     if not attachment:
         return await _chat_with_fallback(history, subject, context, lectures)
     try:
@@ -272,7 +272,7 @@ async def reply(history: list, subject: str, context: str, lectures: str, source
     (review_demo.demo_chat). sources — куски с номерами [n] (поиск по смыслу);
     None — целые лекции, источники ищутся по заголовкам. solve — своя модель
     вместо обычной («Подумать»). Сбой модели — 502 BUSY_TEXT."""
-    from utils import md_to_tg_html_chunks
+    from kapibara.core.utils import md_to_tg_html_chunks
     try:
         result = await (solve() if solve else _solve(history, subject, context, lectures, attachment))
     except HTTPException:
@@ -280,8 +280,8 @@ async def reply(history: list, subject: str, context: str, lectures: str, source
     except Exception as e:
         # причина (какая модель, код) — в лог для /status; человеку — без
         # названий провайдеров и кодов (Никита 21.10: «причём тут Gemini?»)
-        import gemini_solver
-        import think
+        from kapibara.features.ai import gemini as gemini_solver
+        from kapibara.features.ai import think
         log_failure(logger, f"webapp chat failed: {_short_reason(e)}", e,
                     expected=(gemini_solver.GeminiError, think.ThinkError))
         raise HTTPException(status_code=502, detail=BUSY_TEXT)
@@ -313,10 +313,10 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     сообщение). В системный промпт — контекст группы: пары, дедлайны, ДЗ."""
     import asyncio
     from database import get_subject_lecture_context, get_subjects_with_lecture_text
-    from group_context import build_group_context
+    from kapibara.features.groups.context import build_group_context
 
-    import ai_quota
-    import think
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.features.ai import think
     deep = body.think or body.think_first
     again = deep and not body.think_first        # «Подумать ещё» под ответом
     if deep:
@@ -335,13 +335,13 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     if not subject and history[-1]["role"] == "user":
         # «завтра МБП, что на лекции?» — предмет по сокращению, без списка
         # «по какому предмету?» (фронт переключит предмет в шапке)
-        import lecture_picker as _lp
+        from kapibara.features.lectures import picker as _lp
         picked_subject = _lp.subject_by_abbrev(history[-1]["content"], with_text) or ""
         subject = picked_subject
     # Лекции — только подходящие к вопросу (lecture_picker): после выгрузки
     # СДО их у предмета сотни тысяч символов. Без выбранного предмета — из
     # всех предметов, но только при явном совпадении с вопросом.
-    import lecture_picker
+    from kapibara.features.lectures import picker as lecture_picker
     from database import get_all_lecture_context
     # «Подробнее», «Пример», «а почему?» — ищем по теме прошлых вопросов,
     # заглушку вложения («Разбери этот файл.») не ищем вовсе
@@ -374,9 +374,9 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
         pass
     elif query.strip() and (not subject or subject in with_text) and not lecture_picker.wants_course(query):
         try:
-            import semantic_search
+            from kapibara.features.ai import semantic_search
             if await semantic_search.ready():
-                import embedder
+                from kapibara.features.ai import embedder
                 hits = await semantic_search.search(query, subject)
                 searched = embedder.rel_min(embedder.provider()) is not None   # у модели есть порог
                 if hits:

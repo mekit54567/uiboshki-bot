@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import local_embed  # noqa: E402
+from kapibara.features.ai import local_embed  # noqa: E402
 
 TEXTS = [
     "Дисконтирование денежных потоков: будущие доходы проекта приводятся к текущему моменту по ставке дисконта, "

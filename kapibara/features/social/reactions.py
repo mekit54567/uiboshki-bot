@@ -6,7 +6,7 @@
 from datetime import datetime, timedelta
 
 from database._conn import connect
-from utils import TZ
+from kapibara.core.utils import TZ
 
 # Порядок — как в приложении: капибара радуется, пьёт кофе, грустит, спит,
 # злится (5.100.6, Никита 18.10: «препод злой», поза №11).

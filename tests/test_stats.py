@@ -4,7 +4,7 @@ import time
 import aiosqlite
 import pytest
 
-import stats
+from kapibara.ops import stats
 
 
 def test_kind_for_paths():
@@ -40,7 +40,7 @@ async def test_collect_and_render(db, monkeypatch):
     assert s["total"] == 3 and s["day"] == 3 and s["week"] == 3
     assert s["new_day"] == 3 and s["new_week"] == 3 and "Новые: сегодня <b>3</b>" in stats.summary(s)
     assert "ИИ сегодня" not in stats.summary(s)                      # вопросов не было — строки нет
-    import ai_quota                                                     # вопросы ИИ — из дневного счёта
+    from kapibara.features.ai import quota as ai_quota                                                     # вопросы ИИ — из дневного счёта
     for _ in range(3):
         await ai_quota.take(2)
     await ai_quota.take(3)
@@ -159,7 +159,7 @@ async def test_evening_summary_only_with_new_people(db, monkeypatch):
     """Вечером старосте «+N новых (M с сайта)» за сутки — только если пришли
     новые; «с сайта» — только среди новых; склонения."""
     import aiosqlite
-    import config
+    from kapibara.core import config
     from datetime import datetime, timedelta
     sent = []
 

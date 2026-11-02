@@ -6,12 +6,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, ErrorEvent, MenuButtonWebApp, WebAppInfo
 
-from config import BOT_TOKEN, STAROSTA_ID, WEBAPP_PORT, WEBAPP_URL, GROUP_NAME
+from kapibara.core.config import BOT_TOKEN, STAROSTA_ID, WEBAPP_PORT, WEBAPP_URL, GROUP_NAME
 from database import init_db
-import health
+from kapibara.ops import health
 from handlers import register_handlers
-from scheduler import start_scheduler
-from middleware import (ConsentMiddleware, GroupContextMiddleware, MenuInterruptMiddleware,
+from kapibara.jobs.scheduler import start_scheduler
+from kapibara.bot.middleware import (ConsentMiddleware, GroupContextMiddleware, MenuInterruptMiddleware,
                         OptionalSubjectsMiddleware, StatsMiddleware)
 from kapibara.core.telegram import cosmetic
 
@@ -105,8 +105,8 @@ BOT_NAME = "Капибара МИРЭА"
 
 
 def bot_description(group: str) -> str:
-    import config
-    import login_channel
+    from kapibara.core import config
+    from kapibara.features.identity import login_channel
     news = login_channel.news_line()
     text = BOT_DESCRIPTION.format(group=group)
     if config.APPSTORE_URL:              # iPhone-приложение уже в App Store
@@ -121,13 +121,13 @@ async def setup_bot_menu(bot: Bot):
     try:
         await bot.set_my_commands(BOT_COMMANDS)
         from aiogram.types import BotCommandScopeChat
-        from config import STAROSTA_IDS
+        from kapibara.core.config import STAROSTA_IDS
         for sid in STAROSTA_IDS:
             try:
                 await bot.set_my_commands(STAROSTA_COMMANDS, scope=BotCommandScopeChat(chat_id=sid))
             except Exception as e:      # староста ещё не писал боту — чата нет
                 logger.info(f"Команды старосты {sid}: {e}")
-        from config import GROUP_NAME
+        from kapibara.core.config import GROUP_NAME
         try:
             # имя — только если другое: Telegram ограничивает частую смену
             if (await bot.get_my_name()).name != BOT_NAME:
@@ -205,10 +205,10 @@ async def stop_webapp(server, task):
 
 
 async def main():
-    import net
+    from kapibara.core import net
     bot = Bot(token=BOT_TOKEN, session=net.tg_session())   # прокси для Telegram из России (net.py)
     # Длиннее лимита Telegram — несколькими сообщениями (long_messages.py)
-    from long_messages import SplitLongMessages
+    from kapibara.bot.long_messages import SplitLongMessages
     bot.session.middleware(SplitLongMessages())
     dp  = Dispatcher(storage=MemoryStorage())
 
@@ -230,11 +230,11 @@ async def main():
         health.mark_ready("polling")
     dp.startup.register(polling_started)
 
-    import backup                   # init_db меняет схему — сначала копия базы рядом
+    from kapibara.ops import backup                   # init_db меняет схему — сначала копия базы рядом
     await backup.keep_before_start()
     await init_db()
     health.mark_ready("db")
-    import login_channel
+    from kapibara.features.identity import login_channel
     await login_channel.start()             # отметка «с какого момента канал для новых»
     register_handlers(dp)
     health.mark_ready("handlers")
@@ -254,12 +254,12 @@ async def main():
             logger.info(f"превью поста канала: {e}")
     asyncio.create_task(offer_post())
 
-    import sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
+    from kapibara.features.sdo import accounts as sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
     asyncio.create_task(sdo_accounts.rotate_all())
-    import app_push
+    from kapibara.features.notifications import app_push
     asyncio.create_task(app_push.rotate_keys())         # ключи телефонов для пушей — тем же секретом
 
-    import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
+    from kapibara.features.privacy import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
     if (missing := privacy.operator_missing()) and STAROSTA_ID:
         try:
             await bot.send_message(STAROSTA_ID, "⚠️ В согласии и политике (/consent, /privacy) нет данных "
@@ -269,7 +269,7 @@ async def main():
     webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
     # Справочник для /teacher, /group, /room и поиска в WebApp — в фоне:
     # первый обход ~полчаса, дальше продолжается с места остановки.
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     index_task = asyncio.create_task(schedule_index.ensure_fresh())
     lag_task = asyncio.create_task(health.watch_loop())     # «самое долгое зависание» в /status
 

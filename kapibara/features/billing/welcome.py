@@ -29,14 +29,14 @@ NOTE_FROM = "Никиты"           # /grant — только владелец 
 
 def note_line(note: str) -> str:
     """Личная приписка к выдаче (/grant … текст) — отдельной строкой курсивом."""
-    from utils import esc
+    from kapibara.core.utils import esc
     return f"<i>Приписка от {NOTE_FROM}: {esc(note.strip())}</i>"
 
 
 def text(until: str | None, *, granted: bool = False, unlimited: bool = False, note: str | None = None) -> str:
     """until — последний день (None — навсегда, только у безлимита); note —
     приписка Никиты из /grant (экранируется), идёт сразу под заголовком."""
-    import config
+    from kapibara.core import config
     term = f"до {_day(until)}" if until else "навсегда"
     if unlimited:
         head = f"✨ Тебе выдали безлимит: «Капибара+» {term} — бесплатно, и ИИ без дневных лимитов."
@@ -63,8 +63,8 @@ async def mark(uid: int) -> bool:
 async def maybe_send(bot, uid: int) -> bool:
     """Подарок своей группе действует, а приветствия ещё не было — прислать.
     True — отправили сейчас."""
-    import billing
-    import privacy
+    from kapibara.features.billing import billing
+    from kapibara.features.privacy import privacy
     from database.billing import welcomed
     if bot is None or await welcomed(uid) or await privacy.blocked(uid):
         return False

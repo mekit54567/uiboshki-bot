@@ -2,7 +2,7 @@
 сборка сделала это неудачно, рядом остаётся база, какой она была до неё."""
 import sqlite3
 
-import backup
+from kapibara.ops import backup
 
 
 async def test_copy_before_start(db):

@@ -10,7 +10,7 @@ import os
 import numpy as np
 import pytest
 
-import local_embed
+from kapibara.features.ai import local_embed
 
 pytest.importorskip("tokenizers")
 
@@ -37,9 +37,9 @@ def _make_model(folder, *, roberta=False, cls=False, layers=2, hidden=16, heads=
     cfg = {"model_type": "xlm-roberta" if roberta else "bert", "hidden_size": hidden, "num_attention_heads": heads,
            "num_hidden_layers": layers, "intermediate_size": inter, "max_position_embeddings": 40,
            "layer_norm_eps": 1e-12, "hidden_act": "gelu", "pad_token_id": pad, "vocab_size": len(vocab)}
-    with open(os.path.join(folder, "config.json"), "w") as f:
+    with open(os.path.join(folder, "kapibara.core.config.json"), "w") as f:
         json.dump(cfg, f)
-    with open(os.path.join(folder, "1_Pooling", "config.json"), "w") as f:
+    with open(os.path.join(folder, "1_Pooling", "kapibara.core.config.json"), "w") as f:
         json.dump({"pooling_mode_cls_token": cls, "pooling_mode_mean_tokens": not cls}, f)
     rng = np.random.default_rng(1)
 

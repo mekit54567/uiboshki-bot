@@ -5,8 +5,8 @@
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from config import TIMEZONE
-from utils import esc
+from kapibara.core.config import TIMEZONE
+from kapibara.core.utils import esc
 
 TZ = ZoneInfo(TIMEZONE)
 

@@ -11,8 +11,8 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import aiosqlite
 
-from deadline_names import clean_course, pretty_subject, split_subject
-from utils import TZ
+from kapibara.features.deadlines.names import clean_course, pretty_subject, split_subject
+from kapibara.core.utils import TZ
 
 NAMES_KEY = "sdo_course_names"   # общий словарь {курс: название} в settings
 MAX_DONE = 6
@@ -26,7 +26,7 @@ async def remember_courses(courses: list[dict]):
     names = {k: v for k, v in names.items() if v}
     if not names:
         return
-    import locks
+    from kapibara.core import locks
     from database import get_setting, set_setting
     async with locks.lock("settings", NAMES_KEY):
         try:

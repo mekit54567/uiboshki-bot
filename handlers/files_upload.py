@@ -11,8 +11,8 @@ from aiogram.types import (
 )
 
 from database import add_file, get_files
-from keyboards import MAIN_KB, CANCEL_KB
-from utils import esc
+from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
+from kapibara.core.utils import esc
 
 router = Router()
 
@@ -49,7 +49,7 @@ def title_from_filename(file_name: str) -> str:
 
 
 async def _upload_subjects() -> list[str]:
-    from schedule_parser import get_group_subjects
+    from kapibara.features.schedule.parser import get_group_subjects
     known = {f["subject"] for f in await get_files() if f.get("subject")}
     return sorted(known | set(await get_group_subjects()))
 
@@ -77,7 +77,7 @@ async def cmd_upload(message: Message, state: FSMContext):
 async def _ask_category(target: Message, state: FSMContext, subject: str):
     """Второй шаг: тип файлов (лекции/практики/КР/…) — или «определить по
     названию» для смешанной пачки."""
-    from file_categories import CATEGORIES
+    from kapibara.features.lectures.categories import CATEGORIES
     await state.update_data(subject=subject)
     await state.set_state(UploadFile.waiting_category)
     rows = [[InlineKeyboardButton(text=label, callback_data=f"upct:{key}")] for key, label in CATEGORIES]
@@ -89,7 +89,7 @@ async def _ask_category(target: Message, state: FSMContext, subject: str):
 
 @router.callback_query(UploadFile.waiting_category, F.data.startswith("upct:"))
 async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
-    from file_categories import LABELS
+    from kapibara.features.lectures.categories import LABELS
     key = callback.data.split(":", 1)[1]
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
@@ -98,7 +98,7 @@ async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
 
 
 async def _start_collecting(target: Message, state: FSMContext, subject: str, category: str | None = None):
-    from file_categories import LABELS
+    from kapibara.features.lectures.categories import LABELS
     await state.set_state(UploadFile.waiting_file)
     await state.update_data(subject=subject, category=category, added=0, with_text=0, dupes=0, status_id=None)
     where = f"в «{esc(subject)}»" if subject else "без предмета"
@@ -170,7 +170,7 @@ async def receive_file(message: Message, state: FSMContext):
         else:
             fid = await add_file(title_from_filename(file_name), subject, tg_file_id, file_name,
                                  message.from_user.id, category=data.get("category"))
-            from file_text import extract_and_save
+            from kapibara.features.lectures.text import extract_and_save
             if await extract_and_save(message.bot, fid, tg_file_id, file_name):
                 data["with_text"] = data.get("with_text", 0) + 1
             data["added"] = data.get("added", 0) + 1

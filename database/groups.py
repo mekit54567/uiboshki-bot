@@ -79,7 +79,7 @@ async def set_subscription_until(user_id: int, until: str | None, source: str = 
 # (HOME_GROUP_ID = 0) — всё, как раньше.
 
 def home() -> int:
-    from config import HOME_GROUP_ID
+    from kapibara.core.config import HOME_GROUP_ID
     return HOME_GROUP_ID
 
 
@@ -105,7 +105,7 @@ async def viewer_group(user_id: int | None) -> int:
     gid = await get_user_group(user_id) if user_id else None
     if gid and gid != home():
         return gid
-    import members
+    from kapibara.features.groups import members
     return 0 if user_id and await members.known(user_id) is False else home()
 
 

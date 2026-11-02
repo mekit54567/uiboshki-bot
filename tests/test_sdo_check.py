@@ -6,9 +6,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-import config
-import sdo_check
-import sdo_parser
+from kapibara.core import config
+from kapibara.features.sdo import check as sdo_check
+from kapibara.features.sdo import parser as sdo_parser
 from tests.test_webapp_home import _make_init_data
 
 HOME = config.HOME_GROUP_ID
@@ -40,7 +40,7 @@ async def test_unknown_until_checked(client):
 
 @pytest.mark.asyncio
 async def test_home_group_ok_then_failed_keeps_last_ok(client, monkeypatch):
-    import scheduler
+    from kapibara.jobs import scheduler
     await scheduler._note_sync({"added": 1, "updated": 0})
     s = client(MINE)
     assert s["ok"] is True and s["checked_at"] == s["last_ok"]
@@ -58,7 +58,7 @@ async def test_home_group_ok_then_failed_keeps_last_ok(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_home_group_falls_back_to_health(client):
-    import health
+    from kapibara.ops import health
     await health.note("sdo_sync", False, "СДО не ответил")             # итог до 5.80 — только в /status
     s = client(MINE)
     assert s["ok"] is False and s["last_ok"] is None and s["checked_at"]
@@ -66,8 +66,8 @@ async def test_home_group_falls_back_to_health(client):
 
 @pytest.mark.asyncio
 async def test_other_group_by_donor(client, db, monkeypatch):
-    import group_sync
-    import sdo_accounts
+    from kapibara.features.groups import sync as group_sync
+    from kapibara.features.sdo import accounts as sdo_accounts
     await db.save_sdo_session(DONOR, sdo_accounts.encrypt("A" * 26))
     await group_sync.sync_group(OTHER)                                  # не делится — не проверяли
     assert client(MATE) is None

@@ -4,8 +4,8 @@ import base64
 import httpx
 import pytest
 
-import sdo_grades
-import sdo_submit
+from kapibara.features.sdo import grades as sdo_grades
+from kapibara.features.sdo import submit as sdo_submit
 
 PF = "https://online-edu.mirea.ru/pluginfile.php/9001/mod_assign/introattachment/0/"
 TASK = f"""<html><body><div role="main"><h2>Практическая работа №5</h2>
@@ -81,7 +81,7 @@ async def test_submit_respects_assignment_maxfiles(monkeypatch):
 @pytest.mark.asyncio
 async def test_webapp_task_and_signed_download(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_sdo_submit import COOKIE, EDIT_PAGE
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
@@ -123,7 +123,7 @@ async def test_webapp_task_and_signed_download(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_webapp_submit_several_files(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_sdo_submit import COOKIE, FakeMoodle
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
@@ -177,7 +177,7 @@ def test_quiz_page_attempts_best_and_open():
 @pytest.mark.asyncio
 async def test_webapp_quiz_screen(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_sdo_submit import COOKIE
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data

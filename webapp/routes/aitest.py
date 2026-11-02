@@ -32,7 +32,7 @@ HEADERS = {"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
 
 
 def _check(k: str, exp: int, sig: str) -> None:
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     if (not deps.BOT_TOKEN or k not in ai_bench.SETTINGS or exp < time.time()
             or not hmac.compare_digest(sig, _sig(exp, k))):
         raise HTTPException(404)
@@ -40,7 +40,7 @@ def _check(k: str, exp: int, sig: str) -> None:
 
 @router.get("/aitest")
 async def aitest_page(k: str = "vote", exp: int = 0, sig: str = "", view: str = "", full: str = ""):
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     _check(k, exp, sig)
     html = await ai_bench.load(k)
     if not html:
@@ -59,14 +59,14 @@ class Pick(BaseModel):
 
 @router.get("/aitest/pick")
 async def aitest_picks(k: str = "", exp: int = 0, sig: str = ""):
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     _check("vote", exp, sig)
     return {"picks": await ai_bench.vote_picks()}
 
 
 @router.post("/aitest/pick")
 async def aitest_pick(body: Pick, k: str = "", exp: int = 0, sig: str = ""):
-    import ai_bench
+    from kapibara.features.ai import bench as ai_bench
     _check("vote", exp, sig)
     current = await ai_bench.vote_pick(body.i, body.j)
     if current is None:

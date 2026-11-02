@@ -7,7 +7,7 @@
 
 from datetime import timedelta
 
-from utils import today_msk
+from kapibara.core.utils import today_msk
 
 KEEP_DAYS = 160          # семестр с запасом
 
@@ -28,7 +28,7 @@ async def record(user_id: int, courses: list[dict]):
     if att:
         await save_attendance_points(user_id, today_msk().isoformat(), att)
     # названия курсов — общим словарём: «Итоги дня» пишут «Анализ данных: +6»
-    import day_summary
+    from kapibara.features.notifications import day_summary
     await day_summary.remember_courses(courses)
 
 

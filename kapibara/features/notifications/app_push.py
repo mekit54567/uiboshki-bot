@@ -129,7 +129,7 @@ def enabled(platform: str) -> bool:
 
 async def _request(url: str, *, json_body: dict | None = None, form: dict | None = None,
                    headers: dict | None = None, http2: bool = False) -> tuple[int, dict]:
-    import net
+    from kapibara.core import net
     async with net.client(timeout=15, http2=http2) as c:
         r = await c.post(url, json=json_body, data=form, headers=headers or {})
         try:
@@ -281,7 +281,7 @@ async def send_apns(token: str, env: dict, tag: str = "") -> str:
 
 async def send(row: dict, data: dict) -> str:
     """Одно устройство (строка app_push) → ok / gone / error."""
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     key = parse_key(sdo_accounts.decrypt(row["key_enc"]) or "")
     if key is None:
         return GONE                                    # ключ не читается — пусть приложение подпишется заново
@@ -335,7 +335,7 @@ async def push_user(user_id: int, data: dict) -> int:
 async def rotate_keys() -> int:
     """Задали новый SDO_CRYPT_KEY/фразу — перешифровать ключи устройств (как
     sdo_accounts.rotate_all). → сколько перешифровано."""
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     from database.app_push import all_app_pushes, update_app_push_key
     n = 0
     for row in await all_app_pushes():

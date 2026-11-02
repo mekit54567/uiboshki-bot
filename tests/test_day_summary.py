@@ -4,8 +4,8 @@ from datetime import date, timedelta
 
 import pytest
 
-import day_summary
-import sdo_history
+from kapibara.features.notifications import day_summary
+from kapibara.features.sdo import history as sdo_history
 from tests.test_webapp_home import _ical, client  # noqa: F401 — фикстура клиента WebApp
 
 D = date(2026, 9, 26)
@@ -96,8 +96,8 @@ async def test_small_change_unknown_name_and_empty_day(db):
 
 @pytest.mark.asyncio
 async def test_api_day_summary_past_only(db, client, monkeypatch):  # noqa: F811
-    import schedule_parser
-    from utils import today_msk
+    from kapibara.features.schedule import parser as schedule_parser
+    from kapibara.core.utils import today_msk
     today = today_msk()
 
     async def raw():
@@ -119,8 +119,8 @@ async def test_api_day_summary_past_only(db, client, monkeypatch):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_api_day_summary_failure_drops_field(db, client, monkeypatch):  # noqa: F811
-    import schedule_parser
-    from utils import today_msk
+    from kapibara.features.schedule import parser as schedule_parser
+    from kapibara.core.utils import today_msk
 
     async def raw():
         return _ical(today_msk())

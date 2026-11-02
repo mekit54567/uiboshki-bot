@@ -80,7 +80,7 @@ async def test_menu_button_opens_webapp_when_url_set(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_chat_without_deepseek_key_uses_gemini_and_returns_pretty_html(db, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     import webapp.server as server
     from fastapi.testclient import TestClient
 
@@ -118,7 +118,7 @@ def _chat_client(monkeypatch):
 @pytest.mark.asyncio
 async def test_chat_photo_goes_to_gemini_vision_with_question(db, monkeypatch):
     import base64
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     seen = {}
 
     async def fake_image(image_bytes, mime="image/jpeg", subject="", lectures="", prompt=""):
@@ -140,7 +140,7 @@ async def test_chat_photo_goes_to_gemini_vision_with_question(db, monkeypatch):
 @pytest.mark.asyncio
 async def test_chat_document_text_goes_into_message(db, monkeypatch):
     import base64
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     seen = {}
 
     async def fake_history(history, subject="", backend="gemini", lectures="", extra_system=""):

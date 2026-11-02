@@ -51,8 +51,8 @@ def _min(platform: str) -> str:
 
 @router.get("/api/meta")
 async def api_meta():
-    import config
-    import oauth
+    from kapibara.core import config
+    from kapibara.features.identity import oauth
     return {
         "api": API_VERSION,
         "server": server_version(),
@@ -69,9 +69,9 @@ async def api_meta():
 
 
 async def _links() -> dict:
-    import config
+    from kapibara.core import config
     from webapp.server import _guide_link
-    import login_channel
+    from kapibara.features.identity import login_channel
     # news — открытый канал Капибары (LOGIN_CHANNEL) для «Капибара в других местах»
     return {"bot": f"https://t.me/{config.BOT_USERNAME}", "channel": config.CHANNEL_URL or "",
             "contact": config.CONTACT_URL or "", "sdo_guide": await _guide_link(), "news": login_channel.link(),

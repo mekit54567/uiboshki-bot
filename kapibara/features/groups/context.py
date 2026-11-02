@@ -14,9 +14,9 @@ import aiosqlite
 
 import database
 from database import _conn
-from config import GROUP_NAME
-from lecture_day import NIGHT_UNTIL
-from utils import TZ, today_msk
+from kapibara.core.config import GROUP_NAME
+from kapibara.features.lectures.day import NIGHT_UNTIL
+from kapibara.core.utils import TZ, today_msk
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ async def list_homework(limit: int = 30, group_id: int | None = None) -> list[di
 
 
 async def _schedule_lines(days: int = 2, user_id: int | None = None) -> list[str]:
-    from schedule_parser import format_day, parse_events_for_date, raw_for_user
+    from kapibara.features.schedule.parser import format_day, parse_events_for_date, raw_for_user
     try:
         raw = await raw_for_user(user_id or 0)
     except Exception as e:
@@ -71,8 +71,8 @@ def _lecture_numbers(raw: bytes, events: list[dict], day: date) -> list[str]:
     """«Моделирование бизнес-процессов (лк) — лекция №5 семестра»: какая по
     счёту лекция предмета (Никита 21.10: «можно посмотреть, какая она по
     счёту, по расписанию»)."""
-    import attendance
-    from schedule_format import _split_kind
+    from kapibara.features.schedule import attendance
+    from kapibara.features.schedule.format import _split_kind
     out, seen = [], set()
     for e in events:
         title, _, short = _split_kind(e.get("summary", ""))
@@ -89,7 +89,7 @@ def _lecture_numbers(raw: bytes, events: list[dict], day: date) -> list[str]:
 
 
 async def build_group_context(user_id: int, deadline_days: int = 21) -> str:
-    import groups
+    from kapibara.features.groups import groups
     from database.groups import viewer_group
     gid = await viewer_group(user_id)
     name = (await groups.name_of(gid)) or GROUP_NAME

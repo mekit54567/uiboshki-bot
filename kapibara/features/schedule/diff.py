@@ -19,10 +19,10 @@ import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from config import GROUP_CHAT_ID, TIMEZONE
+from kapibara.core.config import GROUP_CHAT_ID, TIMEZONE
 from database import get_schedule_snapshot, save_schedule_snapshot
-from schedule_parser import fetch_schedule_raw, parse_events_for_date
-from utils import esc
+from kapibara.features.schedule.parser import fetch_schedule_raw, parse_events_for_date
+from kapibara.core.utils import esc
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ def annotate(lessons: list[dict], marks: list[dict], hide: frozenset = frozenset
     """Отметки — в пары дня (lessons_for_date): у пары с другим кабинетом
     room_was и room_changed_at; возвращает отменённые пары (их в lessons нет)
     в том же виде, что пары, без предметов по выбору, на которые не ходит."""
-    from schedule_format import _split_kind
+    from kapibara.features.schedule.format import _split_kind
     if not marks:
         return []
 
@@ -185,9 +185,9 @@ def annotate(lessons: list[dict], marks: list[dict], hide: frozenset = frozenset
 async def day_changes(user_id: int, d, lessons: list[dict]) -> list[dict]:
     """Для /api/today и /api/day: отметить пары дня d и вернуть отменённые.
     Только своя группа (её расписание проверяет check_schedule_changes)."""
-    import groups
+    from kapibara.features.groups import groups
     from database import get_user_group
-    from optional_subjects import HIDE
+    from kapibara.features.groups.optional_subjects import HIDE
     gid = await get_user_group(user_id)
     if gid and gid != groups.home_id():
         return []
@@ -211,15 +211,15 @@ _empty_once: set[str] = set()
 
 def _visible(events: list[dict], hide: frozenset) -> list[dict]:
     """Без предметов по выбору, на которые человек не ходит."""
-    from schedule_format import _split_kind
+    from kapibara.features.schedule.format import _split_kind
     return [e for e in events if _split_kind(e["summary"])[0] not in hide] if hide else events
 
 
 async def check_schedule_changes(bot):
-    import notify_prefs
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_all_optional_answers, get_reminder_users
-    from optional_subjects import no_filter
+    from kapibara.features.groups.optional_subjects import no_filter
     try:
         raw = await fetch_schedule_raw()
     except Exception as e:
@@ -286,7 +286,7 @@ async def check_schedule_changes(bot):
             if not text:
                 continue
             try:
-                from delivery import deliver
+                from kapibara.features.notifications.delivery import deliver
                 await deliver(bot, uid, text, kind="lessons", tab="today",
                               title=f"Изменилось расписание на {weekday_label}",
                               body="\n".join(text.split("\n")[2:]))

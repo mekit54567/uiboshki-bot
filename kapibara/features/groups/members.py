@@ -31,7 +31,7 @@ CHAT_TTL = 60
 
 
 async def chat_id() -> int:
-    import config
+    from kapibara.core import config
     import database
     from database import get_setting
     if config.GROUP_CHAT_ID:
@@ -82,7 +82,7 @@ async def check(bot, user_id: int) -> bool | None:
 
 async def known(user_id: int) -> bool | None:
     """Без запроса в Telegram: True/False по последнему ответу, None — не знаем."""
-    import config
+    from kapibara.core import config
     if config.is_starosta(user_id):
         return True
     if not await chat_id():
@@ -92,7 +92,7 @@ async def known(user_id: int) -> bool | None:
 
 async def is_member(user_id: int, bot=None) -> bool | None:
     """Свежий ответ: из памяти, а если устарел — у Telegram (если дан bot)."""
-    import config
+    from kapibara.core import config
     if config.is_starosta(user_id):
         return True
     if not await chat_id():
@@ -108,7 +108,7 @@ async def is_member(user_id: int, bot=None) -> bool | None:
 async def refresh_later(bot, user_id: int):
     """Обновить в фоне, если ответ устарел (заход в приложение или к боту)."""
     import asyncio
-    import config
+    from kapibara.core import config
     if config.is_starosta(user_id) or bot is None or not await chat_id():
         return
     if not (await _cached(user_id))[1]:

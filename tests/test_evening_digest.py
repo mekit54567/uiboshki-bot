@@ -5,9 +5,9 @@ from datetime import date, datetime
 
 import pytest
 
-import evening_digest
-import notify_prefs
-from utils import TZ
+from kapibara.features.notifications import evening_digest
+from kapibara.features.notifications import prefs as notify_prefs
+from kapibara.core.utils import TZ
 
 TUE = date(2026, 10, 13)                      # завтра
 NOW = datetime(2026, 10, 12, 20, 0, tzinfo=TZ)
@@ -22,7 +22,7 @@ def _lessons(by_date):
 
 @pytest.fixture
 def day(monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     def set_day(items):
         monkeypatch.setattr(schedule_parser, "lessons_for_date", _lessons({TUE: items}))
@@ -100,7 +100,7 @@ def world(db, day, monkeypatch):
     """Бот, своя группа, погода без сети, «сегодня» — 12.10."""
     import database.deadlines
     import handlers.weather
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     async def raw(*a, **k):
         return b""
@@ -170,7 +170,7 @@ async def test_design2_off_sends_nothing(db, world, day, monkeypatch):
 @pytest.mark.asyncio
 async def test_push_title_is_summary(db, world, day, monkeypatch):
     """Пуш: заголовок — «Завтра: …», текст — без повтора заголовка."""
-    import delivery
+    from kapibara.features.notifications import delivery
     bot, sent = world
     day(PAIRS)
     await db.upsert_user(1, "", "X")
@@ -190,7 +190,7 @@ async def test_push_title_is_summary(db, world, day, monkeypatch):
 @pytest.mark.asyncio
 async def test_api_notify_evening(db, monkeypatch):
     from fastapi.testclient import TestClient
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
 

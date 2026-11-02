@@ -9,7 +9,7 @@
 import logging
 from datetime import datetime, timedelta
 
-from utils import TZ
+from kapibara.core.utils import TZ
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def resolve(d: dict, preset: str | None, at: str | None, now: datetime | None = 
 
 def label(at: str, now: datetime | None = None) -> str:
     """«завтра в 18:00», «сегодня в 21:00», «5 окт в 9:00»."""
-    from schedule_parser import MONTHS_GEN
+    from kapibara.features.schedule.parser import MONTHS_GEN
     now = now or datetime.now(TZ)
     t = datetime.strptime(at, FMT)
     days = (t.date() - now.date()).days
@@ -59,8 +59,8 @@ def label(at: str, now: datetime | None = None) -> str:
 async def send_due(bot, now: datetime | None = None):
     from database import due_deadline_reminders, mark_deadline_reminder_sent
     from handlers.deadlines import due_label
-    from keyboards import app_button
-    from utils import esc
+    from kapibara.bot.keyboards import app_button
+    from kapibara.core.utils import esc
     now = now or datetime.now(TZ)
     for r in await due_deadline_reminders(now.strftime(FMT)):
         await mark_deadline_reminder_sent(r["user_id"], r["deadline_id"], r["remind_at"])
@@ -70,12 +70,12 @@ async def send_due(bot, now: datetime | None = None):
         desc = (r.get("description") or "").strip()
         text = (f"⏰ <b>Напоминание: {esc(r['subject'])}</b>\n{due_label(due, now.date(), r.get('due_time'))}"
                 + (f"\n📝 {esc(desc[:300])}" if desc and not desc.startswith("http") else ""))
-        from push_text import split_subject, when
+        from kapibara.features.notifications.push_text import split_subject, when
         name, course = split_subject(r["subject"])
         try:
             # через слой доставки: раньше — только Telegram, и в приложении
             # (вход через VK/Яндекс) своё напоминание не приходило совсем
-            import delivery
+            from kapibara.features.notifications import delivery
             await delivery.deliver(bot, r["user_id"], text, kind="deadlines", tab="deadlines",
                                    title=f"Напоминание: {name}",
                                    body=" · ".join(x for x in (course, "срок " + when(r["due_date"], r.get("due_time"), now.date())) if x),

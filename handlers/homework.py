@@ -12,7 +12,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from database import add_hw, delete_hw, get_hw_by_subject, get_hw_subjects, init_hw_table, is_editor
 from database.homework import get_hw
-from utils import esc, parse_day_month, today_msk, utc_to_msk_date
+from kapibara.core.utils import esc, parse_day_month, today_msk, utc_to_msk_date
 
 router = Router()
 logger = logging.getLogger(__name__)

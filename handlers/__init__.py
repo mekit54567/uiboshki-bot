@@ -32,7 +32,7 @@ cancel_router = Router(name="cancel")
 async def cmd_cancel_any(message: Message, state: FSMContext, interrupted_fsm_state: str | None = None):
     current = interrupted_fsm_state or await state.get_state()
     await state.clear()
-    from keyboards import MAIN_KB
+    from kapibara.bot.keyboards import MAIN_KB
     await message.answer("Отменил." if current else "Отменять нечего.", reply_markup=MAIN_KB)
 
 
@@ -48,7 +48,7 @@ async def _anonymize_feed_on_startup():
 
 async def _ensure_home_group():
     """Своя группа (ICAL_URL) — в справочнике групп (groups.py)."""
-    import groups
+    from kapibara.features.groups import groups
     await groups.ensure_home()
 
 

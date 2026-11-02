@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-import config
+from kapibara.core import config
 from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
-from utils import TZ
+from kapibara.core.utils import TZ
 
 ME, MATE, STRANGER = 501, 502, 503
 OTHER = 5002
@@ -15,7 +15,7 @@ OTHER = 5002
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     import webapp.server as server
     from database.groups import upsert_group
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -100,7 +100,7 @@ async def test_validation(client):
 
 @pytest.mark.asyncio
 async def test_not_member_has_no_group_counts(client, monkeypatch):
-    import members
+    from kapibara.features.groups import members
     c, h = client
 
     async def known(uid):
@@ -111,7 +111,7 @@ async def test_not_member_has_no_group_counts(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ratelimit(client, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     monkeypatch.setitem(ratelimit.LIMITS, "reaction", (2, 600))
     c, h = client
     s = _start()
@@ -122,7 +122,7 @@ async def test_ratelimit(client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_erased_with_user(client, db):
-    import lesson_reactions as lr
+    from kapibara.features.social import reactions as lr
     from database.privacy import erase_user
     c, h = client
     s = _start()

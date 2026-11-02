@@ -18,7 +18,7 @@ class ItemBody(BaseModel):
 @router.post("/api/report")
 async def api_report(body: ItemBody, user: dict = CurrentUser):
     """Пожаловаться: запись уходит владельцу в бота с «Удалить / Оставить»."""
-    import ugc
+    from kapibara.features.social import ugc
     try:
         await ugc.report(deps.tg_bot(), user["id"], body.kind, body.id, body.reason)
     except ugc.ReportError as e:
@@ -29,7 +29,7 @@ async def api_report(body: ItemBody, user: dict = CurrentUser):
 @router.post("/api/hide-author")
 async def api_hide_author(body: ItemBody, user: dict = CurrentUser):
     """Скрыть автора записи — только у себя."""
-    import ugc
+    from kapibara.features.social import ugc
     try:
         await ugc.hide_author(user["id"], body.kind, body.id)
     except ugc.ReportError as e:
@@ -39,12 +39,12 @@ async def api_hide_author(body: ItemBody, user: dict = CurrentUser):
 
 @router.get("/api/hidden-authors")
 async def api_hidden(user: dict = CurrentUser):
-    import ugc
+    from kapibara.features.social import ugc
     return {"count": len(await ugc.hidden(user["id"]))}
 
 
 @router.delete("/api/hidden-authors")
 async def api_unhide(user: dict = CurrentUser):
     """«Показать всех снова» (Ещё → Безопасность)."""
-    import ugc
+    from kapibara.features.social import ugc
     return {"ok": True, "count": await ugc.unhide_all(user["id"])}

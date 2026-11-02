@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from utils import esc
+from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 
 router = Router(name="group_pick")
@@ -31,7 +31,7 @@ async def ask_group(message: Message, state: FSMContext, intro: str = ""):
 
 @router.message(Command("group"))
 async def cmd_group(message: Message, state: FSMContext):
-    import groups
+    from kapibara.features.groups import groups
     from database import upsert_user
     user = message.from_user
     await upsert_user(user.id, user.username or "", user.full_name or "")
@@ -41,7 +41,7 @@ async def cmd_group(message: Message, state: FSMContext):
 
 @router.message(GroupPick.query, F.text)
 async def group_query(message: Message, state: FSMContext):
-    import groups
+    from kapibara.features.groups import groups
     found = await groups.search(message.text)
     if not found:
         await message.answer("Не нашёл такую группу. Напиши, как в расписании: <b>УИБО-03-24</b>. "
@@ -54,7 +54,7 @@ async def group_query(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("grp:"))
 async def group_chosen(callback: CallbackQuery, state: FSMContext):
-    import groups
+    from kapibara.features.groups import groups
     gid = callback.data.split(":", 1)[1]
     g = await groups.choose(callback.from_user.id, int(gid), callback.bot) if gid.isdigit() else None
     if not g:
@@ -81,7 +81,7 @@ async def group_chosen(callback: CallbackQuery, state: FSMContext):
 
 async def request_admin(bot, user, group: dict) -> str:
     """Запрос «я староста группы» владельцу бота. → текст ответа человеку."""
-    from config import STAROSTA_ID
+    from kapibara.core.config import STAROSTA_ID
     from database import is_group_admin
     if await is_group_admin(user.id, group["id"]):
         return f"Ты уже староста группы {group['name']}."
@@ -99,7 +99,7 @@ async def request_admin(bot, user, group: dict) -> str:
 
 @router.message(Command("iamstarosta"))
 async def cmd_iam_starosta(message: Message):
-    import groups
+    from kapibara.features.groups import groups
     g = await groups.of_user(message.from_user.id)
     if not g:
         await message.answer("Сначала выбери группу — /group")
@@ -112,9 +112,9 @@ async def cmd_iam_starosta(message: Message):
 
 @router.callback_query(F.data.startswith("gadm:"))
 async def admin_decision(callback: CallbackQuery):
-    from config import is_starosta
+    from kapibara.core.config import is_starosta
     from database import add_group_admin
-    import groups
+    from kapibara.features.groups import groups
     if not is_starosta(callback.from_user.id):
         await callback.answer("Только владелец бота", show_alert=True)
         return

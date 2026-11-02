@@ -4,14 +4,14 @@ import asyncio
 
 import pytest
 
-import lecture_summary
+from kapibara.features.lectures import summary as lecture_summary
 
 TEXT = "Бухгалтерский учёт. Дебет — левая сторона счёта, кредит — правая. Баланс: актив = пассив."
 SUMMARY = "**Основы учёта**\n- Дебет — левая сторона счёта\n- Кредит — правая\n- Актив = пассив"
 
 
 def _fake_ai(monkeypatch, calls):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
 
     async def fake_chat(history, subject="", extra_system="", lectures=""):
         calls.append(lectures)
@@ -69,7 +69,7 @@ async def test_two_presses_at_once_call_ai_once(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_no_text_or_ai_failure(db, monkeypatch):
-    import ai_solver
+    from kapibara.features.ai import solver as ai_solver
     fid = await db.add_file("Скан", "Бухучёт", "TG3", "scan.pdf", 0)
     c, h = _client(monkeypatch)
     assert c.post(f"/api/summary/{fid}", headers=h).status_code == 422

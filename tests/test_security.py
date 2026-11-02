@@ -1,8 +1,8 @@
 """Безопасность: ключ из секретной фразы с переходом без потерь, лимиты частоты."""
 import pytest
 
-import ratelimit
-import sdo_accounts
+from kapibara.core import ratelimit
+from kapibara.features.sdo import accounts as sdo_accounts
 
 
 def test_passphrase_key_and_rotation(monkeypatch):
@@ -24,7 +24,7 @@ async def test_rotate_all_on_new_key(db, monkeypatch):
     """152-ФЗ, 16.10: задали отдельный ключ — при запуске все входы (и
     устаревшие) перешифровываются, не дожидаясь проверки; /status больше не
     предупреждает про ключ от BOT_TOKEN."""
-    import health
+    from kapibara.ops import health
     from database import get_sdo_sessions, save_sdo_session, set_sdo_status
     monkeypatch.delenv("SDO_CRYPT_KEY", raising=False)
     monkeypatch.delenv("SDO_CRYPT_PASSPHRASE", raising=False)
@@ -71,13 +71,13 @@ async def test_ai_daily_limit_switch(db, monkeypatch):
     """AI_DAILY_LIMIT: 0 — без дневного лимита (но счёт идёт — для /stats);
     задан — после N вопросов за календарный день МСК «day»; Никите
     (config.is_starosta) не действует; счёт в базе — деплой его не обнуляет; новый день — заново."""
-    import ai_quota
-    import config
+    from kapibara.features.ai import quota as ai_quota
+    from kapibara.core import config
     import database.homework
     from datetime import date
     from tests.conftest import STAROSTA_ID
     day = [date(2026, 10, 6)]
-    monkeypatch.setattr("utils.today_msk", lambda: day[0])
+    monkeypatch.setattr("kapibara.core.utils.today_msk", lambda: day[0])
     monkeypatch.setattr(ratelimit, "allow", lambda action, uid: True)      # минутный — не о том
     await db.upsert_user(555, "u", "U")
     await db.set_user_group(555, config.HOME_GROUP_ID)                     # своя группа — тариф own

@@ -53,7 +53,7 @@ def _write_through(monkeypatch):
 def _sdo_breaker_reset():
     """Предохранитель СДО (sdo_net) — свой в каждом тесте: тест, где СДО «не
     отвечает», не должен ронять соседей."""
-    import sdo_net
+    from kapibara.features.sdo import net as sdo_net
     sdo_net.reset()
     yield
     sdo_net.reset()
@@ -63,7 +63,7 @@ def _sdo_breaker_reset():
 def _no_schedule_network(monkeypatch):
     """Кнопки предметов (/solve, /upload) строятся из расписания группы —
     в тестах без сети: иначе каждый такой тест ходил бы за ical МИРЭА."""
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     async def no_subjects(*args, **kwargs):
         return []
@@ -77,7 +77,7 @@ def _no_sdo_calendar_network(monkeypatch):
     сети — как будто AJAX недоступен, и работает запасной путь (страница
     «Предстоящие», её тесты подменяют fetch_upcoming_html). Сам календарь —
     tests/test_sdo_calendar.py."""
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
 
     async def unavailable():
         return None
@@ -91,12 +91,12 @@ def _fixed_semester(monkeypatch):
     26.09.2026, иначе с февраля 2027 они бы считались прошлым семестром и
     тесты синка СДО упали бы сами собой. Явная дата — по-прежнему своя."""
     from datetime import date
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     real = sdo_parser.current_semester_tag
     monkeypatch.setattr(sdo_parser, "current_semester_tag", lambda today=None: real(today or date(2026, 9, 26)))
     # сроки работ ТК (срок прошёл / 15 дней ждём оценку) — от той же даты
     from datetime import datetime
-    import sdo_grades
+    from kapibara.features.sdo import grades as sdo_grades
     monkeypatch.setattr(sdo_grades, "_now_msk", lambda: datetime(2026, 9, 26, 12, 0))
 
 
@@ -109,7 +109,7 @@ def _no_plus_welcome(monkeypatch):
     """Приветствие «Капибары+» при первом заходе (plus_welcome) шлёт лишнее
     сообщение — в чужих тестах оно мешало бы считать ответы; своё —
     tests/test_grant.py."""
-    import plus_welcome
+    from kapibara.features.billing import welcome as plus_welcome
     monkeypatch.setattr(plus_welcome, "AUTO", False)
     plus_welcome._checked.clear()
 
@@ -119,7 +119,7 @@ def _consent_given(request, monkeypatch):
     """152-ФЗ: без согласия бот и API закрыты (privacy.blocked). Тесты
     остального ходят от имени тех, кто согласие дал; сама блокировка —
     tests/test_privacy.py (метка consent_real)."""
-    import privacy
+    from kapibara.features.privacy import privacy
     privacy._given.clear()
     privacy._open.clear()
     if "consent_real" in request.keywords:
@@ -138,11 +138,11 @@ def _consent_given(request, monkeypatch):
 def _fresh_rate_limits():
     """Счётчики ratelimit живут в памяти процесса — между тестами сбрасываем,
     иначе один тест на лимит (21 дедлайн подряд) роняет соседние с 429."""
-    import mirea_schedule_api
-    import ratelimit
+    from kapibara.features.schedule import mirea_api as mirea_schedule_api
+    from kapibara.core import ratelimit
     ratelimit.reset()
     mirea_schedule_api.reset_ical_cache()       # кэш чужих календарей — тоже в памяти процесса
-    import gemini_solver
+    from kapibara.features.ai import gemini as gemini_solver
     gemini_solver._primary_rest_until = 0.0     # «основная модель отдыхает» после 429 — между тестами не тащим
     gemini_solver._missing.clear()              # и пропавшие запасные
     spare, main = gemini_solver.AI_SPARE_MODEL, gemini_solver.AI_MAIN

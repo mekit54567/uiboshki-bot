@@ -30,7 +30,7 @@ class _Tuned(sqlite3.Connection):
 
 
 def connect():
-    import timing                # время в базе — в «Долгие запросы» /status
+    from kapibara.core import timing                # время в базе — в «Долгие запросы» /status
     return timing.Timed(aiosqlite.connect(database.DATABASE_PATH, timeout=BUSY_SECONDS, factory=_Tuned), "db")
 
 

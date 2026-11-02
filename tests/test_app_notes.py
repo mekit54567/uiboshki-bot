@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-import config
+from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
 
@@ -15,7 +15,7 @@ OTHER = 5001
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     import webapp.server as server
     from database.groups import upsert_group
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -32,7 +32,7 @@ async def client(db, monkeypatch):
 
 
 def _day(n=1):
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     return (today_msk() + timedelta(days=n)).isoformat()
 
 
@@ -63,7 +63,7 @@ async def test_add_note_validation(client):
 
 @pytest.mark.asyncio
 async def test_add_note_ratelimit(client, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     monkeypatch.setitem(ratelimit.LIMITS, "note", (2, 600))
     c, h = client
     codes = [c.post("/api/notes", json={"date": _day(), "text": f"{i}"}, headers=h(AUTHOR)).status_code

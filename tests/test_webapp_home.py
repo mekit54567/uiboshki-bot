@@ -23,7 +23,7 @@ def _ical(day) -> bytes:
 
 
 def test_lessons_for_date_statuses_and_merge():
-    from schedule_parser import lessons_for_date
+    from kapibara.features.schedule.parser import lessons_for_date
     day = datetime(2026, 9, 24, tzinfo=TZ).date()
     lessons = lessons_for_date(_ical(day), day, now=datetime(2026, 9, 24, 11, 0, tzinfo=TZ))
     assert [(l["num"], l["start"], l["end"], l["status"]) for l in lessons] == [
@@ -44,8 +44,8 @@ def client(monkeypatch):
 @pytest.mark.asyncio
 async def test_api_today(db, client, monkeypatch):
     import handlers.weather as weather
-    import schedule_parser
-    from utils import today_msk
+    from kapibara.features.schedule import parser as schedule_parser
+    from kapibara.core.utils import today_msk
     today = today_msk()
 
     async def raw():
@@ -72,7 +72,7 @@ async def test_api_today(db, client, monkeypatch):
 @pytest.mark.asyncio
 async def test_api_today_survives_schedule_outage(db, client, monkeypatch):
     import handlers.weather as weather
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     async def down():
         raise RuntimeError("english.mirea.ru не отвечает")
@@ -88,7 +88,7 @@ async def test_api_today_survives_schedule_outage(db, client, monkeypatch):
 
 
 def test_api_day(db, client, monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     day = datetime(2026, 9, 24, tzinfo=TZ).date()
 
     async def raw():
@@ -156,7 +156,7 @@ def _headers_for(uid):
 
 @pytest.mark.asyncio
 async def test_edit_permissions_and_sdo_does_not_overwrite(db, client, monkeypatch):
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     from tests.conftest import STAROSTA_ID
     c, _ = client
     shared = await db.add_deadline("Практическая работа №1 - срок сдачи (Архитектура_Экзамен [I.26-27])",
@@ -259,7 +259,7 @@ def _week_ical(monday) -> bytes:
 
 @pytest.mark.asyncio
 async def test_api_week_number_and_dots(db, client, monkeypatch):
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
     c, headers = client
     monday = datetime(2026, 9, 21, tzinfo=TZ).date()
 

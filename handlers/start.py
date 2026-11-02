@@ -7,9 +7,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import upsert_user, set_subscription, get_user
-from config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
-from keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
-from utils import esc, split_by_lines
+from kapibara.core.config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
+from kapibara.bot.keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
+from kapibara.core.utils import esc, split_by_lines
 from kapibara.core.telegram import cosmetic
 
 router = Router()
@@ -52,7 +52,7 @@ async def send_file_to(bot, user_id: int, fid) -> bool:
 
 async def send_hw_to(bot, user_id: int, hw_id) -> bool:
     """Файл ДЗ в личку (кнопка «Открыть файл» у ДЗ в WebApp)."""
-    from group_context import list_homework
+    from kapibara.features.groups.context import list_homework
     item = next((h for h in await list_homework(500) if str(h["id"]) == str(hw_id)), None)
     if not item or not item.get("file_id"):
         return False
@@ -88,7 +88,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         await ask_login(message, payload[6:])
         return
     if payload.startswith("ref_"):              # пришёл по приглашению друга (referrals.py)
-        import referrals
+        from kapibara.features.billing import referrals
         await referrals.bind(user.id, payload[4:], was_new=not existed)
     if payload == "plus" and existed:           # с сайта /plus: «Капибара+» и оплата (новым — приветствие)
         from handlers.plus import plus_text
@@ -103,7 +103,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         await welcome(message, user, state, store=True)
         return
     if payload == "site":                       # кнопка «Открыть бота» на сайте /about — для /stats
-        import stats
+        from kapibara.ops import stats
         await stats.track(user.id, "from_site")
     await cmd_start(message, state)
 
@@ -115,7 +115,7 @@ async def ask_login(message: Message, code: str):
     if not login or login["status"] != "wait":
         await message.answer("Ссылка для входа устарела — нажми «Войти через Telegram» в приложении ещё раз.")
         return
-    import login_channel
+    from kapibara.features.identity import login_channel
     if await login_channel.needed(message.bot, message.chat.id):     # новый — сначала канал
         store = login_channel.store_app(login["device"])
         await message.answer(login_channel.text(store), reply_markup=login_channel.keyboard(f"login:{code}", store))
@@ -136,7 +136,7 @@ def login_prompt(code: str, login: dict) -> tuple[str, InlineKeyboardMarkup]:
 @router.callback_query(F.data.startswith("chan:"))
 async def channel_decision(callback: CallbackQuery, state: FSMContext | None = None):
     """«Я в канале, дальше» / «Позже» (login_channel.py) → «это вы?» или приветствие."""
-    import login_channel
+    from kapibara.features.identity import login_channel
     _, verdict, step = callback.data.split(":", 2)
     if verdict == "ok" and await login_channel.subscribed(callback.bot, callback.from_user.id) is False:
         await callback.answer("Пока не вижу подписки. Подпишись на канал и нажми ещё раз.", show_alert=True)
@@ -209,7 +209,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     об оплате (правило Apple 3.1.1: из приложения — не к другой оплате; цены
     остаются в /plus и /help). Новому — сначала канал (login_channel.py)."""
     await upsert_user(user.id, user.username or "", user.full_name or "")
-    import login_channel
+    from kapibara.features.identity import login_channel
     if not checked and await login_channel.needed(message.bot, user.id):
         await message.answer(login_channel.text(False, login=False),
                              reply_markup=login_channel.keyboard("start:ios" if store else "start", False))
@@ -217,7 +217,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     # Одно короткое сообщение с одной кнопкой. Сначала оно уходит с
     # ReplyKeyboardRemove (убрать старую большую клавиатуру у тех, у кого она
     # осталась), потом к нему же цепляется кнопка «Открыть приложение».
-    import groups
+    from kapibara.features.groups import groups
     # новый человек (после этапа 1: любая группа) — тем же сообщением спросить группу
     ask = state is not None and groups.home_id() and not await groups.of_user(user.id)
     if ask:
@@ -252,9 +252,9 @@ def _optional_kb(i: int) -> InlineKeyboardMarkup:
 async def ask_optional(message: Message, user_id: int, all_subjects: bool = False):
     """Спросить про предметы по выбору: после /start — только те, на которые
     ещё не ответил; /optional — все (чтобы поменять ответ)."""
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_optional_answers
-    from optional_subjects import pending_for
+    from kapibara.features.groups.optional_subjects import pending_for
     subjects = OPTIONAL_SUBJECTS if all_subjects else await pending_for(user_id)
     answers = await get_optional_answers(user_id) if all_subjects else {}
     for s in subjects:
@@ -273,7 +273,7 @@ async def cmd_optional(message: Message):
 
 @router.callback_query(F.data.startswith("opt:"))
 async def optional_answer(callback: CallbackQuery):
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import set_optional_answer
     _, i, attend = callback.data.split(":")
     if not i.isdigit() or int(i) >= len(OPTIONAL_SUBJECTS):
@@ -294,7 +294,7 @@ async def cmd_app(message: Message):
     if not kb:
         await message.answer("🚧 Приложение скоро появится — его ещё не включили.")
         return
-    import login_channel
+    from kapibara.features.identity import login_channel
     news = login_channel.news_line()
     await message.answer(
         "🚀 Расписание, дедлайны, ДЗ, файлы и чат с ИИ — в одном окне.\n"
@@ -339,7 +339,7 @@ async def handle_action(callback: CallbackQuery):
         await callback.bot.send_message(uid, ACTION_HINTS[action])
 
     elif action == "nextweek":
-        from schedule_parser import get_next_week_schedule
+        from kapibara.features.schedule.parser import get_next_week_schedule
         wait = await callback.bot.send_message(uid, "⏳ Загружаю следующую неделю...")
         from database import get_user_group
         text = await get_next_week_schedule(await get_user_group(uid))
@@ -384,7 +384,7 @@ RUSTORE_LINE = f"🤖 На Android — <a href=\"{RUSTORE_URL}\">приложе�
 def stores_line() -> str:
     """Строка о приложении в сторах. App Store — только когда задан
     APPSTORE_URL (приложение уже в сторе), до этого — только RuStore."""
-    import config
+    from kapibara.core import config
     if not config.APPSTORE_URL:
         return RUSTORE_LINE
     return (f"📲 Приложение — в <a href=\"{RUSTORE_URL}\">RuStore</a> (Android) "
@@ -397,7 +397,7 @@ def start_text(first_name: str, group: str | None = None) -> str:
     поэтому представляется Капибарой, а группа человека — отдельной строкой,
     если он её уже выбрал (новому вопрос о группе дописывает welcome).
     Абзацы — через пустую строку: without_pay убирает абзац об оплате."""
-    import login_channel
+    from kapibara.features.identity import login_channel
     news = login_channel.news_line()
     mine = f"\n🎓 Твоя группа — <b>{esc(group)}</b> · сменить: /group" if group else ""
     return (
@@ -418,7 +418,7 @@ def start_text(first_name: str, group: str | None = None) -> str:
 
 
 def _news() -> str:
-    import login_channel
+    from kapibara.features.identity import login_channel
     news = login_channel.news_line()
     return f"{news}\n\n" if news else ""
 
@@ -521,7 +521,7 @@ async def cmd_setreminder(message: Message):
     if mins < 1 or mins > 60:
         await message.answer("❌ Введи число от 1 до 60")
         return
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     await notify_prefs.set_all_reminders(message.from_user.id, mins)
     await message.answer(f"✅ Буду напоминать за <b>{mins} минут</b> до пары!\n"
                          "Отдельно для первой пары и после перемены — в приложении: ☰ Ещё → Уведомления.",
@@ -533,7 +533,7 @@ REMINDER_CHOICES = (5, 10, 15, 30)
 
 def _settings_view(user: dict | None) -> tuple[str, InlineKeyboardMarkup]:
     """Настройки — кнопками, а не «напиши /setreminder 15»: одно касание."""
-    import notify_prefs
+    from kapibara.features.notifications import prefs as notify_prefs
     mins = (user or {}).get("reminder_minutes", 15) or 15
     sub = bool((user or {}).get("subscribed"))
     prefs = notify_prefs.merge((user or {}).get("notify"))
@@ -546,7 +546,7 @@ def _settings_view(user: dict | None) -> tuple[str, InlineKeyboardMarkup]:
         f"Рассылка приходит каждое утро в {SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d}: расписание и погода.\n\n"
         "Дни недели, погода, подсказка про другой корпус — в приложении: ☰ Ещё → Уведомления."
     )
-    from keyboards import app_button
+    from kapibara.bot.keyboards import app_button
     app = app_button("🔔 Настроить в приложении", "notify")
     soon = [InlineKeyboardButton(text=("✓ " if not prefs["deadline_soon"] else "") + "срок: нет", callback_data="set:soon:0")]
     soon += [InlineKeyboardButton(text=("✓ " if prefs["deadline_soon"] and h == prefs["deadline_soon_hours"] else "")
@@ -587,14 +587,14 @@ async def settings_change(callback: CallbackQuery):
         user = await get_user(uid)
         await set_subscription(uid, 0 if (user and user.get("subscribed")) else 1)
     elif parts[1] == "rem" and len(parts) == 3 and parts[2].isdigit() and int(parts[2]) in REMINDER_CHOICES:
-        import notify_prefs
+        from kapibara.features.notifications import prefs as notify_prefs
         await notify_prefs.set_all_reminders(uid, int(parts[2]))
     elif parts[1] == "soon" and len(parts) == 3 and parts[2].isdigit():
-        import notify_prefs
+        from kapibara.features.notifications import prefs as notify_prefs
         h = int(parts[2])
         if h == 0 or h in notify_prefs.DEADLINE_SOON_CHOICES:
             from database import set_notify
-            from locks import lock
+            from kapibara.core.locks import lock
             async with lock("notify", uid):
                 prefs = notify_prefs.merge((await get_user(uid) or {}).get("notify"))
                 prefs.update({"deadline_soon": True, "deadline_soon_hours": h} if h else {"deadline_soon": False})

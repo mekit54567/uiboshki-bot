@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-import config
+from kapibara.core import config
 from kapibara.core.telegram import cosmetic
 
 router = Router()
@@ -30,7 +30,7 @@ class Dispute(StatesGroup):
 
 @router.callback_query(F.data.startswith("rep:"))
 async def report_decision(callback: CallbackQuery):
-    import ugc
+    from kapibara.features.social import ugc
     if not config.is_starosta(callback.from_user.id):
         await callback.answer("Это кнопка владельца бота", show_alert=True)
         return
@@ -49,7 +49,7 @@ async def report_decision(callback: CallbackQuery):
 
 @router.callback_query(F.data == "dis:cancel")
 async def dispute_cancel(callback: CallbackQuery, state: FSMContext):
-    import ugc
+    from kapibara.features.social import ugc
     await state.clear()
     await callback.answer("Отменил")
     with cosmetic("reports.dispute_cancel"):
@@ -60,7 +60,7 @@ async def dispute_cancel(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("dis:"))
 async def dispute(callback: CallbackQuery, state: FSMContext):
     """«Оспорить» под сообщением «Твою запись убрали» → просим объяснение одним сообщением."""
-    import ugc
+    from kapibara.features.social import ugc
     rid = int(callback.data.split(":", 1)[1])
     status = await ugc.can_dispute(rid, callback.from_user.id)
     if status != "removed":
@@ -79,7 +79,7 @@ async def dispute(callback: CallbackQuery, state: FSMContext):
 
 @router.message(StateFilter(Dispute.why))
 async def dispute_why(message: Message, state: FSMContext):
-    import ugc
+    from kapibara.features.social import ugc
     text = (message.text or "").strip()
     if not text:
         await message.answer("Нужен текст: напиши словами, с чем не согласен.", reply_markup=CANCEL_KB)

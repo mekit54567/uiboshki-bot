@@ -48,7 +48,7 @@ class ReportError(Exception):
 
 
 async def item(kind: str, item_id: int) -> dict | None:
-    import lesson_comments
+    from kapibara.features.social import comments as lesson_comments
     from database import get_deadline, get_file_by_id, get_lesson_note
     from database.homework import get_hw
     get = {"note": get_lesson_note, "hw": get_hw, "file": get_file_by_id, "deadline": get_deadline,
@@ -100,7 +100,7 @@ async def _checked(user_id: int, kind: str, item_id: int) -> dict:
 async def report(bot, user_id: int, kind: str, item_id: int, reason: str = "") -> int:
     """Жалоба → таблица reports и сообщение владельцу. Повтор от того же
     человека на ту же запись — та же жалоба, без второго сообщения."""
-    import ratelimit
+    from kapibara.core import ratelimit
     from database._conn import connect
     if kind not in KINDS:
         raise ReportError("Не знаю такой записи")
@@ -123,10 +123,10 @@ async def report(bot, user_id: int, kind: str, item_id: int, reason: str = "") -
 
 
 async def _notify_owner(bot, rid: int, kind: str, row: dict, reason: str):
-    import config
+    from kapibara.core import config
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from database import get_user
-    from utils import esc
+    from kapibara.core.utils import esc
     if not config.STAROSTA_ID or bot is None:
         logger.warning(f"жалоба {rid}: некому отправить")
         return
@@ -158,7 +158,7 @@ async def decide(rid: int, remove: bool) -> str:
     """«Удалить» — запись пропадает у всех (копия — в жалобе, для спора), жалобы
     на неё закрыты; «Оставить» — только закрыть."""
     import json
-    import lesson_comments
+    from kapibara.features.social import comments as lesson_comments
     from database import delete_deadline, delete_file, delete_hw, delete_lesson_note
     from database._conn import connect
     rep = await get_report(rid)
@@ -240,8 +240,8 @@ def _snap_preview(rep: dict) -> str:
 async def tell_author(bot, rid: int):
     """Автору — что его запись убрали и почему, с кнопкой «Оспорить»."""
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    from delivery import deliver
-    from utils import esc
+    from kapibara.features.notifications.delivery import deliver
+    from kapibara.core.utils import esc
     rep = await get_report(rid)
     if not rep or rep["status"] != "removed" or not rep["author_id"] or bot is None:
         return
@@ -269,10 +269,10 @@ async def can_dispute(rid: int, user_id: int) -> str:
 
 async def dispute(bot, rid: int, user_id: int, appeal: str = "") -> str:
     """Спор автора с его объяснением → владельцу заявка «Вернуть» / «Оставить скрытым»."""
-    import config
+    from kapibara.core import config
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from database._conn import connect
-    from utils import esc
+    from kapibara.core.utils import esc
     status = await can_dispute(rid, user_id)
     if status != "removed":
         return status
@@ -304,7 +304,7 @@ async def settle(bot, rid: int, restore: bool) -> str:
     """Решение владельца по спору; автору — ответ."""
     import json
     from database._conn import connect
-    from delivery import deliver
+    from kapibara.features.notifications.delivery import deliver
     rep = await get_report(rid)
     if not rep:
         return "missing"
@@ -355,7 +355,7 @@ async def note_spam(user_id: int, date: str, text: str, group_id: int | None = N
 # ── «Скрыть автора» ─────────────────────────────────────────────────────────
 
 async def hide_author(user_id: int, kind: str, item_id: int) -> None:
-    import config
+    from kapibara.core import config
     from database._conn import connect
     if kind not in KINDS:
         raise ReportError("Не знаю такой записи")

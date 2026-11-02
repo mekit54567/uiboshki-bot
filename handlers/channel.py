@@ -9,9 +9,9 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-import config
-from config import is_starosta
-from utils import esc
+from kapibara.core import config
+from kapibara.core.config import is_starosta
+from kapibara.core.utils import esc
 
 router = Router()
 
@@ -25,7 +25,7 @@ def _kb(slug: str, done: bool) -> InlineKeyboardMarkup:
 
 async def _list_text(posts, done) -> str:
     lines = [f"{'✅' if p['slug'] in done else '▫️'} <code>{i + 1}</code> {esc(p['title'])}" for i, p in enumerate(posts)]
-    import login_channel
+    from kapibara.features.identity import login_channel
     where = esc(config.CHANNEL_ID) if config.CHANNEL_ID else "⚠️ канал не задан — переменная CHANNEL_URL или CHANNEL_ID"
     news = login_channel.channel()
     where += f" · посты news — в {esc(news)}" if news else ""
@@ -34,7 +34,7 @@ async def _list_text(posts, done) -> str:
 
 
 async def _preview(bot, chat_id, posts, idx, done):
-    from channel_posts import check, send_post
+    from kapibara.features.content.channel_posts import check, send_post
     post = posts[idx]
     problem = check(post)
     if problem:
@@ -55,8 +55,8 @@ async def offer_next(bot) -> str | None:
     channel:offered не повторяются. Публикация — только по кнопке.
     → slug предложенного поста или None."""
     import json
-    from config import STAROSTA_ID
-    from channel_posts import load_posts, published, target
+    from kapibara.core.config import STAROSTA_ID
+    from kapibara.features.content.channel_posts import load_posts, published, target
     from database import get_setting, set_setting
     if not STAROSTA_ID:
         return None
@@ -84,7 +84,7 @@ async def cmd_channel(message: Message):
     if not is_starosta(message.from_user.id):
         await message.answer("❌ Только для старосты.")
         return
-    from channel_posts import load_posts, published
+    from kapibara.features.content.channel_posts import load_posts, published
     posts, done = load_posts(), await published()
     if (message.text or "").split()[1:2] == ["redo"]:
         n = len(done)
@@ -119,7 +119,7 @@ async def _edit(message: Message, posts: list, done: dict):
     """/channel edit 1 4 6 — поправить выпущенные посты (номера как в
     /channel) текстом из репозитория, с той же обложкой. Комментарии и
     просмотры остаются, в отличие от /channel redo."""
-    from channel_posts import edit_post, target
+    from kapibara.features.content.channel_posts import edit_post, target
     nums = [int(x) for x in (message.text or "").split()[2:] if x.isdigit()]
     if not nums:
         await message.answer("Какие посты поправить? Номера — как в /channel: <code>/channel edit 1 4 6</code>",
@@ -147,7 +147,7 @@ async def channel_button(callback: CallbackQuery):
     if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    from channel_posts import forget_published, load_posts, mark_published, post_link, published, send_post, target
+    from kapibara.features.content.channel_posts import forget_published, load_posts, mark_published, post_link, published, send_post, target
     _, action, *rest = callback.data.split(":", 2)
     slug = rest[0] if rest else ""
     posts, done = load_posts(), await published()
@@ -186,7 +186,7 @@ async def channel_button(callback: CallbackQuery):
         await callback.answer("Канал не задан: переменная LOGIN_CHANNEL (посты news) или CHANNEL_URL / CHANNEL_ID",
                               show_alert=True)
         return
-    from locks import lock
+    from kapibara.core.locks import lock
     # двойное нажатие: оба колбэка видели «ещё не в канале» и, пока шла
     # отправка, выпускали пост дважды — проверка и отправка под одним замком
     async with lock("channel:pub"):

@@ -7,8 +7,8 @@ from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
 )
 
-from config import STAROSTA_ID, is_starosta
-from utils import esc
+from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 
 router = Router()
@@ -38,8 +38,8 @@ def sdo_moves(courses, current: dict[str, tuple[int, str]]) -> list[tuple[int, s
 
 
 def _sdo_report(courses, known: set[str], current: dict | None = None) -> tuple[list[str], int]:
-    from file_categories import CATEGORIES
-    from utils import plural
+    from kapibara.features.lectures.categories import CATEGORIES
+    from kapibara.core.utils import plural
     total = sum(len(c.files) for c in courses)
     new = sum(f.source not in known for c in courses for f in c.files)
     lines = [
@@ -87,10 +87,10 @@ async def cmd_sdo_files(message: Message):
     if STAROSTA_ID and not is_starosta(message.from_user.id):
         await message.answer("❌ Только для старосты.")
         return
-    import sdo_files
-    import sdo_parser
+    from kapibara.features.sdo import files as sdo_files
+    from kapibara.features.sdo import parser as sdo_parser
     from database import get_file_sources, get_sdo_file_subjects
-    from schedule_parser import get_group_subjects
+    from kapibara.features.schedule.parser import get_group_subjects
     if not sdo_parser.SDO_SESSION_COOKIE:
         await message.answer("⚠️ Кука СДО не задана (SDO_SESSION_COOKIE в переменных хостинга) — см. /syncsdo.")
         return
@@ -111,7 +111,7 @@ async def cmd_sdo_files(message: Message):
     current = await get_sdo_file_subjects()
     chunks, new = _sdo_report(courses, await get_file_sources(), current)
     moves = sdo_moves(courses, current)
-    from utils import plural
+    from kapibara.core.utils import plural
     rows = []
     if moves:
         _sdo_moves[message.from_user.id] = moves
@@ -139,7 +139,7 @@ async def sdo_files_move(callback: CallbackQuery):
         return
     from database import set_files_subject
     await set_files_subject(moves)
-    from utils import plural
+    from kapibara.core.utils import plural
     await callback.answer(f"Переложил {len(moves)} {plural(len(moves), 'файл', 'файла', 'файлов')}", show_alert=True)
     try:
         kb = callback.message.reply_markup
@@ -173,8 +173,8 @@ async def sdo_files_go(callback: CallbackQuery):
 
 
 async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
-    import sdo_files
-    import sdo_parser
+    from kapibara.features.sdo import files as sdo_files
+    from kapibara.features.sdo import parser as sdo_parser
     last = [0.0]
 
     async def progress(done, total):

@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Chat, Message, Update, User
 
-import ai_solver
+from kapibara.features.ai import solver as ai_solver
 from tests.test_solver_render import RecordingSession
 
 USER = User(id=222, is_bot=False, first_name="Alice")
@@ -55,7 +55,7 @@ def test_lecture_prompt_contains_lectures_and_rules():
 @pytest.mark.asyncio
 async def test_solve_uses_lectures_in_first_answer_and_follow_ups(db, dp, bot, monkeypatch):
     import handlers.solver as solver
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     fid = await db.add_file("Лекция 1", "Анализ данных", "tg1", "l1.pdf", 1)
     await db.save_file_text(fid, "Метод наименьших квадратов: минимизируем сумму квадратов отклонений")
@@ -91,7 +91,7 @@ async def test_solve_uses_lectures_in_first_answer_and_follow_ups(db, dp, bot, m
 @pytest.mark.asyncio
 async def test_subject_keyboard_marks_lecture_subjects(db, monkeypatch):
     import handlers.solver as solver
-    import schedule_parser
+    from kapibara.features.schedule import parser as schedule_parser
 
     fid = await db.add_file("Лекция", "Анализ данных", "tg1", "l1.pdf", 1)
     await db.save_file_text(fid, "текст")

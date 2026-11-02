@@ -17,14 +17,14 @@ LATE минут, позже — нет.
 import logging
 from datetime import datetime, timedelta
 
-from utils import TZ
+from kapibara.core.utils import TZ
 
 logger = logging.getLogger(__name__)
 LATE = 30           # мин
 
 
 def due_at(d: dict) -> datetime:
-    from quiz_alerts import close_at
+    from kapibara.features.notifications.quiz_alerts import close_at
     return close_at(d)
 
 
@@ -37,9 +37,9 @@ def is_due(d: dict, hours: int, now: datetime) -> bool:
 
 def text(d: dict, hours: int, now: datetime) -> tuple[str, str, str]:
     """(заголовок пуша, текст пуша, HTML для Telegram)."""
-    from notify_prefs import minutes_text
-    from push_text import split_subject, when
-    from utils import esc
+    from kapibara.features.notifications.prefs import minutes_text
+    from kapibara.features.notifications.push_text import split_subject, when
+    from kapibara.core.utils import esc
     due = due_at(d)
     left = max(1, round((due - now).total_seconds() / 60))
     left = hours * 60 if abs(left - hours * 60) <= LATE else left
@@ -54,12 +54,12 @@ def text(d: dict, hours: int, now: datetime) -> tuple[str, str, str]:
 
 async def send_due(bot, now: datetime | None = None) -> int:
     """Раз в 5 минут: кому пора напомнить. → сколько ушло."""
-    import notify_prefs
-    import quiz_time
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.deadlines import quiz_time
     from database import get_all_optional_answers, get_reminder_users
     from database.sdo import mark_quiz_alert
-    from keyboards import app_button
-    from quiz_alerts import visible_to
+    from kapibara.bot.keyboards import app_button
+    from kapibara.features.notifications.quiz_alerts import visible_to
     now = now or datetime.now(TZ)
     users = [(u, p) for u in await get_reminder_users()
              if (p := notify_prefs.merge(u.get("notify"))).get("deadline_soon")]
@@ -78,7 +78,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
                 continue
             title, body, html = text(d, hours, now)
             try:
-                import delivery
+                from kapibara.features.notifications import delivery
                 await delivery.deliver(bot, uid, html, kind="deadlines", tab="deadlines", title=title, body=body,
                                        reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
                 sent += 1

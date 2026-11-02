@@ -32,8 +32,8 @@ import logging
 import re
 from datetime import datetime, timedelta
 
-from notify_prefs import QUIZ_REMIND_CHOICES as CHOICES     # минут до закрытия — плашки в «Уведомлениях»
-from utils import TZ
+from kapibara.features.notifications.prefs import QUIZ_REMIND_CHOICES as CHOICES     # минут до закрытия — плашки в «Уведомлениях»
+from kapibara.core.utils import TZ
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def next_open(prev: str | None, new: str | None, now: datetime) -> str:
 
 async def note_opens(items: list[dict], now: datetime | None = None):
     """После синка (sdo_parser.apply_items): открытия тестов из календаря."""
-    import quiz_time
+    from kapibara.features.deadlines import quiz_time
     from database.sdo import get_quiz_opens, save_quiz_opens
     now = now or datetime.now(TZ)
     new = {c: i.get("opens") for i in items if i.get("calendar") and (c := quiz_time.quiz_cmid(i.get("description")))}
@@ -88,13 +88,13 @@ def is_open(open_at: str | None, now: datetime) -> bool:
 
 
 def limit_text(minutes: int | None) -> str:
-    from notify_prefs import minutes_text
+    from kapibara.features.notifications.prefs import minutes_text
     return f" ({minutes_text(minutes)} на попытку)" if minutes else ""
 
 
 def remind_head(minutes: int, close: datetime, now: datetime) -> str:
     """«Через 10 мин закрывается тест», «Завтра в 23:59 закрывается тест»."""
-    from notify_prefs import minutes_text
+    from kapibara.features.notifications.prefs import minutes_text
     if minutes >= 1440:
         day = {0: "Сегодня", 1: "Завтра"}.get((close.date() - now.date()).days, close.strftime("%d.%m"))
         return f"{day} в {close:%H:%M} закрывается тест"
@@ -104,13 +104,13 @@ def remind_head(minutes: int, close: datetime, now: datetime) -> str:
 
 
 def remind_text(d: dict, minutes: int, limit: int | None, now: datetime) -> str:
-    from utils import esc
+    from kapibara.core.utils import esc
     return f"⏰ <b>{remind_head(minutes, close_at(d), now)}</b> · {esc(d['subject'])}{limit_text(limit)}"
 
 
 def open_line(d: dict, limit: int | None) -> str:
-    from new_tasks import when
-    from utils import esc
+    from kapibara.features.notifications.new_tasks import when
+    from kapibara.core.utils import esc
     return f"• <b>{esc(d['subject'])}</b>{limit_text(limit)} — сдать {when(d['due_date'], d.get('due_time'))}"
 
 
@@ -121,8 +121,8 @@ def open_text(d: dict, limit: int | None) -> str:
 def push_head(d: dict, kind: str, minutes: int, limit: int | None, now: datetime) -> tuple[str, str]:
     """Пуш (Никита 25.10): «Через 30 мин закрывается тест» и ниже название;
     «Открыли тест: Тест 2» и ниже предмет, лимит и срок."""
-    from notify_prefs import minutes_text
-    from push_text import split_subject, when
+    from kapibara.features.notifications.prefs import minutes_text
+    from kapibara.features.notifications.push_text import split_subject, when
     name, course = split_subject(d["subject"])
     lim = f"{minutes_text(limit)} на попытку" if limit else ""
     if kind == "open":
@@ -134,7 +134,7 @@ def push_head(d: dict, kind: str, minutes: int, limit: int | None, now: datetime
 def due_now(quizzes: list[dict], opens: dict[int, str], now: datetime) -> list[tuple[dict, str, str, int]]:
     """Что пора прислать сейчас: (дедлайн, вид, время-ключ, минуты).
     Вид — «r<минуты>» (до закрытия) или «open»."""
-    import quiz_time
+    from kapibara.features.deadlines import quiz_time
     out = []
     for d in quizzes:
         close = close_at(d)
@@ -152,7 +152,7 @@ def due_now(quizzes: list[dict], opens: dict[int, str], now: datetime) -> list[t
 
 async def visible_to(uid: int, skip_optional: dict | None = None) -> dict[int, dict]:
     """Дедлайны, которые человек видит у себя и не сдал (как new_tasks)."""
-    from config import OPTIONAL_SUBJECTS
+    from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_active_deadlines
     answers = skip_optional or {}
     skip = [s.lower() for s in OPTIONAL_SUBJECTS if not answers.get(s)]
@@ -162,8 +162,8 @@ async def visible_to(uid: int, skip_optional: dict | None = None) -> dict[int, d
 
 async def send_due(bot, now: datetime | None = None) -> int:
     """Раз в минуту: напоминания до закрытия и «открыли тест». → сколько ушло."""
-    import notify_prefs
-    import quiz_time
+    from kapibara.features.notifications import prefs as notify_prefs
+    from kapibara.features.deadlines import quiz_time
     from database import get_all_optional_answers, get_quiz_limits, get_reminder_users
     from database.sdo import get_quiz_deadlines, get_quiz_opens, mark_quiz_alert
     now = now or datetime.now(TZ)
@@ -176,7 +176,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
         return 0
     limits = await get_quiz_limits([c for c in cmids if c])
     answers = await get_all_optional_answers()
-    from keyboards import app_button
+    from kapibara.bot.keyboards import app_button
     sent = 0
     for user in await get_reminder_users():
         uid = user["user_id"]
@@ -193,7 +193,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
             text = open_text(d, limit) if kind == "open" else remind_text(d, m, limit, now)
             title, short = push_head(d, kind, m, limit, now)
             try:
-                import delivery
+                from kapibara.features.notifications import delivery
                 await delivery.deliver(bot, uid, text, kind="quiz", tab="deadlines", title=title, body=short,
                                        reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
                 sent += 1
@@ -221,7 +221,7 @@ async def peek(client, html: str) -> bool:
     текущего месяца (с 20-го — и следующего) одним запросом на месяц. Есть
     тест, которого полный синк не видел, или у теста другое время открытия —
     True: пора полный синк. Сбой — False (синк и так придёт по расписанию)."""
-    import sdo_parser
+    from kapibara.features.sdo import parser as sdo_parser
     from database import get_setting
     m = re.search(r'"sesskey":"([^"]+)"', html or "")
     seen = await get_setting(PEEK_KEY)

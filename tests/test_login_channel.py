@@ -48,7 +48,7 @@ async def _say(dp, bot, text=None, data=None):
 
 @pytest.fixture
 def env(db, monkeypatch):
-    import config
+    from kapibara.core import config
     import handlers.start as start
     monkeypatch.setattr(config, "LOGIN_CHANNEL", "https://t.me/kapibara_news")
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=ChannelSession())
@@ -65,8 +65,8 @@ async def _since_before_user(db):
 
 
 def test_channel_name_forms(monkeypatch):
-    import config
-    import login_channel
+    from kapibara.core import config
+    from kapibara.features.identity import login_channel
     for v, want in (("https://t.me/kapibara_news", "@kapibara_news"), ("@kapibara_news", "@kapibara_news"),
                     ("kapibara_news", "@kapibara_news"), ("-1001234", "-1001234"), ("", "")):
         monkeypatch.setattr(config, "LOGIN_CHANNEL", v)
@@ -117,8 +117,8 @@ async def test_store_app_login_can_skip(env, db):
 
 @pytest.mark.asyncio
 async def test_old_users_and_no_channel_as_before(env, db, monkeypatch):
-    import config
-    import login_channel
+    from kapibara.core import config
+    from kapibara.features.identity import login_channel
     from database.sessions import create_login
     bot, dp = env
     await db.upsert_user(UID, "anya", "Аня")
@@ -133,7 +133,7 @@ async def test_old_users_and_no_channel_as_before(env, db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_telegram_silent_does_not_block(env, db):
-    import login_channel
+    from kapibara.features.identity import login_channel
 
     class Broken:
         async def get_chat_member(self, *a):
@@ -164,7 +164,7 @@ def test_ios_welcome_has_no_pay_lines():
 
 @pytest.mark.asyncio
 async def test_start_ios_welcome(env, db, monkeypatch):
-    import config
+    from kapibara.core import config
     bot, dp = env
     monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
     await _say(dp, bot, text="/start ios")
@@ -174,7 +174,7 @@ async def test_start_ios_welcome(env, db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_erase_forgets_channel_mark(db):
-    import privacy
+    from kapibara.features.privacy import privacy
     from database import get_setting, set_setting
     await db.upsert_user(UID, "anya", "Аня")
     await set_setting(f"login_channel:{UID}", "1")

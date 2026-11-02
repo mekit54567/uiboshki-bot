@@ -6,8 +6,8 @@ from urllib.parse import parse_qs
 import httpx
 import pytest
 
-import sdo_grades
-import sdo_submit
+from kapibara.features.sdo import grades as sdo_grades
+from kapibara.features.sdo import submit as sdo_submit
 from tests.test_sdo_submit import COOKIE, EDIT_PAGE, VIEW_SUBMITTED
 
 MINE = ('<a href="https://online-edu.mirea.ru/pluginfile.php/9001/assignsubmission_file/submission_files/7/'
@@ -137,7 +137,7 @@ async def test_remove_answer_refused(moodle):
 async def test_webapp_remove_and_replace(db, moodle, monkeypatch):
     import base64
     from fastapi.testclient import TestClient
-    import sdo_accounts
+    from kapibara.features.sdo import accounts as sdo_accounts
     import webapp.server as server
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)

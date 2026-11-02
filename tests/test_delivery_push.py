@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from fastapi.testclient import TestClient
 
-import webpush
+from kapibara.features.notifications import webpush
 
 
 def _browser():
@@ -58,7 +58,7 @@ def test_vapid_jwt_is_valid_es256():
 
 @pytest.mark.asyncio
 async def test_deliver_sends_telegram_and_push(db, monkeypatch):
-    import delivery
+    from kapibara.features.notifications import delivery
     from database.push import get_push_subs, save_push_sub
     _, p256dh, auth = _browser()
     await save_push_sub(1, "https://push.example/a", p256dh, auth)
@@ -106,7 +106,7 @@ def test_subscribe_api(db, monkeypatch):
 async def test_push_only_skips_telegram_when_push_arrived(db, monkeypatch):
     """«Дублировать в Telegram» выключено (Никита 14.10: «чтоб приходили от PWA,
     а не TG»): пуш дошёл — в Telegram не шлём; пуш не дошёл — Telegram всё равно."""
-    import delivery
+    from kapibara.features.notifications import delivery
     from database import set_notify, upsert_user
     from database.push import save_push_sub
     _, p256dh, auth = _browser()
@@ -145,8 +145,8 @@ async def test_payment_messages_go_to_telegram_despite_push_only(db, monkeypatch
     """Никита 02.11: тестовая оплата — пуш пришёл, а в Telegram нет («не
     дублировать» выключено). Платят на сайте, часто из Telegram: об оплате и
     донате пишем и туда, мимо тумблера; остальное — как раньше."""
-    import billing
-    import delivery
+    from kapibara.features.billing import billing
+    from kapibara.features.notifications import delivery
     from database import set_notify, upsert_user
     from database.push import save_push_sub
     _, p256dh, auth = _browser()
@@ -179,8 +179,8 @@ async def test_push_only_phone_app_no_pwa_copy(db, monkeypatch):
     """Никита 02.11: пуши в приложении на телефоне включены, «дублировать»
     выключено — ни Telegram, ни PWA не копируют. Включил — и туда, и туда.
     Об оплате («plus») — в PWA всегда."""
-    import app_push
-    import delivery
+    from kapibara.features.notifications import app_push
+    from kapibara.features.notifications import delivery
     from database import set_notify, upsert_user
     from database.push import save_push_sub
     _, p256dh, auth = _browser()

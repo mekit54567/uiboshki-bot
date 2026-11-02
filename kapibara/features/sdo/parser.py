@@ -38,8 +38,8 @@ from zoneinfo import ZoneInfo
 import httpx
 from bs4 import BeautifulSoup
 
-import sdo_net
-from config import SDO_SESSION_COOKIE, SDO_BASE_URL, TIMEZONE
+from kapibara.features.sdo import net as sdo_net
+from kapibara.core.config import SDO_SESSION_COOKIE, SDO_BASE_URL, TIMEZONE
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -222,7 +222,7 @@ def course_of(subject: str) -> str:
     """Курс из названия дедлайна: последняя скобка верхнего уровня —
     «ПР 1 (Анализ данных (УИБО-03-24))» → «Анализ данных (УИБО-03-24)»."""
     s = (subject or "").rstrip()
-    from deadline_names import SEP
+    from kapibara.features.deadlines.names import SEP
     if SEP in s:          # уже понятное название: «Практика 2 · Анализ данных (Экз)»
         return re.sub(r"\s*\((?:Зач|Экз)\)$", "", s.rsplit(SEP, 1)[1]).strip()
     if not s.endswith(")"):
@@ -259,7 +259,7 @@ def off_schedule(course: str, subjects: list[str]) -> bool:
         return False
     if any(k in course.lower() for k in KEEP_COURSES):
         return False
-    from sdo_files import match_subject
+    from kapibara.features.sdo.files import match_subject
     return match_subject(course, subjects) not in subjects
 
 
@@ -309,7 +309,7 @@ async def calendar_months(client: httpx.AsyncClient, sesskey: str, months: int =
 def quiz_opens(events: list[dict]) -> dict[int, str]:
     """Когда открываются тесты: {cmid: «ГГГГ-ММ-ДД ЧЧ:ММ»} из событий
     «… открывается» (mod_quiz, open) — для «Тест открылся» (quiz_alerts.py)."""
-    from quiz_time import quiz_cmid
+    from kapibara.features.deadlines.quiz_time import quiz_cmid
     out = {}
     for e in events:
         component = e.get("component") or (f"mod_{e['modulename']}" if e.get("modulename") else "")
@@ -321,7 +321,7 @@ def quiz_opens(events: list[dict]) -> dict[int, str]:
 def parse_calendar_events(events: list[dict]) -> list[dict]:
     """То же, что parse_deadlines, но из JSON календаря; прошедшие — мимо.
     У закрытия теста — opens: когда он открывается (нет события — None)."""
-    from quiz_time import quiz_cmid
+    from kapibara.features.deadlines.quiz_time import quiz_cmid
     today = datetime.now(TZ).date()
     opens = quiz_opens(events)
     results, seen = [], set()
@@ -381,7 +381,7 @@ async def sync_deadlines() -> dict:
     expired=True, чтобы вызывающий код (scheduler/хендлер) сам решил,
     как об этом сообщить старосте, вместо падения джобы целиком.
     """
-    from locks import lock
+    from kapibara.core.locks import lock
     async with lock("sdo_sync"):        # синк по расписанию и внеочередной (peek теста) — не вместе
         return await _sync_deadlines()
 
@@ -409,7 +409,7 @@ async def apply_items(items: list[dict], group_id: int | None = None) -> dict:
     «sdo:<группа>:<id>» и group_id: одно задание курса потока у каждой группы
     своим дедлайном, со своими правками и удалениями."""
     from database import add_deadline, get_deadline_by_external_id, is_deadline_skipped, update_deadline_due
-    from schedule_parser import get_group_subjects
+    from kapibara.features.schedule.parser import get_group_subjects
     added = updated = skipped = 0
     new_ids: list[int] = []               # для рассылки «новые задания» (new_tasks.py)
     moved: dict[int, str] = {}            # id → прежний срок «YYYY-MM-DD»: преподаватель перенёс
@@ -417,7 +417,7 @@ async def apply_items(items: list[dict], group_id: int | None = None) -> dict:
     old = [i for i in items if not_this_semester(i, subjects)]
     items = [i for i in items if not not_this_semester(i, subjects)]
     # понятные названия — после проверки семестра (метка «[I.26-27]» уходит)
-    from deadline_names import pretty
+    from kapibara.features.deadlines.names import pretty
     for i in items:
         if i.get("title"):
             i["subject"] = pretty(i["title"], i.get("course") or "", subjects)
@@ -460,7 +460,7 @@ async def apply_items(items: list[dict], group_id: int | None = None) -> dict:
             i["external_id"] = i["external_id"].replace("sdo:", f"sdo:{group_id}:", 1)
     gone = await drop_vanished(items + old, group_id)
     try:                                  # тесты: когда открываются (quiz_alerts.py, «Тест открылся»)
-        import quiz_alerts
+        from kapibara.features.notifications import quiz_alerts
         await quiz_alerts.note_opens(items + old)
         if not group_id and items + old and all(i.get("calendar") for i in items + old):
             await quiz_alerts.remember(items + old)

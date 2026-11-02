@@ -9,8 +9,8 @@ from aiogram.client.session.base import BaseSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Message, Update, User
 
-import channel_posts
-import config
+from kapibara.features.content import channel_posts
+from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 
 

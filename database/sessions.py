@@ -154,7 +154,7 @@ def group_sessions(items: list[dict], current_id: int | None = None) -> list[dic
     (каждый перелогин — новая запись, старую закрыть было некому). Текущий
     вход — своей строкой: «Выйти» на нём не трогает соседей. Порядок — по
     последнему заходу; id строки — самый свежий вход, ids — все."""
-    from utils import plural
+    from kapibara.core.utils import plural
     groups: dict[tuple, dict] = {}
     for it in items:                                   # items — уже по last_seen DESC
         cur = it["id"] == current_id

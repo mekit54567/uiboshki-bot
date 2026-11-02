@@ -16,19 +16,19 @@ MIRROR = "https://english.mirea.ru/schedule/api/ical/1/{id}"
 
 
 def home_id() -> int:
-    from config import HOME_GROUP_ID
+    from kapibara.core.config import HOME_GROUP_ID
     return HOME_GROUP_ID
 
 
 def ical_url(group_id: int) -> str:
     """Календарь группы; для своей — ICAL_URL как есть (его можно переопределить)."""
-    from config import ICAL_URL
+    from kapibara.core.config import ICAL_URL
     return ICAL_URL if group_id == home_id() else MIRROR.format(id=int(group_id))
 
 
 async def ensure_home():
     """Своя группа в справочнике групп (при старте бота)."""
-    from config import GROUP_NAME
+    from kapibara.core.config import GROUP_NAME
     from database import upsert_group
     if home_id():
         await upsert_group(home_id(), GROUP_NAME, own=True)
@@ -36,7 +36,7 @@ async def ensure_home():
 
 async def search(query: str, limit: int = 8) -> list[dict]:
     """Группы по названию (справочник schedule_index): [{id, name}]."""
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     q = (query or "").strip()
     if len(q) < 2:
         return []
@@ -67,11 +67,11 @@ HOME_ONLY_MEMBERS = "в эту группу — только участники 
 async def choose(user_id: int, group_id: int, bot=None) -> dict | None:
     """Записать человека в группу. None — такой группы нет в справочнике;
     {"denied": …} — своя группа, а человек не в её чате (members.py)."""
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     from database import set_user_group, upsert_group
     group_id = int(group_id)
     if group_id == home_id():
-        import members
+        from kapibara.features.groups import members
         if await members.is_member(user_id, bot) is False:
             return {"denied": HOME_ONLY_MEMBERS}
         await ensure_home()

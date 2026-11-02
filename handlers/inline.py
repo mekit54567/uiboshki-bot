@@ -40,7 +40,7 @@ def _cut(text: str) -> str:
 
 
 def _app_kb() -> InlineKeyboardMarkup:
-    from config import BOT_USERNAME
+    from kapibara.core.config import BOT_USERNAME
     return InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="📱 Открыть в приложении", url=f"https://t.me/{BOT_USERNAME}?startapp")]])
 
@@ -64,15 +64,15 @@ def _photo(rid: str, url: str, title: str, description: str, caption: str) -> In
 
 
 def _card_base() -> str:
-    from config import WEBAPP_URL
+    from kapibara.core.config import WEBAPP_URL
     return WEBAPP_URL.rstrip("/")
 
 
 async def _own_results(only: str | None, user_id: int | None = None) -> list:
     """«Сегодня/завтра/неделя» — группы того, кто пишет (этап 1): своя —
     как раньше, чужая — её календарь (в ссылке картинки — id группы)."""
-    import groups
-    from config import GROUP_NAME
+    from kapibara.features.groups import groups
+    from kapibara.core.config import GROUP_NAME
     from database.groups import viewer_group
     try:
         gid = await viewer_group(user_id) if user_id else groups.home_id()
@@ -82,7 +82,7 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
     other = bool(gid) and gid > 0 and gid != groups.home_id()
     name = (await groups.name_of(gid) or GROUP_NAME) if other else GROUP_NAME
     if base := _card_base():
-        import schedule_card
+        from kapibara.features.schedule import card as schedule_card
         out = []
         for key, title, desc in (("today", f"📅 Сегодня — {name}", "пары на сегодня"),
                                  ("tomorrow", f"🌙 Завтра — {name}", "пары на завтра"),
@@ -92,7 +92,7 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
             url = schedule_card.card_url(base, key, *((1, gid) if other else ()))
             out.append(_photo(f"own:{key}:{url}", url, title, desc, title))
         return out
-    from schedule_parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule
+    from kapibara.features.schedule.parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule
     cards = [("today", f"📅 Сегодня — {name}", "пары на сегодня", get_today_schedule),
              ("tomorrow", f"🌙 Завтра — {name}", "пары на завтра", get_tomorrow_schedule),
              ("week", f"🗓 Неделя — {name}", "вся неделя", get_week_schedule)]
@@ -106,11 +106,11 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
 
 
 async def _target_results(query: str) -> list:
-    import schedule_index
+    from kapibara.features.schedule import index as schedule_index
     from handlers.schedule import _TARGET_EMOJI, render_target_schedule
     found = (await schedule_index.search(query, limit=3))[:3]
     if base := _card_base():
-        import schedule_card
+        from kapibara.features.schedule import card as schedule_card
         out = []
         for t in found:
             url = schedule_card.card_url(base, "target", t["type"], t["id"])
@@ -132,7 +132,7 @@ async def _target_results(query: str) -> list:
 
 async def _share_results(user_id: int) -> list:
     """Готовое сообщение про Капибару с личной ссылкой (referrals.py)."""
-    import referrals
+    from kapibara.features.billing import referrals
     from handlers.plus import share_kb
     kb = await share_kb(user_id)
     if _card_base():

@@ -16,7 +16,7 @@ import json
 import logging
 from datetime import datetime
 
-from health import TZ
+from kapibara.ops.health import TZ
 
 logger = logging.getLogger(__name__)
 

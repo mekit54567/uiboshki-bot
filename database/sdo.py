@@ -156,7 +156,7 @@ async def get_group_donors(group_id: int) -> list[dict]:
 
 async def get_sharing_groups() -> list[int]:
     """Чужие группы, где хоть кто-то делится СДО."""
-    from config import HOME_GROUP_ID
+    from kapibara.core.config import HOME_GROUP_ID
     async with connect() as db:
         rows = await (await db.execute(
             "SELECT DISTINCT u.group_id FROM sdo_sessions s JOIN users u ON u.user_id = s.user_id "

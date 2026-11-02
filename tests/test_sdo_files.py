@@ -15,7 +15,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Chat, Document, Message, Update, User
 
-import sdo_files
+from kapibara.features.sdo import files as sdo_files
 from tests.conftest import STAROSTA_ID
 from tests.test_solver_render import RecordingSession
 
@@ -247,8 +247,8 @@ async def test_expired_cookie_is_reported():
 
 @pytest.mark.asyncio
 async def test_sdofiles_command_dry_run_then_import(db, bot, monkeypatch):
-    import sdo_parser
-    import schedule_parser
+    from kapibara.features.sdo import parser as sdo_parser
+    from kapibara.features.schedule import parser as schedule_parser
     import handlers.files as hf
     from handlers import files_sdo
 

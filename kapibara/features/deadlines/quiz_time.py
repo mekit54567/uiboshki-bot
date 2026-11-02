@@ -63,9 +63,9 @@ async def attach(items: list[dict]):
 async def learn_missing(cookie: str | None = None, limit: int = MAX_PER_RUN) -> int:
     """Фоном после синка СДО: тесты своей группы со сроком впереди, о которых
     ещё ничего не знаем, — страница каждого общей кукой. → сколько узнали."""
-    from config import SDO_SESSION_COOKIE
+    from kapibara.core.config import SDO_SESSION_COOKIE
     from database import get_quiz_deadline_links, get_quiz_limits
-    from utils import today_msk
+    from kapibara.core.utils import today_msk
     cookie = cookie or SDO_SESSION_COOKIE
     if not cookie:
         return 0
@@ -75,10 +75,10 @@ async def learn_missing(cookie: str | None = None, limit: int = MAX_PER_RUN) -> 
     if not todo:
         return 0
     import httpx
-    from config import SDO_BASE_URL
-    from sdo_files import make_client
-    from sdo_grades import parse_assign_page
-    from sdo_parser import get_checked
+    from kapibara.core.config import SDO_BASE_URL
+    from kapibara.features.sdo.files import make_client
+    from kapibara.features.sdo.grades import parse_assign_page
+    from kapibara.features.sdo.parser import get_checked
     pages: dict[int, dict | None] = {}
     async with make_client(cookie) as client:
         for cmid in todo:

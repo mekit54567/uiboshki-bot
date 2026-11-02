@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import achievements
+from kapibara.features.social import achievements
 from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,7 +25,7 @@ def test_catalog_matches_app():
 
 @pytest.fixture
 async def client(db, monkeypatch):
-    import ratelimit
+    from kapibara.core import ratelimit
     import webapp.server as server
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
     ratelimit._hits.clear()
@@ -72,7 +72,7 @@ async def test_rank_closed(db):
 async def test_creator_has_all(client, db, monkeypatch):
     """Никита 17.10: у создателя (оба аккаунта старосты) — все ачивки сразу,
     открытые раньше — со своим временем; у остальных — только свои."""
-    import config
+    from kapibara.core import config
     from tests.conftest import STAROSTA_ID
     second = 112
     monkeypatch.setattr(config, "STAROSTA_IDS", [STAROSTA_ID, second])

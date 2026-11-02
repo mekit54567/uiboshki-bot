@@ -50,8 +50,8 @@ def _client_ip(request: Request) -> str:
 
 @router.post("/api/auth/start")
 async def auth_start(request: Request):
-    import ratelimit
-    from config import BOT_USERNAME
+    from kapibara.core import ratelimit
+    from kapibara.core.config import BOT_USERNAME
     from database.sessions import create_login, get_login
     if not ratelimit.allow("auth_start", _client_ip(request)):
         raise HTTPException(429, "Слишком много попыток — подожди минуту")
@@ -73,8 +73,8 @@ class PollBody(BaseModel):
 async def auth_review(body: PollBody, request: Request):
     """Демо-вход проверяющих App Store / RuStore по коду REVIEW_CODE
     (review_demo.py): данные — запись стенда, не чьи-то настоящие."""
-    import ratelimit
-    import review_demo
+    from kapibara.core import ratelimit
+    from kapibara.features.content import review_demo
     if not review_demo.enabled():
         raise HTTPException(404, "Вход по коду выключен")
     if not ratelimit.allow("auth_review", _client_ip(request)):
@@ -155,7 +155,7 @@ APP_RETURN = "ru.uiboshki.app://auth"
 
 
 def _provider(provider: str) -> str:
-    import oauth
+    from kapibara.features.identity import oauth
     if provider not in oauth.available():
         raise HTTPException(404, "Такого входа нет")
     return provider
@@ -182,9 +182,9 @@ async def auth_providers():
     """Каким ещё входом можно войти (есть ключи на хостинге); code — вход по
     коду для проверяющих магазинов (review_demo.py); apple — вход через Apple
     (только в iPhone-приложении, apple_signin.py)."""
-    import oauth
-    import review_demo
-    import apple_signin
+    from kapibara.features.identity import oauth
+    from kapibara.features.content import review_demo
+    from kapibara.features.identity import apple as apple_signin
     return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()],
             "code": review_demo.enabled(), "apple": apple_signin.enabled()}
 
@@ -202,8 +202,8 @@ CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 async def _oauth_start(provider: str, request: Request, client: str, link_user: int | None,
                        challenge: str = "") -> dict:
-    import oauth
-    import ratelimit
+    from kapibara.features.identity import oauth
+    from kapibara.core import ratelimit
     from database.identities import new_state
     if not ratelimit.allow("auth_start", _client_ip(request)):
         raise HTTPException(429, "Слишком много попыток — подожди минуту")
@@ -231,7 +231,7 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
                               device_id: str = "", error: str = ""):
     import logging
 
-    import oauth
+    from kapibara.features.identity import oauth
     from fastapi.responses import RedirectResponse
     from database import get_user, upsert_user
     from database.identities import find_user, link, new_local_user, new_state, take_state
@@ -287,8 +287,8 @@ async def auth_oauth_exchange(body: OAuthExchange, request: Request):
     после первой попытки — верной или нет."""
     import hmac
 
-    import oauth
-    import ratelimit
+    from kapibara.features.identity import oauth
+    from kapibara.core import ratelimit
     from database.identities import take_state
     from database.sessions import create_session
     if not ratelimit.allow("auth_start", _client_ip(request)):
@@ -302,7 +302,7 @@ async def auth_oauth_exchange(body: OAuthExchange, request: Request):
 
 @router.post("/api/auth/{provider}/confirm")
 async def auth_oauth_confirm(provider: str, request: Request):
-    import oauth
+    from kapibara.features.identity import oauth
     from database.identities import find_user, link, take_state
     provider = _provider(provider)
     from urllib.parse import parse_qs
@@ -331,8 +331,8 @@ async def auth_apple(body: AppleBody, request: Request):
     свой аккаунт (привязан раньше) или новый без Telegram → токен сессии."""
     import logging
 
-    import apple_signin
-    import ratelimit
+    from kapibara.features.identity import apple as apple_signin
+    from kapibara.core import ratelimit
     from database.identities import find_user, link, new_local_user
     from database.sessions import create_session
     if not apple_signin.enabled():
@@ -360,7 +360,7 @@ async def auth_apple(body: AppleBody, request: Request):
 
 @router.get("/api/auth/identities")
 async def auth_identities(user: dict = CurrentUser):
-    import oauth
+    from kapibara.features.identity import oauth
     from database.identities import is_local, list_for
     titles = {**oauth.NAMES, "apple": "Apple"}
     return {"items": [dict(i, title=titles.get(i["provider"], i["provider"])) for i in await list_for(user["id"])],
@@ -377,6 +377,6 @@ async def auth_unlink(provider: str, user: dict = CurrentUser):
     if not await unlink(user["id"], provider):
         raise HTTPException(404, "Не привязан")
     if provider == "apple":
-        import apple_signin
+        from kapibara.features.identity import apple as apple_signin
         await apple_signin.revoke_for(user["id"])      # Apple требует отзывать вход
     return {"ok": True}

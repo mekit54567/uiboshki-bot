@@ -14,10 +14,10 @@ import asyncio
 import json
 import logging
 
-import net
+from kapibara.core import net
 
-import gemini_solver
-from config import DEEPSEEK_API_KEY
+from kapibara.features.ai import gemini as gemini_solver
+from kapibara.core.config import DEEPSEEK_API_KEY
 
 logger = logging.getLogger(__name__)
 

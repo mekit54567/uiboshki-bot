@@ -7,7 +7,7 @@ import logging
 from aiogram import F, Router
 from aiogram.types import ChatMemberUpdated
 
-from utils import esc
+from kapibara.core.utils import esc
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -15,8 +15,8 @@ router = Router()
 
 @router.my_chat_member(F.chat.type.in_({"group", "supergroup"}))
 async def bot_added_to_group(event: ChatMemberUpdated):
-    import config
-    import members
+    from kapibara.core import config
+    from kapibara.features.groups import members
     from database import set_setting
     status = str(event.new_chat_member.status).split(".")[-1].lower()
     if status not in ("member", "administrator") or not config.is_starosta(event.from_user.id):
