@@ -22,6 +22,7 @@ assets/fonts — на сервере может не быть кирилличе
 import asyncio
 import io
 import logging
+import sqlite3
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -87,8 +88,12 @@ async def track(user_id: int, kind: str | None):
     if not kind or not user_id:
         return
     import privacy
-    if await privacy.blocked(user_id):
-        return                      # до согласия на обработку данных — без событий (152-ФЗ)
+    try:
+        if await privacy.blocked(user_id):
+            return                  # до согласия на обработку данных — без событий (152-ФЗ)
+    except sqlite3.Error as e:      # база не ответила: согласие неизвестно — не пишем; решит ConsentMiddleware
+        logger.warning(f"статистика: согласие не проверилось: {e!r}")
+        return
     await privacy.seen(user_id)     # последний заход — для срока хранения (152-ФЗ)
     if kind in VIEWS:
         key, now = (user_id, kind), time.monotonic()

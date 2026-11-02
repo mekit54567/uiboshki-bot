@@ -616,3 +616,27 @@ def test_timeweb_not_processor(monkeypatch):
     assert "ТАЙМВЭБ.КЛАУД" in role and "не получает" in role and "по поручению" not in role
     monkeypatch.setattr(privacy, "HOST", {**privacy.HOSTS["amvera"], "org": "ООО «Амвера»"})
     assert "по поручению оператора" in privacy.hosting_texts()["HOST_ROLE"]
+
+
+@pytest.mark.consent_real
+@pytest.mark.asyncio
+async def test_consent_check_failure_does_not_let_in(db, bot, monkeypatch):  # noqa: F811
+    """02.11: база не ответила на проверке согласия — раньше бот обрабатывал
+    человека как давшего согласие. Теперь не пускаем и просим подождать."""
+    import sqlite3
+
+    import privacy
+
+    async def broken(uid):
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(privacy, "blocked", broken)
+    d = _gated_dp()
+    try:
+        await send(d, bot, "/help")
+        texts = bot.session.texts()
+        assert len(texts) == 1 and "недоступен" in texts[0]
+        await press(d, bot, "act:today")
+        assert "недоступен" in bot.session.named("AnswerCallbackQuery")[-1].text
+        assert await _events(db.DATABASE_PATH, ME) == 0
+    finally:
+        _release(d)
