@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths: ["local_embed.py", "tools/embed_check.py", ".github/workflows/embed-check.yml"]
+    paths: ["local_embed.py", "kapibara/features/ai/local_embed.py", "tools/embed_check.py", ".github/workflows/embed-check.yml"]
 
 permissions:
   contents: read

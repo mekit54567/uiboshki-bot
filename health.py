@@ -24,7 +24,7 @@ STARTED = datetime.now(TZ)
 DAY = 24 * 3600
 
 # Раздел по имени логгера (модуля): первое совпадение по началу имени
-AREAS = [("ai_solver", "ИИ"), ("gemini_solver", "ИИ"), ("lecture_summary", "ИИ"), ("kapibara.features.lectures.summary", "ИИ"), ("handlers.solver", "ИИ"),
+AREAS = [("ai_solver", "ИИ"), ("kapibara.features.ai", "ИИ"), ("gemini_solver", "ИИ"), ("lecture_summary", "ИИ"), ("kapibara.features.lectures.summary", "ИИ"), ("handlers.solver", "ИИ"),
          ("webapp.routes.chat", "ИИ"), ("sdo", "СДО"), ("kapibara.features.sdo", "СДО"), ("grade_alerts", "СДО"), ("webapp.routes.sdo", "СДО"),
          ("schedule", "Расписание"), ("kapibara.features.schedule", "Расписание"), ("mirea_schedule_api", "Расписание"), ("backup", "Бэкап")]
 

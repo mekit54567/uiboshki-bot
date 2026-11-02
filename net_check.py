@@ -165,7 +165,7 @@ def _cpu(before: dict, after: dict, seconds: float, proc: float) -> dict:
 def _embedding() -> bool:
     """Своя модель векторов сейчас считает (поток embed занят)."""
     import sys
-    le = sys.modules.get("local_embed")
+    le = sys.modules.get("kapibara.features.ai.local_embed")    # переехал из local_embed (ADR 0003)
     return bool(le and le._lock.locked())
 
 
