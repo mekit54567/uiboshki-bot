@@ -49,6 +49,16 @@ MOVED = {
     "schedule_parser": "kapibara.features.schedule.parser",
     "mirea_schedule_api": "kapibara.features.schedule.mirea_api",
     "attendance": "kapibara.features.schedule.attendance",
+    "sdo_accounts": "kapibara.features.sdo.accounts",
+    "sdo_check": "kapibara.features.sdo.check",
+    "sdo_done": "kapibara.features.sdo.done",
+    "sdo_files": "kapibara.features.sdo.files",
+    "sdo_goal": "kapibara.features.sdo.goal",
+    "sdo_grades": "kapibara.features.sdo.grades",
+    "sdo_history": "kapibara.features.sdo.history",
+    "sdo_net": "kapibara.features.sdo.net",
+    "sdo_parser": "kapibara.features.sdo.parser",
+    "sdo_submit": "kapibara.features.sdo.submit",
 }
 
 
