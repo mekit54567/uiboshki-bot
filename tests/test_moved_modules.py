@@ -41,6 +41,14 @@ MOVED = {
     "plus_grant": "kapibara.features.billing.grants",
     "plus_welcome": "kapibara.features.billing.welcome",
     "referrals": "kapibara.features.billing.referrals",
+    "schedule_card": "kapibara.features.schedule.card",
+    "schedule_diff": "kapibara.features.schedule.diff",
+    "schedule_events": "kapibara.features.schedule.events",
+    "schedule_format": "kapibara.features.schedule.format",
+    "schedule_index": "kapibara.features.schedule.index",
+    "schedule_parser": "kapibara.features.schedule.parser",
+    "mirea_schedule_api": "kapibara.features.schedule.mirea_api",
+    "attendance": "kapibara.features.schedule.attendance",
 }
 
 
@@ -89,7 +97,8 @@ def test_status_area_survives_the_move(old, new):
     """Раздел ошибок в /status (health.AREAS) — по имени логгера, то есть по
     пути модуля: после переезда «ИИ» не должен стать «Прочим»."""
     import health
-    assert health.area_of(new) == health.area_of(old)
+    if health.area_of(old) != "Прочее":                 # из «Прочего» в свой раздел — можно
+        assert health.area_of(new) == health.area_of(old)
 
 
 def test_data_files_found_from_project_root():
@@ -101,3 +110,8 @@ def test_data_files_found_from_project_root():
     from kapibara.core.paths import ROOT
     assert (ROOT / "bot.py").is_file()
     assert os.path.isfile(os.path.join(pulse_lab.KIT_DIR, "hook.js"))      # kit.json — необязательный
+
+
+def test_schedule_card_finds_fonts():
+    import schedule_card
+    assert schedule_card.FONTS.is_dir() and any(schedule_card.FONTS.iterdir())
