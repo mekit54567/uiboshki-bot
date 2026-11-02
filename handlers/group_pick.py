@@ -13,6 +13,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from utils import esc
+from kapibara.core.telegram import cosmetic
 
 router = Router(name="group_pick")
 
@@ -124,13 +125,9 @@ async def admin_decision(callback: CallbackQuery):
         note = f"Теперь ты староста группы <b>{esc(name)}</b>: можешь добавлять общие дедлайны (/add), ДЗ (/addhw) и заметки к парам для всей группы."
     else:
         note = f"Запрос «староста группы {esc(name)}» отклонён."
-    try:
+    with cosmetic("group_pick.admin_decision"):
         await callback.bot.send_message(int(uid), note, parse_mode="HTML")
-    except Exception:
-        pass
     await callback.answer("Готово")
-    try:
+    with cosmetic("group_pick.admin_decision"):
         await callback.message.edit_text(callback.message.html_text + ("\n\n✅ Одобрено" if verdict == "ok" else "\n\n✖️ Отклонено"),
                                          parse_mode="HTML")
-    except Exception:
-        pass

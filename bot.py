@@ -13,6 +13,7 @@ from handlers import register_handlers
 from scheduler import start_scheduler
 from middleware import (ConsentMiddleware, GroupContextMiddleware, MenuInterruptMiddleware,
                         OptionalSubjectsMiddleware, StatsMiddleware)
+from kapibara.core.telegram import cosmetic
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 health.install()   # ошибки из логов за сутки — в /status у старосты
@@ -282,10 +283,8 @@ async def main():
         # хотя если причина именно в сети, само сообщение тоже может не уйти.
         logger.critical(f"Polling упал целиком: {e}")
         if STAROSTA_ID:
-            try:
+            with cosmetic("bot.main"):
                 await bot.send_message(STAROSTA_ID, f"🔴 Бот полностью упал: {type(e).__name__}: {e}")
-            except Exception:
-                pass
         raise
     finally:
         index_task.cancel()
