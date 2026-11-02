@@ -59,6 +59,16 @@ MOVED = {
     "sdo_net": "kapibara.features.sdo.net",
     "sdo_parser": "kapibara.features.sdo.parser",
     "sdo_submit": "kapibara.features.sdo.submit",
+    "ai_bench": "kapibara.features.ai.bench",
+    "ai_quota": "kapibara.features.ai.quota",
+    "ai_solver": "kapibara.features.ai.solver",
+    "gemini_solver": "kapibara.features.ai.gemini",
+    "think": "kapibara.features.ai.think",
+    "embedder": "kapibara.features.ai.embedder",
+    "embed_bench": "kapibara.features.ai.embed_bench",
+    "local_embed": "kapibara.features.ai.local_embed",
+    "semantic_index": "kapibara.features.ai.semantic_index",
+    "semantic_search": "kapibara.features.ai.semantic_search",
 }
 
 
