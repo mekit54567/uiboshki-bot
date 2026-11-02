@@ -9,7 +9,7 @@ tools/ratchet.json и пускает их только вниз, как храп
     («python tools/ratchet.py --update» и закоммить ratchet.json), иначе
     следующий PR мог бы молча вернуть цифру назад.
 
-Что считаем (код сервера: корень, handlers/, database/, webapp/):
+Что считаем (код сервера: корень, kapibara/, handlers/, database/, webapp/):
   broad_except   — except Exception / BaseException / голый except;
   silent_except  — обработчик, в котором только pass (ошибка пропадает);
   cycle_modules  — модули, сцепленные взаимными импортами в клубок
@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "tools" / "ratchet.json"
-SERVER_DIRS = ("handlers", "database", "webapp")
+SERVER_DIRS = ("kapibara", "handlers", "database", "webapp")
 
 
 def server_files(root: Path) -> list[Path]:
