@@ -203,15 +203,22 @@ async def main():
     dp.inline_query.outer_middleware(consent)
     dp.error.register(notify_starosta_on_error)
 
+    async def polling_started():            # /ready: бот принимает сообщения
+        health.mark_ready("polling")
+    dp.startup.register(polling_started)
+
     import backup                   # init_db меняет схему — сначала копия базы рядом
     await backup.keep_before_start()
     await init_db()
+    health.mark_ready("db")
     import login_channel
     await login_channel.start()             # отметка «с какого момента канал для новых»
     register_handlers(dp)
+    health.mark_ready("handlers")
 
     scheduler = start_scheduler(bot)
     scheduler.start()
+    health.mark_ready("scheduler")
 
     await setup_bot_menu(bot)
 
