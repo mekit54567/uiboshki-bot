@@ -10,6 +10,7 @@ from database import upsert_user, set_subscription, get_user
 from config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
 from utils import esc, split_by_lines
+from kapibara.core.telegram import cosmetic
 
 router = Router()
 
@@ -80,10 +81,8 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         if not ok:
             await message.answer("❌ Файл не найден (возможно, его удалили)." if is_file
                                  else "❌ Файл ДЗ не найден (возможно, его удалили).")
-        try:
+        with cosmetic("start.cmd_start_deeplink"):
             await message.delete()
-        except Exception:
-            pass
         return
     if payload.startswith("login_"):            # вход в приложение без Telegram (webapp/routes/auth.py)
         await ask_login(message, payload[6:])
@@ -154,10 +153,8 @@ async def channel_decision(callback: CallbackQuery, state: FSMContext | None = N
         text, kb = login_prompt(code, login)
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         return
-    try:
+    with cosmetic("start.channel_decision"):
         await callback.message.delete()
-    except Exception:
-        pass
     await welcome(callback.message, callback.from_user, state, store=step == "start:ios", checked=True)
 
 
@@ -287,10 +284,8 @@ async def optional_answer(callback: CallbackQuery):
     text = (f"🎖 <b>{esc(subject)}</b> — буду показывать эти пары." if attend == "1"
             else f"Ок, <b>{esc(subject)}</b> убрал из твоего расписания. Передумаешь — /optional")
     await callback.answer()
-    try:
+    with cosmetic("start.optional_answer"):
         await callback.message.edit_text(text, parse_mode="HTML")
-    except Exception:
-        pass
 
 
 @router.message(Command("app"))

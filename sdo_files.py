@@ -35,6 +35,7 @@ import sdo_net
 from config import SDO_BASE_URL
 from file_categories import detect_category
 from sdo_parser import SdoSessionExpired
+from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
 
@@ -353,10 +354,8 @@ async def import_files(bot, chat_id: int, client: httpx.AsyncClient, files: list
             msg = await bot.send_document(chat_id, BufferedInputFile(data, filename=name),
                                           disable_notification=True)
             tg_file_id = msg.document.file_id if msg.document else None
-            try:
+            with cosmetic("sdo_files.import_files"):
                 await bot.delete_message(chat_id, msg.message_id)
-            except Exception:
-                pass
             if not tg_file_id:
                 stats["failed"] += 1
                 continue
