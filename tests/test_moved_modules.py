@@ -23,6 +23,14 @@ MOVED = {
     "teacher_rating": "kapibara.features.social.teacher_rating",
     "ugc": "kapibara.features.social.ugc",
     "xp": "kapibara.features.social.xp",
+    "file_categories": "kapibara.features.lectures.categories",
+    "file_names": "kapibara.features.lectures.names",
+    "file_request": "kapibara.features.lectures.request",
+    "file_text": "kapibara.features.lectures.text",
+    "lecture_day": "kapibara.features.lectures.day",
+    "lecture_picker": "kapibara.features.lectures.picker",
+    "lecture_summary": "kapibara.features.lectures.summary",
+    "lecture_topic": "kapibara.features.lectures.topic",
 }
 
 
@@ -64,3 +72,11 @@ def test_nobody_holds_the_redirect_itself():
         "print(bad); sys.exit(1 if bad else 0)\n")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr[-2000:]
+
+
+@pytest.mark.parametrize("old,new", MOVED.items())
+def test_status_area_survives_the_move(old, new):
+    """Раздел ошибок в /status (health.AREAS) — по имени логгера, то есть по
+    пути модуля: после переезда «ИИ» не должен стать «Прочим»."""
+    import health
+    assert health.area_of(new) == health.area_of(old)
