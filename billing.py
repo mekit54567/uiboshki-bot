@@ -543,7 +543,7 @@ async def donate_status_line() -> str:
 async def notify(bot, uid: int, text: str):
     import delivery
     try:
-        await delivery.deliver(bot, uid, text, kind="plus", tab="more")
+        await delivery.deliver(bot, uid, text, kind="plus", tab="more", always_tg=True)
     except Exception as e:
         logger.info(f"подписка: не написать {uid}: {e}")
 
