@@ -107,6 +107,11 @@ MOVED = {
     "s3_store": "kapibara.ops.s3_store",
     "net_check": "kapibara.ops.net_check",
     "stats": "kapibara.ops.stats",
+    "middleware": "kapibara.bot.middleware",
+    "keyboards": "kapibara.bot.keyboards",
+    "long_messages": "kapibara.bot.long_messages",
+    "intent_router": "kapibara.bot.intent_router",
+    "scheduler": "kapibara.jobs.scheduler",
 }
 
 

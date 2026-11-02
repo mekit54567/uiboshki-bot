@@ -40,6 +40,7 @@ def test_prompts_use_group(monkeypatch):
 def test_no_hardcoded_group_in_code():
     import pathlib
     root = pathlib.Path(__file__).parent.parent
-    for f in ("ai_solver.py", "gemini_solver.py", "group_context.py", "bot.py", "handlers/start.py",
+    for f in ("kapibara/features/ai/solver.py", "kapibara/features/ai/gemini.py",
+              "kapibara/features/groups/context.py", "bot.py", "handlers/start.py",
               "handlers/schedule.py", "handlers/inline.py", "webapp/static/js/home.js"):
         assert "УИБО-03-24" not in (root / f).read_text(encoding="utf-8"), f
