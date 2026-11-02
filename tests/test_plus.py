@@ -217,13 +217,12 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_rank_bonus_waits_for_server_achievements(db, monkeypatch):
-    import sys
-    import types
     closed = {"v": False}
 
     async def rank_closed(uid, rank):
         return closed["v"]
-    monkeypatch.setitem(sys.modules, "achievements", types.SimpleNamespace(rank_closed=rank_closed))
+    from kapibara.features.social import achievements
+    monkeypatch.setattr(achievements, "rank_closed", rank_closed)
     await db.upsert_user(ME, "", "u")
     await _events(db.DATABASE_PATH, ME, 1)
     with pytest.raises(referrals.BonusError) as e:
