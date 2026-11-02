@@ -19,6 +19,7 @@ Future<void> maybeAskPush(BuildContext context, Api api) async {
   if (prefs.getBool(pushAskedKey) == true) return;
   if (await AppPush.state(api) != 'off' || !context.mounted) return; // включены, запрещены или канала нет
   await prefs.setBool(pushAskedKey, true);
+  if (!context.mounted) return;
   final yes = await confirmSheet(
     context,
     title: 'Присылать расписание и сроки?',
