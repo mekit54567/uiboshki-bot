@@ -495,8 +495,11 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_weekly_digest,      "cron", day_of_week="sun", hour=19, minute=0, args=[bot])
     from evening_digest import send_all as send_evening_digest    # сводка на завтра — во время, выбранное человеком
     scheduler.add_job(send_evening_digest,     "cron", minute="0,30", args=[bot])
-    from grade_alerts import check_all as check_new_grades     # новые баллы СДО — днём раз в 3 часа
-    scheduler.add_job(check_new_grades,        "cron", hour="10,13,16,19,22", minute=7, args=[bot])
+    # новые баллы СДО — днём каждый час (Никита 02.11: раз в 3 часа — поздно); ночью
+    # не проверяем, чтобы не будить пушем; не успели за час — следующий запуск пропускается
+    from grade_alerts import check_all as check_new_grades
+    scheduler.add_job(check_new_grades,        "cron", hour="8-22", minute=7, args=[bot],
+                      max_instances=1, coalesce=True)
     from deadline_reminders import send_due as send_deadline_custom_reminders   # свои напоминания о дедлайне
     scheduler.add_job(send_deadline_custom_reminders, "cron", minute="*",        args=[bot])
     import quiz_alerts                    # тесты СДО: до закрытия и «открыли тест» (Уведомления → Тесты СДО)
