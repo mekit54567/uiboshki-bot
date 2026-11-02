@@ -295,9 +295,15 @@ async def send(row: dict, data: dict) -> str:
     return GONE
 
 
+# Чего не шлём на iPhone: «Капибара+» и оплата — в iOS-приложении о плате ни слова
+# (App Store 3.1.1; Никита 02.11: «Оплата прошла… «Капибара+» до …» пришло пушем).
+IOS_HIDDEN = {"plus"}
+
+
 async def push_report(user_id: int, data: dict) -> list[dict]:
     """Пуш на все телефоны человека, по устройству: platform, device, result
-    (ok / gone / error / off — канал выключен на сервере). Мёртвый токен — забываем."""
+    (ok / gone / error / off — канал выключен на сервере, hidden — не для
+    iPhone, IOS_HIDDEN). Мёртвый токен — забываем."""
     from database.app_push import delete_app_push, get_app_pushes
     on = platforms()
     out = []
@@ -306,6 +312,9 @@ async def push_report(user_id: int, data: dict) -> list[dict]:
         out.append(item)
         if not on.get(row["platform"]):
             item["result"] = "off"
+            continue
+        if row["platform"] == "apns" and data.get("tag") in IOS_HIDDEN:
+            item["result"] = "hidden"
             continue
         try:
             res = await send(row, data)

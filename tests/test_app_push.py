@@ -390,3 +390,20 @@ async def test_pushtest_command(db, monkeypatch):
     monkeypatch.setattr(app_push, "push_report", report)
     await group_tools.cmd_pushtest(Msg())
     assert "iPhone (Apple) · iPhone: ✅ ушёл" in sent[-1]
+
+
+@pytest.mark.asyncio
+async def test_plus_not_pushed_to_iphone(db, monkeypatch):
+    """Никита 02.11: «Оплата прошла… «Капибара+» до …» пришло пушем в iPhone-
+    приложение. О плате в iOS-приложении — ни слова (App Store 3.1.1): на
+    iPhone такой пуш не шлём, на Android — как раньше."""
+    _all_on(monkeypatch)
+    fake = FakeHttp()
+    monkeypatch.setattr(app_push, "_request", fake)
+    await _register(1, "fcm", "fcm-token-1234567890")
+    await _register(1, "apns", APNS_TOKEN)
+    report = await app_push.push_report(1, dict(DATA, tag="plus"))
+    assert [(r["platform"], r["result"]) for r in report] == [("fcm", "ok"), ("apns", "hidden")]
+    assert not [c for c in fake.calls if "push.apple.com" in str(c)]
+    report = await app_push.push_report(1, DATA)                    # остальное — и на iPhone
+    assert [(r["platform"], r["result"]) for r in report] == [("fcm", "ok"), ("apns", "ok")]

@@ -75,9 +75,12 @@ async def _tg_copy(user_id: int) -> bool:
 
 
 async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = None, reply_markup=None,
-                  parse_mode: str = "HTML", title: str | None = None, body: str | None = None):
+                  parse_mode: str = "HTML", title: str | None = None, body: str | None = None,
+                  always_tg: bool = False):
     """Сообщение человеку: пуш на его устройства + Telegram (выключен
-    тумблером tg_copy — только если пуш дошёл).
+    тумблером tg_copy — только если пуш дошёл). always_tg — в Telegram
+    всегда, мимо тумблера: оплата и донаты (Никита 02.11: платят на сайте,
+    часто из Telegram, — ответ должен прийти и туда).
     Ошибка Telegram пробрасывается (рассылки её логируют), пуш — молча.
     До согласия на обработку данных (privacy.blocked) — ничего."""
     import privacy
@@ -92,6 +95,6 @@ async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = 
     from database.identities import is_local
     if is_local(user_id):
         return None               # вошёл через VK/Яндекс, Telegram нет — только пуш
-    if sent and not await _tg_copy(user_id):
+    if sent and not always_tg and not await _tg_copy(user_id):
         return None               # «только в приложение»: пуш дошёл — в Telegram не дублируем
     return await bot.send_message(user_id, html, parse_mode=parse_mode, reply_markup=reply_markup)
