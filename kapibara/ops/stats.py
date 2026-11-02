@@ -26,10 +26,10 @@ import sqlite3
 import time
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from config import TIMEZONE
+from kapibara.core.paths import ROOT
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -305,7 +305,7 @@ def groups_line(rows: list[dict], top: int = 6) -> str:
 
 # ── картинка ─────────────────────────────────────────────────────────────────
 
-FONTS = Path(__file__).parent / "assets" / "fonts"
+FONTS = ROOT / "assets" / "fonts"            # от корня проекта (kapibara/core/paths.py)
 BG, CARD, LINE, HINT, TEXT, ACCENT = "#0f1115", "#181b22", "#2a2e3a", "#9aa0ac", "#f2f3f7", "#4a8ff7"
 
 

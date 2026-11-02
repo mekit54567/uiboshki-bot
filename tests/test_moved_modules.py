@@ -102,6 +102,11 @@ MOVED = {
     "locks": "kapibara.core.locks",
     "ratelimit": "kapibara.core.ratelimit",
     "net": "kapibara.core.net",
+    "health": "kapibara.ops.health",
+    "backup": "kapibara.ops.backup",
+    "s3_store": "kapibara.ops.s3_store",
+    "net_check": "kapibara.ops.net_check",
+    "stats": "kapibara.ops.stats",
 }
 
 
@@ -176,3 +181,8 @@ def test_content_data_found_from_project_root():
     import roadmap
     assert channel_posts.POSTS_DIR.is_dir()
     assert roadmap.PATH.is_file() and review_demo.FIXTURES.is_file()
+
+
+def test_stats_card_finds_fonts():
+    import stats
+    assert stats.FONTS.is_dir()
