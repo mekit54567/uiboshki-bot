@@ -16,6 +16,7 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from kapibara.core.errors import log_failure
 from webapp.deps import CurrentUser
 
 router = APIRouter()
@@ -245,7 +246,7 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
         subject, name = await oauth.profile(provider, code, st["verifier"], _redirect_uri(request, provider),
                                             device_id=device_id, state=state)
     except Exception as e:
-        logging.getLogger(__name__).warning(f"вход {provider}: {e}")
+        log_failure(logging.getLogger(__name__), f"вход {provider}", e, expected=(oauth.OAuthError,))
         return _page("Не получилось", f"{oauth.NAMES[provider]} не ответил — попробуй через минуту.", status=502)
     owner = await find_user(provider, subject)
     if st["link_user"]:
@@ -343,7 +344,7 @@ async def auth_apple(body: AppleBody, request: Request):
     except apple_signin.AppleError as e:
         raise HTTPException(401, f"Apple не подтвердил вход: {e}")
     except Exception as e:  # noqa: BLE001 — сеть до Apple
-        logging.getLogger(__name__).warning(f"вход Apple: {e}")
+        log_failure(logging.getLogger(__name__), "вход Apple", e)
         raise HTTPException(502, "Apple не ответил — попробуй через минуту")
     name = " ".join(body.name.split())[:80]
     owner = await find_user("apple", claims["sub"])

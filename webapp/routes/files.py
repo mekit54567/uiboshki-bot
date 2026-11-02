@@ -14,6 +14,8 @@ from config import STAROSTA_ID, is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
+from kapibara.core.errors import log_failure
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -255,7 +257,7 @@ async def api_summary_make(file_id: int, user: dict = CurrentUser):
     except lecture_summary.NoText:
         raise HTTPException(422, "В файле нет текста — конспект делать не из чего")
     except Exception as e:
-        logger.warning(f"конспект файла {file_id}: {e!r}")
+        log_failure(logger, f"конспект файла {file_id}", e)
         raise HTTPException(502, "ИИ сейчас не ответил — попробуй через минуту")
     return await _summary_view(f, made)
 
@@ -294,7 +296,7 @@ async def api_lecture_search(q: str = "", subject: str = "", user: dict = Curren
     try:
         hits = await semantic_search.search(q, subject=subject, k=8)
     except Exception as e:
-        logger.warning(f"поиск в лекциях: {e!r}")
+        log_failure(logger, "поиск в лекциях", e)
         raise HTTPException(502, "Поиск в лекциях сейчас не работает")
     return {"ready": True, "items": [{
         "file_id": h["file_id"], "title": h["title"], "subject": h["subject"],
