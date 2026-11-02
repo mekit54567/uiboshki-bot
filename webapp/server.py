@@ -181,6 +181,26 @@ async def health():
     return {"ok": True}
 
 
+# Готовность (deploy/timeweb/update.sh после выкладки): 200 — бот прошёл все
+# этапы запуска (health.READY_STEPS) и база отвечает; 503 — ещё нет или
+# сломалось. Тоже без initData: в ответе нет ничего, кроме этапов и коммита.
+@app.get("/ready")
+async def ready():
+    from fastapi.responses import JSONResponse
+    from database._conn import connect
+    waiting = bot_health.not_ready()
+    try:
+        async with connect() as db:
+            await db.execute("SELECT 1")
+        db_ok = True
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"/ready: база не отвечает: {e!r}")
+        db_ok = False
+    ok = db_ok and not waiting
+    body = {"ok": ok, "waiting": waiting, "db": db_ok, "commit": meta.build_info()["commit"]}
+    return JSONResponse(body, status_code=200 if ok else 503)
+
+
 # ── Обработчики по темам (webapp/routes/*) ──────────────────────────────────
 # Пути у них не пересекаются, так что порядок не важен; важно только, что
 # статика ниже — последней.

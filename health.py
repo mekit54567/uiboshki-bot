@@ -29,6 +29,22 @@ AREAS = [("ai_solver", "ИИ"), ("gemini_solver", "ИИ"), ("lecture_summary", "
          ("schedule", "Расписание"), ("mirea_schedule_api", "Расписание"), ("backup", "Бэкап")]
 
 
+# Готовность к работе (/ready; по нему deploy/timeweb/update.sh решает, удалась
+# ли выкладка). /health отвечает, пока жив процесс; /ready — только когда
+# main() в bot.py прошёл все этапы запуска и бот начал принимать сообщения.
+READY_STEPS = ("db", "handlers", "scheduler", "polling")
+_ready: set[str] = set()
+
+
+def mark_ready(step: str) -> None:
+    _ready.add(step)
+
+
+def not_ready() -> list[str]:
+    """Этапы запуска, которые ещё не пройдены (пусто — готов)."""
+    return [s for s in READY_STEPS if s not in _ready]
+
+
 def area_of(name: str) -> str:
     return next((label for prefix, label in AREAS if name.startswith(prefix)), "Прочее")
 
