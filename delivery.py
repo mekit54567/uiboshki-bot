@@ -17,6 +17,11 @@ TITLES = {"morning": "Доброе утро", "lesson": "Скоро пара", "
           "lessons": "Изменилось расписание", "sdo": "Вход в СДО"}
 
 
+# Что приходит везде, мимо «Дублировать пуши»: оплата и донаты (Никита 02.11 —
+# платят на сайте, ответ должен прийти и в PWA, и в Telegram).
+ALWAYS_ALL = {"plus"}
+
+
 def plain(html: str, limit: int = 180) -> str:
     """Текст пуша: без HTML-разметки, первые строки."""
     text = re.sub(r"<[^>]+>", "", html or "")
@@ -51,6 +56,8 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
     except Exception as e:
         logger.info(f"пуш приложения {user_id}: {type(e).__name__}: {e}")
     subs = await get_push_subs(user_id)
+    if sent and subs and kind not in ALWAYS_ALL and not await _tg_copy(user_id):
+        subs = []                 # пуш дошёл до телефона, «дублировать» выключено — в PWA не копируем
     for sub in subs:
         try:
             code = await webpush.send(sub, data)
@@ -67,8 +74,9 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
 
 
 async def _tg_copy(user_id: int) -> bool:
-    """Слать ли в Telegram, когда пуш уже дошёл (тумблер «Дублировать в
-    Telegram» в уведомлениях PWA). Пуш не дошёл — Telegram в любом случае."""
+    """Копировать ли, когда пуш уже дошёл (тумблер «Дублировать пуши» в
+    уведомлениях): выключен — пуш в приложение на телефоне, без копии в PWA
+    и Telegram (Никита 02.11). Пуш не дошёл — Telegram в любом случае."""
     import notify_prefs
     from database import get_user
     return notify_prefs.merge((await get_user(user_id) or {}).get("notify"))["tg_copy"]

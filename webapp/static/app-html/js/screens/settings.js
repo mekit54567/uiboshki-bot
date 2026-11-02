@@ -133,7 +133,7 @@ window.openNotify = function openNotify() {
         install: "Добавь Капибару на экран «Домой» (Поделиться → На экран «Домой») и открой оттуда" }[push]
         || "Включи — и уведомления придут сюда, как у приложения";
       return card({ ic: "notifications_active", title: "На этом устройстве", sub, key: "push", on: push === "on",
-        children: row("Дублировать в Telegram", tg ? "приходят и сюда, и в Telegram" : "только сюда; не дошло — тогда в Telegram", "tg_copy", tg) });
+        children: row("Дублировать в Telegram", tg ? "пуш сюда и копия в Telegram" : "только пуш (есть приложение на телефоне — только в него); не дошёл — в Telegram", "tg_copy", tg) });
     };
 
     const draw = () => {
