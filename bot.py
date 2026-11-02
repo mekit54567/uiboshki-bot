@@ -203,6 +203,8 @@ async def main():
     dp.inline_query.outer_middleware(consent)
     dp.error.register(notify_starosta_on_error)
 
+    import backup                   # init_db меняет схему — сначала копия базы рядом
+    await backup.keep_before_start()
     await init_db()
     import login_channel
     await login_channel.start()             # отметка «с какого момента канал для новых»
