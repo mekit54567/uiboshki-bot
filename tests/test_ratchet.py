@@ -53,3 +53,14 @@ def test_compare_is_a_ratchet():
     assert worse and not better
     worse, better = ratchet.compare({"broad_except": 9}, ceiling)
     assert better and not worse                      # лучше — потолок надо опустить
+
+
+def test_moved_module_is_not_a_new_cycle(tmp_path):
+    """Переезд (ADR 0003) не увеличивает клубок: старое имя = новый модуль."""
+    m = _tree(tmp_path, {
+        "a.py": "import old\n",
+        "old.py": "import sys\n\nimport kapibara.new as _m\n\nsys.modules[__name__] = _m\n",
+        "kapibara/__init__.py": "",
+        "kapibara/new.py": "def f():\n    import a\n",
+    })
+    assert m["cycle_modules"] == 2                  # a и kapibara.new, без old

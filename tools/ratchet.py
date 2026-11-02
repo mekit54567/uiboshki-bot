@@ -88,9 +88,27 @@ def _cycle_modules(graph: dict[str, set[str]]) -> int:
     return total
 
 
+def _redirect_target(p: Path) -> str | None:
+    """«import kapibara.x.y as _m; sys.modules[__name__] = _m» → kapibara.x.y."""
+    text = p.read_text(encoding="utf-8")
+    if "sys.modules[__name__]" not in text:
+        return None
+    tree = ast.parse(text)
+    imported = {a.asname: a.name for n in tree.body if isinstance(n, ast.Import) for a in n.names if a.asname}
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and len(n.targets) == 1 and ast.unparse(n.targets[0]) == "sys.modules[__name__]"                 and isinstance(n.value, ast.Name):
+            return imported.get(n.value.id)
+    return None
+
+
 def measure(root: Path) -> dict[str, int]:
     files = server_files(root)
     names = {module_name(p, root): p for p in files}
+    # Переехавший модуль (ADR 0003): старое имя — переадресация на новое, в
+    # графе это один и тот же модуль
+    redirect = {n: t for n, p in names.items() if (t := _redirect_target(p))}
+    for n in redirect:
+        names.pop(n)
     broad = silent = 0
     graph: dict[str, set[str]] = {n: set() for n in names}
 
@@ -99,6 +117,7 @@ def measure(root: Path) -> dict[str, int]:
         parts = name.split(".")
         for i in range(len(parts), 0, -1):
             cand = ".".join(parts[:i])
+            cand = redirect.get(cand, cand)
             if cand in names:
                 return cand
         return None
