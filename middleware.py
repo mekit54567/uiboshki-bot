@@ -142,9 +142,11 @@ class ConsentMiddleware(BaseMiddleware):
         import privacy
         try:
             blocked = await privacy.blocked(user.id)
-        except Exception as e:
-            logger.warning(f"согласие: {e}")
-            return await handler(event, data)
+        except Exception:
+            # Не смогли проверить согласие — не пускаем (152-ФЗ): до 02.11 при
+            # сбое базы бот обрабатывал человека, не зная, давал ли он согласие
+            logger.warning("согласие: проверка не удалась — не пускаю", exc_info=True)
+            return await self._unavailable(event)
         if blocked:
             return await self._blocked(handler, event, data)
         result = await handler(event, data)
@@ -178,6 +180,20 @@ class ConsentMiddleware(BaseMiddleware):
         from handlers.privacy import ask_consent
         await ask_consent(data["bot"], chat.id, new=name == "start", first_name=event.from_user.first_name,
                           store=name == "start" and text.split()[1:] == ["ios"])
+        return None
+
+    async def _unavailable(self, event):
+        from aiogram.types import CallbackQuery, InlineQuery
+        text = "Бот на минуту недоступен — попробуй чуть позже"
+        try:
+            if isinstance(event, CallbackQuery):
+                await event.answer(text, show_alert=True)
+            elif isinstance(event, InlineQuery):
+                await event.answer([], cache_time=0, is_personal=True)
+            elif (chat := getattr(event, "chat", None)) and chat.type == "private":
+                await event.answer(text)
+        except Exception as e:
+            logger.warning(f"согласие: не смог ответить: {e!r}")
         return None
 
     async def _erasing(self, event, text: str):
