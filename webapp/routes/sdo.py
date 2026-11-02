@@ -12,6 +12,8 @@ from config import is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
+from kapibara.core.errors import log_failure
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -65,7 +67,8 @@ async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
         raise HTTPException(status_code=400, detail="не похоже на MoodleSession — скопируй значение целиком")
     try:
         alive = await sdo_accounts.check(cookie)
-    except Exception:
+    except Exception as e:
+        log_failure(logger, "СДО: проверка куки", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     if not alive:
         raise HTTPException(status_code=400, detail="СДО не пускает с этой кукой — войди на сайте заново и скопируй новую")
@@ -188,7 +191,7 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     except Exception as e:
         # 3.3: что угодно ещё (обрыв, таймаут, странный ответ СДО) — не 500, а
         # понятный текст: файл мог и дойти, человек проверит в СДО
-        logger.warning(f"СДО: сдача в задание {cmid} у {user['id']} упала: {type(e).__name__}: {e}")
+        log_failure(logger, f"СДО: сдача в задание {cmid} у {user['id']} упала", e)
         raise HTTPException(status_code=502, detail=sdo_submit.UNAVAILABLE)
     logger.info(f"СДО: {user['id']} сдал файл в задание {cmid}")
     import sdo_grades
@@ -257,7 +260,7 @@ async def api_sdo_grades(fresh: bool = False, user: dict = CurrentUser):
         await set_sdo_status(user["id"], "expired")
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
     except Exception as e:
-        logger.warning(f"Баллы СДО: {type(e).__name__}: {e}")
+        log_failure(logger, "Баллы СДО", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     try:
         import sdo_history          # точка истории баллов на сегодня (график на экране предмета)
@@ -282,7 +285,7 @@ async def api_sdo_course(course_id: int, user: dict = CurrentUser):
         await set_sdo_status(user["id"], "expired")
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
     except Exception as e:
-        logger.warning(f"Баллы СДО, курс {course_id}: {type(e).__name__}: {e}")
+        log_failure(logger, f"Баллы СДО, курс {course_id}", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     try:
         import sdo_history
@@ -332,7 +335,8 @@ async def api_sdo_goal(course_id: int, body: Goal, user: dict = CurrentUser):
         from database import set_sdo_status
         await set_sdo_status(user["id"], "expired")   # как в /api/sdo/grades: экран «Подключить заново»
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception:
+    except Exception as e:
+        log_failure(logger, f"СДО: курс {course_id}", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     if body.label is not None and body.label not in [m["label"] for m in course.get("marks") or []]:
         raise HTTPException(status_code=400, detail="такой оценки у предмета нет")
@@ -374,7 +378,8 @@ async def api_attendance_mark(course_id: int, body: AttendanceMark, user: dict =
         from database import set_sdo_status
         await set_sdo_status(user["id"], "expired")   # как в /api/sdo/grades: экран «Подключить заново»
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception:
+    except Exception as e:
+        log_failure(logger, f"СДО: курс {course_id}", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     blank = await attendance.for_course(user["id"], course, manual={})
     marks = await get_attendance_marks(user["id"], course_id)
@@ -432,7 +437,7 @@ async def api_sdo_task(cmid: int, request: Request, module: str = "assign", user
         await set_sdo_status(user["id"], "expired")
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
     except Exception as e:
-        logger.warning(f"Задание СДО {cmid}: {type(e).__name__}: {e}")
+        log_failure(logger, f"Задание СДО {cmid}", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     exp = int(time.time()) + 600

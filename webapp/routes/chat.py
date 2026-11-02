@@ -9,6 +9,8 @@ from pydantic import BaseModel
 
 from webapp.deps import CurrentUser
 
+from kapibara.core.errors import log_failure
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -278,7 +280,10 @@ async def reply(history: list, subject: str, context: str, lectures: str, source
     except Exception as e:
         # причина (какая модель, код) — в лог для /status; человеку — без
         # названий провайдеров и кодов (Никита 21.10: «причём тут Gemini?»)
-        logger.warning(f"webapp chat failed: {_short_reason(e)} ({e!r})")
+        import gemini_solver
+        import think
+        log_failure(logger, f"webapp chat failed: {_short_reason(e)}", e,
+                    expected=(gemini_solver.GeminiError, think.ThinkError))
         raise HTTPException(status_code=502, detail=BUSY_TEXT)
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
