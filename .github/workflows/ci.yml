@@ -46,6 +46,11 @@ jobs:
       - name: Свои импорты (и внутри функций)
         run: python tools/check_imports.py
 
+      # Храповик: широкие except, молчаливые pass, клубок импортов, файлы в
+      # корне — только вниз (потолок в tools/ratchet.json, tools/ratchet.py)
+      - name: Храповик качества
+        run: python tools/ratchet.py
+
       - name: Run tests
         run: python -m pytest -v
 

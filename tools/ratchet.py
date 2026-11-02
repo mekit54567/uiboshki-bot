@@ -1,0 +1,168 @@
+"""Храповик качества кода (CI: «python tools/ratchet.py»).
+
+Плохих мест в коде много (широкие except, клубок импортов, плоский корень),
+и чинить всё разом опасно для прода. Поэтому CI запоминает текущие цифры в
+tools/ratchet.json и пускает их только вниз, как храповик крутится в одну
+сторону:
+  - стало больше — CI красный: новый код должен быть чище старого;
+  - стало меньше — тоже красный, пока не обновишь потолок
+    («python tools/ratchet.py --update» и закоммить ratchet.json), иначе
+    следующий PR мог бы молча вернуть цифру назад.
+
+Что считаем (код сервера: корень, handlers/, database/, webapp/):
+  broad_except   — except Exception / BaseException / голый except;
+  silent_except  — обработчик, в котором только pass (ошибка пропадает);
+  cycle_modules  — модули, сцепленные взаимными импортами в клубок
+                   (с импортами внутри функций);
+  root_py_files  — .py в корне репозитория (план — пакет kapibara/).
+"""
+from __future__ import annotations
+
+import ast
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BASELINE = ROOT / "tools" / "ratchet.json"
+SERVER_DIRS = ("handlers", "database", "webapp")
+
+
+def server_files(root: Path) -> list[Path]:
+    files = list(root.glob("*.py"))
+    for d in SERVER_DIRS:
+        files += [p for p in (root / d).rglob("*.py") if "__pycache__" not in p.parts]
+    return sorted(files)
+
+
+def module_name(p: Path, root: Path) -> str:
+    parts = list(p.relative_to(root).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def _is_broad(h: ast.ExceptHandler) -> bool:
+    if h.type is None:
+        return True
+    types = h.type.elts if isinstance(h.type, ast.Tuple) else [h.type]
+    return any(isinstance(t, ast.Name) and t.id in ("Exception", "BaseException") for t in types)
+
+
+def _cycle_modules(graph: dict[str, set[str]]) -> int:
+    """Сколько модулей сидит в компонентах сильной связности размером > 1 (Тарьян)."""
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    stack: list[str] = []
+    on: set[str] = set()
+    total = 0
+    counter = 0
+    sys.setrecursionlimit(max(10000, sys.getrecursionlimit()))
+
+    def visit(v: str) -> None:
+        nonlocal counter, total
+        index[v] = low[v] = counter
+        counter += 1
+        stack.append(v)
+        on.add(v)
+        for w in graph.get(v, ()):
+            if w not in index:
+                visit(w)
+                low[v] = min(low[v], low[w])
+            elif w in on:
+                low[v] = min(low[v], index[w])
+        if low[v] == index[v]:
+            size = 0
+            while True:
+                w = stack.pop()
+                on.discard(w)
+                size += 1
+                if w == v:
+                    break
+            if size > 1:
+                total += size
+
+    for v in sorted(graph):
+        if v not in index:
+            visit(v)
+    return total
+
+
+def measure(root: Path) -> dict[str, int]:
+    files = server_files(root)
+    names = {module_name(p, root): p for p in files}
+    broad = silent = 0
+    graph: dict[str, set[str]] = {n: set() for n in names}
+
+    def target(name: str) -> str | None:
+        # самый длинный свой модуль-префикс: «database.users» → database.users, иначе database
+        parts = name.split(".")
+        for i in range(len(parts), 0, -1):
+            cand = ".".join(parts[:i])
+            if cand in names:
+                return cand
+        return None
+
+    for name, p in names.items():
+        tree = ast.parse(p.read_text(encoding="utf-8"), str(p))
+        is_pkg = p.name == "__init__.py"
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler):
+                if _is_broad(node):
+                    broad += 1
+                if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
+                    silent += 1
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    if (t := target(a.name)) and t != name:
+                        graph[name].add(t)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    base = name.split(".") if is_pkg else name.split(".")[:-1]
+                    base = base[: len(base) - (node.level - 1)]
+                    mod = ".".join(base + ([node.module] if node.module else []))
+                else:
+                    mod = node.module or ""
+                for a in node.names:
+                    t = target(f"{mod}.{a.name}") or target(mod)
+                    if t and t != name:
+                        graph[name].add(t)
+    return {
+        "broad_except": broad,
+        "silent_except": silent,
+        "cycle_modules": _cycle_modules(graph),
+        "root_py_files": len(list(root.glob("*.py"))),
+    }
+
+
+def compare(now: dict[str, int], ceiling: dict[str, int]) -> tuple[list[str], list[str]]:
+    """(стало хуже, стало лучше — потолок надо опустить)"""
+    worse = [f"{k}: {now[k]} > потолка {ceiling[k]}" for k in now if k in ceiling and now[k] > ceiling[k]]
+    better = [f"{k}: {now[k]} < потолка {ceiling[k]}" for k in now if k in ceiling and now[k] < ceiling[k]]
+    worse += [f"{k}: нет в tools/ratchet.json" for k in now if k not in ceiling]
+    return worse, better
+
+
+def main(argv: list[str]) -> int:
+    now = measure(ROOT)
+    if "--update" in argv:
+        BASELINE.write_text(json.dumps(now, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print("потолок обновлён:", now)
+        return 0
+    ceiling = json.loads(BASELINE.read_text(encoding="utf-8"))
+    worse, better = compare(now, ceiling)
+    for k, v in now.items():
+        print(f"{k}: {v} (потолок {ceiling.get(k, '—')})")
+    if worse:
+        print("\n❌ Стало хуже — новый код должен быть не хуже старого:\n  " + "\n  ".join(worse))
+        print("Узкий тип ошибки вместо except Exception, лог вместо pass, импорт без нового цикла.")
+        return 1
+    if better:
+        print("\n✅ Стало лучше:\n  " + "\n  ".join(better))
+        print("Опусти потолок: python tools/ratchet.py --update и закоммить tools/ratchet.json")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
