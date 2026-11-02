@@ -44,8 +44,18 @@ class Module:
         self.is_package = path.name == "__init__.py"
         self.names: set[str] = set()
         self.star = False           # from x import * / globals() — имён не знаем, не проверяем
+        self.alias: str | None = None   # переадресация sys.modules[__name__] = другой модуль (ADR 0003)
+        imported: dict[str, str] = {}
         for node in tree.body:
             self._collect(node)
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.asname:
+                        imported[a.asname] = a.name
+            elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+                t = node.targets[0]
+                if isinstance(t, ast.Subscript) and ast.unparse(t) == "sys.modules[__name__]"                         and isinstance(node.value, ast.Name) and node.value.id in imported:
+                    self.alias = imported[node.value.id]
 
     def _collect(self, node: ast.AST) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -117,6 +127,8 @@ def check(root: Path) -> tuple[int, list[str]]:
                     errors.append(f"{rel}:{node.lineno}: нет модуля {target}")
                     continue
                 m = mods[target]
+                if m.alias in mods:
+                    m = mods[m.alias]
                 if m.star:
                     continue
                 for a in node.names:
