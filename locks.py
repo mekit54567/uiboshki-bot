@@ -1,18 +1,7 @@
-"""
-Замки «один писатель на ключ» в памяти процесса: бот, WebApp и планировщик —
-один процесс и один event loop, а настройки-JSON (уведомления, цели,
-выпущенные посты канала) пишутся как «прочитал → поменял → записал». Без
-замка два быстрых запроса одного человека перетирали друг друга (ревью
-04.10: выключил «Погоду» и «Обзор недели» подряд — сохранилось одно).
-"""
+"""Переехал в kapibara/core/locks.py — здесь переадресация на тот же
+модуль (docs/adr/0003-safe-moves.md). Убирается, когда импорты перепишем."""
+import sys
 
-import asyncio
+import kapibara.core.locks as _m
 
-_locks: dict[tuple, asyncio.Lock] = {}
-
-
-def lock(*key) -> asyncio.Lock:
-    """lock("notify", user_id) — один и тот же замок на один ключ."""
-    if key not in _locks:
-        _locks[key] = asyncio.Lock()
-    return _locks[key]
+sys.modules[__name__] = _m

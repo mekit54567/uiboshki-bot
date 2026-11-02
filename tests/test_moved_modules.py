@@ -95,6 +95,13 @@ MOVED = {
     "channel_posts": "kapibara.features.content.channel_posts",
     "roadmap": "kapibara.features.content.roadmap",
     "review_demo": "kapibara.features.content.review_demo",
+    "config": "kapibara.core.config",
+    "utils": "kapibara.core.utils",
+    "translit": "kapibara.core.translit",
+    "timing": "kapibara.core.timing",
+    "locks": "kapibara.core.locks",
+    "ratelimit": "kapibara.core.ratelimit",
+    "net": "kapibara.core.net",
 }
 
 
