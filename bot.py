@@ -207,6 +207,8 @@ async def main():
         health.mark_ready("polling")
     dp.startup.register(polling_started)
 
+    import backup                   # init_db меняет схему — сначала копия базы рядом
+    await backup.keep_before_start()
     await init_db()
     health.mark_ready("db")
     import login_channel

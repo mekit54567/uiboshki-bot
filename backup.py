@@ -235,6 +235,32 @@ async def keep_local_copy() -> str | None:
         return None
 
 
+BEFORE_START_SPARE = 200 * 1024 * 1024    # копия перед запуском — только если после неё останется столько
+
+
+async def keep_before_start() -> str | None:
+    """Копия базы перед init_db() при каждом запуске (02.11): init_db меняет
+    схему, и если новая сборка сделала это неудачно, рядом лежит база, какой
+    она была до неё (<база>.before-start, одна, перезаписывается). Нет места
+    на диске — не копируем, бот запускается как обычно. → путь или None."""
+    import shutil
+    src = database.DATABASE_PATH
+    if not os.path.exists(src):
+        return None                     # первый запуск — копировать нечего
+    path = src + ".before-start"
+    old = os.path.getsize(path) if os.path.exists(path) else 0
+    free = shutil.disk_usage(os.path.dirname(os.path.abspath(src))).free + old
+    if free < os.path.getsize(src) + BEFORE_START_SPARE:
+        logger.warning(f"копия перед запуском: мало места ({free // 2**20} МБ) — пропускаю")
+        return None
+    try:
+        await asyncio.to_thread(_copy_into, src, path)
+        return path
+    except Exception as e:
+        logger.warning(f"копия перед запуском не снялась: {e!r}")
+        return None
+
+
 def _drop_search_index():
     """Индекс поиска по смыслу — производные данные с id файлов; после
     восстановления id раздаются заново, и старые куски подклеились бы к чужим
