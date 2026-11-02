@@ -1,13 +1,24 @@
-name: Выкладка на Amvera
-# Amvera собирает бота из ветки deploy, а не из main. После мержа в main
-# Actions докидывают ещё коммиты (CHANGELOG, веб-сборка PWA), и Amvera
-# пересобиралась 2–3 раза подряд: 10–15 минут перезапусков и «Сервер не
-# отвечает» (Никита 17.10). Здесь ждём, пока эти сборки main закончатся, и
-# двигаем deploy один раз — одна сборка на мерж.
-# Коммиты Actions (GITHUB_TOKEN) этот файл не запускают — только мерж.
+name: Выкладка (ветка deploy)
+# Сервер (Timeweb, deploy/timeweb/update.sh) раз в минуту тянет ветку deploy,
+# а не main. После мержа в main Actions докидывают ещё коммиты (CHANGELOG,
+# веб-сборка PWA), и без ожидания сервер пересобирался 2–3 раза подряд
+# (Никита 17.10). Здесь ждём, пока эти сборки main закончатся, и двигаем
+# deploy один раз — одна сборка на мерж.
+#
+# С 02.11 на сервер едет только проверенное: запуск идёт не от мержа, а от
+# зелёного CI этого мержа (workflow_run). До этого deploy двигался на любой
+# свежий main, даже если тесты упали. Двигаем deploy, только если:
+#   - CI мержа зелёный (иначе этот файл вообще не запускается дальше if);
+#   - CHANGELOG и PWA после него закончились и не упали;
+#   - между проверенным коммитом и main — только коммиты github-actions[bot]
+#     (CHANGELOG, PWA). Есть чужой коммит — это новый мерж, у него свой CI,
+#     и выкладывать его будет его собственный запуск.
+# Ручной запуск (workflow_dispatch) берёт последний зелёный CI на main.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -21,26 +32,65 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+
+      - name: Какой коммит проверен CI
+        id: tested
+        run: |
+          sha="${{ github.event.workflow_run.head_sha }}"
+          if [ -z "$sha" ]; then
+            sha=$(gh run list --repo "$REPO" --workflow ci.yml --branch main --event push \
+              --status success --limit 1 --json headSha --jq '.[0].headSha')
+          fi
+          [ -n "$sha" ] || { echo "::error::нет зелёного CI на main"; exit 1; }
+          echo "проверен CI: $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Ждём CHANGELOG и веб-сборку PWA
         env:
-          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.tested.outputs.sha }}
         run: |
+          # Только запуски от того же мержа: старый упавший PWA не держит выкладку вечно
+          runs() {
+            gh run list --repo "$REPO" --branch main --limit 30 \
+              --json workflowName,status,conclusion,headSha \
+              --jq "[.[] | select((.workflowName == \"CHANGELOG\" or .workflowName == \"PWA — веб-сборка приложения\") and .headSha == \"$SHA\")]"
+          }
           sleep 20
           for i in $(seq 1 60); do
-            busy=$(gh run list --repo "$GITHUB_REPOSITORY" --branch main --limit 30 \
-              --json workflowName,status \
-              --jq '[.[] | select((.workflowName == "CHANGELOG" or .workflowName == "PWA — веб-сборка приложения") and .status != "completed")] | length')
+            busy=$(runs | jq '[.[] | select(.status != "completed")] | length')
             echo "ещё идут: $busy"
             [ "$busy" = "0" ] && break
             sleep 20
           done
-      - name: deploy = свежий main
+          [ "$busy" = "0" ] || { echo "::error::CHANGELOG/PWA не закончились за 20 минут — deploy не трогаю"; exit 1; }
+          failed=$(runs | jq -r '.[] | select(.conclusion != "success" and .conclusion != "skipped") | "\(.workflowName): \(.conclusion)"')
+          [ -z "$failed" ] || { echo "::error::после мержа упало: $failed — deploy не трогаю"; exit 1; }
+
+      - name: deploy = проверенный main
+        env:
+          SHA: ${{ steps.tested.outputs.sha }}
         run: |
           git fetch origin main
+          git merge-base --is-ancestor "$SHA" origin/main \
+            || { echo "::error::$SHA не в main"; exit 1; }
+          others=$(git log --format='%h %an' "$SHA..origin/main" | grep -v ' github-actions\[bot\]$' || true)
+          if [ -n "$others" ]; then
+            echo "в main уже новый мерж, его выложит его собственный CI:"
+            echo "$others"
+            exit 0
+          fi
           git push origin origin/main:refs/heads/deploy --force
+          echo "deploy → $(git rev-parse --short origin/main) (CI зелёный на ${SHA:0:7})"
