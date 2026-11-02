@@ -36,6 +36,11 @@ MOVED = {
     "pulse_check": "kapibara.features.pulse.check",
     "pulse_lab": "kapibara.features.pulse.lab",
     "pulse_probe": "kapibara.features.pulse.probe",
+    "billing": "kapibara.features.billing.billing",
+    "plans": "kapibara.features.billing.plans",
+    "plus_grant": "kapibara.features.billing.grants",
+    "plus_welcome": "kapibara.features.billing.welcome",
+    "referrals": "kapibara.features.billing.referrals",
 }
 
 
