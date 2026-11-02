@@ -681,8 +681,8 @@ class _WebPushCardState extends State<_WebPushCard> {
       onChanged: _state == 'install' || _state == 'denied' ? () {} : _switch,
       children: [
         _Row(
-          title: 'Дублировать пуши в Telegram',
-          sub: widget.tgCopy ? 'пуш в приложение и PWA, и то же сообщение в Telegram' : 'только пуш в приложение и PWA; не дошёл — тогда в Telegram. Об оплате — всегда и в Telegram',
+          title: 'Дублировать в Telegram',
+          sub: widget.tgCopy ? 'пуш сюда и копия в Telegram' : 'только пуш (есть приложение на телефоне — только в него); не дошёл — в Telegram',
           k: 'tg_copy',
           prefs: {'tg_copy': widget.tgCopy},
           onTap: (_) => widget.onTgCopy(),
@@ -748,8 +748,8 @@ class _AppPushCardState extends State<_AppPushCard> {
       children: [
         if (on)
           _Row(
-            title: 'Дублировать пуши в Telegram',
-            sub: widget.tgCopy ? 'пуш в приложение и PWA, и то же сообщение в Telegram' : 'только пуш в приложение и PWA; не дошёл — тогда в Telegram. Об оплате — всегда и в Telegram',
+            title: 'Дублировать в Telegram и PWA',
+            sub: widget.tgCopy ? 'пуш на телефон и копия в Telegram и PWA' : 'только на телефон; не дошёл — в Telegram. Об оплате — везде',
             k: 'tg_copy',
             prefs: {'tg_copy': widget.tgCopy},
             onTap: (_) => widget.onTgCopy(),

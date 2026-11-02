@@ -138,3 +138,44 @@ async def test_push_only_skips_telegram_when_push_arrived(db, monkeypatch):
     codes[0] = 201
     await delivery.deliver(bot, 1, "пара", kind="lesson")
     assert bot.sent == [1, 1, 1]                            # по умолчанию — и туда, и туда
+
+
+@pytest.mark.asyncio
+async def test_push_only_phone_app_no_pwa_copy(db, monkeypatch):
+    """Никита 02.11: пуши в приложении на телефоне включены, «дублировать»
+    выключено — ни Telegram, ни PWA не копируют. Включил — и туда, и туда.
+    Об оплате («plus») — в PWA всегда."""
+    import app_push
+    import delivery
+    from database import set_notify, upsert_user
+    from database.push import save_push_sub
+    _, p256dh, auth = _browser()
+    await upsert_user(1, "", "Аня")
+    await set_notify(1, {"tg_copy": False})
+    await save_push_sub(1, "https://push.example/a", p256dh, auth)
+    web = []
+
+    async def send(sub, data, ttl=3600):
+        web.append(data["tag"])
+        return 201
+
+    async def push_user(uid, data):
+        return 1                                            # телефон принял
+
+    monkeypatch.setattr(webpush, "send", send)
+    monkeypatch.setattr(app_push, "push_user", push_user)
+
+    class Bot:
+        sent = []
+
+        async def send_message(self, uid, text, **kw):
+            self.sent.append(uid)
+
+    bot = Bot()
+    await delivery.deliver(bot, 1, "пара", kind="lesson")
+    assert web == [] and bot.sent == []                     # только телефон
+    await delivery.deliver(bot, 1, "оплата", kind="plus")
+    assert web == ["plus"]                                  # оплата — и в PWA
+    await set_notify(1, {"tg_copy": True})
+    await delivery.deliver(bot, 1, "пара", kind="lesson")
+    assert web == ["plus", "lesson"] and bot.sent[-1:] == [1]

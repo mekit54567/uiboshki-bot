@@ -203,7 +203,7 @@ void main() {
     await settle(t);
     expect((bodies['POST /api/push/app/subscribe'] as Map)['platform'], 'fcm');
     expect(find.textContaining('Текст зашифрован'), findsOneWidget);
-    expect(find.text('Дублировать пуши в Telegram'), findsOneWidget);
+    expect(find.text('Дублировать в Telegram и PWA'), findsOneWidget);
   });
 
   testWidgets('сборка без пушей — карточки нет', (t) async {
