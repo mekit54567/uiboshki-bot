@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/app_push.dart';
 import 'package:uiboshki/screens/notify.dart';
+import 'package:uiboshki/screens/push_ask.dart';
 import 'package:uiboshki/theme/app_theme.dart';
 
 import 'fake_api.dart';
@@ -211,5 +212,55 @@ void main() {
     await t.pumpWidget(_wrap(NotifyScreen(api: fakeApi(overrides: _on))));
     await settle(t);
     expect(find.text('На этом телефоне'), findsNothing);
+  });
+
+  testWidgets('после входа один раз спрашиваем своим окном, системное — только после «Включить»', (t) async {
+    final bodies = <String, Object?>{};
+    final api = fakeApi(bodies: bodies, overrides: _on);
+    late BuildContext ctx;
+    await t.pumpWidget(_wrap(Scaffold(body: Builder(builder: (c) {
+      ctx = c;
+      return const SizedBox();
+    }))));
+    var asked = maybeAskPush(ctx, api);
+    await t.pumpAndSettle();
+    expect(find.text('Присылать расписание и сроки?'), findsOneWidget);
+    expect(dev.key, isNull); // до «Включить» системного окна и токена нет
+    await t.tap(find.text('Включить'));
+    await t.pumpAndSettle();
+    await asked;
+    expect((bodies['POST /api/push/app/subscribe'] as Map)['platform'], 'fcm');
+    expect(dev.key, isNotNull);
+    await t.pump(const Duration(seconds: 5)); // тост ушёл
+
+    // уже спрашивали — больше не спрашиваем, даже если выключил
+    await AppPush.disable(api);
+    asked = maybeAskPush(ctx, api);
+    await t.pumpAndSettle();
+    await asked;
+    expect(find.text('Присылать расписание и сроки?'), findsNothing);
+  });
+
+  testWidgets('«Не сейчас» — ничего не включаем; запрещены или канала нет — не спрашиваем', (t) async {
+    final bodies = <String, Object?>{};
+    final api = fakeApi(bodies: bodies, overrides: _on);
+    late BuildContext ctx;
+    await t.pumpWidget(_wrap(Scaffold(body: Builder(builder: (c) {
+      ctx = c;
+      return const SizedBox();
+    }))));
+    final asked = maybeAskPush(ctx, api);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Не сейчас'));
+    await t.pumpAndSettle();
+    await asked;
+    expect(bodies.containsKey('POST /api/push/app/subscribe'), isFalse);
+    expect(dev.key, isNull);
+
+    SharedPreferences.setMockInitialValues({});
+    dev.here = {};
+    await maybeAskPush(ctx, api);
+    await t.pumpAndSettle();
+    expect(find.text('Присылать расписание и сроки?'), findsNothing);
   });
 }
