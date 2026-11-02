@@ -32,6 +32,7 @@ from database import (
 )
 from config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
 from utils import esc
+from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -144,10 +145,8 @@ async def handle_reaction(callback: CallbackQuery):
     await set_feed_reaction(post_id, callback.from_user.id, emoji)
     counts = await get_feed_reaction_counts(post_id)
 
-    try:
+    with cosmetic("feed.handle_reaction"):
         await callback.message.edit_reply_markup(reply_markup=feed_keyboard(post_id, counts))
-    except Exception:
-        pass
     await callback.answer(f"{emoji} учтено")
 
 

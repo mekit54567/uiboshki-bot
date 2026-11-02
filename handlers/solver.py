@@ -17,6 +17,7 @@ from database import (
 from keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from intent_router import classify_intent, dispatch_intent
 from utils import esc, md_to_tg_html_parts, utc_to_msk_date
+from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -514,10 +515,8 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
         await callback.answer(GONE_TEXT, show_alert=True)
         return
     await callback.answer()
-    try:
+    with cosmetic("solver.think_again"):
         await callback.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
     wait = await callback.message.answer("🧠 Думаю ещё раз…")
     uid = callback.from_user.id
     try:
@@ -589,10 +588,8 @@ async def drop_arm(message: Message, state: FSMContext, data: dict):
     if not mid:
         return
     await state.update_data(think_arm=None, think_next=False)
-    try:
+    with cosmetic("solver.drop_arm"):
         await message.bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=mid, reply_markup=None)
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == THINK_ARM_CB)
@@ -601,10 +598,8 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     if await state.get_state() != SolverState.waiting_task.state or data.get("think_arm") != callback.message.message_id:
         await callback.answer(ARM_GONE, show_alert=True)
-        try:
+        with cosmetic("solver.toggle_arm"):
             await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
         return
     uid = callback.from_user.id
     on = not data.get("think_next")
@@ -612,17 +607,13 @@ async def toggle_arm(callback: CallbackQuery, state: FSMContext):
     if why:
         await state.update_data(think_next=False)
         await callback.answer(why, show_alert=True)
-        try:
+        with cosmetic("solver.toggle_arm"):
             await callback.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
         return
     await state.update_data(think_next=on)
     await callback.answer("Капибара решит задачу, подумав подольше" if on else "Решу как обычно")
-    try:
+    with cosmetic("solver.toggle_arm"):
         await callback.message.edit_reply_markup(reply_markup=arm_kb(await think.left_or_none(uid), on))
-    except Exception:
-        pass
 
 
 async def _think_first(message: Message, question: list, subject: str = "", lectures: str = "") -> str | None:
@@ -635,10 +626,8 @@ async def _think_first(message: Message, question: list, subject: str = "", lect
     except think.ThinkError as e:
         await wait.edit_text("⏳ " + str(e))
         return None
-    try:
+    with cosmetic("solver._think_first"):
         await wait.delete()
-    except Exception:
-        pass
     return answer
 
 
