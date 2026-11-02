@@ -95,7 +95,7 @@ AltStore пушей на iPhone нет). Осталось сделать в ак
 ищется так же, как у виджета), запасной путь — настройки группы
 (`UserDefaults(suiteName:)`). Расширение читает оттуда же (`PushOpen.loadKey`).
 
-## Что написать в политике (тексты правит координатор, `legal_texts.py`)
+## Что сказано в политике (`legal_texts.py`)
 
 - Получатели: Google LLC / Google Ireland (Firebase Cloud Messaging), Apple
   Inc. (Apple Push Notification service), ООО «ВК» (RuStore Push) — только
