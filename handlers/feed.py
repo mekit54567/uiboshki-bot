@@ -55,12 +55,18 @@ def feed_keyboard(post_id: int, counts: dict) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[buttons])
 
 
+async def _chat() -> int:
+    """GROUP_CHAT_ID или чат, запомненный при добавлении бота (handlers/members_chat.py)."""
+    from kapibara.features.groups import members
+    return GROUP_CHAT_ID or await members.chat_id()
+
+
 @router.message(Command("feed"))
 @router.message(F.text == "🗣 Подслушано")
 async def cmd_feed_start(message: Message, state: FSMContext):
-    if not GROUP_CHAT_ID:
+    if not await _chat():
         await message.answer(
-            "⚠️ Лента ещё не настроена (не задан GROUP_CHAT_ID). "
+            "⚠️ Лента ещё не настроена (бот не добавлен в чат группы). "
             "Попроси старосту это исправить."
         )
         return
@@ -109,12 +115,13 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
     # параметр там business_connection_id — кнопки не появлялись ни разу.
     kb = feed_keyboard(post_id, {})
 
+    chat = await _chat()
     try:
         if photo_file_id:
-            sent = await bot.send_photo(GROUP_CHAT_ID, photo_file_id, caption=caption, parse_mode="HTML",
+            sent = await bot.send_photo(chat, photo_file_id, caption=caption, parse_mode="HTML",
                                         reply_markup=kb)
         else:
-            sent = await bot.send_message(GROUP_CHAT_ID, caption, parse_mode="HTML", reply_markup=kb)
+            sent = await bot.send_message(chat, caption, parse_mode="HTML", reply_markup=kb)
     except Exception as e:
         logger.error(f"Не удалось опубликовать в ленту: {e}")
         # Пост так и не появился в группе — помечаем удалённым, иначе
@@ -168,7 +175,7 @@ async def cmd_delpost(message: Message, bot: Bot):
 
     if post.get("message_id"):
         try:
-            await bot.delete_message(GROUP_CHAT_ID, post["message_id"])
+            await bot.delete_message(await _chat(), post["message_id"])
         except Exception as e:
             logger.warning(f"Не смог удалить сообщение из чата: {e}")
 
