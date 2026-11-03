@@ -22,23 +22,8 @@ from datetime import datetime, UTC
 from urllib.parse import quote, urlsplit
 
 from kapibara.core import net
-
-DEFAULT_ENDPOINT = "https://storage.yandexcloud.net"
-
-
-def configured() -> bool:
-    return all(os.getenv(k, "").strip() for k in ("BACKUP_S3_BUCKET", "BACKUP_S3_KEY_ID", "BACKUP_S3_SECRET"))
-
-
-PROVIDERS = (("yandexcloud", "Yandex Cloud"), ("vkcloud", "VK Cloud"), ("mcs.mail", "VK Cloud"),
-             ("selcdn", "Selectel"), ("selectel", "Selectel"), ("timeweb", "Timeweb Cloud"),
-             ("cloud.ru", "Cloud.ru"))
-
-
-def provider() -> str:
-    """Чьё хранилище — для политики обработки данных."""
-    host = urlsplit(os.getenv("BACKUP_S3_ENDPOINT") or DEFAULT_ENDPOINT).netloc.lower()
-    return next((name for key, name in PROVIDERS if key in host), host or "хранилище S3")
+# настройки — в kapibara.core.storage (их читает и политика, слой features)
+from kapibara.core.storage import DEFAULT_ENDPOINT, PROVIDERS, configured, provider  # noqa: F401
 
 
 def _hmac(key: bytes, msg: str) -> bytes:

@@ -176,7 +176,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
         return 0
     limits = await get_quiz_limits([c for c in cmids if c])
     answers = await get_all_optional_answers()
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     sent = 0
     for user in await get_reminder_users():
         uid = user["user_id"]

@@ -191,7 +191,7 @@ async def _chat_file_request(text: str) -> dict | None:
     файле или предмет не угадан — None, отвечает ИИ."""
     from kapibara.features.lectures import request as file_request
     from database import get_file_ids_with_text, get_files
-    from kapibara.features.lectures.categories import LABELS, category_of
+    from kapibara.core.categories import LABELS, category_of
     from kapibara.core.utils import esc
     if not file_request.is_request(text):
         return None

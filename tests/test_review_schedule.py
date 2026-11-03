@@ -237,7 +237,7 @@ async def test_starosta_deletes_note(db, feed):
 
 @pytest.mark.asyncio
 async def test_weather_cached(monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     calls = []
 
     async def fetch():
@@ -255,7 +255,7 @@ async def test_weather_cached(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_today_weather_in_parallel(db, monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     from kapibara.features.schedule import parser as schedule_parser
     import webapp.server as server
 
@@ -404,7 +404,7 @@ async def test_weather_down_keeps_last_good(monkeypatch, caplog):
 
     import httpx
 
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     real_fetch = weather._fetch_weather
     clock = [1000.0]
     monkeypatch.setattr(weather, "time", SimpleNamespace(monotonic=lambda: clock[0]))

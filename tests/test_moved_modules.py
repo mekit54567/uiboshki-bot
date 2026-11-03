@@ -22,7 +22,7 @@ MOVED = {
     "teacher_rating": "kapibara.features.social.teacher_rating",
     "ugc": "kapibara.features.social.ugc",
     "xp": "kapibara.features.social.xp",
-    "file_categories": "kapibara.features.lectures.categories",
+    "file_categories": "kapibara.core.categories",
     "file_names": "kapibara.features.lectures.names",
     "file_request": "kapibara.features.lectures.request",
     "file_text": "kapibara.features.lectures.text",

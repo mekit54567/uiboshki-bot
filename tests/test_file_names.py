@@ -139,7 +139,7 @@ def test_translit_lectures_back_to_russian():
 
 
 def test_translit_only_lesson_titles():
-    from kapibara.features.lectures.categories import detect_category
+    from kapibara.core.categories import detect_category
     from kapibara.core.translit import from_translit
     assert detect_category("Lektsiya 05 Protsessnaya arhitektura") == "lecture"
     for t in ["Lecture 1 Intro", "ArchiMate 3.1 Specification", "Лекция 5. Презентация", "Roadmap"]:

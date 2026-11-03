@@ -21,7 +21,7 @@ split_title — «Лекция 8» и тема отдельно: приложе�
 
 import re
 
-from kapibara.features.lectures.categories import category_of, natural_key
+from kapibara.core.categories import category_of, natural_key
 from kapibara.features.lectures.topic import topic_from_text
 from kapibara.core.translit import from_translit
 

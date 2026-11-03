@@ -43,7 +43,7 @@ def client(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_today(db, client, monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     from kapibara.features.schedule import parser as schedule_parser
     from kapibara.core.utils import today_msk
     today = today_msk()
@@ -71,7 +71,7 @@ async def test_api_today(db, client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_api_today_survives_schedule_outage(db, client, monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     from kapibara.features.schedule import parser as schedule_parser
 
     async def down():

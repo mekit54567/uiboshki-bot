@@ -1,9 +1,8 @@
 # Охранник слоёв (docs/adr/0002-layers.md): импорты идут только сверху вниз.
 #     bot | jobs  →  ops  →  features  →  core;   database — только core
 # CI: «lint-imports». Новый прямой импорт против правил — CI красный.
-# ignore_imports — нарушения, которые были на 02.11 (25 штук; 03.11 — 12). Это список
-# долга: его можно только сокращать (как храповик, docs/adr/0006-ratchet.md).
-# Починил — удали строку отсюда (одинаковый список во всех правилах).
+# Исключений нет: 02.11 их было 25, 03.11 — ноль (ignore_imports не нужен).
+# Нужно позвать слой выше — значит, общее лежит не там: опусти его ниже.
 
 [importlinter]
 root_packages =
@@ -26,20 +25,6 @@ forbidden_modules =
     handlers
     webapp
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards
-
 [importlinter:contract:features]
 name = features не знают про Telegram, HTTP, задания и эксплуатацию
 type = forbidden
@@ -51,20 +36,6 @@ forbidden_modules =
     handlers
     webapp
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards
-
 [importlinter:contract:ops]
 name = ops не зовёт Telegram-слой и планировщик
 type = forbidden
@@ -73,20 +44,6 @@ forbidden_modules =
     kapibara.bot
     kapibara.jobs
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards
-
 [importlinter:contract:bot]
 name = Telegram-слой не зовёт планировщик
 type = forbidden
@@ -94,20 +51,6 @@ source_modules = kapibara.bot
 forbidden_modules =
     kapibara.jobs
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards
-
 [importlinter:contract:jobs]
 name = планировщик не зовёт Telegram-слой
 type = forbidden
@@ -115,20 +58,6 @@ source_modules = kapibara.jobs
 forbidden_modules =
     kapibara.bot
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards
-
 [importlinter:contract:database]
 name = база не знает про логику продукта
 type = forbidden
@@ -141,16 +70,3 @@ forbidden_modules =
     handlers
     webapp
 allow_indirect_imports = True
-ignore_imports =
-    database.files -> kapibara.features.lectures.categories
-    kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
-    kapibara.features.deadlines.soon -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> handlers.weather
-    kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
-    kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.privacy.privacy -> kapibara.ops.s3_store
-    kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.jobs.scheduler -> kapibara.bot.keyboards

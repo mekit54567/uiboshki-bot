@@ -55,7 +55,7 @@ class FakeBot:
 
 @pytest.mark.asyncio
 async def test_morning_uses_each_users_group(two_groups, monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
     from kapibara.jobs import scheduler
 
     async def no_weather():

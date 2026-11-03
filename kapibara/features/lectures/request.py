@@ -11,7 +11,7 @@
 
 import re
 
-from kapibara.features.lectures.categories import category_of, natural_key, sort_files
+from kapibara.core.categories import category_of, natural_key, sort_files
 
 _ASK = re.compile(r"(?<![а-яё])(скин|кин|дай|дайте|пришли|пришлите|отправ|нуж[нe]|найди|ищу|где\s+(?:лежит|найти)|скачать)",
                   re.I)

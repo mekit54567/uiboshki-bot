@@ -15,7 +15,7 @@ from kapibara.core.config import (
 from database import get_all_subscribed_users, get_deadlines_soon
 from kapibara.features.schedule.parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
 from kapibara.core.utils import esc, today_msk, esc_attr
-from kapibara.bot.keyboards import app_button
+from kapibara.core.telegram import app_button
 from kapibara.features.notifications.broadcast import pace
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ async def send_morning_schedule(bot: Bot):
             if prefs["weather"]:
                 if weather_text is None:
                     try:
-                        from handlers.weather import get_weather_for_morning
+                        from kapibara.features.weather.forecast import get_weather_for_morning
                         weather_text = await get_weather_for_morning() or ""
                     except Exception as e:
                         logger.error(f"Weather error: {e}")

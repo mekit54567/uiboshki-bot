@@ -79,7 +79,7 @@ def test_build_nothing(day):
 
 
 def test_tomorrow_weather_text():
-    from handlers.weather import tomorrow_text
+    from kapibara.features.weather.forecast import tomorrow_text
     assert tomorrow_text({"tmin": 2, "tmax": 6, "code": 63}) == "+2…+6°, дождь"
     assert tomorrow_text({"tmin": -1, "tmax": -1, "code": 0}) == "-1°, ясно"
     assert tomorrow_text(None) == ""                                     # сбой — строки погоды нет
@@ -100,7 +100,7 @@ def test_slot():
 def world(db, day, monkeypatch):
     """Бот, своя группа, погода без сети, «сегодня» — 12.10."""
     import database.deadlines
-    import handlers.weather
+    import kapibara.features.weather.forecast
     from kapibara.features.schedule import parser as schedule_parser
 
     async def raw(*a, **k):
@@ -110,7 +110,7 @@ def world(db, day, monkeypatch):
         return "+2°, дождь"
 
     monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", raw)
-    monkeypatch.setattr(handlers.weather, "get_weather_for_tomorrow", weather)
+    monkeypatch.setattr(kapibara.features.weather.forecast, "get_weather_for_tomorrow", weather)
     monkeypatch.setattr(database.deadlines, "today_msk", lambda: NOW.date())
     monkeypatch.delenv("DESIGN2", raising=False)
     sent = []

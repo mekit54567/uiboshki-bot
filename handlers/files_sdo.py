@@ -38,7 +38,7 @@ def sdo_moves(courses, current: dict[str, tuple[int, str]]) -> list[tuple[int, s
 
 
 def _sdo_report(courses, known: set[str], current: dict | None = None) -> tuple[list[str], int]:
-    from kapibara.features.lectures.categories import CATEGORIES
+    from kapibara.core.categories import CATEGORIES
     from kapibara.core.utils import plural
     total = sum(len(c.files) for c in courses)
     new = sum(f.source not in known for c in courses for f in c.files)

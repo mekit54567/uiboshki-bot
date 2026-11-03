@@ -241,7 +241,7 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
     elif bot:
         try:
             from kapibara.features.notifications.delivery import deliver
-            from kapibara.bot.keyboards import app_button
+            from kapibara.core.telegram import app_button
             await deliver(bot, uid, expired_text(row.get("via")), kind="sdo", tab="sdo",
                           title="Вход в СДО устарел", body=expired_push(row.get("via")), reply_markup=app_button("🎓 Подключить СДО", "sdo"))
         except Exception as e:

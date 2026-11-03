@@ -76,7 +76,7 @@ def _browse(url: str, init_data: str):
 @pytest.mark.asyncio
 async def test_home_opens_without_js_errors(db, monkeypatch):
     import bot
-    import handlers.weather
+    import kapibara.features.weather.forecast
     from kapibara.features.schedule import parser as schedule_parser
     import webapp.deps as deps
 
@@ -91,7 +91,7 @@ async def test_home_opens_without_js_errors(db, monkeypatch):
     await db.upsert_user(222, "", "Alice")
     await db.set_user_group(222, config.HOME_GROUP_ID)          # группа уже выбрана — лист выбора не мешает
     monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", mirea_down)
-    monkeypatch.setattr(handlers.weather, "get_weather_for_morning", no_weather)
+    monkeypatch.setattr(kapibara.features.weather.forecast, "get_weather_for_morning", no_weather)
     port = _free_port()
     server, task = bot.start_webapp(port)
     try:
@@ -394,7 +394,7 @@ async def test_layout_safe_area_narrow_and_wide(db, monkeypatch):
     тянулось на 1280px."""
     import bot
     from kapibara.core import config
-    import handlers.weather
+    import kapibara.features.weather.forecast
     from kapibara.features.schedule import parser as schedule_parser
     import webapp.deps as deps
 
@@ -408,7 +408,7 @@ async def test_layout_safe_area_narrow_and_wide(db, monkeypatch):
     await db.upsert_user(222, "", "Alice")
     await db.set_user_group(222, config.HOME_GROUP_ID)
     monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", mirea_down)
-    monkeypatch.setattr(handlers.weather, "get_weather_for_morning", no_weather)
+    monkeypatch.setattr(kapibara.features.weather.forecast, "get_weather_for_morning", no_weather)
     port = _free_port()
     server, task = bot.start_webapp(port)
     try:

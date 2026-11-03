@@ -69,7 +69,7 @@ async def cmd_upload(message: Message, state: FSMContext):
 async def _ask_category(target: Message, state: FSMContext, subject: str):
     """Второй шаг: тип файлов (лекции/практики/КР/…) — или «определить по
     названию» для смешанной пачки."""
-    from kapibara.features.lectures.categories import CATEGORIES
+    from kapibara.core.categories import CATEGORIES
     await state.update_data(subject=subject)
     await state.set_state(UploadFile.waiting_category)
     rows = [[InlineKeyboardButton(text=label, callback_data=f"upct:{key}")] for key, label in CATEGORIES]
@@ -81,7 +81,7 @@ async def _ask_category(target: Message, state: FSMContext, subject: str):
 
 @router.callback_query(UploadFile.waiting_category, F.data.startswith("upct:"))
 async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
-    from kapibara.features.lectures.categories import LABELS
+    from kapibara.core.categories import LABELS
     key = callback.data.split(":", 1)[1]
     await callback.answer()
     await callback.message.edit_reply_markup(reply_markup=None)
@@ -90,7 +90,7 @@ async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
 
 
 async def _start_collecting(target: Message, state: FSMContext, subject: str, category: str | None = None):
-    from kapibara.features.lectures.categories import LABELS
+    from kapibara.core.categories import LABELS
     await state.set_state(UploadFile.waiting_file)
     await state.update_data(subject=subject, category=category, added=0, with_text=0, dupes=0, status_id=None)
     where = f"в «{esc(subject)}»" if subject else "без предмета"

@@ -106,7 +106,7 @@ async def api_today(user: dict = CurrentUser):
     from datetime import datetime, timedelta, date as date_cls
     from database import get_active_deadlines, get_lesson_notes
     from handlers.schedule import _clip
-    from handlers.weather import get_weather_for_morning
+    from kapibara.features.weather.forecast import get_weather_for_morning
     from kapibara.features.schedule.parser import lessons_for_date, raw_for_user
     from kapibara.core.utils import TZ
 

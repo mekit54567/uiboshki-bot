@@ -86,7 +86,7 @@ def test_lesson_escapes_html():
 
 @pytest.mark.asyncio
 async def test_morning_weather_line_is_empty_on_failure(monkeypatch):
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
 
     async def no_weather():
         return None

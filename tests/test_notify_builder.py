@@ -37,7 +37,7 @@ def test_campus():
 async def _morning(monkeypatch, events, weekday_date=datetime(2026, 10, 1, 7, 0)):
     """Прогнать утреннюю рассылку (четверг) и вернуть, что ушло в личку."""
     from kapibara.jobs import scheduler
-    import handlers.weather as weather
+    from kapibara.features.weather import forecast as weather
 
     class FakeDatetime(datetime):
         @classmethod

@@ -58,7 +58,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
     from kapibara.features.deadlines import quiz_time
     from database import get_all_optional_answers, get_reminder_users
     from database.sdo import mark_quiz_alert
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     from kapibara.features.notifications.quiz_alerts import visible_to
     now = now or datetime.now(TZ)
     users = [(u, p) for u in await get_reminder_users()
