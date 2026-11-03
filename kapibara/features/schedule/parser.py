@@ -3,6 +3,8 @@
 группы. Разбор ical — schedule_events.py, оформление — schedule_format.py."""
 
 import asyncio
+import functools
+import sqlite3
 import time
 import httpx
 import logging
@@ -12,6 +14,12 @@ from kapibara.core.config import ICAL_URL, SCHEDULE_CACHE_TTL_SECONDS
 
 from kapibara.features.groups.optional_subjects import unfiltered
 logger = logging.getLogger(__name__)
+
+from kapibara.core.errors import NETWORK, log_failure  # noqa: E402
+
+# Расписание не загрузилось: сеть, зеркало ответило не календарём (ValueError),
+# календарь чужой группы не пришёл (RuntimeError). Остальное — баг, с traceback.
+FETCH_ERRORS = (*NETWORK, ValueError, RuntimeError)
 
 # Разбор и оформление — в schedule_events.py и schedule_format.py (v5.0.2);
 # здесь — загрузка календаря с кэшем и сборка готовых ответов. Снаружи всё
@@ -66,7 +74,7 @@ def _check_calendar(data: bytes):
         raise ValueError("зеркало ответило не календарём")   # страница ошибки с кодом 200
     try:
         cal = Calendar.from_ical(data)
-    except Exception as e:
+    except (ValueError, IndexError, KeyError) as e:     # icalendar на мусор отвечает ValueError
         raise ValueError(f"календарь не разбирается: {e}") from e
     if not cal.walk("VEVENT"):
         raise ValueError("в календаре нет ни одного события")
@@ -89,7 +97,7 @@ async def _save_backup(data: bytes):
         from database import save_schedule_backup
         await save_schedule_backup(data, _ok_at.isoformat())
         _backup_hash = h
-    except Exception as e:
+    except sqlite3.Error as e:
         logger.info(f"Копия расписания не сохранилась: {e}")
 
 
@@ -105,13 +113,13 @@ async def _refresh() -> bytes:
     global _cache_data, _cache_time, _ok_at, _stale, _fail_at, _fail_exc
     try:
         data = await _download()
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:
         _fail_at, _fail_exc = time.monotonic(), e
         if _cache_data is None:
             try:
                 from database import load_schedule_backup
                 saved = await load_schedule_backup()
-            except Exception as be:
+            except sqlite3.Error as be:
                 logger.warning(f"запасная копия расписания не прочиталась: {be!r}")
                 saved = None
             if not saved:
@@ -177,7 +185,7 @@ async def _from_backup() -> bool:
     try:
         from database import load_schedule_backup
         saved = await load_schedule_backup()
-    except Exception as e:
+    except sqlite3.Error as e:
         logger.info(f"запасная копия расписания не прочиталась: {e!r}")
         return False
     if not saved:
@@ -196,33 +204,42 @@ async def _raw(group_id: int | None = None, force: bool = False) -> bytes:
     return await fetch_schedule_raw(force) if force else await fetch_schedule_raw()
 
 
+def _text_or_error(msg: str = "⚠️ Не удалось загрузить расписание."):
+    """Ответ текстом для бота и WebApp: не загрузилось или сломалось —
+    человеку строка вместо расписания; сеть — одной строкой в лог, баг — с
+    traceback (ADR 0004: граница — здесь, а не в каждой функции)."""
+    def wrap(fn):
+        @functools.wraps(fn)
+        async def run(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as e:      # граница: текст человеку вместо расписания
+                log_failure(logger, f"расписание ({fn.__name__})", e, FETCH_ERRORS)
+                return msg
+        return run
+    return wrap
+
+
+@_text_or_error()
 async def get_today_schedule(group_id: int | None = None) -> str:
-    try:
-        raw   = await _raw(group_id)
-        now   = datetime.now(TZ)
-        return format_day(parse_events_for_date(raw, now.date()), now.date(), now=now) + ("" if _other_group(group_id) else stale_note())
-    except Exception as e:
-        logger.error(f"Ошибка расписания: {e}")
-        return "⚠️ Не удалось загрузить расписание."
+    raw   = await _raw(group_id)
+    now   = datetime.now(TZ)
+    return format_day(parse_events_for_date(raw, now.date()), now.date(), now=now) + ("" if _other_group(group_id) else stale_note())
 
 
+@_text_or_error()
 async def get_tomorrow_schedule(group_id: int | None = None) -> str:
-    try:
-        raw      = await _raw(group_id)
-        tomorrow = datetime.now(TZ).date() + timedelta(days=1)
-        return format_day(parse_events_for_date(raw, tomorrow), tomorrow) + ("" if _other_group(group_id) else stale_note())
-    except Exception as e:
-        logger.error(f"Ошибка расписания: {e}")
-        return "⚠️ Не удалось загрузить расписание."
+    raw      = await _raw(group_id)
+    tomorrow = datetime.now(TZ).date() + timedelta(days=1)
+    return format_day(parse_events_for_date(raw, tomorrow), tomorrow) + ("" if _other_group(group_id) else stale_note())
 
 
 async def get_date_schedule(d: date, group_id: int | None = None) -> str:
     """Любой день (inline «пятница», «12 ноября»)."""
-    from kapibara.core.errors import NETWORK
     try:
         raw = await _raw(group_id)
         return format_day(parse_events_for_date(raw, d), d) + ("" if _other_group(group_id) else stale_note())
-    except (*NETWORK, ValueError, OSError) as e:
+    except (*FETCH_ERRORS, OSError) as e:      # и чужая группа не загрузилась (RuntimeError)
         logger.error(f"Ошибка расписания: {e}")
         return "⚠️ Не удалось загрузить расписание."
 
@@ -238,7 +255,7 @@ async def get_group_subjects(days_back: int = 14, days_ahead: int = 28, group_id
     не загрузилось."""
     try:
         raw = await _raw(group_id)
-    except Exception as e:
+    except FETCH_ERRORS as e:
         logger.warning(f"get_group_subjects: {e}")
         return []
     today = datetime.now(TZ).date()
@@ -288,16 +305,13 @@ def _format_week(raw: bytes, monday: date, label: str) -> str:
     return f"📆 <b>{label}</b> · {span}\n\n" + "\n\n".join(days)
 
 
+@_text_or_error()
 async def get_week_schedule(group_id: int | None = None) -> str:
-    try:
-        raw   = await _raw(group_id)
-        today = datetime.now(TZ).date()
-        monday = today - timedelta(days=today.weekday())
+    raw   = await _raw(group_id)
+    today = datetime.now(TZ).date()
+    monday = today - timedelta(days=today.weekday())
 
-        return _format_week(raw, monday, "Эта неделя")
-    except Exception as e:
-        logger.error(f"Ошибка расписания: {e}")
-        return "⚠️ Не удалось загрузить расписание."
+    return _format_week(raw, monday, "Эта неделя")
 
 
 async def raw_for_user(user_id: int, force: bool = False) -> bytes:
@@ -306,17 +320,14 @@ async def raw_for_user(user_id: int, force: bool = False) -> bytes:
     return await _raw(await get_user_group(user_id), force)
 
 
+@_text_or_error()
 async def get_next_week_schedule(group_id: int | None = None) -> str:
-    try:
-        raw   = await _raw(group_id)
-        today = datetime.now(TZ).date()
-        days_until_monday = (7 - today.weekday()) % 7 or 7
-        next_monday = today + timedelta(days=days_until_monday)
+    raw   = await _raw(group_id)
+    today = datetime.now(TZ).date()
+    days_until_monday = (7 - today.weekday()) % 7 or 7
+    next_monday = today + timedelta(days=days_until_monday)
 
-        return _format_week(raw, next_monday, "Следующая неделя")
-    except Exception as e:
-        logger.error(f"Ошибка расписания: {e}")
-        return "⚠️ Не удалось загрузить расписание."
+    return _format_week(raw, next_monday, "Следующая неделя")
 
 
 def _pair_num(e: dict, pos: int) -> int:
@@ -325,39 +336,36 @@ def _pair_num(e: dict, pos: int) -> int:
     return PAIR_SLOTS.get((e.get("time") or "").split("–")[0], pos)
 
 
+@_text_or_error("⚠️ Не удалось получить расписание.")
 async def get_next_lesson(group_id: int | None = None) -> str:
-    try:
-        raw  = await _raw(group_id)
-        now  = datetime.now(TZ)
-        today = now.date()
-        events = parse_events_for_date(raw, today)
+    raw  = await _raw(group_id)
+    now  = datetime.now(TZ)
+    today = now.date()
+    events = parse_events_for_date(raw, today)
 
-        for e in events:
-            if e["time_start"] and e["time_start"] > now:
-                delta = e["time_start"] - now
-                mins  = int(delta.total_seconds() // 60)
-                hrs   = mins // 60
-                mins  = mins % 60
-                time_left = f"{hrs} ч {mins} мин" if hrs else f"{mins} мин"
-                num = _keycap(_pair_num(e, events.index(e) + 1))
-                return (
-                    f"⏭ <b>Следующая пара — через {time_left}</b>\n\n"
-                    + format_lesson(e, num)
-                )
-
-        tomorrow = today + timedelta(days=1)
-        t_events = parse_events_for_date(raw, tomorrow)
-        if t_events:
-            e = t_events[0]
+    for e in events:
+        if e["time_start"] and e["time_start"] > now:
+            delta = e["time_start"] - now
+            mins  = int(delta.total_seconds() // 60)
+            hrs   = mins // 60
+            mins  = mins % 60
+            time_left = f"{hrs} ч {mins} мин" if hrs else f"{mins} мин"
+            num = _keycap(_pair_num(e, events.index(e) + 1))
             return (
-                "✅ На сегодня пары закончились!\n\n"
-                "<b>Завтра первая пара:</b>\n"
-                + format_lesson(e, _keycap(_pair_num(e, 1)))
+                f"⏭ <b>Следующая пара — через {time_left}</b>\n\n"
+                + format_lesson(e, num)
             )
-        return "✅ Пар больше нет ни сегодня, ни завтра!"
-    except Exception as e:
-        logger.error(f"Ошибка: {e}")
-        return "⚠️ Не удалось получить расписание."
+
+    tomorrow = today + timedelta(days=1)
+    t_events = parse_events_for_date(raw, tomorrow)
+    if t_events:
+        e = t_events[0]
+        return (
+            "✅ На сегодня пары закончились!\n\n"
+            "<b>Завтра первая пара:</b>\n"
+            + format_lesson(e, _keycap(_pair_num(e, 1)))
+        )
+    return "✅ Пар больше нет ни сегодня, ни завтра!"
 
 
 async def get_first_lesson_today(group_id: int | None = None) -> dict | None:
@@ -369,5 +377,6 @@ async def get_first_lesson_today(group_id: int | None = None) -> dict | None:
             if e["time_start"]:
                 return e
         return None
-    except Exception:
+    except FETCH_ERRORS as e:
+        logger.info(f"первая пара: расписание не загрузилось: {type(e).__name__}: {e}")
         return None
