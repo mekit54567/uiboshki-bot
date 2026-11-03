@@ -445,6 +445,9 @@ async def handle_plain_text(message: Message, state: FSMContext):
     # ("когда следующая пара", "покажи дедлайны" и т.д.). Если не удалось —
     # при достаточной длине считаем это учебной задачей для решалки, как раньше.
     intent = await classify_intent(message.text)
+    if intent == "history":
+        await cmd_history(message)
+        return
     if intent != "none":
         handled = await dispatch_intent(intent, message)
         if handled:

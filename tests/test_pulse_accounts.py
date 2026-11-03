@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from kapibara.features.pulse import accounts as pulse_accounts
+from kapibara.features.pulse import service as pulse_service
 from kapibara.features.pulse import attendance as pulse_attendance
 from kapibara.features.pulse import probe as pulse_probe
 from tests.test_pulse_probe import ME
@@ -53,24 +54,24 @@ async def test_connect_keepalive_expire(db, monkeypatch):
         return None
     monkeypatch.setattr(pulse_attendance, "sync_due", no_sync)
     answers[0] = "blocked"
-    assert (await pulse_accounts.connect_from_app(1, "sid=abc"))["state"] == "blocked"
+    assert (await pulse_service.connect_from_app(1, "sid=abc"))["state"] == "blocked"
     assert (await pulse_accounts.status_for(1))["state"] == "off"      # сервер не пускают — не храним
     answers[0] = "ok"
-    assert (await pulse_accounts.connect_from_app(1, "sid=abc; _ga=1"))["state"] == "ok"
+    assert (await pulse_service.connect_from_app(1, "sid=abc; _ga=1"))["state"] == "ok"
     assert await pulse_accounts.cookie_for(1) == "sid=abc"
     row = await pulse_accounts._row(1)
     assert "sid=abc" not in row["cookie_enc"]                          # в базе — только шифр
 
     later = datetime.now(UTC) + timedelta(minutes=pulse_accounts.keepalive_minutes() + 1)
-    await pulse_accounts.keepalive_due(later)
+    await pulse_service.keepalive_due(later)
     st = await pulse_accounts.status_for(1)
     assert st["state"] == "ok" and st["lived_min"] >= pulse_accounts.keepalive_minutes()
 
     answers[0] = "blocked"                      # DDoS-Guard разок не пустил — вход не теряем
-    await pulse_accounts.keepalive_due(later + timedelta(hours=2))
+    await pulse_service.keepalive_due(later + timedelta(hours=2))
     assert (await pulse_accounts.status_for(1))["state"] == "ok"
     answers[0] = "expired"
-    await pulse_accounts.keepalive_due(later + timedelta(hours=4))
+    await pulse_service.keepalive_due(later + timedelta(hours=4))
     assert (await pulse_accounts.status_for(1))["state"] == "expired"
     assert await pulse_accounts.cookie_for(1) is None
     await pulse_accounts.forget(1)
@@ -101,3 +102,22 @@ def test_endpoints_only_for_starosta(db, monkeypatch):
     assert c.get("/api/v1/pulse/status", headers=me).json()["state"] == "ok"
     assert c.post("/api/pulse/disconnect", headers=me).json() == {"ok": True}
     assert c.get("/api/pulse/status", headers=me).json() == {"state": "off"}
+
+
+async def test_connect_starts_attendance_in_background(db, monkeypatch):
+    """pulse.service: вход удался — посещения подтягиваются фоном (через
+    spawn, задача не теряется); не удался — посещения не трогаем."""
+    import asyncio
+    started = []
+
+    async def fake_check(cookie):
+        return "ok" if cookie == "sid=good" else "blocked"
+
+    async def fake_sync(uid, now=None):
+        started.append(uid)
+    monkeypatch.setattr(pulse_accounts, "check", fake_check)
+    monkeypatch.setattr(pulse_attendance, "sync_due", fake_sync)
+    assert (await pulse_service.connect_from_app(7, "sid=bad"))["state"] == "blocked"
+    assert (await pulse_service.connect_from_app(8, "sid=good"))["state"] == "ok"
+    await asyncio.sleep(0)
+    assert started == [8]

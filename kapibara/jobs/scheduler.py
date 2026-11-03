@@ -555,8 +555,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # очередь (50–59 мин случайно, потом 55), а не все разом (sdo_accounts.py)
     from kapibara.features.sdo.accounts import keepalive_due
     scheduler.add_job(keepalive_due,           "interval", minutes=1, args=[bot])
-    from kapibara.features.pulse import accounts as pulse_accounts                      # вход в Пульс — так же, как СДО (pulse_accounts.py)
-    scheduler.add_job(pulse_accounts.keepalive_due, "interval", minutes=1)
+    from kapibara.features.pulse import service as pulse_service                        # вход в Пульс — так же, как СДО (pulse/accounts.py)
+    scheduler.add_job(pulse_service.keepalive_due, "interval", minutes=1)
     from database import purge_events          # статистика старше 180 дней не нужна
     scheduler.add_job(purge_events,            "cron", hour=4, minute=20)
     from kapibara.features.privacy import privacy                             # 152-ФЗ: год без заходов — данные стираются

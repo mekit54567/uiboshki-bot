@@ -65,9 +65,6 @@ async def dispatch_intent(intent: str, message) -> bool:
     elif intent == "rating":
         from handlers.group_tools import cmd_rating
         await cmd_rating(message)
-    elif intent == "history":
-        from handlers.solver import cmd_history
-        await cmd_history(message)
-    else:
+    else:      # "history" — сама решалка (handlers/solver): её /history живёт там же
         return False
     return True

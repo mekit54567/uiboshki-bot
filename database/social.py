@@ -175,3 +175,18 @@ async def delete_lesson_note(note_id: int):
     async with connect() as db:
         await db.execute("DELETE FROM lesson_notes WHERE id=?", (note_id,))
         await db.commit()
+
+
+# ── Комментарии под парой: одна запись по id (жалобы ugc и features/social/comments) ──
+
+async def get_lesson_comment(comment_id: int) -> dict | None:
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM lesson_comments WHERE id = ?", (comment_id,))).fetchone()
+        return dict(row) if row else None
+
+
+async def delete_lesson_comment(comment_id: int):
+    async with connect() as db:
+        await db.execute("DELETE FROM lesson_comments WHERE id = ?", (comment_id,))
+        await db.commit()

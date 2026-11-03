@@ -146,10 +146,6 @@ async def connect_from_app(user_id: int, raw_cookie: str) -> dict:
         return {"state": "network", "error": type(e).__name__}
     if state == "ok":
         await save(user_id, cookie)
-        import asyncio
-
-        from kapibara.features.pulse import attendance as pulse_attendance                 # первые посещения — сразу, фоном
-        asyncio.get_running_loop().create_task(pulse_attendance.sync_due(user_id))
     return {"state": state}
 
 
@@ -179,8 +175,9 @@ async def _check_one(row: dict, now: datetime):
         await db.commit()
 
 
-async def keepalive_due(now: datetime | None = None):
-    """Раз в минуту (scheduler.py): проверить входы, чья очередь подошла."""
+async def keepalive_due(now: datetime | None = None) -> list[int]:
+    """Проверить входы, чья очередь подошла; вернуть, чьи проверены
+    (раз в минуту зовёт pulse.service.keepalive_due)."""
     now = now or _now()
     async with connect() as db:
         db.row_factory = aiosqlite.Row
@@ -189,6 +186,4 @@ async def keepalive_due(now: datetime | None = None):
         rows = [dict(r) for r in await cur.fetchall()]
     for row in rows:
         await _check_one(row, now)
-        from kapibara.features.pulse import attendance as pulse_attendance                 # посещения лекций — заодно, не чаще раза в 3 ч
-        if await cookie_for(row["user_id"]):
-            await pulse_attendance.sync_due(row["user_id"])
+    return [row["user_id"] for row in rows]

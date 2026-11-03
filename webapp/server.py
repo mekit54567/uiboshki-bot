@@ -36,7 +36,10 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from kapibara.ops import health as bot_health
-from webapp import deps
+from webapp import deps, pages
+# пути и общие куски страниц — в webapp/pages (их берут и routes/site, meta);
+# здесь — прежние имена, ими пользуются тесты и старые места
+from webapp.pages import FLUTTER_DIR, GUIDE_SLUG, STATIC_DIR, digest as _digest, guide_link as _guide_link  # noqa: F401
 from webapp.routes import (account, achievements, aitest, auth, billing, channel, chat, deadlines, files, legal, meta,
                            push, rating, reactions, reports, roadmap_page, schedule, sdo, site)
 
@@ -166,7 +169,6 @@ async def security_headers(request: Request, call_next):
         resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return resp
 
-STATIC_DIR = Path(__file__).parent / "static"
 
 
 # ── Здоровье сервиса ─────────────────────────────────────────────────────────
@@ -210,78 +212,16 @@ for _module in (schedule, account, achievements, deadlines, files, chat, sdo, ch
 
 # ── Статика фронтенда (должна идти последней — ловит всё остальное) ─────────
 
-_ASSET_RE = re.compile(r'(src|href)="((?:js/[\w-]+\.js)|app\.css)"')
-
-
-GUIDE_SLUG = "13-sdo-guide-pinned"      # пост-гайд «как подключить СДО» (channel/posts)
-
-
-async def _guide_link() -> str:
-    """Ссылка на выпущенный пост-гайд по СДО в канале — для экрана «Подключить
-    СДО». Номер сообщения — из channel:published (после /channel redo он
-    другой), канал — из CHANNEL_URL (t.me/<имя> или @имя). Нет — пусто."""
-    from kapibara.core import config
-    try:
-        from kapibara.features.content.channel_posts import published
-        ids = ((await published()).get(GUIDE_SLUG) or {}).get("ids") or []
-    except Exception:
-        return ""
-    m = re.search(r"(?:t\.me/|^@)(\w+)", config.CHANNEL_URL or "")
-    return f"https://t.me/{m.group(1)}/{ids[0]}" if ids and m else ""
-
-
-_DIGESTS: dict[str, tuple[float, str]] = {}
-
-
-def _digest(rel: str) -> str:
-    """Хэш содержимого файла статики — пересчитывается, только если файл
-    поменялся (раньше — дюжина sha1 на каждое открытие приложения)."""
-    import hashlib
-    f = STATIC_DIR / rel
-    mtime = f.stat().st_mtime
-    hit = _DIGESTS.get(rel)
-    if not hit or hit[0] != mtime:
-        hit = _DIGESTS[rel] = (mtime, hashlib.sha1(f.read_bytes()).hexdigest()[:10])
-    return hit[1]
-
-
 @app.get("/", include_in_schema=False)
 @app.get("/index.html", include_in_schema=False)
 async def index_page(request: Request):
-    """index.html со ссылками на стили и скрипты с меткой версии (?v=хэш
-    содержимого): WebApp Telegram держит старые файлы в кэше, и после
-    выкатки у части людей был бы новый HTML со старым JS."""
-    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-
-    def versioned(m):
-        return f'{m.group(1)}="{m.group(2)}?v={_digest(m.group(2))}"'
-
-    # имя группы и бота — из переменных (config.py): одна и та же вёрстка
-    # годится для копии бота у другой группы
-    import json
-    from html import escape
-    from kapibara.core import config
-    # канал бота и «написать нам» — для плиток меню «Ещё» (дизайн-ревью, п. 18)
-    cfg = json.dumps({"group": config.GROUP_NAME, "bot": config.BOT_USERNAME,
-                      "channel": config.CHANNEL_URL, "contact": config.CONTACT_URL,
-                      "guide": await _guide_link()},
-                     ensure_ascii=False).replace("</", "<\\/")
-    # превью ссылки на корень — как у сайта (гость по www.uiboshki.ru уйдёт на /about);
-    # вставляем до подстановки имени группы — в описании оно тоже есть
-    from webapp.routes.site import og_meta
-    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-    html = html.replace("</head>", og_meta(base) + "\n</head>", 1)
-    html = html.replace("УИБО-03-24", escape(config.GROUP_NAME)).replace(
-        '<script src="js/core.js"', f'<script>window.APP_CONFIG = {cfg};</script>\n<script src="js/core.js"', 1)
-    return Response(_ASSET_RE.sub(versioned, html), media_type="text/html",
-                    headers={"Cache-Control": "no-cache"})
+    return await pages.index_page(request)
 
 
 # PWA (/app) — то же приложение, что на iPhone: веб-сборка Flutter из app/
 # (Никита 14.10: «дизайн у приложений на iPhone и PWA одинаковый»). Собирает
 # её GitHub Actions после мержа (app-web.yml) в webapp/flutter; сборки нет
 # (тесты, разработка) — /app отдаёт прежний WebApp, как раньше.
-FLUTTER_DIR = Path(__file__).parent / "flutter"
 
 
 class _NoCacheStatic(StaticFiles):
@@ -326,7 +266,7 @@ _HTML_ASSET_RE = re.compile(r'(src|href)="((?:css|js)/[\w./-]+\.(?:css|js))"')
 
 def _app_og(html: str, request: Request) -> str:
     """Превью ссылки /app — как у сайта (своё описание у страницы уже есть)."""
-    from webapp.routes.site import og_meta
+    from webapp.pages import og_meta
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     return html.replace("</head>", og_meta(base, "/app", description=False) + "\n</head>", 1)
 

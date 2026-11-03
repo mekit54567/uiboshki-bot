@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import aiosqlite
 
 from database._conn import connect
+from database.social import delete_lesson_comment, get_lesson_comment
 
 TEXT_MAX = 500
 BEFORE_DAYS, AFTER_DAYS = 7, 14
@@ -47,17 +48,9 @@ async def add(group_id: int, key: str, user_id: int, text: str) -> int:
         return cur.lastrowid
 
 
-async def get(comment_id: int) -> dict | None:
-    async with connect() as db:
-        db.row_factory = aiosqlite.Row
-        row = await (await db.execute("SELECT * FROM lesson_comments WHERE id = ?", (comment_id,))).fetchone()
-        return dict(row) if row else None
-
-
-async def delete(comment_id: int):
-    async with connect() as db:
-        await db.execute("DELETE FROM lesson_comments WHERE id = ?", (comment_id,))
-        await db.commit()
+# одна запись по id — в базе: её берут и жалобы (ugc), а ugc — ниже comments
+get = get_lesson_comment
+delete = delete_lesson_comment
 
 
 async def items(group_id: int, key: str, viewer_id: int) -> list[dict]:
