@@ -10,6 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 from kapibara.core.utils import TZ
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ async def send_due(bot, now: datetime | None = None):
                 + (f"\n📝 {esc(desc[:300])}" if desc and not desc.startswith("http") else ""))
         from kapibara.features.notifications.push_text import split_subject, when
         name, course = split_subject(r["subject"])
-        try:
+        with aside(logger, f"напоминание о дедлайне не дошло до {r['user_id']}", level=logging.INFO):  # обычно — бот заблокирован
             # через слой доставки: раньше — только Telegram, и в приложении
             # (вход через VK/Яндекс) своё напоминание не приходило совсем
             from kapibara.features.notifications import delivery
@@ -80,5 +81,3 @@ async def send_due(bot, now: datetime | None = None):
                                    title=f"Напоминание: {name}",
                                    body=" · ".join(x for x in (course, "срок " + when(r["due_date"], r.get("due_time"), now.date())) if x),
                                    reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
-        except Exception as e:
-            logger.info(f"напоминание о дедлайне не дошло до {r['user_id']}: {e!r}")  # обычно — бот заблокирован

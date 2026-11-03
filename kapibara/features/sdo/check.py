@@ -17,6 +17,7 @@ import logging
 from datetime import datetime
 
 from kapibara.core.utils import TZ
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,10 @@ def _key(group_id: int) -> str:
 async def note(group_id: int, ok: bool):
     """Запомнить итог проверки; при сбое прошлый удачный раз остаётся."""
     from database import get_setting, set_setting
-    try:
+    with aside(logger, f"sdo_check.note {group_id}", level=logging.INFO):
         at = datetime.now(TZ).isoformat()
         last_ok = at if ok else (_load(await get_setting(_key(group_id))) or {}).get("last_ok")
         await set_setting(_key(group_id), json.dumps({"at": at, "ok": ok, "last_ok": last_ok}))
-    except Exception as e:
-        logger.info(f"sdo_check.note {group_id}: {e}")
 
 
 async def note_home(result: dict):

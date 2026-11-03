@@ -20,6 +20,7 @@ from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
 from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
 from kapibara.features.deadlines.labels import WEEKDAY_SHORT, due_label  # noqa: F401 — старое место
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -178,13 +179,11 @@ async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
 
     wait = await message.answer("🔎 Распознаю текст с фото...")
     text = ""
-    try:
+    with aside(logger, "Не смог распознать фото дедлайна"):
         photo      = message.photo[-1]
         file       = await bot.get_file(photo.file_id)
         file_bytes = await bot.download_file(file.file_path)
         text       = await extract_text_from_image(file_bytes.read())
-    except Exception as e:
-        logger.warning(f"Не смог распознать фото дедлайна: {e}")
 
     text = (text or "").strip()
     if not text:
@@ -475,10 +474,8 @@ async def deadline_post_confirm(callback: CallbackQuery):
         _dlpost_done.add(key)
     _dlpost_locks.pop(key, None)
     await callback.answer("Опубликовано!")
-    try:
+    with aside(logger, "dlpost: кнопки не снялись"):
         await callback.message.edit_text(text + "\n\n✅ Опубликовано в группу.", parse_mode="HTML", reply_markup=None)
-    except Exception as e:
-        logger.warning(f"dlpost: кнопки не снялись: {e!r}")
 
 
 @router.callback_query(F.data == "dlpost:no")

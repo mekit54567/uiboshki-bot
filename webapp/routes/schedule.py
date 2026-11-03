@@ -14,7 +14,7 @@ from webapp.deps import CurrentUser
 
 import sqlite3
 
-from kapibara.core.errors import NETWORK, log_failure
+from kapibara.core.errors import NETWORK, aside, log_failure
 from kapibara.features.schedule.parser import FETCH_ERRORS
 
 logger = logging.getLogger(__name__)
@@ -213,11 +213,9 @@ async def api_day(date: str, user: dict = CurrentUser):
     if d <= now.date():
         # «Итоги дня» (day_summary.py): сданное и баллы; None — пустой день.
         # Сбой — без поля, как у изменений расписания.
-        try:
+        with aside(logger, "итоги дня не прочитались"):
             from kapibara.features.notifications import day_summary
             out["summary"] = await day_summary.summary(user["id"], d)
-        except Exception as e:
-            logger.warning(f"итоги дня не прочитались: {e}")
     return out
 
 

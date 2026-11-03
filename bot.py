@@ -17,6 +17,7 @@ from kapibara.bot.middleware import (ConsentMiddleware, GroupContextMiddleware, 
                         OptionalSubjectsMiddleware, StatsMiddleware)
 from kapibara.core.telegram import cosmetic
 from kapibara.core.tasks import spawn
+from kapibara.core.errors import aside
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 health.install()   # ошибки из логов за сутки — в /status у старосты
@@ -51,14 +52,12 @@ async def notify_starosta_on_error(event: ErrorEvent, bot: Bot):
     if now - _LAST_ERROR_ALERT_AT < _ERROR_ALERT_COOLDOWN_SECONDS:
         return
     _LAST_ERROR_ALERT_AT = now
-    try:
+    with aside(logger, "Не смог отправить алерт старосте"):
         await bot.send_message(
             STAROSTA_ID,
             f"⚠️ Бот словил ошибку: {type(event.exception).__name__}: {event.exception}\n\n"
             f"Подробности — в логах (следующий такой алерт не раньше чем через 5 минут).",
         )
-    except Exception as e:
-        logger.warning(f"Не смог отправить алерт старосте: {e}")
 
 
 # Команды в меню «/» клиента Telegram — коротко: главное в приложении
@@ -121,33 +120,25 @@ async def setup_bot_menu(bot: Bot):
     """Список команд и кнопка меню слева от поля ввода. Если WebApp поднят —
     кнопка меню открывает его сразу (как у приложений-ботов), без отдельной
     настройки в BotFather. Не критично: при ошибке бот работает дальше."""
-    try:
+    with aside(logger, "Не смог настроить меню бота"):
         await bot.set_my_commands(BOT_COMMANDS)
         from aiogram.types import BotCommandScopeChat
         from kapibara.core.config import STAROSTA_IDS
         for sid in STAROSTA_IDS:
-            try:
+            with aside(logger, f"Команды старосты {sid}", level=logging.INFO):  # староста ещё не писал боту — чата нет
                 await bot.set_my_commands(STAROSTA_COMMANDS, scope=BotCommandScopeChat(chat_id=sid))
-            except Exception as e:      # староста ещё не писал боту — чата нет
-                logger.info(f"Команды старосты {sid}: {e}")
         from kapibara.core.config import GROUP_NAME
-        try:
+        with aside(logger, "Имя бота", level=logging.INFO):
             # имя — только если другое: Telegram ограничивает частую смену
             if (await bot.get_my_name()).name != BOT_NAME:
                 await bot.set_my_name(BOT_NAME)
-        except Exception as e:
-            logger.info(f"Имя бота: {e}")
-        try:
+        with aside(logger, "Описание бота", level=logging.INFO):  # лимит Telegram на частую смену — не страшно
             await bot.set_my_description(bot_description(GROUP_NAME))
             await bot.set_my_short_description(BOT_SHORT_DESCRIPTION.format(group=GROUP_NAME))
-        except Exception as e:          # лимит Telegram на частую смену — не страшно
-            logger.info(f"Описание бота: {e}")
         if WEBAPP_URL:
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(text="Открыть приложение", web_app=WebAppInfo(url=WEBAPP_URL))
             )
-    except Exception as e:
-        logger.warning(f"Не смог настроить меню бота: {e}")
 
 
 async def notify_rollback(bot: Bot):
@@ -187,11 +178,9 @@ def start_webapp(port: int):
     server.capture_signals = contextlib.nullcontext
 
     async def serve():
-        try:
+        with aside(logger, "WebApp упал"):
             logger.info(f"🌐 WebApp слушает порт {port}")
             await server.serve()
-        except Exception as e:
-            logger.error(f"WebApp упал: {e}")
 
     return server, asyncio.create_task(serve())
 
@@ -249,11 +238,9 @@ async def main():
     await notify_rollback(bot)
 
     async def offer_post():         # новый пост канала — превью старосте после деплоя
-        try:
+        with aside(logger, "превью поста канала", level=logging.INFO):
             from handlers.channel import offer_next
             await offer_next(bot)
-        except Exception as e:
-            logger.info(f"превью поста канала: {e}")
     spawn(offer_post(), name="offer_post")
 
     from kapibara.features.sdo import accounts as sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
@@ -263,11 +250,9 @@ async def main():
 
     from kapibara.features.privacy import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
     if (missing := privacy.operator_missing()) and STAROSTA_ID:
-        try:
+        with aside(logger, "данные оператора", level=logging.INFO):
             await bot.send_message(STAROSTA_ID, "⚠️ В согласии и политике (/consent, /privacy) нет данных "
                                    f"оператора. Задай на хостинге: {', '.join(missing)}.")
-        except Exception as e:
-            logger.info(f"данные оператора: {e}")
     webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
     # Справочник для /teacher, /group, /room и поиска в WebApp — в фоне:
     # первый обход ~полчаса, дальше продолжается с места остановки.
@@ -292,11 +277,9 @@ async def main():
         index_task.cancel()
         lag_task.cancel()
         await stop_webapp(webapp_server, webapp_task)
-        try:
+        with aside(logger, "события /stats при выходе", level=logging.INFO):
             from database.service import flush_events
             await flush_events()            # события /stats копятся пачкой — дописать перед выходом
-        except Exception as e:
-            logger.info(f"события /stats при выходе: {e}")
         scheduler.shutdown()
         await bot.session.close()
 

@@ -17,6 +17,7 @@ FRIEND_WINDOW дней. Тогда другу REF_BONUS дней всегда, �
 
 import logging
 from datetime import datetime, timedelta, UTC
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -186,10 +187,8 @@ async def check_all(bot=None) -> int:
     from database.billing import open_referrals
     n = 0
     for ref in await open_referrals(FRIEND_WINDOW + 1):
-        try:
+        with aside(logger, f"приглашение {ref['friend_id']}"):
             n += await check(ref["friend_id"], bot)
-        except Exception as e:
-            logger.warning(f"приглашение {ref['friend_id']}: {e}")
     return n
 
 

@@ -16,6 +16,7 @@ import logging
 
 # сам разбор файлов — в lectures/extract (его зовут и поиск по смыслу, и файлы СДО)
 from kapibara.features.lectures.extract import SUPPORTED_EXTENSIONS, extract_text  # noqa: F401
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,7 @@ async def extract_and_save(bot, db_file_id: int, tg_file_id: str, file_name: str
         return False
     # сразу в индекс поиска по смыслу — с номерами страниц, пока байты под
     # рукой (векторы досчитает фоновый проход, semantic_index.index_pending)
-    try:
+    with aside(logger, f"индекс поиска: файл {db_file_id}", level=logging.INFO):
         from kapibara.features.ai import semantic_index
         await semantic_index.index_file(db_file_id, data, file_name, text)
-    except Exception as e:
-        logger.info(f"индекс поиска: файл {db_file_id}: {type(e).__name__}: {e}")
     return True

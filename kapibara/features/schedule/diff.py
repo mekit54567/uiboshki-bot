@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from kapibara.core.config import GROUP_CHAT_ID, TIMEZONE
 from database import get_schedule_snapshot, save_schedule_snapshot
 from kapibara.features.schedule.parser import FETCH_ERRORS, fetch_schedule_raw, parse_events_for_date
-from kapibara.core.errors import NETWORK
+from kapibara.core.errors import NETWORK, aside
 from aiogram.exceptions import TelegramAPIError
 from kapibara.core.utils import esc
 
@@ -290,13 +290,11 @@ async def check_schedule_changes(bot):
             text = text_for(frozenset(s for s in OPTIONAL_SUBJECTS if not mine.get(s)))
             if not text:
                 continue
-            try:
+            with aside(logger, f"Не смог отправить diff расписания {uid}"):
                 from kapibara.features.notifications.delivery import deliver
                 await deliver(bot, uid, text, kind="lessons", tab="today",
                               title=f"Изменилось расписание на {weekday_label}",
                               body="\n".join(text.split("\n")[2:]))
-            except Exception as e:
-                logger.warning(f"Не смог отправить diff расписания {uid}: {e}")
 
         # Смена/отмена пары — это то, что реально должно долетать до общего
         # чата, не только до лично подписавшихся: как правило, шлём это

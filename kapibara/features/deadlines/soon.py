@@ -18,6 +18,7 @@ import logging
 from datetime import datetime, timedelta
 
 from kapibara.core.utils import TZ
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 LATE = 30           # мин
@@ -77,11 +78,9 @@ async def send_due(bot, now: datetime | None = None) -> int:
             if not await mark_quiz_alert(uid, d["id"], f"soon{hours}", due_at(d).strftime("%Y-%m-%d %H:%M")):
                 continue
             title, body, html = text(d, hours, now)
-            try:
+            with aside(logger, f"срок скоро {uid}", level=logging.INFO):  # обычно — бот заблокирован
                 from kapibara.features.notifications import delivery
                 await delivery.deliver(bot, uid, html, kind="deadlines", tab="deadlines", title=title, body=body,
                                        reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
                 sent += 1
-            except Exception as e:
-                logger.info(f"срок скоро {uid}: {e}")      # обычно — бот заблокирован
     return sent

@@ -16,7 +16,7 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from kapibara.core.errors import log_failure
+from kapibara.core.errors import aside, log_failure
 from webapp.deps import CurrentUser
 
 router = APIRouter()
@@ -352,10 +352,8 @@ async def auth_apple(body: AppleBody, request: Request):
     if not owner:
         owner = await new_local_user(name or apple_signin.NAME)
         await link("apple", claims["sub"], owner, name)
-    try:
+    with aside(logging.getLogger(__name__), "Apple /auth/token"):  # без refresh-токена вход всё равно состоялся
         await apple_signin.save_token(owner, await apple_signin.exchange(body.code[:2000]))
-    except Exception as e:  # noqa: BLE001 — без refresh-токена вход всё равно состоялся
-        logging.getLogger(__name__).warning(f"Apple /auth/token: {e}")
     return {"status": "ok", "token": await create_session(owner, f"{_device(request)} · Apple")}
 
 

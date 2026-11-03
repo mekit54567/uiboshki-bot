@@ -15,6 +15,7 @@ import logging
 from datetime import date
 
 from kapibara.features.notifications.push_text import date_line as when
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -131,15 +132,13 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
             shifted = [dict(d, was=moved[d["id"]]) for d in visible if d["id"] in moved]
         if not mine and not shifted and not opened:
             continue
-        try:
+        with aside(logger, f"новые задания {uid}", level=logging.INFO):
             from kapibara.features.notifications import delivery
             title, short = headline(mine, shifted, opened_d)
             await delivery.deliver(bot, uid, build(mine, shifted, opened), kind="new_tasks", tab="deadlines",
                                    title=title, body=short,
                                    reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
             sent += 1
-        except Exception as e:
-            logger.info(f"новые задания {uid}: {e}")
     return sent
 
 

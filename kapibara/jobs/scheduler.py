@@ -15,6 +15,7 @@ from kapibara.core.config import (
 from database import get_all_subscribed_users, get_deadlines_soon
 from kapibara.features.schedule.parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
 from kapibara.core.utils import esc, today_msk, esc_attr
+from kapibara.core.errors import aside
 from kapibara.core.telegram import app_button
 from kapibara.features.notifications.broadcast import pace
 
@@ -33,7 +34,7 @@ def format_date(date_str: str) -> str:
     try:
         d = date.fromisoformat(date_str)
         return d.strftime("%d.%m.%Y")
-    except:
+    except (TypeError, ValueError):      # не дата — показать как есть
         return date_str
 
 
@@ -74,7 +75,7 @@ async def send_morning_schedule(bot: Bot):
 
     users = await get_all_subscribed_users()
     for uid in users:
-        try:
+        with aside(logger, f"рассылка: не смог отправить {uid}"):
             prefs = await notify_prefs.get(uid)
             if not notify_prefs.allowed(prefs, "morning", now.weekday()):
                 continue
@@ -87,12 +88,10 @@ async def send_morning_schedule(bot: Bot):
             head = "☀️ <b>Доброе утро!</b>"
             if prefs["weather"]:
                 if weather_text is None:
-                    try:
+                    weather_text = ""            # не вышло — утро без погоды
+                    with aside(logger, "утро: погода"):
                         from kapibara.features.weather.forecast import get_weather_for_morning
                         weather_text = await get_weather_for_morning() or ""
-                    except Exception as e:
-                        logger.error(f"Weather error: {e}")
-                        weather_text = ""
                 if weather_text:
                     head += f"\n{weather_text}"
             if prefs["campus"] and events:
@@ -104,8 +103,6 @@ async def send_morning_schedule(bot: Bot):
             await deliver(bot, uid, f"{head}\n\n{body}", kind="morning", tab="today", title=title, body=short,
                           reply_markup=app_button("📅 Открыть расписание", "today"))
             await pace()
-        except Exception as e:
-            logger.warning(f"Не смог отправить {uid}: {e}")
 
 
 def morning_push(events: list[dict], home: str | None, prefs: dict, weather: str | None):
@@ -185,10 +182,8 @@ async def send_group_morning(bot: Bot, chat_id: int | None = None) -> str:
 
 async def send_group_morning_digest(bot: Bot):
     """Задание по расписанию: сбой не роняет планировщик, но виден в логах."""
-    try:
+    with aside(logger, "Не смог отправить утреннюю карточку в группу"):
         await send_group_morning(bot)
-    except Exception as e:
-        logger.warning(f"Не смог отправить утреннюю карточку в группу: {e!r}")
 
 
 def _format_deadline_reminders(deadlines: list[dict]) -> str:
@@ -243,7 +238,7 @@ async def send_deadline_reminders(bot: Bot):
     weekday = today_msk().weekday()
     users = await get_all_subscribed_users()
     for uid in users:
-        try:
+        with aside(logger, f"рассылка: не смог отправить {uid}"):
             if not notify_prefs.allowed(await notify_prefs.get(uid), "deadlines", weekday):
                 continue
             deadlines = await get_deadlines_soon(days=3, viewer_id=uid)
@@ -254,13 +249,11 @@ async def send_deadline_reminders(bot: Bot):
                           title=title, body=short,
                           reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
             await pace()
-        except Exception as e:
-            logger.warning(f"Не смог отправить {uid}: {e}")
 
     # В общий чат группы имеет смысл предлагать публиковать только общие
     # дедлайны (старосты/автосинка СДО), никогда — чью-то личную запись.
     if STAROSTA_ID and await group_chat():
-        try:
+        with aside(logger, "Не смог отправить старосте запрос на публикацию дедлайнов"):
             shared = await get_deadlines_soon(days=3, shared_only=True)
             if shared:
                 text = _format_deadline_reminders(shared)
@@ -270,8 +263,6 @@ async def send_deadline_reminders(bot: Bot):
                     parse_mode="HTML",
                     reply_markup=DEADLINE_POST_KB,
                 )
-        except Exception as e:
-            logger.warning(f"Не смог отправить старосте запрос на публикацию дедлайнов: {e}")
 
 
 async def _any_other_group() -> bool:
@@ -287,7 +278,7 @@ async def check_lesson_reminders(bot: Bot):
     по выбору — двумя запросами на всех, а расписание разбирается один раз на
     каждый набор скрытых предметов, а не на каждого человека."""
     global _sent_reminders
-    try:
+    with aside(logger, "напоминания о парах"):
         from kapibara.features.notifications import prefs as notify_prefs
         from kapibara.core.config import OPTIONAL_SUBJECTS
         from database import get_all_optional_answers, get_reminder_users
@@ -348,15 +339,13 @@ async def check_lesson_reminders(bot: Bot):
                 _sent_reminders.add(key)
                 # Память стирается перезапуском (деплой посреди минуты
                 # напоминания) — отметка в базе ловит второй процесс.
-                try:
+                with aside(logger, "отметка напоминания о паре"):
                     from database.schedule import mark_lesson_reminder
                     if not await mark_lesson_reminder(uid, today.isoformat(), key[2], remind_mins):
                         continue
-                except Exception as ex:
-                    logger.warning(f"отметка напоминания о паре: {ex}")
                 label = "первая пара" if kind == "remind_first" else "пара"
                 title, short = lesson_push(e, remind_mins)
-                try:
+                with aside(logger, f"напоминание о паре {uid}"):
                     await deliver(
                         bot, uid,
                         f"⏰ <b>Через {notify_prefs.minutes_text(remind_mins)} {label}</b>\n\n"
@@ -364,10 +353,6 @@ async def check_lesson_reminders(bot: Bot):
                         kind="lesson", tab="today", title=title, body=short,
                         reply_markup=app_button("📅 Расписание", "today"),
                     )
-                except Exception as ex:
-                    logger.warning(f"Reminder error {uid}: {ex}")
-    except Exception as e:
-        logger.error(f"check_lesson_reminders: {e}")
 
 
 def lesson_push(e: dict, minutes: int) -> tuple[str, str]:
@@ -431,12 +416,10 @@ async def sdo_keepalive(bot: Bot | None = None):
         # староста без своего входа ходит этой кукой — его новые баллы проверяем здесь
         from kapibara.core.config import STAROSTA_IDS
         from database import get_sdo_session
-        try:
+        with aside(logger, "новые баллы старосты"):
             for uid in STAROSTA_IDS:
                 if uid and not await get_sdo_session(uid):
                     grade_alerts.check_soon(bot, uid, SDO_SESSION_COOKIE)
-        except Exception as e:
-            logger.warning(f"новые баллы старосты: {type(e).__name__}: {e}")
 
 
 async def sync_sdo_deadlines(bot: Bot):
@@ -455,7 +438,7 @@ async def sync_sdo_deadlines(bot: Bot):
         # глоталось, и никто не знал, что автосинк не работает вовсе.
         global _sdo_error_notified
         if not _sdo_error_notified and STAROSTA_ID:
-            try:
+            with aside(logger, "Не смог уведомить старосту о недоступности СДО"):
                 await bot.send_message(
                     STAROSTA_ID,
                     "⚠️ СДО недоступен с сервера бота — автосинк дедлайнов не работает.\n\n"
@@ -464,14 +447,12 @@ async def sync_sdo_deadlines(bot: Bot):
                     "зарубежные адреса (сервер бота — в США).",
                 )
                 _sdo_error_notified = True
-            except Exception as e:
-                logger.warning(f"Не смог уведомить старосту о недоступности СДО: {e}")
         return
     _sdo_error_notified = False
 
     if result.get("expired"):
         if not _sdo_expired_notified and STAROSTA_ID:
-            try:
+            with aside(logger, "Не смог уведомить старосту о протухшей куке СДО"):
                 await bot.send_message(
                     STAROSTA_ID,
                     "⚠️ Сессия СДО протухла — автосинк дедлайнов не работает.\n\n"
@@ -480,17 +461,13 @@ async def sync_sdo_deadlines(bot: Bot):
                     "Cookies) и обнови переменную окружения SDO_SESSION_COOKIE.",
                 )
                 _sdo_expired_notified = True
-            except Exception as e:
-                logger.warning(f"Не смог уведомить старосту о протухшей куке СДО: {e}")
         return
 
     _sdo_expired_notified = False  # сессия снова живая — сбрасываем флаг
 
-    try:            # время новых тестов (quiz_time.py) — для подписи в «Сдать»
+    with aside(logger, "время тестов: не вышло узнать"):
         from kapibara.features.deadlines import quiz_time
         await quiz_time.learn_missing()
-    except Exception as e:
-        logger.warning(f"время тестов: не вышло узнать: {e}")
 
     if (result["added"] or result.get("updated") or result.get("gone")) and STAROSTA_ID:
         parts = []
@@ -500,19 +477,15 @@ async def sync_sdo_deadlines(bot: Bot):
             parts.append(f"перенесено/изменено — {result['updated']}")
         if result.get("gone"):
             parts.append(f"пропало из СДО и убрано — {len(result['gone'])} ({'; '.join(result['gone'][:5])})")
-        try:
+        with aside(logger, "Не смог уведомить старосту об автосинке СДО"):
             await bot.send_message(
                 STAROSTA_ID,
                 f"🔄 Автосинк СДО: {', '.join(parts)}",
             )
-        except Exception as e:
-            logger.warning(f"Не смог уведомить старосту об автосинке СДО: {e}")
     # каждому — что появилось нового (у кого включено «Новые задания»)
-    try:
+    with aside(logger, "новые задания: рассылка не вышла"):
         from kapibara.features.notifications import new_tasks
         await new_tasks.announce(bot, result.get("new_ids") or [], result.get("moved") or {})
-    except Exception as e:
-        logger.warning(f"новые задания: рассылка не вышла: {e}")
 
 
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
@@ -581,13 +554,11 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     from kapibara.features.ai import semantic_index
 
     async def index_lectures():
-        try:
+        with aside(logger, "индекс поиска"):
             st = await semantic_index.index_pending(bot)
             from kapibara.ops import health
             await health.note("semantic", True, f"{st['chunks']} фрагментов из {st['files']} файлов, "
                                                 f"с векторами {st['embedded']}")
-        except Exception as e:
-            logger.warning(f"индекс поиска: {type(e).__name__}: {e}")
     # первый проход — не сразу: после выкладки все разом открывают приложение,
     # а на Amvera пол-ядра (17.10: в первые минуты ответы по 35 с)
     scheduler.add_job(index_lectures, "interval", minutes=20, next_run_time=datetime.now(TZ) + timedelta(minutes=INDEX_FIRST_DELAY))

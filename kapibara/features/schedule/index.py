@@ -28,6 +28,7 @@ import httpx
 
 from kapibara.core.config import TIMEZONE
 from database import _conn
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ async def build_index(client: httpx.AsyncClient | None = None):
 async def ensure_fresh():
     """Для фоновой задачи: достроить прерванный обход или обновить раз в месяц.
     Ошибки только в лог — бот и поиск по уже собранному работают дальше."""
-    try:
+    with aside(logger, "schedule_index: обход прервался, продолжу позже"):
         built_at = await _get_state("built_at")
         if built_at and time.time() - int(built_at) > REFRESH_DAYS * 86400:
             # Новый круг: сначала, старые записи обновятся по месту. Только
@@ -175,8 +176,6 @@ async def ensure_fresh():
             built_at = None
         if not built_at:
             await build_index()
-    except Exception as e:
-        logger.warning(f"schedule_index: обход прервался, продолжу позже: {e}")
 
 
 async def is_ready() -> bool:

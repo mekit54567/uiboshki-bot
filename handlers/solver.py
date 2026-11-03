@@ -21,7 +21,7 @@ from kapibara.bot.keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTT
 from kapibara.bot.intent_router import classify_intent, dispatch_intent
 from kapibara.core.utils import esc, md_to_tg_html_parts, utc_to_msk_date
 from kapibara.core.telegram import cosmetic
-from kapibara.core.errors import log_failure
+from kapibara.core.errors import aside, log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -101,14 +101,12 @@ async def _lectures_for(data: dict, query: str = "") -> str:
     from kapibara.features.lectures import picker as lecture_picker
     subject = data.get("subject", "")
     if query.strip() and not lecture_picker.wants_course(query):
-        try:
+        with aside(logger, "поиск по смыслу в боте"):
             from kapibara.features.ai import semantic_search
             if await semantic_search.ready():
                 hits = await semantic_search.search(query, subject)
                 if hits:
                     return semantic_search.build_context(hits)[0]
-        except Exception as e:
-            logger.warning(f"поиск по смыслу в боте: {type(e).__name__}: {e} — подбираю лекции по словам")
     return lecture_picker.pick(await get_subject_lecture_context(subject), query)
 
 

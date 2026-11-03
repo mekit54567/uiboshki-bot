@@ -20,6 +20,7 @@ import logging
 import os
 
 from kapibara.core.config import STAROSTA_IDS
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -291,11 +292,9 @@ async def erase(user_id: int) -> dict:
     """Всё о человеке — из базы и кэшей. Из ночных копий базы — когда они
     сменятся (backup_texts, политика это говорит)."""
     from database.privacy import erase_user
-    try:
+    with aside(logger, "отзыв входа Apple"):
         from kapibara.features.identity import apple as apple_signin
         await apple_signin.revoke_for(user_id)    # вход через Apple — отозвать у Apple (их правило)
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"отзыв входа Apple: {e}")
     from database.service import drop_events
     from database.users import forget_user
     drop_events(user_id)
@@ -348,13 +347,11 @@ async def request_erase(user_id: int, bot=None) -> str:
         from kapibara.core.utils import esc
         u = await get_user(user_id) or {}
         name = esc(u.get("full_name") or u.get("username") or "без имени")
-        try:
+        with aside(logger, "удаление: старосте не ушло", level=logging.INFO):
             await bot.send_message(
                 STAROSTA_IDS[0], f"🗑 {name} (<code>{user_id}</code>) удаляет свои данные: полностью — "
                 f"{fmt_day(due)}. Попросит вернуть до этого — <code>/undelete {user_id}</code>.",
                 parse_mode="HTML")
-        except Exception as e:
-            logger.info(f"удаление: старосте не ушло: {e}")
     return due
 
 

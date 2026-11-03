@@ -8,6 +8,7 @@ RuStore, APNs — сервисы доставки видят только шиф
 
 import logging
 import re
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,8 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
     data = {"title": title or TITLES.get(kind, "Капибара"), "body": plain(body) if body else _body(html, title),
             "url": "/app" + (f"?tab={tab}" if tab else ""), "tag": kind}
     sent = 0
-    try:
+    with aside(logger, f"пуш приложения {user_id}", level=logging.INFO):
         sent += await app_push.push_user(user_id, {**data, "tab": tab or ""})
-    except Exception as e:
-        logger.info(f"пуш приложения {user_id}: {type(e).__name__}: {e}")
     subs = await get_push_subs(user_id)
     if sent and subs and kind not in ALWAYS_ALL and not await _tg_copy(user_id):
         subs = []                 # пуш дошёл до телефона, «дублировать» выключено — в PWA не копируем
@@ -95,11 +94,9 @@ async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = 
     if await privacy.blocked(user_id):
         return None
     sent = 0
-    try:
+    with aside(logger, f"доставка {user_id}: пуш не ушёл", level=logging.INFO):
         sent = await push(user_id, kind, html, tab, **({"title": title} if title else {}),
                           **({"body": body} if body else {}))
-    except Exception as e:
-        logger.info(f"доставка {user_id}: пуш не ушёл: {e}")
     from database.identities import is_local
     if is_local(user_id):
         return None               # вошёл через VK/Яндекс, Telegram нет — только пуш

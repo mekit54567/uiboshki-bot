@@ -10,6 +10,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 from kapibara.core.utils import TZ, esc
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -162,11 +163,9 @@ async def send_all(bot, now: datetime | None = None):
             HIDE.reset(token)
         if not text:
             continue
-        try:
+        with aside(logger, f"обзор недели {uid}", level=logging.INFO):
             from kapibara.features.notifications import delivery
             title, body = head
             await delivery.deliver(bot, uid, text, kind="weekly", tab="today", title=title, body=body,
                                    reply_markup=app_button("📅 Открыть неделю", "today"))
             await pace()
-        except Exception as e:
-            logger.info(f"обзор недели {uid}: {e}")

@@ -16,6 +16,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 from kapibara.core.utils import TZ, esc
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
@@ -132,7 +133,7 @@ async def send_all(bot, now: datetime | None = None):
     from kapibara.core.config import OPTIONAL_SUBJECTS
     for user, prefs in users:
         uid = user["user_id"]
-        try:
+        with aside(logger, f"вечерняя сводка {uid}", level=logging.INFO):
             raw, home = await raw_of(user.get("group_id"))
             if raw is None:
                 continue                          # не знаем, есть ли пары, — не пишем «пар нет»
@@ -158,5 +159,3 @@ async def send_all(bot, now: datetime | None = None):
             await delivery.deliver(bot, uid, text, kind="evening", tab="today", title=title,
                                    reply_markup=app_button("📅 Открыть расписание", "today"))
             await pace()
-        except Exception as e:
-            logger.info(f"вечерняя сводка {uid}: {e}")

@@ -38,6 +38,7 @@ from kapibara.core.utils import TZ
 from kapibara.features.deadlines.quiz_opens import (  # noqa: F401 — их брали отсюда
     FMT, PEEK_KEY, _parse, next_open, note_opens, remember, signature,
 )
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -160,13 +161,11 @@ async def send_due(bot, now: datetime | None = None) -> int:
             limit = limits.get(quiz_time.quiz_cmid(d["description"]))
             text = open_text(d, limit) if kind == "open" else remind_text(d, m, limit, now)
             title, short = push_head(d, kind, m, limit, now)
-            try:
+            with aside(logger, f"тест СДО {uid}", level=logging.INFO):  # обычно — бот заблокирован
                 from kapibara.features.notifications import delivery
                 await delivery.deliver(bot, uid, text, kind="quiz", tab="deadlines", title=title, body=short,
                                        reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
                 sent += 1
-            except Exception as e:
-                logger.info(f"тест СДО {uid}: {e}")    # обычно — бот заблокирован
     return sent
 
 
