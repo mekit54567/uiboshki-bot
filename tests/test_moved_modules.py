@@ -180,3 +180,16 @@ def test_moved_helpers_are_the_same_objects():
     assert intent_router.SYSTEM_PROMPT is intent.SYSTEM_PROMPT
     assert scheduler.pace is broadcast.pace
     assert meta.build_info is build.build_info
+
+
+def test_cycle_split_keeps_old_names_cycles_2():
+    """03.11, клубок импортов: общие куски переехали в новые модули, на старом
+    месте — тот же объект (снаружи ничего не поменялось)."""
+    import handlers.start
+    from kapibara.bot import optional
+    from webapp import pages, server
+    from webapp.routes import site
+    assert handlers.start.ask_optional is optional.ask_optional
+    assert server.STATIC_DIR is pages.STATIC_DIR and server.FLUTTER_DIR is pages.FLUTTER_DIR
+    assert server._guide_link is pages.guide_link and server._digest is pages.digest
+    assert site.og_meta is pages.og_meta
