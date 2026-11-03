@@ -30,7 +30,7 @@ from kapibara.features.sdo import net as sdo_net
 from kapibara.core.config import SDO_BASE_URL, SDO_SESSION_COOKIE, is_starosta
 # шифрование — общее для всех секретов в базе (kapibara/core/crypto); отсюда его брали раньше
 from kapibara.core.crypto import decrypt, encrypt, key_source, needs_rotation  # noqa: F401
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
     now = now or _now()
     try:
         alive = bool(cookie) and await check(cookie)
-    except Exception as e:
+    except NETWORK as e:
         logger.info(f"СДО keepalive {uid}: {type(e).__name__}")
         await set_sdo_next_check(uid, _utc(now + timedelta(minutes=next_interval(left))), left)
         return

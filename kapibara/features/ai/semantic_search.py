@@ -18,6 +18,7 @@ PER_FILE кусков из одного файла.
 ответом — «Лекция 5 · слайд 12»: нажал — открылась нужная страница.
 """
 
+import sqlite3
 import logging
 import re
 from collections import OrderedDict
@@ -112,7 +113,7 @@ async def ready() -> bool:
     try:
         async with open_index() as db:
             return (await (await db.execute("SELECT 1 FROM chunks LIMIT 1")).fetchone()) is not None
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         logger.info(f"индекс поиска недоступен: {e}")
         return False
 

@@ -25,6 +25,7 @@ tier (и implicit, и explicit caching — платная фича) — поэт
 ответ и не сам запрос к Gemini, а сборку контекста у себя в БД.
 """
 
+import sqlite3
 import base64
 import contextvars
 import logging
@@ -186,7 +187,7 @@ async def ai_main() -> str:
     try:
         from database import get_setting
         mode = await get_setting("ai_main")
-    except Exception as e:
+    except sqlite3.Error as e:
         logger.info(f"ai_main: {e}")
         mode = None
     mode = (mode or "").strip().lower()

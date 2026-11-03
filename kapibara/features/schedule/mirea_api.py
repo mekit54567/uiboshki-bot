@@ -116,7 +116,7 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
             return
         try:
             main, pairs = summarize_target(raw)
-        except Exception:
+        except (ValueError, KeyError, TypeError):
             return
         r["pairs"] = pairs
         r["hint"] = main if pairs else "нет пар в ближайшие 2 недели"

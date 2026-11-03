@@ -17,7 +17,7 @@ from kapibara.bot.middleware import (ConsentMiddleware, GroupContextMiddleware, 
                         OptionalSubjectsMiddleware, StatsMiddleware)
 from kapibara.core.telegram import cosmetic
 from kapibara.core.tasks import spawn
-from kapibara.core.errors import aside
+from kapibara.core.errors import EXTERNAL, aside
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 health.install()   # ошибки из логов за сутки — в /status у старосты
@@ -156,7 +156,7 @@ async def notify_rollback(bot: Bot):
         try:
             await bot.send_message(STAROSTA_ID, f"🔴 Сборка {bad} не поднялась на сервере — откатил на {prev}. "
                                    "Её больше не пробую; починка — новым мержем (логи: kap logs).")
-        except Exception as e:
+        except EXTERNAL as e:
             logger.warning(f"не смог сказать об откате: {e!r}")
             return
     os.remove(path)
@@ -171,7 +171,7 @@ def start_webapp(port: int):
     try:
         import uvicorn
         from webapp.server import app
-    except Exception as e:
+    except ImportError as e:
         logger.error(f"WebApp не запустился: {e}")
         return None, None
     server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))

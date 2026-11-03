@@ -335,7 +335,7 @@ async def report() -> str:
                      + ("" if st.get("provider", "gemini") == "gemini" else f" (своя модель {st['provider']})"))
         if not st["vectors"]:
             lines.append("⚠️ sqlite-vec не загрузился — ищу только по словам")
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         lines.append(f"⚠️ индекс недоступен: {type(e).__name__}")
 
     lines += ["", "<b>ИИ</b>"]

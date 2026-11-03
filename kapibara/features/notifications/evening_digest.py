@@ -16,7 +16,7 @@ import logging
 from datetime import date, datetime, timedelta
 
 from kapibara.core.utils import TZ, esc
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 DAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
@@ -143,7 +143,7 @@ async def send_all(bot, now: datetime | None = None):
                 try:
                     from kapibara.features.weather.forecast import get_weather_for_tomorrow
                     weather = await get_weather_for_tomorrow() or ""
-                except Exception as e:
+                except (*NETWORK, KeyError, ValueError, TypeError) as e:
                     logger.info(f"вечерняя сводка: погода не загрузилась: {e}")
                     weather = ""
             hidden = frozenset(s for s in OPTIONAL_SUBJECTS if not answers.get(uid, {}).get(s))

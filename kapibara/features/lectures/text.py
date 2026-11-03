@@ -11,12 +11,13 @@ Telegram file_id (bot.get_file + bot.download_file) и парсит в обыч�
 в контексте лекций для решалки).
 """
 
+import sqlite3
 import asyncio
 import logging
 
 # сам разбор файлов — в lectures/extract (его зовут и поиск по смыслу, и файлы СДО)
 from kapibara.features.lectures.extract import SUPPORTED_EXTENSIONS, extract_text  # noqa: F401
-from kapibara.core.errors import aside
+from kapibara.core.errors import EXTERNAL, aside
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ async def extract_and_save(bot, db_file_id: int, tg_file_id: str, file_name: str
         tg_file = await bot.get_file(tg_file_id)
         buf = await bot.download_file(tg_file.file_path)
         data = buf.read()
-    except Exception as e:
+    except EXTERNAL as e:
         logger.warning(f"Не смог скачать файл для извлечения текста (file_id={db_file_id}): {e}")
         return False
 
@@ -52,7 +53,7 @@ async def extract_and_save(bot, db_file_id: int, tg_file_id: str, file_name: str
     from database import save_file_text
     try:
         await save_file_text(db_file_id, text)
-    except Exception as e:
+    except sqlite3.Error as e:
         # Тот же контракт, что и выше: сбой не должен ронять аплоад/синк
         # (в /syncfiles исключение отсюда обрывало импорт всех оставшихся файлов).
         logger.warning(f"Не смог сохранить текст файла (file_id={db_file_id}): {e}")

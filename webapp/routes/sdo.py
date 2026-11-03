@@ -12,7 +12,7 @@ from kapibara.core.config import is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
-from kapibara.core.errors import log_failure
+from kapibara.core.errors import NETWORK, log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
         raise HTTPException(status_code=400, detail="не похоже на MoodleSession — скопируй значение целиком")
     try:
         alive = await sdo_accounts.check(cookie)
-    except Exception as e:
+    except NETWORK as e:
         log_failure(logger, "СДО: проверка куки", e)
         raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже") from e
     if not alive:

@@ -5,6 +5,7 @@
 server с роутами сцеплялись в клубок импортов (03.11). Отсюда берут все:
 server (маршрут «/»), routes/site (/about, демо), routes/meta (ссылки).
 """
+import sqlite3
 import re
 from pathlib import Path
 
@@ -31,7 +32,7 @@ async def guide_link() -> str:
     try:
         from kapibara.features.content.channel_posts import published
         ids = ((await published()).get(GUIDE_SLUG) or {}).get("ids") or []
-    except Exception:
+    except (sqlite3.Error, ValueError):
         return ""
     m = re.search(r"(?:t\.me/|^@)(\w+)", config.CHANNEL_URL or "")
     return f"https://t.me/{m.group(1)}/{ids[0]}" if ids and m else ""

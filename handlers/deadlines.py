@@ -21,6 +21,7 @@ from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
 from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
 from kapibara.features.deadlines.labels import WEEKDAY_SHORT, due_label  # noqa: F401 — старое место
 from kapibara.core.errors import aside
+from aiogram.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -38,7 +39,7 @@ def format_date(date_str: str) -> str:
     try:
         d = date.fromisoformat(date_str)
         return d.strftime("%d.%m.%Y")
-    except:
+    except (ValueError, TypeError):
         return date_str
 
 
@@ -468,7 +469,7 @@ async def deadline_post_confirm(callback: CallbackQuery):
             return
         try:
             await callback.bot.send_message(chat, group_text, parse_mode="HTML")
-        except Exception as e:
+        except TelegramAPIError as e:
             await callback.answer(f"Ошибка отправки: {e}", show_alert=True)
             return
         _dlpost_done.add(key)

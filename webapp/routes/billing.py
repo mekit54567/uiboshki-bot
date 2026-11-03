@@ -447,7 +447,7 @@ async def yookassa_hook(request: Request):
     try:
         data = await request.json()
         pid = str(data["object"]["id"])
-    except Exception:
+    except (ValueError, KeyError, TypeError):
         raise HTTPException(400, "не то") from None
     if not await billing.is_ours(pid):
         return {"ok": True}           # не наш платёж — не дёргаем кассу зря

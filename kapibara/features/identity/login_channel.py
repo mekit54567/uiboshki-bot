@@ -20,6 +20,7 @@ Telegram» — сначала подписывается на открытый �
 import logging
 import re
 from datetime import datetime, UTC
+from kapibara.core.errors import EXTERNAL
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ async def subscribed(bot, user_id: int) -> bool | None:
         return None
     try:
         m = await bot.get_chat_member(c, user_id)
-    except Exception as e:
+    except EXTERNAL as e:
         logger.warning(f"канал входа {c}: {e}")
         return None
     status = str(getattr(m, "status", "")).split(".")[-1].lower()

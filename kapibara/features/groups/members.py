@@ -23,6 +23,7 @@ import logging
 from database.members import (  # noqa: F401 — chat_id, remember, forget_chat зовут отсюда
     CHAT_TTL, TTL, _cached, chat_id, forget_chat, remember,
 )
+from kapibara.core.errors import EXTERNAL
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ async def check(bot, user_id: int) -> bool | None:
         return None
     try:
         m = await bot.get_chat_member(cid, user_id)
-    except Exception as e:
+    except EXTERNAL as e:
         logger.info(f"участник чата {user_id}: {e}")
         return None
     status = str(getattr(m, "status", "")).split(".")[-1].lower()

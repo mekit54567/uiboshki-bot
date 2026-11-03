@@ -37,7 +37,7 @@ import uuid
 from datetime import date, timedelta
 
 from kapibara.core import config
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +380,7 @@ async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: st
             r = await c.post(f"{YOOKASSA_API}/payments", json=body, headers={"Idempotence-Key": local})
         r.raise_for_status()
         data = r.json()
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:
         logger.warning(f"ЮKassa: платёж не создан: {e}")
         await (store.mark_donation if donation else store.mark_payment)(local, "canceled")
         raise PayError("касса не отвечает — попробуй через минуту") from e
@@ -437,7 +437,7 @@ async def yookassa_check(pid: str) -> str | None:
             r = await c.get(f"{YOOKASSA_API}/payments/{pid}")
         r.raise_for_status()
         data = r.json()
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:
         logger.warning(f"ЮKassa: статус {pid} не узнать: {e}")
         return None
     pay = await _payment(pid)

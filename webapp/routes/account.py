@@ -9,6 +9,8 @@ from pydantic import BaseModel
 
 from kapibara.core.config import design2_on, is_starosta
 from webapp.deps import CurrentUser
+from kapibara.features.schedule.parser import FETCH_ERRORS
+from kapibara.core.errors import EXTERNAL
 
 router = APIRouter()
 
@@ -114,7 +116,7 @@ async def _notify_view(uid: int) -> dict:
     user = await get_user(uid) or {}
     try:
         home = notify_prefs.home_campus(await raw_for_user(uid))
-    except Exception:
+    except FETCH_ERRORS:
         home = None
     prefs = notify_prefs.merge(user.get("notify"))
     if not design2_on():
@@ -203,7 +205,7 @@ async def api_pulse_lab(request: Request, user: dict = CurrentUser):
         await tg_bot().send_document(user["id"], BufferedInputFile(data, filename=name),
                                      caption=summary + "\n\nПерешли этот файл Claude в тред про Пульс.")
         sent = True
-    except Exception:
+    except EXTERNAL:
         sent = False
     return {"ok": True, "sent": sent, "summary": summary}
 

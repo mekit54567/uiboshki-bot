@@ -8,6 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from database import create_vote, get_active_vote, add_vote_answer, get_vote_results, close_vote
 from kapibara.core.config import STAROSTA_ID, STAROSTA_IDS
 from kapibara.core.utils import esc
+from kapibara.core.errors import EXTERNAL
 
 router = Router()
 
@@ -138,5 +139,5 @@ async def send_anon(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         await message.answer("✅ Вопрос отправлен старосте анонимно!")
-    except Exception as e:
+    except EXTERNAL as e:
         await message.answer(f"❌ Не удалось отправить: {e}")
