@@ -11,9 +11,10 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
 from kapibara.features.ai.solver import solve_text, solve_image, solve_with_history, SUBJECTS
 from kapibara.features.ai.gemini import solve_with_lecture_context
 from database import (
-    upsert_user, add_solver_history, get_solver_history,
+    add_solver_history, get_solver_history,
     get_subjects_with_lecture_text, get_subject_lecture_context,
 )
+from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.bot.keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTTON_TEXTS
 from kapibara.bot.intent_router import classify_intent, dispatch_intent
 from kapibara.core.utils import esc, md_to_tg_html_parts, utc_to_msk_date

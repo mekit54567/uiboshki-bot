@@ -1,7 +1,7 @@
 # Охранник слоёв (docs/adr/0002-layers.md): импорты идут только сверху вниз.
 #     bot | jobs  →  ops  →  features  →  core;   database — только core
 # CI: «lint-imports». Новый прямой импорт против правил — CI красный.
-# ignore_imports — нарушения, которые были на 02.11 (25 штук; 03.11 — 16). Это список
+# ignore_imports — нарушения, которые были на 02.11 (25 штук; 03.11 — 12). Это список
 # долга: его можно только сокращать (как храповик, docs/adr/0006-ratchet.md).
 # Починил — удали строку отсюда (одинаковый список во всех правилах).
 
@@ -28,10 +28,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
@@ -57,10 +53,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
@@ -83,10 +75,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
@@ -108,10 +96,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
@@ -133,10 +117,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
@@ -163,10 +143,6 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    database.groups -> kapibara.features.groups.members
-    database.users -> kapibara.features.privacy.privacy
-    kapibara.features.content.review_demo -> webapp.routes.chat
-    kapibara.features.content.review_demo -> webapp.routes.schedule
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather

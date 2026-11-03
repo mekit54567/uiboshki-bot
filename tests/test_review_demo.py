@@ -6,7 +6,7 @@ from datetime import date, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from kapibara.features.content import review_demo
+from webapp import review_demo
 from kapibara.core.utils import TZ
 
 CODE = "kapibara-review-2026"

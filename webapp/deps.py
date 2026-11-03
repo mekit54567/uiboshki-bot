@@ -53,7 +53,7 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
         if not user or "id" not in user:
             raise HTTPException(status_code=401, detail="нет данных пользователя в initData")
 
-        from database import upsert_user
+        from kapibara.features.privacy.privacy import upsert_user
         # full_name — как у бота (aiogram User.full_name = "first last"), иначе каждый
         # заход в WebApp перетирал в users фамилию, записанную ботом.
         full_name = " ".join(p for p in (user.get("first_name", ""), user.get("last_name", "")) if p)

@@ -13,7 +13,8 @@ from kapibara.features.schedule.parser import (
 from kapibara.features.schedule.mirea_api import (
     search_targets, get_baseinfo, fetch_ical, SearchUnavailable, TARGET_GROUP, TARGET_TEACHER, TARGET_ROOM,
 )
-from database import upsert_user, add_lesson_note, delete_lesson_note, get_lesson_notes, get_or_create_calendar_token
+from database import add_lesson_note, delete_lesson_note, get_lesson_notes, get_or_create_calendar_token
+from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.bot.keyboards import CANCEL_KB, MAIN_KB
 from kapibara.core.config import GROUP_NAME, WEBAPP_URL, is_starosta
 from kapibara.core.utils import esc, split_by_lines, today_msk

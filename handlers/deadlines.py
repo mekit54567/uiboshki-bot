@@ -12,8 +12,9 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 
 from database import (
     add_deadline, get_active_deadlines, mark_deadline_done, set_deadline_done,
-    delete_deadline, upsert_user, get_deadline_stats, get_deadline, is_shared_deadline,
+    delete_deadline, get_deadline_stats, get_deadline, is_shared_deadline,
 )
+from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.core.config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
 from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB

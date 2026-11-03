@@ -32,7 +32,7 @@ async def ask_group(message: Message, state: FSMContext, intro: str = ""):
 @router.message(Command("group"))
 async def cmd_group(message: Message, state: FSMContext):
     from kapibara.features.groups import groups
-    from database import upsert_user
+    from kapibara.features.privacy.privacy import upsert_user
     user = message.from_user
     await upsert_user(user.id, user.username or "", user.full_name or "")
     g = await groups.of_user(user.id)

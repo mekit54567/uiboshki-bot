@@ -93,7 +93,7 @@ MOVED = {
     "offer_text": "kapibara.features.privacy.offer_text",
     "channel_posts": "kapibara.features.content.channel_posts",
     "roadmap": "kapibara.features.content.roadmap",
-    "review_demo": "kapibara.features.content.review_demo",
+    "review_demo": "webapp.review_demo",
     "config": "kapibara.core.config",
     "utils": "kapibara.core.utils",
     "translit": "kapibara.core.translit",
@@ -150,7 +150,7 @@ def test_schedule_card_finds_fonts():
 
 def test_content_data_found_from_project_root():
     from kapibara.features.content import channel_posts
-    from kapibara.features.content import review_demo
+    from webapp import review_demo
     from kapibara.features.content import roadmap
     assert channel_posts.POSTS_DIR.is_dir()
     assert roadmap.PATH.is_file() and review_demo.FIXTURES.is_file()
