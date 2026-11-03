@@ -19,7 +19,7 @@ Telegram» — сначала подписывается на открытый �
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ async def _since() -> str:
     key = f"login_channel:since:{channel()}"
     v = await get_setting(key)
     if not v:
-        v = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        v = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         await set_setting(key, v)
     return v
 

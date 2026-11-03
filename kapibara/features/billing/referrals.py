@@ -16,7 +16,7 @@ FRIEND_WINDOW дней. Тогда другу REF_BONUS дней всегда, �
 готовое сообщение: картинка, пара строк и кнопка с личной ссылкой."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ async def bind(friend_id: int, code: str, was_new: bool | None = None) -> bool:
         joined = await joined_at(friend_id)
         if not joined:
             return False
-        age = datetime.now(timezone.utc).replace(tzinfo=None) - datetime.fromisoformat(joined)
+        age = datetime.now(UTC).replace(tzinfo=None) - datetime.fromisoformat(joined)
         was_new = age <= timedelta(hours=NEW_USER_HOURS)
     if not was_new:
         return False
@@ -128,7 +128,7 @@ async def check(friend_id: int, bot=None) -> bool:
     if not ref or ref["rewarded_at"]:
         return False
     start = datetime.fromisoformat(ref["at"])
-    if datetime.now(timezone.utc).replace(tzinfo=None) - start > timedelta(days=FRIEND_WINDOW):
+    if datetime.now(UTC).replace(tzinfo=None) - start > timedelta(days=FRIEND_WINDOW):
         return False
     if await active_days(friend_id, ref["at"]) < FRIEND_DAYS:
         return False

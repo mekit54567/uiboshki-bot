@@ -25,7 +25,7 @@ def _len(field, data):
     return _v(field << 3 | 2) + _v(len(data)) + data
 
 
-ME = (_len(1, "3f2a-uuid".encode()) + _len(2, _len(1, "Иванов".encode()) + _v(2 << 3) + _v(300))
+ME = (_len(1, b"3f2a-uuid") + _len(2, _len(1, "Иванов".encode()) + _v(2 << 3) + _v(300))
       + _v(3 << 3 | 1) + struct.pack("<d", 42.5))
 
 
