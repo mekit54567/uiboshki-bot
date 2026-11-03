@@ -14,6 +14,7 @@ from kapibara.jobs.scheduler import start_scheduler
 from kapibara.bot.middleware import (ConsentMiddleware, GroupContextMiddleware, MenuInterruptMiddleware,
                         OptionalSubjectsMiddleware, StatsMiddleware)
 from kapibara.core.telegram import cosmetic
+from kapibara.core.tasks import spawn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 health.install()   # ошибки из логов за сутки — в /status у старосты
@@ -252,12 +253,12 @@ async def main():
             await offer_next(bot)
         except Exception as e:
             logger.info(f"превью поста канала: {e}")
-    asyncio.create_task(offer_post())
+    spawn(offer_post(), name="offer_post")
 
     from kapibara.features.sdo import accounts as sdo_accounts             # задали SDO_CRYPT_KEY/фразу — входы СДО на новый ключ сразу
-    asyncio.create_task(sdo_accounts.rotate_all())
+    spawn(sdo_accounts.rotate_all(), name="sdo_rotate")
     from kapibara.features.notifications import app_push
-    asyncio.create_task(app_push.rotate_keys())         # ключи телефонов для пушей — тем же секретом
+    spawn(app_push.rotate_keys(), name="push_rotate")         # ключи телефонов для пушей — тем же секретом
 
     from kapibara.features.privacy import privacy                  # 152-ФЗ: тексты без данных оператора — сказать старосте после деплоя
     if (missing := privacy.operator_missing()) and STAROSTA_ID:

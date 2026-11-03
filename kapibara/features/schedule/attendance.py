@@ -28,13 +28,13 @@ SETTLE_DAYS = 10      # столько ждём отметку после лек
 def solve(score: float, max_pts: float, total: int, past: int) -> list[tuple[int, int]]:
     """Все (посещено, ушек), при которых сумма сходится: A·M/(N−U) = S."""
     out = []
-    for u in range(0, past + 1):
+    for u in range(past + 1):
         n = total - u
         if n <= 0:
             break
         unit = max_pts / n
         a = round(score / unit)
-        if 0 <= a and a + u <= past and abs(a * unit - score) <= TOL:
+        if a >= 0 and a + u <= past and abs(a * unit - score) <= TOL:
             out.append((a, u))
     return out
 

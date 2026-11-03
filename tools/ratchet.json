@@ -2,5 +2,6 @@
   "broad_except": 270,
   "silent_except": 25,
   "cycle_modules": 67,
-  "root_py_files": 1
+  "root_py_files": 1,
+  "ruff_debt": 216
 }

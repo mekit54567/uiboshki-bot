@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
@@ -126,23 +127,68 @@ def morning_push(events: list[dict], home: str | None, prefs: dict, weather: str
     return title, " · ".join(x for x in (first_pair(lessons), sky) if x)
 
 
+async def group_chat() -> int:
+    """Чат своей группы: GROUP_CHAT_ID или запомненный, когда староста
+    добавил бота в чат (handlers/members_chat.py). 0 — не задан."""
+    from kapibara.features.groups import members
+    return GROUP_CHAT_ID or await members.chat_id()
+
+
+def morning_caption(lessons: list[dict], notes: str) -> str:
+    """Подпись к утренней карточке в чате группы (до 1024 знаков — лимит Telegram)."""
+    from kapibara.features.schedule.card import _pairs_word
+    n = sum(l.get("pairs", 1) for l in lessons)
+    first = lessons[0]
+    where = f" · {esc(first['room'])}" if first.get("room") else ""
+    text = (f"☀️ <b>Доброе утро!</b> Сегодня {n} {_pairs_word(n)}, "
+            f"с {first['start']} до {lessons[-1]['end']}.\nПервая — {esc(first['title'])}{where}")
+    return text + notes if len(text + notes) <= 1000 else text
+
+
+def group_app_kb() -> InlineKeyboardMarkup:
+    """Кнопка-ссылка (в группе кнопки web_app не работают)."""
+    from kapibara.core.config import BOT_USERNAME
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text="📱 Открыть Капибару", url=f"https://t.me/{BOT_USERNAME}?startapp")]])
+
+
+async def send_group_morning(bot: Bot, chat_id: int | None = None) -> str:
+    """Утром в чат группы — карточка дня «Мел» (как в @боте) с подписью и
+    заметками к парам. Без предметов по выбору. Пар нет — молчим. Отключить —
+    /groupmorning off у старосты. chat_id — куда (превью старосте).
+    Возвращает, что вышло: sent / no_chat / off / no_lessons."""
+    from aiogram.types import BufferedInputFile
+    from database import get_setting
+    from kapibara.core.config import BOT_USERNAME, GROUP_NAME, OPTIONAL_SUBJECTS
+    from kapibara.features.groups.optional_subjects import HIDE
+    from kapibara.features.schedule import card
+    from kapibara.features.schedule.parser import lessons_for_date
+    from handlers.schedule import _notes_block
+    preview = chat_id is not None
+    if not preview:
+        if await get_setting("group_morning") == "off":
+            return "off"
+        if not (chat_id := await group_chat()):
+            return "no_chat"
+    HIDE.set(frozenset(OPTIONAL_SUBJECTS))       # в общем чате — без предметов по выбору
+    raw = await fetch_schedule_raw()
+    now = datetime.now(TZ)
+    lessons = lessons_for_date(raw, now.date())
+    if not lessons:
+        return "no_lessons"
+    data = await asyncio.to_thread(card.build_own, raw, "today", now, GROUP_NAME, BOT_USERNAME)
+    caption = morning_caption(lessons, await _notes_block(now.date().isoformat()))
+    await bot.send_photo(chat_id, BufferedInputFile(data, "today.jpg"), caption=caption,
+                         parse_mode="HTML", reply_markup=group_app_kb())
+    return "sent"
+
+
 async def send_group_morning_digest(bot: Bot):
-    """Короткий утренний дайджест в общий чат группы (не в личку): расписание
-    на сегодня + пометки к парам, если есть. Без погоды — в группе это лишнее,
-    оставляем это личным рассылкам. Молчит, если GROUP_CHAT_ID не настроен —
-    это не критическая функция, чтобы падать при её отсутствии."""
-    if not GROUP_CHAT_ID:
-        return
+    """Задание по расписанию: сбой не роняет планировщик, но виден в логах."""
     try:
-        from kapibara.core.config import OPTIONAL_SUBJECTS
-        from handlers.schedule import _notes_block
-        from kapibara.features.groups.optional_subjects import HIDE
-        HIDE.set(frozenset(OPTIONAL_SUBJECTS))   # в общем чате — без предметов по выбору
-        text = await get_today_schedule()
-        text += await _notes_block(today_msk().isoformat())
-        await bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+        await send_group_morning(bot)
     except Exception as e:
-        logger.warning(f"Не смог отправить утренний дайджест в группу: {e}")
+        logger.warning(f"Не смог отправить утреннюю карточку в группу: {e!r}")
 
 
 def _format_deadline_reminders(deadlines: list[dict]) -> str:
@@ -213,7 +259,7 @@ async def send_deadline_reminders(bot: Bot):
 
     # В общий чат группы имеет смысл предлагать публиковать только общие
     # дедлайны (старосты/автосинка СДО), никогда — чью-то личную запись.
-    if STAROSTA_ID and GROUP_CHAT_ID:
+    if STAROSTA_ID and await group_chat():
         try:
             shared = await get_deadlines_soon(days=3, shared_only=True)
             if shared:

@@ -107,9 +107,9 @@ async def is_member(user_id: int, bot=None) -> bool | None:
 
 async def refresh_later(bot, user_id: int):
     """Обновить в фоне, если ответ устарел (заход в приложение или к боту)."""
-    import asyncio
     from kapibara.core import config
+    from kapibara.core.tasks import spawn
     if config.is_starosta(user_id) or bot is None or not await chat_id():
         return
     if not (await _cached(user_id))[1]:
-        asyncio.create_task(check(bot, user_id))
+        spawn(check(bot, user_id), name="member_check")

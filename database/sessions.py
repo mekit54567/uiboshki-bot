@@ -3,7 +3,7 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import aiosqlite
 
@@ -26,7 +26,7 @@ def ttl(device: str | None) -> timedelta:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _ts(dt: datetime) -> str:

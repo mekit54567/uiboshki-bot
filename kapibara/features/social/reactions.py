@@ -32,7 +32,7 @@ async def get(group_id: int, key: str, user_id: int) -> dict:
         mine = await (await db.execute(
             "SELECT kind FROM lesson_reactions WHERE group_id = ? AND lesson = ? AND user_id = ?",
             (group_id, key, user_id))).fetchone()
-    counts = {k: 0 for k in KINDS}
+    counts = dict.fromkeys(KINDS, 0)
     counts.update({k: n for k, n in rows if k in counts})
     return {"counts": counts, "mine": mine[0] if mine else None}
 

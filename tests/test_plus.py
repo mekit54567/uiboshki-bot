@@ -207,7 +207,7 @@ async def test_rank_bonus_needs_real_days(db, client):  # noqa: F811
 
     from kapibara.features.social import achievements                                                       # ачивки на сервере (#202)
     now_ms = int(time.time() * 1000)
-    await achievements.add(ME, {a: now_ms for a in achievements.RANKS["noon"]}, now_ms)
+    await achievements.add(ME, dict.fromkeys(achievements.RANKS["noon"], now_ms), now_ms)
     r = c.post("/api/plus/rank", headers=h, json={"rank": "noon"})
     assert r.json()["days"] == 5
     assert c.post("/api/plus/rank", headers=h, json={"rank": "noon"}).status_code == 400   # второй раз нет

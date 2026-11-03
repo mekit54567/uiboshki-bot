@@ -12,6 +12,7 @@ import asyncio
 import logging
 
 from kapibara.core.utils import esc
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 PAUSE_SEC = 20          # между людьми: не открывать журналы всех разом
@@ -180,12 +181,12 @@ _tasks: set = set()
 
 
 def daytime(now=None) -> bool:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from kapibara.core.utils import TZ
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if now.tzinfo is None:            # sdo_accounts считает время в UTC без пояса
-        now = now.replace(tzinfo=timezone.utc)
+        now = now.replace(tzinfo=UTC)
     return now.astimezone(TZ).hour in DAY_HOURS
 
 

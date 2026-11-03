@@ -465,6 +465,7 @@ def help_text() -> str:
 STAROSTA_HELP = (
     "\n\n👑 <b>Для старосты</b>\n"
     "/announce — рассылка · /addhw — добавить ДЗ\n"
+    "/say — написать в чат группы от имени бота · /groupmorning — утренняя карточка в чат\n"
     "/setzam ID — назначить зама\n"
     "/syncfiles — загрузить файлы\n"
     "/importdeadlines · /syncsdo — дедлайны из СДО\n"

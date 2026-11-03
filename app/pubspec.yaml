@@ -44,6 +44,7 @@ dependencies:
   sign_in_with_apple: ^8.2.0
   webview_flutter: ^4.14.1
   mobile_scanner: ^7.4.3
+  flutter_secure_storage: ^11.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
