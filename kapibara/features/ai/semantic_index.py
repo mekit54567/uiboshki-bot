@@ -26,9 +26,13 @@ import os
 import re
 import struct
 import time
+import sqlite3
 from contextlib import asynccontextmanager
 
 import aiosqlite
+from aiogram.exceptions import TelegramAPIError
+
+from kapibara.core.errors import NETWORK
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +179,7 @@ async def _load_vec(db) -> bool:
         await db.load_extension(sqlite_vec.loadable_path())
         await db.enable_load_extension(False)
         VEC_OK = True
-    except Exception as e:
+    except (ImportError, AttributeError, OSError, sqlite3.Error) as e:   # нет пакета, SQLite без расширений, не та платформа
         if VEC_OK is None:
             logger.warning(f"sqlite-vec не загрузился — поиск только по словам: {e}")
         VEC_OK = False
@@ -239,7 +243,7 @@ async def has_vectors(db, p: str) -> bool:
     sql = f"SELECT 1 FROM {done} LIMIT 1" if done else "SELECT 1 FROM chunks WHERE embedded=1 LIMIT 1"
     try:
         return bool(await (await db.execute(sql)).fetchone())
-    except Exception:
+    except sqlite3.Error:       # таблицы векторов ещё нет — значит, и готового нет
         return False
 
 
@@ -359,7 +363,7 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
             try:
                 tg = await bot.get_file(tg_id)
                 data = (await bot.download_file(tg.file_path)).read()
-            except Exception as e:          # больше 20 МБ или файл недоступен — по сохранённому тексту
+            except (TelegramAPIError, *NETWORK, OSError) as e:   # больше 20 МБ или файл недоступен — по сохранённому тексту
                 logger.info(f"индекс: файл {fid} не скачался ({type(e).__name__}) — без страниц")
         try:
             await index_file(fid, data, name)

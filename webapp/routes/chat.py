@@ -236,7 +236,7 @@ async def _solve(history: list, subject: str, context: str, lectures: str,
         return await _chat_with_fallback(history, subject, context, lectures)
     try:
         raw = base64.b64decode(attachment.data, validate=False)
-    except Exception:
+    except (ValueError, TypeError):     # binascii.Error — тоже ValueError
         raise HTTPException(status_code=400, detail="вложение повреждено")
     if len(raw) > MAX_ATTACHMENT_BYTES:
         raise HTTPException(status_code=413, detail="файл больше 10 МБ")
