@@ -1,7 +1,9 @@
 import logging
 import re
+from contextlib import asynccontextmanager
 
 from aiogram import Router, F, Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -19,8 +21,24 @@ from kapibara.bot.keyboards import MAIN_KB, STOP_DIALOG_KB, CANCEL_KB, MENU_BUTT
 from kapibara.bot.intent_router import classify_intent, dispatch_intent
 from kapibara.core.utils import esc, md_to_tg_html_parts, utc_to_msk_date
 from kapibara.core.telegram import cosmetic
+from kapibara.core.errors import log_failure
 
 logger = logging.getLogger(__name__)
+
+AI_DOWN = "❌ ИИ сейчас не ответил — попробуй ещё раз через минуту"
+
+
+@asynccontextmanager
+async def _ai_reply(wait: Message, what: str):
+    """Граница ответа ИИ в боте (ADR 0004): что бы ни сломалось — человеку
+    «не ответил» на месте «Думаю…», в лог сеть строкой, баг с traceback.
+    Раньше в семи местах свой except и человеку — текст исключения."""
+    try:
+        yield
+    except Exception as e:      # граница хендлера
+        log_failure(logger, what, e)
+        with cosmetic("решалка: «не ответил» вместо «Думаю…»"):
+            await wait.edit_text(AI_DOWN)
 router = Router()
 
 # Решалка — только в личке: в группе (если боту видны все сообщения) любой
@@ -208,7 +226,7 @@ async def answer_model_text(message: Message, answer: str) -> list[Message]:
     for md, chunk in md_to_tg_html_parts(answer):
         try:
             sent.append(await message.answer(chunk, parse_mode="HTML"))
-        except Exception as e:
+        except TelegramBadRequest as e:      # не разобрал разметку — тот же кусок текстом
             logger.warning(f"Ответ модели не прошёл как HTML, шлю текстом: {e}")
             sent.append(await message.answer(md))
     return sent
@@ -250,7 +268,7 @@ async def handle_first_task(message: Message, state: FSMContext):
         return
     await drop_arm(message, state, data)
     wait    = await message.answer("🧠 Решаю, секунду...")
-    try:
+    async with _ai_reply(wait, "решалка"):
         lectures = await _lectures_for(data, message.text)
         answer = with_sources(await solve_text(message.text, subject, backend=backend, lectures=lectures), lectures)
         if not answer or len(answer.strip()) < 10:
@@ -266,9 +284,6 @@ async def handle_first_task(message: Message, state: FSMContext):
         await state.update_data(history=history)
         await state.set_state(SolverState.in_dialog)
         await send_answer(message, state, answer)
-    except Exception as e:
-        logger.error(e)
-        await wait.edit_text(f"❌ Ошибка: {e}")
 
 
 def _photo_prompt(caption: str, history: list | None = None) -> str:
@@ -308,7 +323,7 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
         return
     await drop_arm(message, state, data)        # к фото «Подумать» нет — решаем как обычно
     wait    = await message.answer("🧠 Анализирую фото...")
-    try:
+    async with _ai_reply(wait, "решалка (предмет)"):
         answer = await _photo_answer(message, bot, data)
 
         if not answer or len(answer.strip()) < 10:
@@ -325,9 +340,6 @@ async def handle_first_photo(message: Message, state: FSMContext, bot: Bot):
         await state.update_data(history=history)
         await state.set_state(SolverState.in_dialog)
         await send_answer(message, state, answer)
-    except Exception as e:
-        logger.error(e)
-        await wait.edit_text(f"❌ Ошибка: {e}")
 
 
 @router.message(SolverState.in_dialog, F.text, PRIVATE)
@@ -348,7 +360,7 @@ async def handle_dialog(message: Message, state: FSMContext):
     history.append({"role": "user", "content": message.text})
 
     wait = await message.answer("🧠 Думаю...")
-    try:
+    async with _ai_reply(wait, "решалка (диалог)"):
         # «а почему?», «подробнее» — лекции ищем по теме прошлых вопросов
         query = lecture_picker.search_query(history)
         lectures = await _lectures_for(data, query)
@@ -364,9 +376,6 @@ async def handle_dialog(message: Message, state: FSMContext):
         await state.update_data(history=history, msg_ids=msg_ids)
         await send_answer(message, state, answer)
 
-    except Exception as e:
-        logger.error(e)
-        await wait.edit_text(f"❌ Ошибка: {e}")
 
 
 @router.message(SolverState.in_dialog, F.photo, PRIVATE)
@@ -381,7 +390,7 @@ async def handle_dialog_photo(message: Message, state: FSMContext, bot: Bot):
         await state.update_data(msg_ids=msg_ids)
         return
     wait = await message.answer("🧠 Анализирую фото...")
-    try:
+    async with _ai_reply(wait, "решалка (фото в диалоге)"):
         answer = await _photo_answer(message, bot, data, history)
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text(PHOTO_FAIL)
@@ -390,9 +399,6 @@ async def handle_dialog_photo(message: Message, state: FSMContext, bot: Bot):
         history += [{"role": "user", "content": _photo_task(message)}, {"role": "assistant", "content": answer}]
         await state.update_data(history=history[-10:], msg_ids=msg_ids)
         await send_answer(message, state, answer)
-    except Exception as e:
-        logger.error(e)
-        await wait.edit_text(f"❌ Ошибка: {e}")
 
 
 @router.message(Command("history"))
@@ -458,7 +464,7 @@ async def handle_plain_text(message: Message, state: FSMContext):
         await message.answer(why)
         return
     wait = await message.answer("🤖 Похоже задание — решаю..." + (" (🐋 DeepSeek)" if backend == "deepseek" else ""))
-    try:
+    async with _ai_reply(wait, "решалка (свободный текст)"):
         answer = await solve_text(text, backend=backend)
         if not answer or len(answer.strip()) < 10:
             # раньше «решаю…» молча пропадало — человек оставался без ответа
@@ -468,9 +474,6 @@ async def handle_plain_text(message: Message, state: FSMContext):
         await add_solver_history(message.from_user.id, text, answer)
         sent = await answer_model_text(message, answer)
         await offer_think(message.from_user.id, state, sent, [{"role": "user", "content": f"Задание:\n{text}"}], {})
-    except Exception as e:
-        logger.error(f"решалка (свободный текст): {e!r}")
-        await wait.edit_text("❌ ИИ сейчас не ответил — попробуй ещё раз через минуту")
 
 
 # ── «Подумать ещё» (think.py, «Капибара+») ────────────────────────────────
@@ -498,10 +501,8 @@ async def offer_think(uid: int, state: FSMContext, sent: list[Message], question
         return
     await state.update_data(think_q=question, think_d={"subject": data.get("subject", ""),
                                                         "has_lectures": data.get("has_lectures", False)})
-    try:
+    with cosmetic("«Подумать ещё»: кнопка"):        # без кнопки «Подумать ещё» ответ всё равно есть
         await sent[-1].edit_reply_markup(reply_markup=think_kb(offer["left"]))
-    except Exception as e:
-        logger.warning(f"«Подумать ещё»: кнопку не поставил: {e!r}")
 
 
 @router.callback_query(F.data == THINK_CB)
@@ -702,7 +703,7 @@ async def handle_plain_photo(message: Message, bot: Bot):
         await message.answer(why)
         return
     wait = await message.answer("🧠 Анализирую фото...")
-    try:
+    async with _ai_reply(wait, "решалка (фото)"):
         answer = await _photo_answer(message, bot, {})
         if not answer or len(answer.strip()) < 10:
             await wait.edit_text(PHOTO_FAIL)
@@ -710,9 +711,6 @@ async def handle_plain_photo(message: Message, bot: Bot):
         await wait.delete()
         await add_solver_history(message.from_user.id, ("[фото] " + (message.caption or "")).strip(), answer)
         await answer_model_text(message, answer)
-    except Exception as e:
-        logger.error(f"решалка (фото): {e!r}")
-        await wait.edit_text("❌ ИИ сейчас не ответил — попробуй ещё раз через минуту")
 
 
 # ── Решалка по лекциям (Gemini, Фаза 9) ─────────────────────────────────────
@@ -768,15 +766,13 @@ async def lecture_handle_task(message: Message, state: FSMContext):
     subject = data.get("subject", "")
     wait = await message.answer("📖 Читаю лекции и решаю — с большим контекстом это может занять чуть больше времени...")
     try:
-        from kapibara.features.lectures import picker as lecture_picker
-        context_text = lecture_picker.pick(await get_subject_lecture_context(subject), message.text)
-        answer = await solve_with_lecture_context(message.text, subject, context_text)
-        await wait.delete()
-        await add_solver_history(message.from_user.id, message.text, answer, subject)
-        await answer_model_text(message, answer)
-        await message.answer("Готово ✅ (/solve_lectures — ещё раз по этому или другому предмету)", reply_markup=MAIN_KB)
-    except Exception as e:
-        logger.error(e)
-        await wait.edit_text(f"❌ Ошибка: {e}")
+        async with _ai_reply(wait, "решалка по лекциям"):
+            from kapibara.features.lectures import picker as lecture_picker
+            context_text = lecture_picker.pick(await get_subject_lecture_context(subject), message.text)
+            answer = await solve_with_lecture_context(message.text, subject, context_text)
+            await wait.delete()
+            await add_solver_history(message.from_user.id, message.text, answer, subject)
+            await answer_model_text(message, answer)
+            await message.answer("Готово ✅ (/solve_lectures — ещё раз по этому или другому предмету)", reply_markup=MAIN_KB)
     finally:
         await state.clear()

@@ -153,7 +153,9 @@ async def test_index_pending_downloads_for_pages(db, embed):
     class Bot:
         async def get_file(self, tg_id):
             if tg_id == "tg-big":
-                raise RuntimeError("file is too big")
+                from aiogram.exceptions import TelegramBadRequest     # так Telegram отвечает на файл > 20 МБ
+                from aiogram.methods import GetFile
+                raise TelegramBadRequest(GetFile(file_id=tg_id), "Bad Request: file is too big")
             return type("F", (), {"file_path": tg_id})()
 
         async def download_file(self, path):
