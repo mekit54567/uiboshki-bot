@@ -12,7 +12,8 @@ name: Выкладка (ветка deploy)
 #   - CHANGELOG и PWA после него закончились и не упали;
 #   - между проверенным коммитом и main — только коммиты github-actions[bot]
 #     (CHANGELOG, PWA). Есть чужой коммит — это новый мерж, у него свой CI,
-#     и выкладывать его будет его собственный запуск.
+#     и выкладывать его будет его собственный запуск; а если его CI уже
+#     зелёный (пачка мержей, запуски отменяют друг друга) — выкладываем его.
 # Ручной запуск (workflow_dispatch) берёт последний зелёный CI на main.
 
 on:
@@ -55,6 +56,21 @@ jobs:
               --status success --limit 1 --json headSha --jq '.[0].headSha')
           fi
           [ -n "$sha" ] || { echo "::error::нет зелёного CI на main"; exit 1; }
+          # Пачка мержей (03.11): CI разных мержей кончаются вразнобой, а
+          # запуск выкладки нового мержа отменяется (concurrency) запуском от
+          # CI старого — и тот уступал новому, которого уже нет: сервер стоял
+          # на #336 после 11 мержей. Поэтому: у нового мержа CI уже зелёный —
+          # выкладываем его сами.
+          git fetch -q origin main
+          latest=$(git log -1 --format=%H --perl-regexp --author='^(?!github-actions\[bot\])' origin/main)
+          if [ -n "$latest" ] && [ "$latest" != "$sha" ]; then
+            ci=$(gh run list --repo "$REPO" --workflow ci.yml --branch main --event push --commit "$latest" \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
+            if [ "$ci" = "completed success" ]; then
+              echo "у нового мержа ${latest:0:7} CI уже зелёный — выкладываю его"
+              sha=$latest
+            fi
+          fi
           echo "проверен CI: $sha"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
