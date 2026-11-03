@@ -86,7 +86,7 @@ def text_parts(text: str, size: int = 1500) -> list[str]:
 def pages_of(data: bytes, file_name: str) -> tuple[str, list[str]]:
     """(вид места, тексты по порядку): PDF — страницы, PPTX — слайды, прочее —
     части. Не разобралось — ("", [])."""
-    from kapibara.features.lectures.text import extract_text
+    from kapibara.features.lectures.extract import extract_text
     name = (file_name or "").lower()
     try:
         if name.endswith(".pdf"):

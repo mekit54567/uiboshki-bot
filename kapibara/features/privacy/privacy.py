@@ -304,8 +304,8 @@ async def erase(user_id: int) -> dict:
     _seen.pop(user_id, None)
     _given.difference_update({g for g in _given if g[0] == user_id})
     _open.discard(user_id)
-    from kapibara.features.sdo import grades as sdo_grades
-    sdo_grades.forget(user_id)          # кэш баллов в памяти — словарь, тут нечему падать
+    from kapibara.core import forget
+    forget.user(user_id)                # кэши в памяти (баллы СДО и т. п.) — словари, тут нечему падать
     logger.info(f"удалены данные человека: {sum(done.values())} строк")
     return done
 
@@ -340,8 +340,8 @@ async def request_erase(user_id: int, bot=None) -> str:
     await _request(user_id, due)
     _given.difference_update({g for g in _given if g[0] == user_id})
     _open.discard(user_id)
-    from kapibara.features.sdo import grades as sdo_grades
-    sdo_grades.forget(user_id)          # кэш баллов в памяти — словарь, тут нечему падать
+    from kapibara.core import forget
+    forget.user(user_id)                # кэши в памяти (баллы СДО и т. п.) — словари, тут нечему падать
     logger.info(f"запрос на удаление данных, полностью — {due}")
     if bot and STAROSTA_IDS:
         from database import get_user

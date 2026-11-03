@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 import httpx
 from bs4 import BeautifulSoup
 
+from kapibara.core import forget as forget_hooks
 from kapibara.core.config import SDO_BASE_URL
 from kapibara.features.sdo.pages import (  # noqa: F401 — их брали отсюда
     _activity_dates, _clean, parse_assign_page, parse_quiz_page, parse_task_page, parse_time_limit,
@@ -351,6 +352,7 @@ def _store(key, value):
     return value
 
 
+@forget_hooks.register
 def forget(user_id: int):
     for k in [k for k in _cache if k[1] == user_id]:
         _cache.pop(k, None)

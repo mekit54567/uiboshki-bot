@@ -681,3 +681,20 @@ async def test_upsert_before_consent_has_no_name(db, monkeypatch):
     await privacy.upsert_user(777001, "nick", "Имя Фамилия")
     u = await get_user(777001)
     assert u and not u.get("username") and not u.get("full_name")
+
+
+async def test_erase_forgets_memory_caches(db):
+    """Кэш баллов СДО в памяти записывает свою очистку сам (core.forget) —
+    privacy его не импортирует (клубок импортов, 03.11), но удаление данных
+    и запрос на удаление по-прежнему его чистят."""
+    from kapibara.core import forget
+    from kapibara.features.privacy import privacy
+    from kapibara.features.sdo import grades as sdo_grades
+    assert sdo_grades.forget in forget._hooks
+    await db.upsert_user(ME, "", "u")
+    sdo_grades._store(("overview", ME), {"courses": []})
+    sdo_grades._store(("overview", ME + 1), {"courses": []})
+    await privacy.erase(ME)
+    assert ("overview", ME) not in sdo_grades._cache
+    assert ("overview", ME + 1) in sdo_grades._cache          # чужой кэш не трогаем
+    sdo_grades.forget(ME + 1)

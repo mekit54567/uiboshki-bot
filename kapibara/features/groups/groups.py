@@ -84,3 +84,28 @@ async def choose(user_id: int, group_id: int, bot=None) -> dict | None:
     await set_user_group(user_id, group_id)
     logger.info(f"группа: {user_id} → {name} ({group_id})")
     return {"id": group_id, "name": name, "own": group_id == home_id()}
+
+
+async def in_home_group(user_id: int) -> bool:
+    """Человек — из своей группы бота (тариф own, подарок «Капибары+»):
+    староста, участник чата группы или выбрал её (и не вышел из чата).
+    Жило в billing/plans._own (03.11): его спрашивает и сама оплата."""
+    from kapibara.core import config
+    from database import get_user_group
+    if config.is_starosta(user_id):
+        return True
+    if not home_id():
+        return False
+    from database import members
+    member = await members.known(user_id)
+    if member:              # в чате своей группы — своя, какую бы группу ни выбрал (владелец 09.10)
+        return True
+    gid = await get_user_group(user_id)
+    if gid and gid == home_id():
+        return member is not False
+    if gid:
+        from database import get_group
+        g = await get_group(gid)
+        if g and g["own"]:
+            return True
+    return False

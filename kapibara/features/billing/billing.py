@@ -170,12 +170,12 @@ async def gift_until() -> str | None:
 
 async def gift_for(uid: int) -> str | None:
     """Подарок действует для него (своя группа и срок не прошёл) → последний день."""
-    from kapibara.features.billing import plans
+    from kapibara.features.groups import groups
     from kapibara.core.utils import today_msk
     until = await gift_until()
     if not until or until < today_msk().isoformat():
         return None
-    return until if await plans._own(uid) else None
+    return until if await groups.in_home_group(uid) else None
 
 
 async def unlimited_for(uid: int) -> dict | None:
@@ -503,11 +503,18 @@ async def donation_paid(pid: str, bot=None) -> bool:
     return True
 
 
+def who_text(u: dict) -> str:
+    from kapibara.core.utils import esc
+    name = esc(u.get("full_name") or "")
+    nick = f"@{esc(u['username'])}" if u.get("username") else ""
+    parts = [p for p in (name, nick) if p]
+    return " ".join(parts + [f"(<code>{u['user_id']}</code>)"])
+
+
 async def _who(uid: int | None) -> str:
-    from kapibara.features.billing import grants as plus_grant
     from database import get_user
     u = await get_user(uid) if uid else None
-    return plus_grant.who_text(u) if u else "кого-то без аккаунта"
+    return who_text(u) if u else "кого-то без аккаунта"
 
 
 async def paid(pid: str, bot=None) -> bool:

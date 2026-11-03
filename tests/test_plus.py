@@ -8,6 +8,7 @@ from datetime import date
 import aiosqlite
 import pytest
 
+from kapibara.features.groups import groups
 from kapibara.features.billing import billing
 from kapibara.features.billing import referrals
 from tests.test_review_bot import send
@@ -88,7 +89,7 @@ async def test_gift_for_own_group(db, monkeypatch):
 
     async def own(uid):
         return uid == ME
-    monkeypatch.setattr(plans, "_own", own)
+    monkeypatch.setattr(groups, "in_home_group", own)
     st = await billing.status(ME)
     assert st["active"] and st["gift"] == billing.GIFT_UNTIL and not st["paid_until"]
     assert await plans.has_plus(ME) and not await plans.has_plus(FRIEND)
@@ -306,13 +307,12 @@ async def test_starosta_switches_and_launch_news(db, bot, dp, monkeypatch):  # n
 
 @pytest.mark.asyncio
 async def test_launch_text_gift_and_where_to_pay(db, monkeypatch, robokassa):
-    from kapibara.features.billing import plans
     from handlers.plus import launch_text, plus_text
     await db.upsert_user(ME, "", "u")
 
     async def own(uid):
         return uid == ME
-    monkeypatch.setattr(plans, "_own", own)
+    monkeypatch.setattr(groups, "in_home_group", own)
     mine, other = await launch_text(ME), await launch_text(FRIEND)
     assert "в подарок до 31 декабря" in mine and "подарок" not in other
     assert "149 ₽" in other and "навсегда" not in other and "так и платит всегда" in other

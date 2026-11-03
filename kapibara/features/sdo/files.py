@@ -291,7 +291,7 @@ async def import_files(bot, chat_id: int, client: httpx.AsyncClient, files: list
     from aiogram.types import BufferedInputFile
 
     from database import add_file, get_file_sources, save_file_text
-    from kapibara.features.lectures.text import extract_text
+    from kapibara.features.lectures.extract import extract_text
 
     known = await get_file_sources()
     todo = [f for f in files if f.source not in known]

@@ -22,6 +22,8 @@ billing.grant) пишется в журнал plus_grants, поэтому «off�
 import re
 from datetime import date, datetime, timedelta
 
+from kapibara.features.billing.billing import who_text
+
 UNIT_DAYS = {"d": 1, "д": 1, "m": 30, "м": 30, "y": 300, "г": 300, "л": 300}
 _TERM = re.compile(r"^(\d{1,4})\s*(d|days?|д|дн|дней|дня|день|m|months?|мес|м|y|years?|г|год|года|лет)$")
 UNLIMITED_WORDS = ("unlimited", "безлимит", "unlim", "∞")
@@ -80,14 +82,6 @@ async def find_user(who: str) -> dict:
         ids = ", ".join(f"<code>{r['user_id']}</code>" for r in rows)
         raise GrantError(f"@{name} — несколько аккаунтов ({ids}). Укажи id.")
     return dict(rows[0])
-
-
-def who_text(u: dict) -> str:
-    from kapibara.core.utils import esc
-    name = esc(u.get("full_name") or "")
-    nick = f"@{esc(u['username'])}" if u.get("username") else ""
-    parts = [p for p in (name, nick) if p]
-    return " ".join(parts + [f"(<code>{u['user_id']}</code>)"])
 
 
 async def extend(uid: int, days: int, by: int, note: str | None = None) -> str:
