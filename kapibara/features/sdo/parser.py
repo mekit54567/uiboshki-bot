@@ -42,6 +42,8 @@ from kapibara.features.sdo import net as sdo_net
 from kapibara.core.config import SDO_SESSION_COOKIE, SDO_BASE_URL, TIMEZONE
 
 logger = logging.getLogger(__name__)
+
+from kapibara.core.errors import NETWORK  # noqa: E402
 TZ = ZoneInfo(TIMEZONE)
 
 UPCOMING_URL = f"{SDO_BASE_URL}/calendar/view.php?view=upcoming"
@@ -91,7 +93,7 @@ async def _time_remaining(client: httpx.AsyncClient, html: str) -> int | None:
                               json=[{"index": 0, "methodname": method, "args": {}}])
         data = r.json()[0]
         return None if data.get("error") else int(data["data"]["timeremaining"])
-    except Exception as e:
+    except (*NETWORK, ValueError, KeyError, IndexError, TypeError) as e:      # сеть или чужой ответ вместо JSON Moodle
         logger.info(f"СДО: срок сессии не узнал ({e})")
         return None
 
@@ -120,7 +122,7 @@ async def keepalive(peek=None) -> bool | None:
     except SdoSessionExpired as e:
         logger.info(f"СДО keepalive: {e}")
         return False
-    except Exception as e:
+    except NETWORK as e:
         logger.info(f"СДО keepalive: СДО не ответил: {type(e).__name__}: {e}")
         return None
 
@@ -292,7 +294,7 @@ async def calendar_months(client: httpx.AsyncClient, sesskey: str, months: int =
                     "year": year, "month": month, "courseid": 1, "includenavigation": False, "mini": False}}],
             )
             data = r.json()[0]
-        except Exception as e:
+        except (*NETWORK, ValueError, KeyError, IndexError, TypeError) as e:
             logger.info(f"СДО: календарь по AJAX не ответил ({e}) — беру «Предстоящие»")
             return None
         if data.get("error"):

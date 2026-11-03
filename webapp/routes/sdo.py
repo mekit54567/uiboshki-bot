@@ -16,6 +16,44 @@ from kapibara.core.errors import log_failure
 
 logger = logging.getLogger(__name__)
 
+EXPIRED = "вход в СДО устарел — подключи заново: вкладка СДО → Вход"
+SDO_DOWN = "СДО сейчас не отвечает — попробуй позже"
+
+
+async def _from_sdo(user_id: int, what: str, call):
+    """Запрос в СДО входом человека — граница (ADR 0004) для всех экранов СДО:
+    курса нет — 404, вход протух — 403 и экран «Подключить заново», СДО не
+    ответил — 502 одной строкой в лог, баг у нас — 502 с traceback."""
+    from kapibara.features.sdo.parser import SdoSessionExpired
+    try:
+        return await call
+    except (KeyError, IndexError) as e:     # тоже LookupError, но это баг разбора, а не «курса нет»
+        log_failure(logger, what, e)
+        raise HTTPException(status_code=502, detail=SDO_DOWN)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="курс не найден")
+    except SdoSessionExpired:
+        from database import set_sdo_status
+        await set_sdo_status(user_id, "expired")
+        raise HTTPException(status_code=403, detail=EXPIRED)
+    except Exception as e:      # граница: человеку «не отвечает», в лог — сеть строкой, баг с traceback
+        log_failure(logger, what, e)
+        raise HTTPException(status_code=502, detail=SDO_DOWN)
+
+
+_NO = object()      # «шаг не вышел» — отличить от None-ответа
+
+
+async def _aside(what: str, call, default=None):
+    """Необязательный шаг экрана СДО (история баллов, отметка «сдал»,
+    посещения): не вышел — экран всё равно открывается, а баг виден в
+    /status с traceback (раньше — строкой info, без следа)."""
+    try:
+        return await call()
+    except Exception as e:      # граница шага: экран важнее, ошибка — в лог
+        log_failure(logger, what, e)
+        return default
+
 router = APIRouter()
 
 
@@ -177,7 +215,7 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
         for it in items:
             clean = re.sub(r'[\\/:*?"<>|]+', "_", it.name).strip() or "работа"
             files.append((clean[:120], base64.b64decode(it.data, validate=False)))
-    except Exception:
+    except (ValueError, TypeError):     # binascii.Error — тоже ValueError
         raise HTTPException(status_code=400, detail="файл повреждён")
     try:
         result = await sdo_submit.submit_file(cookie, cmid, files=files, replace=body.replace)
@@ -200,11 +238,8 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     # приложение рисует «Сдано» только для submitted; черновик и непонятный
     # ответ СДО — другим экраном (аудит 21.10, R5)
     result = dict(result, state=sdo_done.submit_state(result.get("status")))
-    try:
-        if result["state"] == "submitted":   # ушло на проверку — дедлайн у себя сданным (черновик — нет)
-            await sdo_done.mark(user["id"], [cmid])
-    except Exception as e:
-        logger.info(f"отметка «сдал» после сдачи: {e}")
+    if result["state"] == "submitted":   # ушло на проверку — дедлайн у себя сданным (черновик — нет)
+        await _aside("отметка «сдал» после сдачи", lambda: sdo_done.mark(user["id"], [cmid]))
     return result
 
 
@@ -248,25 +283,13 @@ async def _sdo_cookie(user_id: int) -> str:
 @router.get("/api/sdo/grades")
 async def api_sdo_grades(fresh: bool = False, user: dict = CurrentUser):
     from kapibara.features.sdo import grades as sdo_grades
-    from database import set_sdo_status
-    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
     from kapibara.core import ratelimit
     if fresh and not ratelimit.allow("sdo_fresh", user["id"]):
         fresh = False              # «обновить» чаще 3 раз за 5 минут — из кэша, СДО не долбим
-    try:
-        data = await sdo_grades.overview(user["id"], cookie, fresh=fresh)
-    except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception as e:
-        log_failure(logger, "Баллы СДО", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
-    try:
-        from kapibara.features.sdo import history as sdo_history          # точка истории баллов на сегодня (график на экране предмета)
-        await sdo_history.record(user["id"], data.get("courses") or [])
-    except Exception as e:
-        logger.info(f"история баллов: {e}")
+    data = await _from_sdo(user["id"], "Баллы СДО", sdo_grades.overview(user["id"], cookie, fresh=fresh))
+    from kapibara.features.sdo import history as sdo_history          # точка истории баллов на сегодня (график на экране предмета)
+    await _aside("история баллов", lambda: sdo_history.record(user["id"], data.get("courses") or []))
     from kapibara.features.sdo import goal as sdo_goal                 # свои цели по предметам («4» вместо ближайшей «3»)
     return {**data, "goals": await sdo_goal.get_goals(user["id"])}
 
@@ -274,34 +297,18 @@ async def api_sdo_grades(fresh: bool = False, user: dict = CurrentUser):
 @router.get("/api/sdo/grades/{course_id}")
 async def api_sdo_course(course_id: int, user: dict = CurrentUser):
     from kapibara.features.sdo import grades as sdo_grades
-    from database import set_sdo_status
-    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
-    try:
-        data = await sdo_grades.course_detail(user["id"], cookie, course_id)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="курс не найден")
-    except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception as e:
-        log_failure(logger, f"Баллы СДО, курс {course_id}", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
-    try:
-        from kapibara.features.sdo import history as sdo_history
-        data = {**data, "history": await sdo_history.series(user["id"], course_id, data.get("score"))}
-    except Exception as e:
-        logger.info(f"история баллов: {e}")
-    try:
-        from kapibara.features.sdo import done as sdo_done             # зачтено или ждёт оценки — дедлайн у себя сданным
-        await sdo_done.mark(user["id"], sdo_done.finished(data))
-    except Exception as e:
-        logger.info(f"отметка «сдал» по журналу: {e}")
-    try:
-        from kapibara.features.schedule import attendance           # посещения лекций из баллов за посещаемость
-        data = {**data, "attendance": await attendance.for_course(user["id"], data)}
-    except Exception as e:
-        logger.info(f"посещения: {type(e).__name__}: {e}")
+    data = await _from_sdo(user["id"], f"Баллы СДО, курс {course_id}", sdo_grades.course_detail(user["id"], cookie, course_id))
+    from kapibara.features.sdo import history as sdo_history
+    history = await _aside("история баллов", lambda: sdo_history.series(user["id"], course_id, data.get("score")), _NO)
+    if history is not _NO:
+        data = {**data, "history": history}
+    from kapibara.features.sdo import done as sdo_done             # зачтено или ждёт оценки — дедлайн у себя сданным
+    await _aside("отметка «сдал» по журналу", lambda: sdo_done.mark(user["id"], sdo_done.finished(data)))
+    from kapibara.features.schedule import attendance           # посещения лекций из баллов за посещаемость
+    att = await _aside("посещения", lambda: attendance.for_course(user["id"], data), _NO)
+    if att is not _NO:
+        data = {**data, "attendance": att}
     return {**data, "goal": await _goal(user["id"], data)}
 
 
@@ -325,19 +332,9 @@ async def api_sdo_goal(course_id: int, body: Goal, user: dict = CurrentUser):
     from kapibara.features.schedule import attendance
     from kapibara.features.sdo import goal as sdo_goal
     from kapibara.features.sdo import grades as sdo_grades
-    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
-    try:
-        course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="курс не найден")
-    except SdoSessionExpired:
-        from database import set_sdo_status
-        await set_sdo_status(user["id"], "expired")   # как в /api/sdo/grades: экран «Подключить заново»
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception as e:
-        log_failure(logger, f"СДО: курс {course_id}", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
+    course = await _from_sdo(user["id"], f"СДО: курс {course_id}",
+                             sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True))
     if body.label is not None and body.label not in [m["label"] for m in course.get("marks") or []]:
         raise HTTPException(status_code=400, detail="такой оценки у предмета нет")
     if body.mode is not None and body.mode not in sdo_goal.MODES:
@@ -348,10 +345,7 @@ async def api_sdo_goal(course_id: int, body: Goal, user: dict = CurrentUser):
             await sdo_goal.set_goal(user["id"], course_id, body.label)
     else:
         await sdo_goal.set_goal(user["id"], course_id, body.label)
-    try:
-        att = await attendance.for_course(user["id"], course)
-    except Exception:
-        att = None
+    att = await _aside("посещения", lambda: attendance.for_course(user["id"], course))
     return await _goal(user["id"], {**course, "attendance": att})
 
 
@@ -368,19 +362,9 @@ async def api_attendance_mark(course_id: int, body: AttendanceMark, user: dict =
     from kapibara.features.schedule import attendance
     from kapibara.features.sdo import grades as sdo_grades
     from database import get_attendance_marks, set_attendance_mark
-    from kapibara.features.sdo.parser import SdoSessionExpired
     cookie = await _sdo_cookie(user["id"])
-    try:
-        course = await sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True)
-    except LookupError:
-        raise HTTPException(status_code=404, detail="курс не найден")
-    except SdoSessionExpired:
-        from database import set_sdo_status
-        await set_sdo_status(user["id"], "expired")   # как в /api/sdo/grades: экран «Подключить заново»
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception as e:
-        log_failure(logger, f"СДО: курс {course_id}", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
+    course = await _from_sdo(user["id"], f"СДО: курс {course_id}",
+                             sdo_grades.course_detail(user["id"], cookie, course_id, stale_ok=True))
     blank = await attendance.for_course(user["id"], course, manual={})
     marks = await get_attendance_marks(user["id"], course_id)
     why = attendance.check_mark(blank, marks, body.day, body.mark)
@@ -414,7 +398,7 @@ def _sdl_parse(token: str) -> tuple[int, str] | None:
         return None
     try:
         uid, exp, path = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)).decode().split("|", 2)
-    except Exception:
+    except ValueError:      # не base64, не UTF-8 или не три части — подпись чужая
         return None
     if int(exp) < time.time() or not path.startswith("/pluginfile.php/"):
         return None
@@ -426,19 +410,10 @@ async def api_sdo_task(cmid: int, request: Request, module: str = "assign", user
     import time
     from urllib.parse import quote, urlparse
     from kapibara.features.sdo import grades as sdo_grades
-    from database import set_sdo_status
-    from kapibara.features.sdo.parser import SdoSessionExpired
     if module not in ("assign", "quiz"):
         raise HTTPException(status_code=400, detail="неизвестный тип работы")
     cookie = await _sdo_cookie(user["id"])
-    try:
-        task = await sdo_grades.task_detail(cookie, cmid, module)
-    except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
-    except Exception as e:
-        log_failure(logger, f"Задание СДО {cmid}", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
+    task = await _from_sdo(user["id"], f"Задание СДО {cmid}", sdo_grades.task_detail(cookie, cmid, module))
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     exp = int(time.time()) + 600
     for f in task["files"] + task["mine"]:

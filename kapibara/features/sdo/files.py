@@ -39,6 +39,8 @@ from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
 
+from kapibara.core.errors import NETWORK  # noqa: E402
+
 MAX_FILE_BYTES = 45 * 1024 * 1024   # sendDocument бота — до 50 МБ
 SEND_PAUSE = 1.1                    # не упираться в лимиты Telegram на отправку
 
@@ -115,7 +117,7 @@ async def list_courses(client: httpx.AsyncClient) -> list[dict]:
                         "offset": 0, "limit": 0, "classification": classification, "sort": "fullname"}}],
                 )
                 data = resp.json()[0]
-            except Exception as e:
+            except (*NETWORK, ValueError, KeyError, IndexError, TypeError) as e:
                 logger.info(f"sdo_files: AJAX курсов не ответил: {e}")
                 break
             if data.get("error"):
