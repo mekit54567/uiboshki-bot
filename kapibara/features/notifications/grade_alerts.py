@@ -221,7 +221,7 @@ async def check_all(bot, pause: float = PAUSE_SEC):
     from kapibara.features.notifications import prefs as notify_prefs
     from kapibara.core.config import SDO_SESSION_COOKIE, STAROSTA_IDS
     from database import get_sdo_session, get_sdo_sessions, get_user
-    from kapibara.features.sdo.accounts import decrypt
+    from kapibara.core.crypto import decrypt
     rows = [(r["user_id"], decrypt(r["cookie_enc"])) for r in await get_sdo_sessions("ok")]
     # староста без своего входа ходит в СДО общей кукой (sdo_accounts.cookie_for) —
     # раньше его тут не было, и новые баллы ему не приходили (Никита 02.11)

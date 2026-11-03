@@ -428,7 +428,7 @@ async def sdo_download(token: str, name: str):
     import mimetypes
     from urllib.parse import quote
     from kapibara.features.sdo.accounts import client_for, cookie_for
-    from kapibara.features.sdo.parser import SdoSessionExpired, get_checked
+    from kapibara.features.sdo.net import SdoSessionExpired, get_checked
     from kapibara.core.config import SDO_BASE_URL
     parsed = _sdl_parse(token)
     if not parsed:

@@ -382,7 +382,7 @@ def render_week(title: str, subtitle: str, days: list[tuple[date, list[dict]]], 
         dr.text((PAD + 40, y + 50), "Пар нет", font=p.f("heading", 48), fill=p.text)
         dr.text((PAD + 40, y + 120), "вся неделя свободна", font=f_meta, fill=p.muted)
         y += 230
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     for d, rows, bh in blocks:
         _card(dr, p, (PAD, y, W - PAD, y + bh))
         if today and d == today:                     # сегодня — рамкой акцента

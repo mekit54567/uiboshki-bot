@@ -41,7 +41,8 @@ async def test_rotate_all_on_new_key(db, monkeypatch):
     assert {sdo_accounts.decrypt(r["cookie_enc"]) for r in rows} == {"cookie-one-0123456789", "cookie-two-0123456789"}
     assert "ключом от BOT_TOKEN" not in await health.report()
     monkeypatch.setenv("BOT_TOKEN", "другой")                      # токен бота больше не нужен для куки
-    monkeypatch.setattr(sdo_accounts, "BOT_TOKEN", "другой")
+    from kapibara.core import crypto
+    monkeypatch.setattr(crypto, "BOT_TOKEN", "другой")
     assert sdo_accounts.decrypt(rows[0]["cookie_enc"]) is not None
 
 

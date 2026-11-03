@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 
 from kapibara.core.config import ICAL_URL, SCHEDULE_CACHE_TTL_SECONDS
 
-from kapibara.features.groups.optional_subjects import unfiltered
+from kapibara.features.schedule.hidden import unfiltered
 logger = logging.getLogger(__name__)
 
 from kapibara.core.errors import NETWORK, log_failure  # noqa: E402

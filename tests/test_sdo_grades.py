@@ -367,7 +367,7 @@ async def test_overview_retry_partial_and_dedup(monkeypatch):
     не кладём в кэш; одновременные запросы одного человека — один обход."""
     import asyncio
     import contextlib
-    from kapibara.features.sdo import files as sdo_files
+    from kapibara.features.sdo import net as sdo_net
     sdo_grades._cache.clear()
     courses = [{"id": i, "name": f"Курс {i} [I.26-27]", "title": f"Курс {i}"} for i in (1, 2, 3)]
     calls, broken = [], {2: 1, 3: 99}          # курс 2 падает один раз, курс 3 — всегда
@@ -387,7 +387,7 @@ async def test_overview_retry_partial_and_dedup(monkeypatch):
             raise httpx.ConnectTimeout("нет")
         return sdo_grades.parse_report(REPORT)
 
-    monkeypatch.setattr(sdo_files, "make_client", client)
+    monkeypatch.setattr(sdo_net, "make_client", client)
     monkeypatch.setattr(sdo_grades, "this_semester_courses", listing)
     monkeypatch.setattr(sdo_grades, "_report", report)
 

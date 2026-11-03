@@ -8,7 +8,7 @@ WEEKDAY_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 
 def due_label(due: date, today: date, due_time: str | None = None) -> str:
     """«🔴 сегодня в 23:59», «🟠 завтра», «🟡 пт, 2 октября», «💀 просрочен (29.09)»."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     delta = (due - today).days
     tp = f" в {due_time}" if due_time else ""
     if delta < 0:

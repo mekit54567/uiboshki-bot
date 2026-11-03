@@ -34,52 +34,20 @@ from datetime import datetime, timedelta
 
 from kapibara.features.notifications.prefs import QUIZ_REMIND_CHOICES as CHOICES     # минут до закрытия — плашки в «Уведомлениях»
 from kapibara.core.utils import TZ
+# что синк узнал об открытиях тестов — в deadlines/quiz_opens (его пишет синк СДО)
+from kapibara.features.deadlines.quiz_opens import (  # noqa: F401 — их брали отсюда
+    FMT, PEEK_KEY, _parse, next_open, note_opens, remember, signature,
+)
 
 logger = logging.getLogger(__name__)
 
-FMT = "%Y-%m-%d %H:%M"
 LATE = 15                                # мин: опоздали (перезапуск) — ещё шлём, позже — нет
 OPEN_LATE = 120                          # мин: «открыли тест» после открытия — не позже
-PEEK_KEY = "sdo:quiz_sig"                # что о тестах видел последний полный синк (peek)
-
-
-def _parse(at: str | None) -> datetime | None:
-    try:
-        return datetime.strptime((at or "")[:16], FMT).replace(tzinfo=TZ)
-    except ValueError:
-        return None
 
 
 def close_at(d: dict) -> datetime:
     t = (d.get("due_time") or "23:59").strip()[:5]
     return datetime.strptime(f"{d['due_date']} {t}", FMT).replace(tzinfo=TZ)
-
-
-def next_open(prev: str | None, new: str | None, now: datetime) -> str:
-    """Что запомнить об открытии теста после синка. prev — что знали (None —
-    тест видим впервые), new — событие «открывается» из календаря (None —
-    нет: открыт без ограничения или открылся до окна календаря)."""
-    n = now.strftime(FMT)
-    if new and new > n:
-        return new                           # откроется потом — по расписанию
-    if prev and prev > n:
-        return n                             # ждали позже, а он уже открыт: открыли сейчас
-    if prev is not None:
-        return prev                          # уже открыт и мы это знаем
-    return new or ""                         # впервые: открыт с new или «когда — не знаем»
-
-
-async def note_opens(items: list[dict], now: datetime | None = None):
-    """После синка (sdo_parser.apply_items): открытия тестов из календаря."""
-    from kapibara.features.deadlines import quiz_time
-    from database.sdo import get_quiz_opens, save_quiz_opens
-    now = now or datetime.now(TZ)
-    new = {c: i.get("opens") for i in items if i.get("calendar") and (c := quiz_time.quiz_cmid(i.get("description")))}
-    if not new:
-        return
-    known = await get_quiz_opens(new)
-    fresh = {c: next_open(known.get(c), o, now) for c, o in new.items()}
-    await save_quiz_opens({c: v for c, v in fresh.items() if known.get(c) != v})
 
 
 def is_open(open_at: str | None, now: datetime) -> bool:
@@ -109,9 +77,9 @@ def remind_text(d: dict, minutes: int, limit: int | None, now: datetime) -> str:
 
 
 def open_line(d: dict, limit: int | None) -> str:
-    from kapibara.features.notifications.new_tasks import when
+    from kapibara.features.notifications.push_text import date_line
     from kapibara.core.utils import esc
-    return f"• <b>{esc(d['subject'])}</b>{limit_text(limit)} — сдать {when(d['due_date'], d.get('due_time'))}"
+    return f"• <b>{esc(d['subject'])}</b>{limit_text(limit)} — сдать {date_line(d['due_date'], d.get('due_time'))}"
 
 
 def open_text(d: dict, limit: int | None) -> str:
@@ -203,18 +171,6 @@ async def send_due(bot, now: datetime | None = None) -> int:
 
 
 # ── Peek: внезапно открытый тест — не ждать полного синка ────────────────────
-
-def signature(items: list[dict]) -> list[str]:
-    """Тесты из календаря: «id события|когда открывается»."""
-    return sorted({f"{i['external_id']}|{i.get('opens') or ''}" for i in items
-                   if i.get("calendar") and "/mod/quiz/" in (i.get("description") or "")})
-
-
-async def remember(items: list[dict]):
-    """Полный синк своей группы: что он видел о тестах — для peek."""
-    from database import set_setting
-    await set_setting(PEEK_KEY, json.dumps(signature(items)))
-
 
 async def peek(client, html: str) -> bool:
     """На проверке куки (sdo_parser.keepalive, раз в 55 мин): календарь

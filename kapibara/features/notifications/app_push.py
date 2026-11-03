@@ -6,7 +6,7 @@
 Как устроено:
 - приложение при включении уведомлений делает свой случайный ключ AES-256 и
   присылает его с токеном устройства (`POST /api/push/app/subscribe`); ключ в
-  базе — зашифрованным, тем же секретом, что входы СДО (sdo_accounts.encrypt);
+  базе — зашифрованным, тем же секретом, что входы СДО (kapibara.core.crypto);
 - сервер шифрует `{"title","body","tab","tag"}` AES-256-GCM этим ключом и шлёт
   только `{"v": 1, "e": base64(nonce(12) | шифротекст | тег(16))}`;
 - Android (FCM и RuStore) — data-сообщение без notification, приложение само
@@ -281,8 +281,8 @@ async def send_apns(token: str, env: dict, tag: str = "") -> str:
 
 async def send(row: dict, data: dict) -> str:
     """Одно устройство (строка app_push) → ok / gone / error."""
-    from kapibara.features.sdo import accounts as sdo_accounts
-    key = parse_key(sdo_accounts.decrypt(row["key_enc"]) or "")
+    from kapibara.core import crypto
+    key = parse_key(crypto.decrypt(row["key_enc"]) or "")
     if key is None:
         return GONE                                    # ключ не читается — пусть приложение подпишется заново
     env = envelope({k: data.get(k) or "" for k in ("title", "body", "tab", "tag")}, key)
@@ -335,14 +335,14 @@ async def push_user(user_id: int, data: dict) -> int:
 async def rotate_keys() -> int:
     """Задали новый SDO_CRYPT_KEY/фразу — перешифровать ключи устройств (как
     sdo_accounts.rotate_all). → сколько перешифровано."""
-    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.core import crypto
     from database.app_push import all_app_pushes, update_app_push_key
     n = 0
     for row in await all_app_pushes():
         enc = row["key_enc"]
-        if not sdo_accounts.needs_rotation(enc):
+        if not crypto.needs_rotation(enc):
             continue
-        key = sdo_accounts.decrypt(enc)
-        if key is not None and await update_app_push_key(row["id"], sdo_accounts.encrypt(key), only_if=enc):
+        key = crypto.decrypt(enc)
+        if key is not None and await update_app_push_key(row["id"], crypto.encrypt(key), only_if=enc):
             n += 1
     return n

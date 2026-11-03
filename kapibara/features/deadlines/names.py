@@ -15,7 +15,8 @@
 
 import re
 
-SEP = " · "
+from kapibara.features.sdo.courses import SEP  # разделитель живёт у курсов (03.11)
+
 _EVENT_TAIL = re.compile(r"\s*(?:[-–—:]\s*)?(?:срок сдачи|закрывается|открывается|должно быть выполнено|"
                          r"is due|closes|opens)\s*$", re.I)
 _PRACTICE = re.compile(r"^практическ[а-яё]*\s+(?:работ[а-яё]*|задани[а-яё]*|заняти[а-яё]*)\s*(\d{1,2}(?:\s*[-–]\s*\d{1,2})?)\b",
@@ -42,7 +43,7 @@ def clean_course(course: str, subjects: list[str] | None = None) -> str:
     c = re.sub(r"[_]+", " ", c)
     c = re.sub(r"\s+", " ", c).strip(" -–—.")
     if subjects and c:
-        from kapibara.features.sdo.files import match_subject
+        from kapibara.features.sdo.courses import match_subject
         m = match_subject(c, subjects)
         if m in subjects:
             return m
@@ -97,7 +98,7 @@ def pretty_subject(subject: str) -> str:
     s = (subject or "").strip()
     if SEP in s:
         return s
-    from kapibara.features.sdo.parser import course_of
+    from kapibara.features.sdo.courses import course_of
     course = course_of(s)
     at = s.rfind("(" + course) if course else -1
     if at > 0 and _looks_sdo(course) and s[:at].strip():

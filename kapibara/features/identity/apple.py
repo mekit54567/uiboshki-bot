@@ -143,13 +143,13 @@ async def exchange(code: str) -> str:
 
 
 async def save_token(user_id: int, refresh_token: str):
-    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.core import crypto
     from database._conn import connect
     if not refresh_token:
         return
     async with connect() as db:
         await db.execute("INSERT OR REPLACE INTO apple_tokens (user_id, token) VALUES (?, ?)",
-                         (user_id, sdo_accounts.encrypt(refresh_token)))
+                         (user_id, crypto.encrypt(refresh_token)))
         await db.commit()
 
 
@@ -170,13 +170,13 @@ async def revoke_for(user_id: int) -> bool:
     """Отозвать вход через Apple (удаление аккаунта, отвязка). → был ли токен.
     Apple не ответил — токен (шифровкой) уходит в apple_revoke_queue, повтор —
     retry_revokes по расписанию; у человека запись стирается сразу."""
-    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.core import crypto
     from database._conn import connect
     async with connect() as db:
         row = await (await db.execute("SELECT token FROM apple_tokens WHERE user_id = ?", (user_id,))).fetchone()
         await db.execute("DELETE FROM apple_tokens WHERE user_id = ?", (user_id,))
         await db.commit()
-    token = sdo_accounts.decrypt(row[0]) if row else None
+    token = crypto.decrypt(row[0]) if row else None
     if not token or not enabled():
         return bool(token)
     if not await _revoke(token):
@@ -191,7 +191,7 @@ RETRY_MAX = 48  # раз в час — двое суток, потом сдаё�
 
 async def retry_revokes() -> int:
     """Повторить отзыв токенов, на которых Apple не ответил. → сколько отозвано."""
-    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.core import crypto
     from database._conn import connect
     if not enabled():
         return 0
@@ -199,7 +199,7 @@ async def retry_revokes() -> int:
         rows = await (await db.execute("SELECT token, tries FROM apple_revoke_queue")).fetchall()
     done = 0
     for enc, tries in rows:
-        token = sdo_accounts.decrypt(enc)
+        token = crypto.decrypt(enc)
         ok = bool(token) and await _revoke(token)
         async with connect() as db:
             if ok or not token or tries + 1 >= RETRY_MAX:

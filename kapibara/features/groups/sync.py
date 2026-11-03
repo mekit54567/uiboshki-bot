@@ -30,7 +30,7 @@ async def _calendar_items(cookie: str) -> list[dict]:
 
 async def sync_group(group_id: int) -> dict:
     """Синк одной группы по её донорам. → итог apply_items или {"error"}."""
-    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.core import crypto
     from kapibara.features.sdo import parser as sdo_parser
     from database import get_group_donors
     from database.groups import home
@@ -40,7 +40,7 @@ async def sync_group(group_id: int) -> dict:
     last = "нет входа, которым поделились"
     tried = False
     for donor in await get_group_donors(group_id):
-        cookie = sdo_accounts.decrypt(donor["cookie_enc"])
+        cookie = crypto.decrypt(donor["cookie_enc"])
         if not cookie:
             continue
         tried = True
