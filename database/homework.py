@@ -2,11 +2,16 @@
 is_editor — кто правит доску ДЗ и общие дедлайны: староста и зам.
 Раньше жило в handlers/announce.py со своей копией DATABASE_PATH."""
 
+import logging
+import sqlite3
+
 import aiosqlite
 
 import database
 from kapibara.core.config import is_starosta
 from database._conn import connect
+
+logger = logging.getLogger(__name__)
 
 # Базы, где таблицы уже проверены. Раньше init_hw_table шёл перед каждым
 # get_setting — лишнее открытие базы на каждое чтение настройки (по 8 на
@@ -32,14 +37,11 @@ async def init_hw_table():
         # lesson_date — привязка ДЗ к конкретной дате/паре (Фаза 12, календарь),
         # а не только к предмету "вообще". NULL — старое поведение (общее ДЗ по
         # предмету без даты), как было раньше и остаётся по умолчанию.
-        try:
-            await db.execute("ALTER TABLE homework ADD COLUMN lesson_date TEXT")
-        except Exception:
-            pass  # колонка уже есть
-        try:
-            await db.execute("ALTER TABLE homework ADD COLUMN group_id INTEGER")   # этап 1 (б); NULL — своя
-        except Exception:
-            pass
+        for column in ("lesson_date TEXT", "group_id INTEGER"):     # group_id — этап 1 (б); NULL — своя
+            try:
+                await db.execute(f"ALTER TABLE homework ADD COLUMN {column}")
+            except sqlite3.OperationalError as e:      # колонка уже есть — так при каждом запуске
+                logger.debug(f"homework: {column}: {e}")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key   TEXT PRIMARY KEY,

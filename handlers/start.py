@@ -602,10 +602,8 @@ async def settings_change(callback: CallbackQuery):
                 prefs.update({"deadline_soon": True, "deadline_soon_hours": h} if h else {"deadline_soon": False})
                 await set_notify(uid, prefs)
     text, kb = _settings_view(await get_user(uid))
-    try:
+    with cosmetic("start: настройки"):      # «message is not modified» — нажали уже выбранное
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-    except Exception:
-        pass  # «message is not modified» — нажали уже выбранное
     await callback.answer("Сохранено ✓")
 
 
