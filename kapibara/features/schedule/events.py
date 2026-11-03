@@ -3,6 +3,7 @@
 на входе — байты календаря."""
 
 import re
+import threading
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -45,7 +46,7 @@ def groups_at(ical_data: bytes, when: datetime) -> list[str]:
     показывает, с кем она общая (поток на лекции), — в календаре своей
     группы других групп нет."""
     out: list[str] = []
-    for comp in _calendar_query(ical_data).at(when.astimezone(TZ).date()):
+    for comp in _occurrences(ical_data, when.astimezone(TZ).date()):
         start, end = comp.get("DTSTART"), comp.get("DTEND")
         if not start or not end or not isinstance(start.dt, datetime) or not isinstance(end.dt, datetime):
             continue
@@ -71,6 +72,22 @@ def groups_at(ical_data: bytes, when: datetime) -> list[str]:
 _parsed_cal: tuple[bytes, object] | None = None
 
 
+# Разбор календаря и обход повторов (dateutil.rrule кэширует их внутри)
+# не потокобезопасны: инлайн рисует четыре картинки разом в потоках, и общий
+# объект запроса зацикливался навсегда (тест 03.11 висел в CI). Один замок.
+_cal_lock = threading.RLock()
+
+
+def _occurrences(ical_data: bytes, day: date) -> list:
+    with _cal_lock:
+        return list(_calendar_query(ical_data).at(day))
+
+
+def occurrences_between(ical_data: bytes, start, end) -> list:
+    with _cal_lock:
+        return list(_calendar_query(ical_data).between(start, end))
+
+
 def _calendar_query(ical_data: bytes):
     global _parsed_cal
     if _parsed_cal is None or _parsed_cal[0] is not ical_data and _parsed_cal[0] != ical_data:
@@ -79,7 +96,7 @@ def _calendar_query(ical_data: bytes):
 
 
 def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
-    events_raw = _calendar_query(ical_data).at(target)
+    events_raw = _occurrences(ical_data, target)
     events = []
 
     from kapibara.features.groups.optional_subjects import HIDE
@@ -164,7 +181,7 @@ _WEEK_RE = re.compile(r"^\s*(\d{1,2})\s*неделя\s*$", re.I)
 def week_number(raw: bytes, target: date) -> int | None:
     """Номер учебной недели: в ical МИРЭА есть события на весь день
     «4 неделя» (в расписание пар они не попадают — см. parse_events_for_date)."""
-    for component in _calendar_query(raw).at(target):
+    for component in _occurrences(raw, target):
         m = _WEEK_RE.match(str(component.get("SUMMARY", "")))
         if m:
             return int(m.group(1))

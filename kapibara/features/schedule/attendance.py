@@ -50,13 +50,13 @@ def _pick(cands: list[tuple[int, int]], prev: tuple[int, int] | None) -> tuple[i
 
 def lecture_dates(raw: bytes, subject: str, today: date | None = None) -> list[date]:
     """Даты лекций (ЛК) предмета за семестр — из календаря группы."""
-    from kapibara.features.schedule.events import TZ, _calendar_query
+    from kapibara.features.schedule.events import TZ, occurrences_between
     from kapibara.features.schedule.format import _split_kind
     today = today or datetime.now(TZ).date()
     start = datetime.combine(today - timedelta(days=200), datetime.min.time(), TZ)
     end = datetime.combine(today + timedelta(days=200), datetime.min.time(), TZ)
     days = set()
-    for comp in _calendar_query(raw).between(start, end):
+    for comp in occurrences_between(raw, start, end):
         title, _, short = _split_kind(str(comp.get("SUMMARY", "")))
         if short != "лк" or title != subject:
             continue
