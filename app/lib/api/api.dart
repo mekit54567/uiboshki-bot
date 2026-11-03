@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'token_store.dart';
+
 class Unauthorized implements Exception {}
 
 class ApiError implements Exception {
@@ -31,6 +33,12 @@ class ApiError implements Exception {
   String toString() => message;
 }
 
+/// Запрос-действие (POST/PUT/PATCH/DELETE) не дождался ответа: сервер мог
+/// его уже выполнить, поэтому текст — «проверь», а не «не получилось».
+class WriteTimeout extends TimeoutException {
+  WriteTimeout(Duration d) : super('Сервер долго не отвечает', d);
+}
+
 /// Нет сети: связь оборвалась, адрес не нашёлся, ответа не дождались.
 bool isOffline(Object e) =>
     e is http.ClientException || e is TimeoutException || '${e.runtimeType}'.contains('SocketException');
@@ -38,6 +46,7 @@ bool isOffline(Object e) =>
 /// Человеческий текст ошибки для экрана: нет сети ≠ сервер ответил ошибкой.
 String errorText(Object e) {
   if (e is ApiError) return e.message;
+  if (e is WriteTimeout) return 'Сервер долго не отвечает — проверь, сохранилось ли, прежде чем повторять.';
   if (isOffline(e)) return 'Нет интернета — проверь связь.';
   if (e is FormatException) return ApiError.server(200).message;
   return 'Что-то пошло не так — попробуй ещё раз.';
@@ -57,19 +66,15 @@ class Api {
 
   Api({http.Client? client}) : _client = client ?? http.Client();
 
+  /// Токен — в защищённом хранилище телефона (Keychain / Keystore), в вебе —
+  /// как раньше, в localStorage ([TokenStore]).
   Future<void> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    token = prefs.getString(_tokenKey);
+    token = await TokenStore.read(_tokenKey);
   }
 
   Future<void> saveToken(String? value) async {
     token = value;
-    final prefs = await SharedPreferences.getInstance();
-    if (value == null) {
-      await prefs.remove(_tokenKey);
-    } else {
-      await prefs.setString(_tokenKey, value);
-    }
+    await TokenStore.write(_tokenKey, value);
   }
 
   Uri _uri(String path) => Uri.parse('$base/api/v1$path');
@@ -199,18 +204,36 @@ class Api {
     offlineSince.value = null;
   }
 
+  /// Сколько ждать ответ на действие. У GET свой [timeout] и запас, у
+  /// действий запаса нет: раньше они ждали бесконечно (ревью 03.11).
+  static const writeTimeout = Duration(seconds: 30);
+
+  /// Долгие действия: ответ ИИ (с запасными моделями), конспект, сдача и вход
+  /// в СДО, Пульс — сервер сам ждёт чужие сайты до пары минут.
+  static const slowTimeout = Duration(minutes: 4);
+  static const _slow = ['/chat', '/summary/', '/sdo/submit', '/sdo/connect', '/pulse/'];
+
+  static Duration timeoutFor(String path) => _slow.any(path.startsWith) ? slowTimeout : writeTimeout;
+
+  Future<http.Response> _write(String path, Future<http.Response> req) {
+    final d = timeoutFor(path);
+    return req.timeout(d, onTimeout: () => throw WriteTimeout(d));
+  }
+
   Future<dynamic> put(String path, [Object? body]) async =>
-      _noCacheZone() ?? _decode(await _client.put(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
+      _noCacheZone() ??
+      _decode(await _write(path, _client.put(_uri(path), headers: _headers, body: jsonEncode(body ?? {}))));
 
   Future<dynamic> patch(String path, [Object? body]) async =>
-      _noCacheZone() ?? _decode(await _client.patch(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
+      _noCacheZone() ??
+      _decode(await _write(path, _client.patch(_uri(path), headers: _headers, body: jsonEncode(body ?? {}))));
 
   Future<dynamic> delete(String path) async =>
-      _noCacheZone() ?? _decode(await _client.delete(_uri(path), headers: _headers));
+      _noCacheZone() ?? _decode(await _write(path, _client.delete(_uri(path), headers: _headers)));
 
   Future<dynamic> post(String path, [Object? body]) async {
     _noCacheZone();
-    final r = _decode(await _client.post(_uri(path), headers: _headers, body: jsonEncode(body ?? {})));
+    final r = _decode(await _write(path, _client.post(_uri(path), headers: _headers, body: jsonEncode(body ?? {}))));
     onOk?.call('POST', path, body, r);
     return r;
   }
