@@ -72,15 +72,14 @@ async def download(key: str) -> str:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         url = f"{base}/{repo}/resolve/main/{name}"
         tmp = path + ".part"
-        async with net.client(timeout=120, follow_redirects=True) as c:
-            async with c.stream("GET", url) as resp:
-                if resp.status_code == 404 and name in OPTIONAL:
-                    continue
-                if resp.status_code != 200:
-                    raise EmbedUnavailable(f"{repo}/{name}: HTTP {resp.status_code}")
-                with open(tmp, "wb") as f:
-                    async for part in resp.aiter_bytes(1 << 20):
-                        f.write(part)
+        async with net.client(timeout=120, follow_redirects=True) as c, c.stream("GET", url) as resp:
+            if resp.status_code == 404 and name in OPTIONAL:
+                continue
+            if resp.status_code != 200:
+                raise EmbedUnavailable(f"{repo}/{name}: HTTP {resp.status_code}")
+            with open(tmp, "wb") as f:
+                async for part in resp.aiter_bytes(1 << 20):
+                    f.write(part)
         os.replace(tmp, path)
         logger.info(f"модель векторов: скачан {repo}/{name} ({os.path.getsize(path) // 1024} КБ)")
     return folder

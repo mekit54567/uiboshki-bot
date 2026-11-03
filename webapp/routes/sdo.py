@@ -101,12 +101,12 @@ async def api_sdo_share(body: SdoShare, user: dict = CurrentUser):
     if not await set_sdo_share(user["id"], body.share):
         raise HTTPException(status_code=400, detail="сначала подключи СДО")
     if body.share:
-        import asyncio
+        from kapibara.core.tasks import spawn
         from kapibara.features.groups import sync as group_sync
         from database import get_user_group
         gid = await get_user_group(user["id"])
         if gid:
-            asyncio.create_task(group_sync.sync_group(gid))     # задания группы — сразу, не ждать 6 ч
+            spawn(group_sync.sync_group(gid), name="group_sync")     # задания группы — сразу, не ждать 6 ч
     return await status_for(user["id"])
 
 

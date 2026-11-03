@@ -18,7 +18,7 @@ Telegram — заграница, а база по 152-ФЗ должна оста
 import hashlib
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from urllib.parse import quote, urlsplit
 
 from kapibara.core import net
@@ -72,7 +72,7 @@ async def put(key: str, data: bytes, content_type: str = "application/gzip") -> 
     endpoint = (os.getenv("BACKUP_S3_ENDPOINT") or DEFAULT_ENDPOINT).rstrip("/")
     bucket = os.getenv("BACKUP_S3_BUCKET", "").strip()
     url = f"{endpoint}/{bucket}/{quote(key, safe='/~')}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload_hash = hashlib.sha256(data).hexdigest()
     headers = {"host": urlsplit(url).netloc, "x-amz-content-sha256": payload_hash,
                "x-amz-date": now.strftime("%Y%m%dT%H%M%SZ"), "content-type": content_type}
@@ -89,7 +89,7 @@ async def get(key: str) -> tuple[int, bytes]:
     endpoint = (os.getenv("BACKUP_S3_ENDPOINT") or DEFAULT_ENDPOINT).rstrip("/")
     bucket = os.getenv("BACKUP_S3_BUCKET", "").strip()
     url = f"{endpoint}/{bucket}/{quote(key, safe='/~')}"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload_hash = hashlib.sha256(b"").hexdigest()
     headers = {"host": urlsplit(url).netloc, "x-amz-content-sha256": payload_hash,
                "x-amz-date": now.strftime("%Y%m%dT%H%M%SZ")}

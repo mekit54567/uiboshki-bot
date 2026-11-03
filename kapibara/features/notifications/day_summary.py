@@ -7,7 +7,7 @@
 """
 
 import json
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, UTC
 
 import aiosqlite
 
@@ -50,8 +50,8 @@ async def _course_names() -> dict[str, str]:
 def _utc_bounds(d: date) -> tuple[str, str]:
     """Сутки по Москве → полуинтервал в UTC, как пишет datetime('now')."""
     fmt = "%Y-%m-%d %H:%M:%S"
-    start = datetime.combine(d, time(), TZ).astimezone(timezone.utc)
-    end = datetime.combine(d + timedelta(days=1), time(), TZ).astimezone(timezone.utc)
+    start = datetime.combine(d, time(), TZ).astimezone(UTC)
+    end = datetime.combine(d + timedelta(days=1), time(), TZ).astimezone(UTC)
     return start.strftime(fmt), end.strftime(fmt)
 
 
