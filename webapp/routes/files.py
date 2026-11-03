@@ -14,7 +14,9 @@ from kapibara.core.config import STAROSTA_ID, is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
-from kapibara.core.errors import log_failure
+from aiogram.exceptions import TelegramAPIError
+
+from kapibara.core.errors import NETWORK, log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +122,7 @@ async def api_file_link(file_id: int, request: Request, user: dict = CurrentUser
     f = await _visible_file(file_id, user)
     try:
         tf = await deps.tg_bot().get_file(f["file_id"])
-    except Exception as e:
+    except (TelegramAPIError, *NETWORK) as e:      # больше 20 МБ — Bot API не отдаёт
         logger.info(f"файл {file_id} не скачать через Bot API: {e}")
         raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат")
     name = _download_name(f, tf.file_path or "")
@@ -380,7 +382,7 @@ async def file_page_image(file_id: int, page: int, exp: int, sig: str):
                 bot = deps.tg_bot()
                 tf = await bot.get_file(f["file_id"])
                 data = (await bot.download_file(tf.file_path)).read()
-            except Exception as e:
+            except (TelegramAPIError, *NETWORK, OSError) as e:
                 logger.info(f"страница {file_id}/{page}: файл не скачался: {e}")
                 raise HTTPException(413, "Файл слишком большой — открой его целиком")
             _pdf_cache[file_id] = data
@@ -388,7 +390,7 @@ async def file_page_image(file_id: int, page: int, exp: int, sig: str):
                 _pdf_cache.pop(next(iter(_pdf_cache)))
         try:
             _page_cache[key] = await asyncio.to_thread(_render_pdf_page, data, page)
-        except Exception as e:
+        except (RuntimeError, IndexError, ValueError, OSError) as e:      # PdfiumError — RuntimeError; нет такой страницы — IndexError
             logger.info(f"страница {file_id}/{page}: не нарисовалась: {e}")
             raise HTTPException(422, "Страница не нарисовалась")
         while len(_page_cache) > 60:

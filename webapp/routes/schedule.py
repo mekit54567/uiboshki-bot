@@ -12,7 +12,10 @@ from pydantic import BaseModel
 
 from webapp.deps import CurrentUser
 
-from kapibara.core.errors import log_failure
+import sqlite3
+
+from kapibara.core.errors import NETWORK, log_failure
+from kapibara.features.schedule.parser import FETCH_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +204,7 @@ async def api_day(date: str, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
     try:
         raw = await raw_for_user(user["id"])
-    except Exception as e:
+    except (*FETCH_ERRORS, sqlite3.Error) as e:      # не загрузилось или база не ответила
         log_failure(logger, "расписание группы", e)
         raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
     now = datetime.now(TZ)
@@ -240,7 +243,7 @@ async def api_week(start: str, user: dict = CurrentUser):
         raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
     try:
         raw = await raw_for_user(user["id"])
-    except Exception as e:
+    except (*FETCH_ERRORS, sqlite3.Error) as e:      # не загрузилось или база не ответила
         log_failure(logger, "расписание группы", e)
         raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
     return week_overview(raw, monday)
@@ -274,7 +277,7 @@ async def api_search(q: str = "", type: int = 0, subject: str = "", user: dict =
             try:
                 items += [{"type": t, "id": d["id"], "title": d["fullTitle"]}
                           for d in await _official_search(q, t, 10)]
-            except Exception:
+            except (*NETWORK, ValueError, AttributeError, KeyError):      # официальный поиск не ответил — что нашли, то и есть
                 break
     return {"items": items, "ready": ready}
 
@@ -302,7 +305,7 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
         from kapibara.features.schedule.parser import fetch_schedule_raw, stale_label
         try:
             ical, stale = await fetch_schedule_raw(), stale_label()
-        except Exception as e:
+        except FETCH_ERRORS as e:
             logger.info(f"api_target: и копии своей группы нет: {e!r}")
     if ical is None:
         raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
