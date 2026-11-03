@@ -16,7 +16,7 @@ HttpOnly-кукой сайта pulse.mirea.ru — как MoodleSession у СДО
 import logging
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import aiosqlite
 import httpx
@@ -57,11 +57,11 @@ def clean_cookie_header(raw: str) -> str | None:
 
 
 def _utc(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def check(cookie: str) -> str:

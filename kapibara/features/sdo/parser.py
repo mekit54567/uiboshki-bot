@@ -60,7 +60,6 @@ DEADLINE_EVENTS = {
 
 class SdoSessionExpired(Exception):
     """Кука MoodleSession больше не валидна — нужен ручной релогин."""
-    pass
 
 
 async def get_checked(client: httpx.AsyncClient, url: str) -> httpx.Response:

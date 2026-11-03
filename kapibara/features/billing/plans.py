@@ -60,7 +60,7 @@ async def _own(user_id: int) -> bool:
         return True
     if not groups.home_id():
         return False
-    from kapibara.features.groups import members
+    from database import members
     member = await members.known(user_id)
     if member:              # в чате своей группы — своя, какую бы группу ни выбрал (владелец 09.10)
         return True

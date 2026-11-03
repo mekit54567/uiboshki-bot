@@ -62,7 +62,7 @@ async def test_time_from_phone_is_clamped(client):
 
 @pytest.mark.asyncio
 async def test_rank_closed(db):
-    await achievements.add(UID, {a: NOW for a in achievements.RANKS["dusk"][:-1]}, NOW)
+    await achievements.add(UID, dict.fromkeys(achievements.RANKS["dusk"][:-1], NOW), NOW)
     assert not await achievements.rank_closed(UID, "dusk")
     await achievements.add(UID, {achievements.RANKS["dusk"][-1]: NOW}, NOW)
     assert await achievements.rank_closed(UID, "dusk")

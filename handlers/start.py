@@ -6,7 +6,8 @@ from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-from database import upsert_user, set_subscription, get_user
+from database import set_subscription, get_user
+from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.core.config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from kapibara.bot.keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
 from kapibara.core.utils import esc, split_by_lines
@@ -465,6 +466,7 @@ def help_text() -> str:
 STAROSTA_HELP = (
     "\n\n👑 <b>Для старосты</b>\n"
     "/announce — рассылка · /addhw — добавить ДЗ\n"
+    "/say — написать в чат группы от имени бота · /groupmorning — утренняя карточка в чат\n"
     "/setzam ID — назначить зама\n"
     "/syncfiles — загрузить файлы\n"
     "/importdeadlines · /syncsdo — дедлайны из СДО\n"

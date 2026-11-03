@@ -14,18 +14,38 @@ tools/ratchet.json и пускает их только вниз, как храп
   silent_except  — обработчик, в котором только pass (ошибка пропадает);
   cycle_modules  — модули, сцепленные взаимными импортами в клубок
                    (с импортами внутри функций);
-  root_py_files  — .py в корне репозитория (план — пакет kapibara/).
+  root_py_files  — .py в корне репозитория (план — пакет kapibara/);
+  ruff_debt      — замечания Ruff из RUFF_DEBT по всему репозиторию: правила,
+                   которые ловят баги, но в старом коде ещё есть (ревью 03.11).
+                   Правило дошло до нуля — переносим в select в ruff.toml,
+                   тогда CI красный от первого же нового случая.
 """
 from __future__ import annotations
 
 import ast
 import json
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "tools" / "ratchet.json"
 SERVER_DIRS = ("kapibara", "handlers", "database", "webapp")
+
+# B — bugbear (замыкание на переменной цикла, raise без from, zip без strict…),
+# ASYNC — блокирующие вызовы внутри async (бот замирает для всех), SIM/C4/PERF/UP
+# — лишний и устаревший код. ASYNC109 (параметр timeout у async-функции) — не баг.
+RUFF_DEBT = ["B", "ASYNC", "SIM", "C4", "PERF", "UP"]
+RUFF_DEBT_IGNORE = ["ASYNC109"]
+
+
+def ruff_debt(root: Path) -> int:
+    out = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", ".", "--select", ",".join(RUFF_DEBT),
+         "--ignore", ",".join(RUFF_DEBT_IGNORE), "--exit-zero", "--output-format", "json", "--no-cache"],
+        cwd=root, capture_output=True, text=True, check=True,
+    )
+    return len(json.loads(out.stdout or "[]"))
 
 
 def server_files(root: Path) -> list[Path]:
@@ -151,6 +171,7 @@ def measure(root: Path) -> dict[str, int]:
         "silent_except": silent,
         "cycle_modules": _cycle_modules(graph),
         "root_py_files": len(list(root.glob("*.py"))),
+        "ruff_debt": ruff_debt(root),
     }
 
 
@@ -175,6 +196,7 @@ def main(argv: list[str]) -> int:
     if worse:
         print("\n❌ Стало хуже — новый код должен быть не хуже старого:\n  " + "\n  ".join(worse))
         print("Узкий тип ошибки вместо except Exception, лог вместо pass, импорт без нового цикла.")
+        print("ruff_debt — что именно: ruff check . --select " + ",".join(RUFF_DEBT) + " --ignore " + ",".join(RUFF_DEBT_IGNORE))
         return 1
     if better:
         print("\n✅ Стало лучше:\n  " + "\n  ".join(better))

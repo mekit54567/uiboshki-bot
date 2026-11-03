@@ -4,9 +4,10 @@ Inline-режим: в любом чате пишешь «@UiboshkiBot» — и �
 набрать фамилию преподавателя, группу или аудиторию — придёт их расписание
 (справочник schedule_index). Включается один раз в BotFather: /setinline.
 
-Если задан WEBAPP_URL — карточки картинками (schedule_card.py, тёмные, в
-стиле приложения): Telegram сам забирает их по подписанной ссылке /card/…
-с сервера бота. Без WEBAPP_URL — текстом, как раньше.
+Если задан WEBAPP_URL — карточки картинками (schedule/card.py, в стиле
+приложения): бот рисует их сразу, пока отвечает (card.prepare), а Telegram
+забирает готовые по подписанной ссылке /card/… с сервера бота. Без
+WEBAPP_URL — текстом, как раньше.
 
 Карточки собираются только когда их спрашивают; расписание чужих — не больше
 трёх и с ограничением по времени, чтобы Telegram успел получить ответ.
@@ -15,6 +16,8 @@ Inline-режим: в любом чате пишешь «@UiboshkiBot» — и �
 import asyncio
 import hashlib
 import logging
+import re
+from datetime import date, timedelta
 
 from aiogram import Router
 from aiogram.types import (
@@ -28,7 +31,32 @@ router = Router()
 MAX_TEXT = 4000          # лимит текста сообщения Telegram — 4096
 TARGET_TIMEOUT = 6.0
 DAY_WORDS = {"сегодня": "today", "завтра": "tomorrow", "неделя": "week", "неделю": "week"}
+NOW_WORDS = {"сейчас", "щас", "сейчас пара", "пара", "следующая", "след", "след пара", "next", "now"}
+WEEKDAYS = [("пн", "понедельник"), ("вт", "вторник"), ("ср", "среда", "среду"), ("чт", "четверг"),
+            ("пт", "пятница", "пятницу"), ("сб", "суббота", "субботу"), ("вс", "воскресенье")]
+MONTHS = ["янв", "фев", "мар", "апр", "ма", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
 SHARE_WORDS = {"share", "позвать", "пригласить", "поделиться"}    # «Поделиться» из бота и Mini App
+
+
+def parse_day(q: str, today: date) -> date | None:
+    """«пятница», «в пт», «послезавтра», «12 ноября», «12.11» → дата
+    (ближайшая: день недели — сегодня или впереди, число — в этом году,
+    а давно прошедшее — в следующем)."""
+    q = re.sub(r"^(в|во|на)\s+", "", q.lower().strip().replace("ё", "е"))
+    if q == "послезавтра":
+        return today + timedelta(days=2)
+    for wd, names in enumerate(WEEKDAYS):
+        if q in names:
+            return today + timedelta(days=(wd - today.weekday()) % 7)
+    m = re.fullmatch(r"(\d{1,2})\s*(?:[./]\s*(\d{1,2})(?:[./]\d{2,4})?|\s([а-я]+))", q)
+    if not m:
+        return None
+    month = int(m[2]) if m[2] else next((i + 1 for i, st in enumerate(MONTHS) if m[3].startswith(st)), 0)
+    try:
+        d = date(today.year, month, int(m[1]))
+    except ValueError:
+        return None
+    return d.replace(year=today.year + 1) if d < today - timedelta(days=60) else d
 
 
 def _cut(text: str) -> str:
@@ -68,11 +96,27 @@ def _card_base() -> str:
     return WEBAPP_URL.rstrip("/")
 
 
+def _own_cards(only: str | None, name: str, today: date) -> list[tuple[str, str, str]]:
+    """(ключ картинки, заголовок, описание). Пустой запрос — сегодня, завтра,
+    неделя и «сейчас»; слово или дата — одна карточка."""
+    from kapibara.features.schedule.parser import DAY_NAMES, MONTHS_GEN
+    if only and only.startswith("d"):
+        d = date.fromisoformat(f"{only[1:5]}-{only[5:7]}-{only[7:9]}")
+        return [(only, f"📅 {DAY_NAMES[d.weekday()]}, {d.day} {MONTHS_GEN[d.month - 1]} — {name}",
+                 "пары на этот день")]
+    cards = [("today", f"📅 Сегодня — {name}", "пары на сегодня"),
+             ("tomorrow", f"🌙 Завтра — {name}", "пары на завтра"),
+             ("week", f"🗓 Неделя — {name}", "вся неделя"),
+             ("now", f"⏰ Сейчас — {name}", "какая пара идёт или будет следующей")]
+    return [c for c in cards if not only or c[0] == only]
+
+
 async def _own_results(only: str | None, user_id: int | None = None) -> list:
-    """«Сегодня/завтра/неделя» — группы того, кто пишет (этап 1): своя —
-    как раньше, чужая — её календарь (в ссылке картинки — id группы)."""
+    """«Сегодня/завтра/неделя/сейчас/любой день» — группы того, кто пишет
+    (этап 1): своя — как раньше, чужая — её календарь (в ссылке — id группы)."""
     from kapibara.features.groups import groups
     from kapibara.core.config import GROUP_NAME
+    from kapibara.core.utils import today_msk
     from database.groups import viewer_group
     try:
         gid = await viewer_group(user_id) if user_id else groups.home_id()
@@ -81,26 +125,23 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
         gid = groups.home_id()
     other = bool(gid) and gid > 0 and gid != groups.home_id()
     name = (await groups.name_of(gid) or GROUP_NAME) if other else GROUP_NAME
+    cards = _own_cards(only, name, today_msk())
     if base := _card_base():
         from kapibara.features.schedule import card as schedule_card
-        out = []
-        for key, title, desc in (("today", f"📅 Сегодня — {name}", "пары на сегодня"),
-                                 ("tomorrow", f"🌙 Завтра — {name}", "пары на завтра"),
-                                 ("week", f"🗓 Неделя — {name}", "вся неделя")):
-            if only and key != only:
-                continue
-            url = schedule_card.card_url(base, key, *((1, gid) if other else ()))
-            out.append(_photo(f"own:{key}:{url}", url, title, desc, title))
-        return out
-    from kapibara.features.schedule.parser import get_today_schedule, get_tomorrow_schedule, get_week_schedule
-    cards = [("today", f"📅 Сегодня — {name}", "пары на сегодня", get_today_schedule),
-             ("tomorrow", f"🌙 Завтра — {name}", "пары на завтра", get_tomorrow_schedule),
-             ("week", f"🗓 Неделя — {name}", "вся неделя", get_week_schedule)]
+        # рисуем сразу, пока отвечаем: Telegram придёт за готовыми картинками
+        urls = await asyncio.gather(*(schedule_card.prepare(base, key, *((1, gid) if other else ()))
+                                      for key, _, _ in cards))
+        return [_photo(f"own:{key}:{url}", url, title, desc, title)
+                for (key, title, desc), url in zip(cards, urls)]
+    from kapibara.features.schedule import parser
+    g = (gid,) if other else ()
     out = []
-    for key, title, desc, fn in cards:
-        if only and key != only:
-            continue
-        text = await (fn(gid) if other else fn())
+    for key, title, desc in cards:
+        if key.startswith("d"):
+            text = await parser.get_date_schedule(date.fromisoformat(f"{key[1:5]}-{key[5:7]}-{key[7:9]}"), *g)
+        else:
+            text = await {"today": parser.get_today_schedule, "tomorrow": parser.get_tomorrow_schedule,
+                          "week": parser.get_week_schedule, "now": parser.get_next_lesson}[key](*g)
         out.append(_article(f"own:{key}:{hash(text)}", title, desc, text))
     return out
 
@@ -111,9 +152,9 @@ async def _target_results(query: str) -> list:
     found = (await schedule_index.search(query, limit=3))[:3]
     if base := _card_base():
         from kapibara.features.schedule import card as schedule_card
+        urls = await asyncio.gather(*(schedule_card.prepare(base, "target", t["type"], t["id"]) for t in found))
         out = []
-        for t in found:
-            url = schedule_card.card_url(base, "target", t["type"], t["id"])
+        for t, url in zip(found, urls):
             title = f"{_TARGET_EMOJI[t['type']]} {t['title']}"
             out.append(_photo(f"t:{url}", url, title, "расписание на неделю", title))
         return out
@@ -149,7 +190,11 @@ async def _share_results(user_id: int) -> list:
 @router.inline_query()
 async def inline_schedule(query: InlineQuery):
     q = (query.query or "").strip()
-    only = DAY_WORDS.get(q.lower())
+    only = DAY_WORDS.get(q.lower()) or ("now" if q.lower() in NOW_WORDS else None)
+    if not only and q:
+        from kapibara.core.utils import today_msk
+        if d := parse_day(q, today_msk()):
+            only = f"d{d:%Y%m%d}"
     try:
         if q.lower() in SHARE_WORDS:
             results = await _share_results(query.from_user.id)

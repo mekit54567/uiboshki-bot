@@ -49,16 +49,24 @@ def schedule(monkeypatch):
     async def week():
         return "🗓 <b>Неделя</b>"
 
+    async def next_lesson():
+        return "⏰ Следующая пара"
+
+    async def on_date(d):
+        return f"📅 {d.isoformat()}"
+
     monkeypatch.setattr(schedule_parser, "get_today_schedule", today)
     monkeypatch.setattr(schedule_parser, "get_tomorrow_schedule", tomorrow)
     monkeypatch.setattr(schedule_parser, "get_week_schedule", week)
+    monkeypatch.setattr(schedule_parser, "get_next_lesson", next_lesson)
+    monkeypatch.setattr(schedule_parser, "get_date_schedule", on_date)
 
 
 @pytest.mark.asyncio
 async def test_empty_query_three_own_cards(schedule):
     ans = await _ask("")
     titles = [r.title for r in ans.results]
-    assert len(titles) == 3 and "Сегодня" in titles[0] and "Неделя" in titles[2]
+    assert len(titles) == 4 and "Сегодня" in titles[0] and "Неделя" in titles[2] and "Сейчас" in titles[3]
     assert ans.is_personal and all(len(r.input_message_content.message_text) <= 4096 for r in ans.results)
     assert ans.results[1].input_message_content.message_text.endswith("…")
     assert "t.me/" in ans.results[0].reply_markup.inline_keyboard[0][0].url
@@ -93,3 +101,30 @@ async def test_teacher_search_skips_slow(monkeypatch):
 @pytest.mark.asyncio
 async def test_short_query_empty(schedule):
     assert (await _ask("Мо")).results == []
+
+
+@pytest.mark.asyncio
+async def test_now_and_any_day(schedule):
+    """Никита 03.11: «сейчас» — пара, что идёт или следующая; день недели
+    или дата — карточка этого дня."""
+    now = await _ask("сейчас")
+    assert len(now.results) == 1 and "Сейчас" in now.results[0].title
+    fri = await _ask("в пятницу")
+    assert len(fri.results) == 1 and "Пятница" in fri.results[0].title
+    assert fri.results[0].input_message_content.message_text.startswith("📅 20")
+
+
+def test_parse_day():
+    from handlers.inline import parse_day
+    from datetime import date
+    tue = date(2026, 11, 3)
+    assert parse_day("пятница", tue) == date(2026, 11, 6)
+    assert parse_day("пт", tue) == date(2026, 11, 6)
+    assert parse_day("во вторник", tue) == tue
+    assert parse_day("пн", tue) == date(2026, 11, 9)
+    assert parse_day("послезавтра", tue) == date(2026, 11, 5)
+    assert parse_day("12 ноября", tue) == date(2026, 11, 12)
+    assert parse_day("12 мая", tue) == date(2027, 5, 12)
+    assert parse_day("1.12", tue) == date(2026, 12, 1)
+    assert parse_day("31.02", tue) is None
+    assert parse_day("Морозов", tue) is None

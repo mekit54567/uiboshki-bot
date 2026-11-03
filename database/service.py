@@ -8,6 +8,7 @@ import aiosqlite
 import database
 from database._conn import connect
 from database.privacy import NOT_ERASING
+from datetime import UTC
 
 
 # ── Solver history ────────────────────────────────────────────────────────────
@@ -60,8 +61,8 @@ _flusher = None
 
 async def add_event(user_id: int, kind: str):
     import asyncio
-    from datetime import datetime, timezone
-    at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")      # как datetime('now')
+    from datetime import datetime
+    at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")      # как datetime('now')
     _pending.setdefault(database.DATABASE_PATH, []).append((user_id, kind, at))
     if EVENT_FLUSH_SECONDS <= 0:
         await flush_events()

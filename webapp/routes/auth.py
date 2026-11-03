@@ -74,7 +74,7 @@ async def auth_review(body: PollBody, request: Request):
     """Демо-вход проверяющих App Store / RuStore по коду REVIEW_CODE
     (review_demo.py): данные — запись стенда, не чьи-то настоящие."""
     from kapibara.core import ratelimit
-    from kapibara.features.content import review_demo
+    from webapp import review_demo
     if not review_demo.enabled():
         raise HTTPException(404, "Вход по коду выключен")
     if not ratelimit.allow("auth_review", _client_ip(request)):
@@ -183,7 +183,7 @@ async def auth_providers():
     коду для проверяющих магазинов (review_demo.py); apple — вход через Apple
     (только в iPhone-приложении, apple_signin.py)."""
     from kapibara.features.identity import oauth
-    from kapibara.features.content import review_demo
+    from webapp import review_demo
     from kapibara.features.identity import apple as apple_signin
     return {"items": [{"id": p, "name": oauth.NAMES[p]} for p in oauth.available()],
             "code": review_demo.enabled(), "apple": apple_signin.enabled()}
@@ -233,7 +233,8 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
 
     from kapibara.features.identity import oauth
     from fastapi.responses import RedirectResponse
-    from database import get_user, upsert_user
+    from database import get_user
+    from kapibara.features.privacy.privacy import upsert_user
     from database.identities import find_user, link, new_local_user, new_state, take_state
     from database.sessions import create_session
     provider = _provider(provider)

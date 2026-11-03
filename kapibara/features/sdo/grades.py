@@ -259,7 +259,7 @@ def parse_assign_page(html: str) -> dict:
     text = _clean(soup.get_text(" "))
     pass_m = re.search(r"Проходн\w+ (?:балл|оценка)\s*:?\s*(\d+(?:[.,]\d+)?)", text)
     status = next((v for k, v in rows.items() if k.startswith("состояние ответа")), "")
-    due = next((v for k, v in rows.items() if k.startswith("срок сдачи") or k.startswith("последний срок")), "")
+    due = next((v for k, v in rows.items() if k.startswith(("срок сдачи", "последний срок"))), "")
     if not due:
         m = re.search(r"Срок сдачи\s*:?\s*([^.]*?\d{4},\s*\d{1,2}:\d{2})", text)
         due = m.group(1) if m else ""

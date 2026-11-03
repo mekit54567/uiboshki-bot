@@ -5,3 +5,8 @@
 Copyright, public domain changes). Разрешено использовать, копировать и
 распространять, в том числе вместе с программами. Полный текст:
 https://dejavu-fonts.github.io/License.html
+
+Onest, Source Serif 4, Neucha (Onest.ttf, SourceSerif4.ttf, Neucha.ttf) — те же
+шрифты, что в приложении (app/assets/fonts), для картинок inline-режима
+(kapibara/features/schedule/card.py). Лицензия SIL Open Font License 1.1 —
+OFL-Onest.txt, OFL-SourceSerif4.txt, OFL-Neucha.txt.

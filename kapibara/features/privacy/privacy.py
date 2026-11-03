@@ -211,6 +211,14 @@ async def blocked(user_id: int) -> bool:
     return True
 
 
+async def upsert_user(user_id: int, username: str, full_name: str, named: bool = True, wait: bool = True):
+    """Записать человека: до согласия на обработку данных (blocked) — только
+    id, без имени и ника; имя запишется при следующем заходе после согласия.
+    Боту и API — только через неё, не database.upsert_user напрямую."""
+    from database.users import upsert_user as _upsert
+    await _upsert(user_id, username, full_name, named=named and not await blocked(user_id), wait=wait)
+
+
 async def blocked_ids(user_ids) -> set[int]:
     """blocked для многих сразу (рейтинг — все люди): одно подключение к базе
     вместо четырёх на человека."""

@@ -298,7 +298,7 @@ def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     assert q["SuccessUrl2"] == "https://x/donate/done?k=K" and q["SuccessUrl2Method"] == "GET"
     assert q["FailUrl2"] == "https://x/donate?k=K" and q["FailUrl2Method"] == "GET"
-    want = hashlib.md5("shop:300.00:7:https://x/donate/done?k=K:GET:https://x/donate?k=K:GET:p1".encode())
+    want = hashlib.md5(b"shop:300.00:7:https://x/donate/done?k=K:GET:https://x/donate?k=K:GET:p1")
     assert q["SignatureValue"] == want.hexdigest()
     plain = {k: v[0] for k, v in parse_qs(urlparse(billing.robokassa_url(7, 300, "x")).query).items()}
     assert "SuccessUrl2" not in plain and plain["SignatureValue"] == hashlib.md5(b"shop:300.00:7:p1").hexdigest()
