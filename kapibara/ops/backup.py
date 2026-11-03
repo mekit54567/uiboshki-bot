@@ -31,6 +31,9 @@ import database
 from kapibara.ops import health
 from kapibara.core.utils import TZ
 
+from aiogram.exceptions import TelegramAPIError
+from kapibara.core.errors import NETWORK
+
 logger = logging.getLogger(__name__)
 
 MAX_SEND_BYTES = 48 * 1024 * 1024   # sendDocument бота — до 50 МБ
@@ -109,7 +112,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         now = datetime.now(TZ)
         try:
             codes = [await s3_store.put(key, data) for key in s3_store.backup_keys(now)]
-        except Exception as e:
+        except (*NETWORK, OSError) as e:      # хранилище не ответило — ниже уйдёт в Telegram
             codes = [f"{type(e).__name__}"]
         if all(c == 200 for c in codes):
             await health.note("backup", True, f"{size_mb:.1f} МБ в хранилище")
@@ -140,7 +143,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         try:
             await bot.send_document(chat_id, BufferedInputFile(data, filename=name), disable_notification=silent,
                                     caption=caption, request_timeout=SEND_TIMEOUT)
-        except Exception as e:
+        except (TelegramAPIError, *NETWORK) as e:
             err = e
             logger.warning(f"backup: отправка {attempt + 1}/{SEND_TRIES} не прошла: {type(e).__name__}: {e}")
             continue
@@ -151,7 +154,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
     try:
         await bot.send_message(chat_id, f"⚠️ Копия базы ({size_mb:.1f} МБ) не отправилась с {SEND_TRIES} попыток: "
                                         f"{why}\nПопробуй /backup руками.")
-    except Exception:
+    except (TelegramAPIError, *NETWORK):
         logger.exception("backup: не смог сообщить старосте")
     return False
 
@@ -185,6 +188,7 @@ def inspect_backup(raw: bytes) -> tuple[str, dict]:
     fd, tmp = tempfile.mkstemp(suffix=".db")
     with os.fdopen(fd, "wb") as f:
         f.write(raw)
+    checked = False
     try:
         con = sqlite3.connect(tmp)
         try:
@@ -200,9 +204,10 @@ def inspect_backup(raw: bytes) -> tuple[str, dict]:
                        "sdo": count("sdo_sessions"), "size_mb": round(len(raw) / 1024 / 1024, 1)}
         finally:
             con.close()
-    except Exception:
-        os.remove(tmp)
-        raise
+        checked = True
+    finally:
+        if not checked:             # копия битая или проверка сломалась — временный файл не оставляем
+            os.remove(tmp)
     return tmp, summary
 
 
@@ -225,12 +230,12 @@ async def keep_local_copy() -> str | None:
     try:
         await asyncio.to_thread(_copy_into, database.DATABASE_PATH, path)
         return path
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         logger.warning(f"restore: копия через backup API не снялась ({e}) — копирую файл")
     try:
         await asyncio.to_thread(shutil.copyfile, database.DATABASE_PATH, path)
         return path
-    except Exception as e:
+    except OSError as e:
         logger.error(f"restore: не сохранил текущую базу рядом: {e}")
         return None
 
@@ -256,7 +261,7 @@ async def keep_before_start() -> str | None:
     try:
         await asyncio.to_thread(_copy_into, src, path)
         return path
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         logger.warning(f"копия перед запуском не снялась: {e!r}")
         return None
 
@@ -282,7 +287,7 @@ async def apply_backup(tmp_path: str):
             os.remove(tmp_path)
     try:
         _drop_search_index()
-    except Exception as e:
+    except OSError as e:
         logger.error(f"restore: индекс поиска не удалился: {e}")
     from database.users import forget_user
     forget_user()               # «уже записан» относилось к прежней базе
