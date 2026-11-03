@@ -218,8 +218,8 @@ async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser):
     с сервера (пускает ли DDoS-Guard) и хранение зашифрованным. Пока — эксперимент старосты."""
     if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="только для старосты")
-    from kapibara.features.pulse import accounts as pulse_accounts
-    return await pulse_accounts.connect_from_app(user["id"], body.cookie[:16384])
+    from kapibara.features.pulse import service as pulse_service
+    return await pulse_service.connect_from_app(user["id"], body.cookie[:16384])
 
 
 @router.get("/api/pulse/status")

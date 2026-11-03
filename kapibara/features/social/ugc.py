@@ -48,11 +48,11 @@ class ReportError(Exception):
 
 
 async def item(kind: str, item_id: int) -> dict | None:
-    from kapibara.features.social import comments as lesson_comments
     from database import get_deadline, get_file_by_id, get_lesson_note
     from database.homework import get_hw
+    from database.social import get_lesson_comment
     get = {"note": get_lesson_note, "hw": get_hw, "file": get_file_by_id, "deadline": get_deadline,
-           "comment": lesson_comments.get}.get(kind)
+           "comment": get_lesson_comment}.get(kind)
     if not get:
         return None
     row = await get(item_id)
@@ -158,8 +158,8 @@ async def decide(rid: int, remove: bool) -> str:
     """«Удалить» — запись пропадает у всех (копия — в жалобе, для спора), жалобы
     на неё закрыты; «Оставить» — только закрыть."""
     import json
-    from kapibara.features.social import comments as lesson_comments
     from database import delete_deadline, delete_file, delete_hw, delete_lesson_note
+    from database.social import delete_lesson_comment
     from database._conn import connect
     rep = await get_report(rid)
     if not rep:
@@ -171,7 +171,7 @@ async def decide(rid: int, remove: bool) -> str:
     if remove and await item(rep["kind"], rep["item_id"]):
         snap = json.dumps(await _snapshot(rep["kind"], rep["item_id"]), ensure_ascii=False)
         await {"note": delete_lesson_note, "hw": delete_hw, "file": delete_file,
-               "deadline": delete_deadline, "comment": lesson_comments.delete}[rep["kind"]](rep["item_id"])
+               "deadline": delete_deadline, "comment": delete_lesson_comment}[rep["kind"]](rep["item_id"])
     async with connect() as db:
         if remove:
             await db.execute("UPDATE reports SET status='closed' WHERE kind=? AND item_id=? AND status='new' AND id<>?",

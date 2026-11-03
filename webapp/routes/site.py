@@ -18,10 +18,11 @@ import zlib
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 
+from webapp.pages import FLUTTER_DIR, STATIC_DIR, digest, index_page, og_meta  # noqa: F401 — og_meta брали отсюда
+
 router = APIRouter()
 
 def _site_dir():
-    from webapp.server import STATIC_DIR
     return STATIC_DIR / "site"
 
 
@@ -51,23 +52,6 @@ def _client_key(request: Request) -> int:
     return -(zlib.crc32(ip.encode()) + 1)
 
 
-def og_meta(base: str, path: str = "/about", description: bool = True) -> str:
-    """Теги превью ссылки (description, og:*, twitter:*) со страницы сайта —
-    их же отдаёт корень: www.uiboshki.ru в Telegram должен выглядеть как
-    сайт, а JS-переход на /about ботам-превьюшникам не виден. И /app: ссылка
-    uiboshki.ru/app из /help без своих тегов держала в Telegram превью
-    «УИБО-бот» (Никита 20.10)."""
-    lines = (_site_dir() / "index.html").read_text(encoding="utf-8").splitlines()
-    heads = ('<meta property="og:', '<meta name="twitter:') + (('<meta name="description"',) if description else ())
-    keep = [ln for ln in lines if ln.startswith(heads)]
-    if path != "/about":
-        keep = [ln.replace("__BASE__/about", "__BASE__" + path) for ln in keep]
-    from webapp.server import _digest
-    # метка версии у картинки: Telegram помнит превью по адресу — новая og.jpg
-    # без неё не показалась бы (19.10, @WebpageBot отдал старую)
-    return "\n".join(keep).replace("__BASE__", base).replace("__OGV__", _digest("site/og.jpg"))
-
-
 @router.get("/about", include_in_schema=False)
 @router.get("/about/", include_in_schema=False)
 async def about_page(request: Request):
@@ -75,7 +59,6 @@ async def about_page(request: Request):
     абсолютному адресу — подставляем свой домен (WEBAPP_URL, иначе адрес
     запроса)."""
     from webapp import deps
-    from webapp.server import _digest
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     from kapibara.core import config
     from kapibara.features.privacy import privacy
@@ -83,11 +66,11 @@ async def about_page(request: Request):
     html = ((_site_dir() / "index.html").read_text(encoding="utf-8")
             .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
             .replace("__CONTRACTOR__", escape(privacy.contractor()))
-            .replace("__OGV__", _digest("site/og.jpg")))
+            .replace("__OGV__", digest("site/og.jpg")))
     # стили и скрипт сайта — по ссылке с хэшем: после обновления браузер не
     # склеит новую страницу со старым site.js (и кэширует их надолго)
     for rel in ("site/site.css", "site/site.js"):
-        html = html.replace(f'"/{rel}"', f'"/{rel}?v={_digest(rel)}"')
+        html = html.replace(f'"/{rel}"', f'"/{rel}?v={digest(rel)}"')
     return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
 
@@ -97,14 +80,13 @@ async def history_page(request: Request):
     тексты восстановлены из кода первых коммитов (site/history.js), рядом —
     экраны приложения сейчас (демо-данные). Ниже — лента по датам и цифры."""
     from webapp import deps
-    from webapp.server import _digest
     from kapibara.core import config
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
     html = ((_site_dir() / "history.html").read_text(encoding="utf-8")
             .replace("__BASE__", base).replace("__BOT__", config.BOT_USERNAME)
-            .replace("__OGV__", _digest("site/og.jpg")))
+            .replace("__OGV__", digest("site/og.jpg")))
     for rel in ("site/history.css", "site/history.js"):
-        html = html.replace(f'"/{rel}"', f'"/{rel}?v={_digest(rel)}"')
+        html = html.replace(f'"/{rel}"', f'"/{rel}?v={digest(rel)}"')
     return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
 
@@ -114,7 +96,6 @@ async def about_demo(request: Request):
     PWA; Никита 19.10) на демо-данных: первым скриптом — site/demo-app.js
     (время, вход «demo» в памяти, ответы /api/v1/…). Сборки нет (тесты,
     разработка) — прежний Mini App."""
-    from webapp.server import FLUTTER_DIR
     index = FLUTTER_DIR / "index.html"
     if not index.is_file():
         return await about_demo_tg(request)
@@ -130,7 +111,6 @@ async def about_demo_tg(request: Request):
     """Прежний Mini App как в Telegram, но на демо-данных: base href — чтобы
     относительные js/… и app.css грузились от корня, а SDK Telegram
     заменён на site/demo.js (он же подменяет fetch для /api/…)."""
-    from webapp.server import index_page
     page = await index_page(request)
     html = page.body.decode("utf-8")
     demo = _site_dir() / "demo.js"

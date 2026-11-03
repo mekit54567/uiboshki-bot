@@ -5,6 +5,7 @@ import httpx
 
 from kapibara.features.schedule import attendance
 from kapibara.features.pulse import accounts as pulse_accounts
+from kapibara.features.pulse import service as pulse_service
 from kapibara.features.pulse import attendance as pa
 from kapibara.features.pulse import probe as pulse_probe
 from kapibara.features.pulse.attendance import _field as F
@@ -112,6 +113,6 @@ async def test_keepalive_syncs(db, monkeypatch):
         called.append(uid)
     monkeypatch.setattr(pulse_accounts, "check", fake_check)
     monkeypatch.setattr(pa, "sync_due", fake_sync)
-    assert (await pulse_accounts.connect_from_app(5, "sid=abc"))["state"] == "ok"
-    await pulse_accounts.keepalive_due(datetime.now(pa.MSK) + timedelta(hours=2))
+    assert (await pulse_service.connect_from_app(5, "sid=abc"))["state"] == "ok"
+    await pulse_service.keepalive_due(datetime.now(pa.MSK) + timedelta(hours=2))
     assert 5 in called

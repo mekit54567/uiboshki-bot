@@ -71,7 +71,7 @@ async def group_chosen(callback: CallbackQuery, state: FSMContext):
     except Exception:
         await callback.message.answer(text, parse_mode="HTML")
     if g["own"]:
-        from handlers.start import ask_optional
+        from kapibara.bot.optional import ask_optional
         await ask_optional(callback.message, callback.from_user.id)
 
 
