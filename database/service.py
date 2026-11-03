@@ -5,7 +5,7 @@ import sqlite3
 
 import aiosqlite
 
-import database
+from database import _conn
 from database._conn import connect
 from database.privacy import NOT_ERASING
 from datetime import UTC
@@ -63,7 +63,7 @@ async def add_event(user_id: int, kind: str):
     import asyncio
     from datetime import datetime
     at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")      # как datetime('now')
-    _pending.setdefault(database.DATABASE_PATH, []).append((user_id, kind, at))
+    _pending.setdefault(_conn.DATABASE_PATH, []).append((user_id, kind, at))
     if EVENT_FLUSH_SECONDS <= 0:
         await flush_events()
         return
@@ -84,7 +84,7 @@ async def _flush_later():
 
 async def flush_events():
     """Записать накопленные события текущей базы."""
-    rows = _pending.pop(database.DATABASE_PATH, [])
+    rows = _pending.pop(_conn.DATABASE_PATH, [])
     if not rows:
         return
     async with connect() as db:

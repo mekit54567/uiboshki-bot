@@ -6,6 +6,8 @@ settings `member:<id>` = «1|0:время» — последний ответ ge
 12 часов; `group_chat_id` — чат, куда староста добавил бота."""
 import time
 
+from database import _conn
+
 TTL = 12 * 3600
 
 
@@ -17,16 +19,15 @@ CHAT_TTL = 60
 
 async def chat_id() -> int:
     from kapibara.core import config
-    import database
-    from database import get_setting
+    from database.settings import get_setting
     if config.GROUP_CHAT_ID:
         return config.GROUP_CHAT_ID
-    hit = _chat.get(database.DATABASE_PATH)
+    hit = _chat.get(_conn.DATABASE_PATH)
     if hit and time.monotonic() - hit[0] < CHAT_TTL:
         return hit[1]
     v = await get_setting("group_chat_id")
     cid = int(v) if v and v.lstrip("-").isdigit() else 0
-    _chat[database.DATABASE_PATH] = (time.monotonic(), cid)
+    _chat[_conn.DATABASE_PATH] = (time.monotonic(), cid)
     return cid
 
 
@@ -36,7 +37,7 @@ def forget_chat():
 
 async def _cached(user_id: int) -> tuple[bool | None, bool]:
     """(ответ, свежий ли) из settings."""
-    from database import get_setting
+    from database.settings import get_setting
     v = await get_setting(f"member:{user_id}")
     if not v or ":" not in v:
         return None, False
@@ -45,7 +46,7 @@ async def _cached(user_id: int) -> tuple[bool | None, bool]:
 
 
 async def remember(user_id: int, yes: bool):
-    from database import set_setting
+    from database.settings import set_setting
     await set_setting(f"member:{user_id}", f"{int(yes)}:{time.time():.0f}")
 
 

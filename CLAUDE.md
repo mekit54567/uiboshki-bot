@@ -478,9 +478,9 @@ RuStore — «Вход по коду доступа» в приложении, �
   обновления — `NEWS` в `js/more.js` (менять `id` на каждый выпуск).
 - **Код по модулям (эпоха 5, «Брусилов»)**: база — пакет `database/`
   (`schema`, `users`, `deadlines`, `files`, `sdo`, `schedule`, `social`,
-  `homework` — доска ДЗ, настройки, `is_editor`; `service`), снаружи
+  `homework` — доска ДЗ, `is_editor`; `settings`; `service`), снаружи
   `from database import …` как раньше; подключение — только
-  `database._conn.connect()` (путь читается при вызове — тесты подменяют
+  `database._conn.connect()` (путь — `database._conn.DATABASE_PATH`, читается при вызове; тесты подменяют
   `database.DATABASE_PATH`, функции, которые читают модуль, подменять в
   подмодуле: `database.deadlines.today_msk`). Файлы в боте — `handlers/files.py`
   + `files_upload`, `files_sdo`, `files_admin`; объявления —

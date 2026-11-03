@@ -5,7 +5,7 @@ import time
 
 import aiosqlite
 
-import database
+from database import _conn
 from database._conn import connect, write_later
 from database.privacy import NOT_ERASING
 
@@ -38,7 +38,7 @@ async def upsert_user(user_id: int, username: str, full_name: str, named: bool =
     test_privacy.test_upsert_only_through_privacy следит)."""
     if not named:
         username = full_name = ""
-    key, now = (database.DATABASE_PATH, user_id), time.monotonic()
+    key, now = (_conn.DATABASE_PATH, user_id), time.monotonic()
     last = _upserted.get(key)
     if last and last[:2] == (username, full_name) and now - last[2] < UPSERT_EVERY:
         return
