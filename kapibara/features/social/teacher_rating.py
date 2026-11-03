@@ -33,7 +33,7 @@ def teachers_in(raw: bytes) -> set[str]:
     from kapibara.features.schedule.events import _extract_teacher
     try:
         cal = Calendar.from_ical(raw)
-    except Exception:
+    except ValueError:                   # битый календарь — оценивать некого
         return set()
     return {key(t) for e in cal.walk("VEVENT") if (t := _extract_teacher(e))}
 

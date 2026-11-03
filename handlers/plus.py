@@ -10,6 +10,8 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message,
                            PreCheckoutQuery)
+from aiogram.exceptions import TelegramAPIError
+from kapibara.core.errors import NETWORK
 
 router = Router()
 
@@ -249,7 +251,7 @@ async def plusnews_go(callback: CallbackQuery):
             await delivery.deliver(callback.bot, uid, await launch_text(uid), kind="plus", tab="more",
                                    reply_markup=_launch_kb())
             sent += 1
-        except Exception:
+        except (TelegramAPIError, *NETWORK):   # бот заблокирован, пуш не ушёл — считаем и дальше
             failed += 1
         await scheduler.pace()
     await callback.message.answer(f"✅ Разослал: {sent}, не дошло: {failed}.")
@@ -274,7 +276,7 @@ async def send_invite(message: Message, uid: int):
     kb = await share_kb(uid)
     try:
         await message.answer_photo(referrals.share_image(), caption=referrals.share_text(), reply_markup=kb)
-    except Exception:
+    except (TelegramAPIError, OSError):  # картинка не ушла (или не собралась) — текстом
         await message.answer(referrals.share_text(), reply_markup=kb)
     inv = {"ref_max": referrals.REF_MAX, "ref_counted": await referrals.counted(uid)}
     await message.answer(

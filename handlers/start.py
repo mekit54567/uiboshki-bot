@@ -13,6 +13,7 @@ from kapibara.bot.keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keybo
 from kapibara.core.utils import esc, split_by_lines
 from kapibara.core.telegram import cosmetic
 from kapibara.bot.optional import ask_optional
+from aiogram.exceptions import TelegramAPIError
 
 router = Router()
 
@@ -195,7 +196,7 @@ async def login_decision(callback: CallbackQuery):
         text = "Вход отклонён." if ok else "Ссылка для входа устарела."
     try:
         await callback.message.edit_text(text)
-    except Exception:
+    except TelegramAPIError:             # сообщение старое или то же — шлём новым
         await callback.message.answer(text)
 
 
@@ -235,7 +236,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     if kb:
         try:
             await sent.edit_reply_markup(reply_markup=kb)
-        except Exception:
+        except TelegramAPIError:         # клавиатуру не поменять — кнопка отдельным сообщением
             await message.answer("👇", reply_markup=kb)
     if ask:
         return                                # предметы по выбору — после выбора группы

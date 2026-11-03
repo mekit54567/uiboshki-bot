@@ -35,6 +35,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -316,11 +317,9 @@ async def push_report(user_id: int, data: dict) -> list[dict]:
         if row["platform"] == "apns" and data.get("tag") in IOS_HIDDEN:
             item["result"] = "hidden"
             continue
-        try:
+        res = ERROR
+        with aside(logger, f"пуш приложения {user_id} ({row['platform']})", level=logging.INFO):
             res = await send(row, data)
-        except Exception as e:
-            logger.info(f"пуш приложения {user_id} ({row['platform']}): {type(e).__name__}: {e}")
-            res = ERROR
         if res == GONE:
             await delete_app_push(row["platform"], row["token"])
         item["result"] = res

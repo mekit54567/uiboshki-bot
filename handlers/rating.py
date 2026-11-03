@@ -10,6 +10,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton
 from kapibara.core.config import is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
+import sqlite3
 
 router = Router(name="rating")
 
@@ -57,7 +58,7 @@ async def cmd_institutes(message: Message):
         try:
             names = [r[0] for r in await (await db.execute(
                 "SELECT title FROM schedule_targets WHERE type = 1")).fetchall()]
-        except Exception:
+        except sqlite3.OperationalError:     # справочника групп ещё нет (свежая база)
             names = []
     rows = institutes.table(names)
     if not rows:

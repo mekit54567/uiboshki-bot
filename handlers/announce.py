@@ -55,7 +55,7 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
                 try:
                     await push(uid, "announce", f"📢 {message.html_text}", None)
                     sent += 1
-                except Exception:
+                except NETWORK:          # пуш не ушёл — считаем и дальше
                     failed += 1
             continue
         try:
@@ -75,7 +75,7 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
                 # Голосовое, видео, стикер и т.п. — раньше уходило текстом "None".
                 await bot.copy_message(uid, message.chat.id, message.message_id)
             sent += 1
-        except Exception:
+        except TelegramAPIError:          # бот заблокирован, чат пропал — считаем и дальше
             failed += 1
 
     await wait.edit_text(
@@ -132,6 +132,8 @@ async def clearsem_confirm(callback: CallbackQuery):
 # Порядок как был в одном файле: объявления и очистка семестра, дальше доска
 # ДЗ (handlers/homework.py), дальше зам, рейтинг, Пульс, статистика.
 from handlers import group_tools, homework  # noqa: E402
+from kapibara.core.errors import NETWORK
+from aiogram.exceptions import TelegramAPIError
 
 for _sub in (homework, group_tools):
     router.include_router(_sub.router)

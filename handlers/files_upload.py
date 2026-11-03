@@ -13,6 +13,7 @@ from database import add_file, get_files
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
 from kapibara.core.utils import esc
 from kapibara.features.lectures.names import title_from_filename
+from aiogram.exceptions import TelegramAPIError
 
 router = Router()
 
@@ -176,7 +177,7 @@ async def receive_file(message: Message, state: FSMContext):
                 await message.bot.edit_message_text(text, chat_id=message.chat.id, message_id=status_id, parse_mode="HTML")
             else:
                 status_id = (await message.answer(text, parse_mode="HTML")).message_id
-        except Exception:
+        except TelegramAPIError:         # статус удалён или не изменился — новый
             status_id = (await message.answer(text, parse_mode="HTML")).message_id
         await state.update_data(added=data["added"], with_text=data.get("with_text", 0),
                                 dupes=data.get("dupes", 0), status_id=status_id)

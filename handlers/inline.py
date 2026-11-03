@@ -24,6 +24,7 @@ from aiogram.types import (
     InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResultArticle, InlineQueryResultPhoto,
     InputTextMessageContent,
 )
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -118,11 +119,9 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
     from kapibara.core.config import GROUP_NAME
     from kapibara.core.utils import today_msk
     from database.groups import viewer_group
-    try:
+    gid = groups.home_id()
+    with aside(logger, f"inline: группа {user_id}", level=logging.INFO):  # база недоступна — своя группа, как раньше
         gid = await viewer_group(user_id) if user_id else groups.home_id()
-    except Exception as e:                # база недоступна — своя группа, как раньше
-        logger.info(f"inline: группа {user_id}: {e}")
-        gid = groups.home_id()
     other = bool(gid) and gid > 0 and gid != groups.home_id()
     name = (await groups.name_of(gid) or GROUP_NAME) if other else GROUP_NAME
     cards = _own_cards(only, name, today_msk())

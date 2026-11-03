@@ -24,6 +24,7 @@ import httpx
 from kapibara.features.pulse import probe as pulse_probe
 from database._conn import connect
 from kapibara.core.crypto import decrypt, encrypt, needs_rotation
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -155,11 +156,9 @@ async def _check_one(row: dict, now: datetime):
     if cookie is None:
         logger.error(f"Пульс keepalive {uid}: кука не расшифровывается — ключ SDO_CRYPT_*")
         return
-    try:
+    state = None
+    with aside(logger, f"Пульс keepalive {uid}", level=logging.INFO):  # сеть — не повод считать вход протухшим
         state = await check(cookie)
-    except Exception as e:      # сеть — не повод считать вход протухшим
-        logger.info(f"Пульс keepalive {uid}: {type(e).__name__}")
-        state = None
     async with connect() as db:
         nxt = _utc(now + timedelta(minutes=keepalive_minutes()))
         if state == "ok":
