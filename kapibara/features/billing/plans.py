@@ -33,7 +33,7 @@ async def plan_of(user_id: int) -> str:
         return UNL
     if await has_plus(user_id):
         return SUB
-    if await _own(user_id):
+    if await groups.in_home_group(user_id):
         return OWN
     if not groups.home_id():
         return OWN          # копия бота на одну группу (ICAL_URL без id) — тарифов нет
@@ -50,26 +50,3 @@ async def has_plus(user_id: int) -> bool:
     until = await get_subscription(user_id)
     return (bool(until and until >= today_msk().isoformat()) or bool(await billing.gift_for(user_id))
             or bool(await billing.unlimited_for(user_id)))
-
-
-async def _own(user_id: int) -> bool:
-    from kapibara.core import config
-    from kapibara.features.groups import groups
-    from database import get_user_group
-    if config.is_starosta(user_id):
-        return True
-    if not groups.home_id():
-        return False
-    from database import members
-    member = await members.known(user_id)
-    if member:              # в чате своей группы — своя, какую бы группу ни выбрал (владелец 09.10)
-        return True
-    gid = await get_user_group(user_id)
-    if gid and gid == groups.home_id():
-        return member is not False
-    if gid:
-        from database import get_group
-        g = await get_group(gid)
-        if g and g["own"]:
-            return True
-    return False
