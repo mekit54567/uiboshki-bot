@@ -89,7 +89,7 @@ async def cmd_search(message: Message):
 
 
 def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | None:
-    from kapibara.features.lectures.categories import sort_files
+    from kapibara.core.categories import sort_files
     if idx == "all":
         return "Все файлы", sort_files(all_files)
     subjects = sorted({f["subject"] for f in all_files if f.get("subject")})
@@ -104,7 +104,7 @@ def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | 
 async def files_by_subject(callback: CallbackQuery):
     """Предмет → сначала типы (лекции/практики/КР/…) с количеством, если
     их больше одного, иначе сразу файлы."""
-    from kapibara.features.lectures.categories import CATEGORIES, category_of
+    from kapibara.core.categories import CATEGORIES, category_of
     idx = callback.data.split(":", 1)[1]
     picked = _subject_files(await get_files(), idx)
     if not picked:
@@ -136,7 +136,7 @@ async def files_by_subject(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("fct:"))
 async def files_by_category(callback: CallbackQuery):
-    from kapibara.features.lectures.categories import LABELS, category_of
+    from kapibara.core.categories import LABELS, category_of
     parts = callback.data.split(":")
     idx, cat = parts[1], parts[2]
     page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0

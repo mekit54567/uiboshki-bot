@@ -61,7 +61,7 @@ async def cmd_backup(message: Message):
 async def _tidy_plan() -> tuple[list[dict], dict[int, str], set[int]]:
     """Файлы, все переименования и какие из них — темы из текста лекций."""
     from database import get_text_heads
-    from kapibara.features.lectures.categories import category_of
+    from kapibara.core.categories import category_of
     from kapibara.features.lectures.names import text_titles, tidy_titles
     files = await get_files()
     names = tidy_titles(files)

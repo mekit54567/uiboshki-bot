@@ -14,7 +14,7 @@ async def add_file(title, subject, file_id, file_name, uploaded_by, category: st
     group_id не задан — группа того, кто загружает (current_group; синк и
     своя группа — NULL, как раньше)."""
     from database.groups import g_or_home, stored
-    from kapibara.features.lectures.categories import LABELS, detect_category
+    from kapibara.core.categories import LABELS, detect_category
     if category not in LABELS:
         category = detect_category(title or "", file_name or "")
     async with connect() as db:

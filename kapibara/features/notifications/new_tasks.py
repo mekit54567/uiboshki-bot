@@ -96,7 +96,7 @@ async def announce(bot, new_ids: list[int], moved: dict[int, str] | None = None)
     """Разослать про новые дедлайны и перенесённые сроки (из синка). → скольким ушло."""
     from kapibara.features.notifications import prefs as notify_prefs
     from database import get_active_deadlines, get_reminder_users
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     moved = moved or {}
     if len(new_ids) > MASS:
         logger.info(f"новые задания: {len(new_ids)} за раз — не рассылаю (выгрузка, а не новое)")

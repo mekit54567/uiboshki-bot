@@ -113,7 +113,7 @@ async def send_all(bot, now: datetime | None = None):
     from kapibara.features.notifications import prefs as notify_prefs
     from kapibara.features.schedule import parser as schedule_parser
     from database import get_all_optional_answers, get_deadlines_soon, get_reminder_users
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     from kapibara.features.groups.optional_subjects import HIDE
     from kapibara.features.notifications.broadcast import group_raws as _group_raws, pace
     now = now or datetime.now(TZ)
@@ -140,7 +140,7 @@ async def send_all(bot, now: datetime | None = None):
                          if d["due_date"] >= tomorrow.isoformat()]
             if prefs.get("weather") and weather is None:
                 try:
-                    from handlers.weather import get_weather_for_tomorrow
+                    from kapibara.features.weather.forecast import get_weather_for_tomorrow
                     weather = await get_weather_for_tomorrow() or ""
                 except Exception as e:
                     logger.info(f"вечерняя сводка: погода не загрузилась: {e}")

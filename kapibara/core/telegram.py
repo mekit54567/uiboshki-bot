@@ -13,6 +13,7 @@ import contextlib
 import logging
 
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 logger = logging.getLogger(__name__)
 
@@ -25,3 +26,14 @@ def cosmetic(what: str):
         logger.debug(f"{what}: {e}")
     except Exception:                  # граница вспомогательного действия: ответ не ломаем, но и не молчим
         logger.warning(f"{what}: неожиданная ошибка", exc_info=True)
+
+
+def app_button(text: str = "🚀 Открыть приложение", tab: str = "") -> InlineKeyboardMarkup | None:
+    """Кнопка, которая открывает приложение сразу на нужном экране (?tab=…,
+    js/main.js): уведомление «дедлайн завтра» → «Открыть дедлайны». None без
+    WEBAPP_URL — тогда уведомление уходит без кнопки."""
+    from kapibara.core.config import WEBAPP_URL     # читаем при вызове: тесты подменяют config
+    if not WEBAPP_URL:
+        return None
+    url = WEBAPP_URL + (("&" if "?" in WEBAPP_URL else "?") + "tab=" + tab if tab else "")
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]])

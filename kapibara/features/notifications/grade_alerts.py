@@ -140,7 +140,7 @@ async def check_user(bot, user_id: int, cookie: str, notify: bool = True) -> boo
     from kapibara.features.sdo import grades as sdo_grades
     from kapibara.features.sdo import history as sdo_history
     from database import get_last_scores
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     import json
     from database import set_setting
     data = await sdo_grades.overview(user_id, cookie, fresh=True)

@@ -40,7 +40,7 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
     # открывает диплинк на сам бот (t.me/<bot>?start=file_<id>), который уже
     # шлёт документ — см. handlers/start.py: cmd_start_deeplink.
     from database import get_file_ids_with_summary, get_file_ids_with_text
-    from kapibara.features.lectures.categories import CATEGORIES, LABELS, category_of
+    from kapibara.core.categories import CATEGORIES, LABELS, category_of
     from kapibara.features.lectures.names import split_title
     from database import is_editor
     with_text = await get_file_ids_with_text()
@@ -199,7 +199,7 @@ async def api_file_edit(file_id: int, body: FileMeta, user: dict = CurrentUser):
     названию угадан неверно). Предмет меняется вместе с контекстом ИИ:
     текст лекции привязан к файлу, а не к предмету."""
     from database import get_files, update_file_meta
-    from kapibara.features.lectures.categories import LABELS
+    from kapibara.core.categories import LABELS
     from database import is_editor
     f = next((x for x in await get_files() if x["id"] == file_id), None)
     if not f:
@@ -228,7 +228,7 @@ async def _summary_view(f: dict, s: dict | None = None) -> dict:
     пишется, поэтому показываем его отсюда, а не из базы."""
     from kapibara.features.lectures import summary as lecture_summary
     from database import get_file_summary, get_file_text
-    from kapibara.features.lectures.categories import LABELS, category_of
+    from kapibara.core.categories import LABELS, category_of
     s = s or await get_file_summary(f["id"])
     return {
         "id": f["id"], "title": f["title"], "subject": f.get("subject") or "",

@@ -108,7 +108,7 @@ CONTACT_URL = "https://t.me/Partykq"
 def backup_days() -> int:
     """Сколько живёт ночная копия базы: хранилище — 7 дней по кругу, Telegram —
     оператор удаляет старше 30 дней (Никита 18.10: Telegram — ненадолго, до S3)."""
-    from kapibara.ops import s3_store
+    from kapibara.core import storage as s3_store
     return 7 if s3_store.configured() else 30
 
 
@@ -117,7 +117,7 @@ def backup_texts() -> dict:
     legal_texts: своё хранилище в России (BACKUP_S3_*, s3_store.py) или файлом
     оператору в Telegram (ОАЭ); туннель Xray (XRAY_CONFIG, страна —
     PROXY_COUNTRY) или сеть хостинга. Копии — не дольше 30 дней (ст. 21 ч. 5)."""
-    from kapibara.ops import s3_store
+    from kapibara.core import storage as s3_store
     if os.getenv("XRAY_CONFIG", "").strip() or os.getenv("OUT_PROXY", "").strip():
         country = os.getenv("PROXY_COUNTRY", "").strip()
         proxy = ("Запросы к Telegram и ИИ уходят с сервера через зашифрованный туннель на сервер оператора"

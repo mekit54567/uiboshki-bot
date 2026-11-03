@@ -17,6 +17,10 @@ MENU_BUTTON_TEXTS — источник правды для всех тексто
 
 from aiogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
+# app_button живёт в kapibara.core.telegram: им пользуются рассылки (features),
+# а им нельзя импортировать слой бота (docs/adr/0002-layers.md).
+from kapibara.core.telegram import app_button  # noqa: F401
+
 
 def webapp_keyboard(text: str = "🚀 Открыть приложение") -> InlineKeyboardMarkup | None:
     """Кнопка запуска Mini App. Возвращает None, если WEBAPP_URL не настроен —
@@ -29,18 +33,6 @@ def webapp_keyboard(text: str = "🚀 Открыть приложение") -> I
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=text, web_app=WebAppInfo(url=WEBAPP_URL))]
     ])
-
-
-def app_button(text: str = "🚀 Открыть приложение", tab: str = "") -> InlineKeyboardMarkup | None:
-    """Кнопка, которая открывает приложение сразу на нужном экране (?tab=…,
-    js/main.js): уведомление «дедлайн завтра» → «Открыть дедлайны». None без
-    WEBAPP_URL — тогда уведомление уходит без кнопки."""
-    from aiogram.types import WebAppInfo
-    from kapibara.core.config import WEBAPP_URL
-    if not WEBAPP_URL:
-        return None
-    url = WEBAPP_URL + (("&" if "?" in WEBAPP_URL else "?") + "tab=" + tab if tab else "")
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=url))]])
 
 
 # Обновление чата («Корнилов», v4.19.0): всё смотрят в приложении, чат — вход

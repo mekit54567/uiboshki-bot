@@ -127,7 +127,7 @@ async def send_all(bot, now: datetime | None = None):
     from kapibara.features.notifications import prefs as notify_prefs
     from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import get_active_deadlines, get_all_optional_answers, get_reminder_users
-    from kapibara.bot.keyboards import app_button
+    from kapibara.core.telegram import app_button
     from kapibara.features.groups.optional_subjects import HIDE
     from kapibara.features.notifications.broadcast import group_raws as _group_raws, pace
     now = now or datetime.now(TZ)

@@ -33,7 +33,7 @@ from bs4 import BeautifulSoup
 
 from kapibara.features.sdo import net as sdo_net
 from kapibara.core.config import SDO_BASE_URL
-from kapibara.features.lectures.categories import detect_category
+from kapibara.core.categories import detect_category
 from kapibara.features.sdo.parser import SdoSessionExpired
 from kapibara.core.telegram import cosmetic
 

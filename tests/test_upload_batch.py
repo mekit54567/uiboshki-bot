@@ -101,7 +101,7 @@ async def test_batch_upload_saves_files_reads_text_and_skips_dupes(db, dp, bot, 
     (("Проект",), "other"),                                # «пр» без номера — не практика
 ])
 def test_detect_category(names, category):
-    from kapibara.features.lectures.categories import detect_category
+    from kapibara.core.categories import detect_category
     assert detect_category(*names) == category
 
 
@@ -185,7 +185,7 @@ def test_files_keyboard_pages():
 
 def test_files_sorted_by_type_then_number():
     # живой тест: после выгрузки СДО в «Практиках» шло 2, 1, 15 16, 8, 13 14
-    from kapibara.features.lectures.categories import sort_files
+    from kapibara.core.categories import sort_files
     titles = ["Практика 2 Графики", "Практика 1 Знакомство", "Практическа работа 15 16",
               "Практика 8 преподаватель", "Практическа работа 13 14", "Лекция 10", "Лекция 9"]
     files = [{"title": t, "file_name": t + ".pdf"} for t in titles]
