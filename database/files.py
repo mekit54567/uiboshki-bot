@@ -3,6 +3,7 @@
 import aiosqlite
 
 from database._conn import connect
+import sqlite3
 
 
 # ── Files ─────────────────────────────────────────────────────────────────────
@@ -290,7 +291,7 @@ async def search_files(query: str, limit: int = 20, group_id: int | None = None)
                 LIMIT ?
             """, (fts_query, *params, limit))
             return [dict(r) for r in await cursor.fetchall()]
-    except Exception as e:
+    except sqlite3.OperationalError as e:    # кривой запрос FTS5 или нет таблицы — пусто, не 500
         import logging
-        logging.getLogger(__name__).warning(f"search_files failed: {e}")
+        logging.getLogger(__name__).warning(f"search_files: {e}")
         return []

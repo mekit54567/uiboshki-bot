@@ -6,6 +6,7 @@ import time
 from zoneinfo import ZoneInfo
 
 from kapibara.core import net
+from kapibara.core.errors import aside
 
 # имя логгера — прежнее: раздел «Погода» в /status не меняется
 logger = logging.getLogger("handlers.weather")
@@ -169,7 +170,7 @@ async def fetch_tomorrow() -> dict | None:
 
 
 async def _fetch_tomorrow(day: str) -> dict | None:
-    try:
+    with aside(logger, "погода на завтра"):
         url = (
             f"https://api.open-meteo.com/v1/forecast"
             f"?latitude={LAT}&longitude={LON}"
@@ -182,9 +183,7 @@ async def _fetch_tomorrow(day: str) -> dict | None:
             d = resp.json()["daily"]
         return {"tmin": round(d["temperature_2m_min"][0]), "tmax": round(d["temperature_2m_max"][0]),
                 "code": int(d["weathercode"][0])}
-    except Exception as e:
-        logger.error(f"Weather (завтра) error: {e}")
-        return None
+    return None
 
 
 def tomorrow_text(w: dict | None) -> str:

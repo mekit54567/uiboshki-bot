@@ -17,16 +17,15 @@ import logging
 from kapibara.core.config import OPTIONAL_SUBJECTS
 # сам фильтр — у расписания (schedule/hidden): его читает разбор календаря
 from kapibara.features.schedule.hidden import HIDE, no_filter, unfiltered  # noqa: F401 — их брали отсюда
+from kapibara.core.errors import aside
 
 async def hidden_for(user_id: int) -> frozenset:
     """Что скрыть этому человеку: предметы по выбору без ответа «хожу».
     База недоступна — скрываем все (так у большинства и должно быть)."""
     from database import get_optional_answers
-    try:
+    answers = {}
+    with aside(logging.getLogger(__name__), f"предметы по выбору: ответы {user_id} не прочитались"):
         answers = await get_optional_answers(user_id)
-    except Exception as e:
-        logging.getLogger(__name__).warning(f"предметы по выбору: ответы {user_id} не прочитались: {e!r}")
-        answers = {}
     return frozenset(s for s in OPTIONAL_SUBJECTS if not answers.get(s))
 
 

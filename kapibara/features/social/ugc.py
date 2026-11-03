@@ -24,6 +24,7 @@
 
 import logging
 from kapibara.core.errors import aside
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -366,7 +367,7 @@ async def hidden(user_id: int) -> set[int]:
     async with connect() as db:
         try:
             rows = await (await db.execute("SELECT blocked_id FROM user_blocks WHERE user_id=?", (user_id,))).fetchall()
-        except Exception:
+        except sqlite3.OperationalError:     # таблицы ещё нет (старая база до миграции)
             return set()
         return {r[0] for r in rows}
 

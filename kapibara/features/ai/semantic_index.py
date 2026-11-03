@@ -88,7 +88,7 @@ def pages_of(data: bytes, file_name: str) -> tuple[str, list[str]]:
     части. Не разобралось — ("", [])."""
     from kapibara.features.lectures.extract import extract_text
     name = (file_name or "").lower()
-    try:
+    with aside(logger, f"страницы {file_name}", level=logging.INFO):
         if name.endswith(".pdf"):
             from pypdf import PdfReader
             return KINDS[".pdf"], [(p.extract_text() or "") for p in PdfReader(io.BytesIO(data)).pages]
@@ -102,9 +102,7 @@ def pages_of(data: bytes, file_name: str) -> tuple[str, list[str]]:
             return KINDS[".pptx"], slides
         text = extract_text(data, file_name)
         return ("часть", text_parts(text)) if text.strip() else ("", [])
-    except Exception as e:
-        logger.info(f"страницы {file_name}: {type(e).__name__}: {e}")
-        return "", []
+    return ('', [])
 
 
 def _split_long(text: str) -> list[str]:

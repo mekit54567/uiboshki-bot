@@ -14,6 +14,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
+from aiogram.exceptions import TelegramAPIError
 
 router = Router(name="group_pick")
 
@@ -68,7 +69,7 @@ async def group_chosen(callback: CallbackQuery, state: FSMContext):
     text = f"Готово: ты в группе <b>{esc(g['name'])}</b>. Сменить — /group"
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
-    except Exception:
+    except TelegramAPIError:             # сообщение не изменить — шлём новым
         await callback.message.answer(text, parse_mode="HTML")
     if g["own"]:
         from kapibara.bot.optional import ask_optional

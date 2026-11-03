@@ -78,7 +78,7 @@ async def _flush_later():
     await asyncio.sleep(EVENT_FLUSH_SECONDS)
     try:
         await flush_events()
-    except Exception as e:
+    except sqlite3.Error as e:              # база занята — события /stats не главное
         logging.getLogger(__name__).info(f"stats: события не записались: {e}")
 
 

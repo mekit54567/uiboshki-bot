@@ -17,6 +17,7 @@ from database import _conn
 from kapibara.core.config import GROUP_NAME
 from kapibara.features.lectures.day import NIGHT_UNTIL
 from kapibara.core.utils import TZ, today_msk
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +108,9 @@ async def build_group_context(user_id: int, deadline_days: int = 21) -> str:
                      "и не поправляй студента.")
     lines += await _schedule_lines(user_id=user_id)
 
-    try:
+    deadlines = []
+    with aside(logger, "контекст ИИ без дедлайнов"):
         deadlines = await database.get_active_deadlines(user_id)
-    except Exception as e:
-        logger.warning(f"контекст ИИ без дедлайнов: {e!r}")
-        deadlines = []
     horizon = today + timedelta(days=deadline_days)
     upcoming = [d for d in deadlines if date.fromisoformat(d["due_date"]) <= horizon]
     if upcoming:

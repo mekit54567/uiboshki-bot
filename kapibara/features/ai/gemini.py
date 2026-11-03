@@ -37,6 +37,7 @@ from kapibara.core import net
 
 from kapibara.core.config import (AI_MAIN, AI_SPARE_MODEL, GEMINI_API_KEY, GEMINI_FALLBACK_MODELS, GEMINI_MODEL,
                     OPENROUTER_API_KEY)
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -220,11 +221,9 @@ async def ling_first() -> bool:
         return True
     if mode != "plus":
         return False
-    try:
+    with aside(logger, "ling_first", level=logging.INFO):
         return await _has_plus(uid)
-    except Exception as e:
-        logger.info(f"ling_first: {e}")
-        return False
+    return False
 
 
 # Из России Gemini отвечает 400 «User location is not supported» (переезд,

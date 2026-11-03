@@ -222,12 +222,10 @@ async def api_day(date: str, user: dict = CurrentUser):
 async def _changes(user_id: int, d, lessons: list[dict]) -> list[dict]:
     """Кабинет изменён (room_was у пары) и отменённые пары (отдельным списком,
     в lessons их нет — счёт пар и «идёт сейчас» не меняются). Сбой — без отметок."""
-    try:
+    with aside(logger, "изменения расписания не прочитались"):
         from kapibara.features.schedule.diff import day_changes
         return await day_changes(user_id, d, lessons)
-    except Exception as e:
-        logger.warning(f"изменения расписания не прочитались: {e}")
-        return []
+    return []
 
 
 @router.get("/api/week")

@@ -27,6 +27,7 @@ import httpx
 from kapibara.features.pulse import accounts as pulse_accounts
 from kapibara.features.pulse import probe as pulse_probe
 from database._conn import connect
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -215,8 +216,6 @@ async def sync_due(user_id: int, now: datetime | None = None) -> dict | None:
     last = await get_setting(f"pulse_sync:{user_id}")
     if last and now - datetime.fromisoformat(last) < timedelta(hours=SYNC_HOURS):
         return None
-    try:
+    with aside(logger, f"Пульс посещения {user_id}", level=logging.INFO):  # сеть, DDoS-Guard — попробуем при следующей проверке
         return await sync(user_id, now=now)
-    except Exception as e:          # сеть, DDoS-Guard — попробуем при следующей проверке
-        logger.info(f"Пульс посещения {user_id}: {type(e).__name__}")
-        return None
+    return None

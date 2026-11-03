@@ -6,6 +6,7 @@
 import logging
 
 from kapibara.features.ai import gemini as gemini_solver
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ async def classify_intent(text: str) -> str:
     text = (text or "").strip()
     if not gemini_solver.GEMINI_API_KEY or len(text) < 3 or len(text) > MAX_CLASSIFY_CHARS:
         return "none"
-    try:
+    with aside(logger, "классификатор намерений"):
         # max_output_tokens не задаём: у моделей с "мышлением" служебные
         # токены считаются в тот же лимит, и крошечный лимит дал бы пустой
         # ответ. Одно слово на выходе модель и так вернёт по промпту.
@@ -59,6 +60,4 @@ async def classify_intent(text: str) -> str:
             temperature=0, max_output_tokens=None, timeout=10, fallback=False,
         )
         return parse_intent(raw)
-    except Exception as e:
-        logger.warning(f"intent classify failed: {e}")
-        return "none"
+    return 'none'
