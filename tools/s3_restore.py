@@ -36,6 +36,16 @@ def people(path: str) -> int:
         con.close()
 
 
+def _install(tmp: str, path: str) -> None:
+    """Положить проверенную копию на место базы (синхронно — в потоке)."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    try:
+        backup._copy_into(tmp, path)
+    finally:
+        os.remove(tmp)
+    backup._drop_search_index()
+
+
 async def restore(key: str | None = None, force: bool = False) -> str:
     """→ строка-итог; ошибка — SystemExit с понятным текстом."""
     if not s3_store.configured():
@@ -48,12 +58,7 @@ async def restore(key: str | None = None, force: bool = False) -> str:
     if code != 200:
         raise SystemExit(f"Копия {key} не скачалась (HTTP {code}). Сделай /backup на старом сервере.")
     tmp, info = backup.inspect_backup(raw)
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    try:
-        backup._copy_into(tmp, path)
-    finally:
-        os.remove(tmp)
-    backup._drop_search_index()
+    await asyncio.to_thread(_install, tmp, path)
     return (f"База из {key} ({info['size_mb']} МБ): людей {info['users']}, дедлайнов {info['deadlines']}, "
             f"файлов {info['files']}, входов СДО {info['sdo']} → {path}")
 

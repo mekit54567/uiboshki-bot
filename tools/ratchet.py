@@ -32,14 +32,16 @@ ROOT = Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "tools" / "ratchet.json"
 SERVER_DIRS = ("kapibara", "handlers", "database", "webapp")
 
-# B — bugbear (замыкание на переменной цикла, raise без from, zip без strict…),
-# ASYNC — блокирующие вызовы внутри async (бот замирает для всех), SIM/C4/PERF/UP
-# — лишний и устаревший код. ASYNC109 (параметр timeout у async-функции) — не баг.
-RUFF_DEBT = ["B", "ASYNC", "SIM", "PERF", "UP"]
+# Семейства Ruff, которые ещё не в select (ruff.toml). 03.11 все прежние —
+# B, ASYNC, SIM, C4, PERF, UP — дошли до нуля и стали обязательными; новое
+# строгое семейство добавляем сюда, пока в старом коде есть нарушения.
+RUFF_DEBT: list[str] = []
 RUFF_DEBT_IGNORE = ["ASYNC109"]
 
 
 def ruff_debt(root: Path) -> int:
+    if not RUFF_DEBT:
+        return 0
     out = subprocess.run(
         [sys.executable, "-m", "ruff", "check", ".", "--select", ",".join(RUFF_DEBT),
          "--ignore", ",".join(RUFF_DEBT_IGNORE), "--exit-zero", "--output-format", "json", "--no-cache"],
@@ -196,7 +198,8 @@ def main(argv: list[str]) -> int:
     if worse:
         print("\n❌ Стало хуже — новый код должен быть не хуже старого:\n  " + "\n  ".join(worse))
         print("Узкий тип ошибки вместо except Exception, лог вместо pass, импорт без нового цикла.")
-        print("ruff_debt — что именно: ruff check . --select " + ",".join(RUFF_DEBT) + " --ignore " + ",".join(RUFF_DEBT_IGNORE))
+        if RUFF_DEBT:
+            print("ruff_debt — что именно: ruff check . --select " + ",".join(RUFF_DEBT) + " --ignore " + ",".join(RUFF_DEBT_IGNORE))
         return 1
     if better:
         print("\n✅ Стало лучше:\n  " + "\n  ".join(better))

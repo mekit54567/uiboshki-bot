@@ -16,6 +16,7 @@ memmap: в памяти — слои (десятки МБ), а таблица с
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -23,6 +24,7 @@ import struct
 import threading
 import time
 
+import anyio
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -66,22 +68,22 @@ async def download(key: str) -> str:
     base = (os.getenv("EMBED_HF_BASE") or "https://huggingface.co").rstrip("/")
     repo, folder = MODELS[key]["repo"], model_dir(key)
     for name in FILES + OPTIONAL:
-        path = os.path.join(folder, name)
-        if os.path.exists(path):
+        path = anyio.Path(folder) / name
+        if await path.exists():
             continue
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        await path.parent.mkdir(parents=True, exist_ok=True)
         url = f"{base}/{repo}/resolve/main/{name}"
-        tmp = path + ".part"
+        tmp = path.with_name(path.name + ".part")
         async with net.client(timeout=120, follow_redirects=True) as c, c.stream("GET", url) as resp:
             if resp.status_code == 404 and name in OPTIONAL:
                 continue
             if resp.status_code != 200:
                 raise EmbedUnavailable(f"{repo}/{name}: HTTP {resp.status_code}")
-            with open(tmp, "wb") as f:
+            async with await anyio.open_file(tmp, "wb") as f:      # сотни МБ — запись не держит цикл событий
                 async for part in resp.aiter_bytes(1 << 20):
-                    f.write(part)
-        os.replace(tmp, path)
-        logger.info(f"модель векторов: скачан {repo}/{name} ({os.path.getsize(path) // 1024} КБ)")
+                    await f.write(part)
+        await tmp.replace(path)
+        logger.info(f"модель векторов: скачан {repo}/{name} ({(await path.stat()).st_size // 1024} КБ)")
     return folder
 
 
@@ -196,10 +198,8 @@ class Encoder:
 
     def _forward(self, ids: np.ndarray, mask: np.ndarray) -> np.ndarray:
         B, T = ids.shape
-        if self.roberta:          # позиции XLM-R: с pad_id + 1, паддинг — pad_id
-            pos = (np.cumsum(mask, axis=1) * mask) + self.pad_id
-        else:
-            pos = np.broadcast_to(np.arange(T), (B, T))
+        # позиции XLM-R: с pad_id + 1, паддинг — pad_id; у BERT — просто 0..T-1
+        pos = (np.cumsum(mask, axis=1) * mask) + self.pad_id if self.roberta else np.broadcast_to(np.arange(T), (B, T))
         x = np.asarray(self.word[ids.reshape(-1)], dtype=np.float32).reshape(B, T, -1) + self.pos[pos] + self.tok_type
         x = _ln(x, *self.emb_ln, self.eps)
         H = self.heads
@@ -265,10 +265,8 @@ _pool = None
 
 
 def _lower_priority():
-    try:
+    with contextlib.suppress(AttributeError, OSError):       # не Linux — без приоритета
         os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), NICE)
-    except (AttributeError, OSError):       # не Linux — без приоритета
-        pass
 
 
 def _executor():

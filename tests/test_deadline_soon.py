@@ -1,5 +1,6 @@
 """«Срок скоро, а ты не сдал» (Никита 25.10): за N часов до срока (по
 умолчанию 3), только не сданное, один раз, время — в настройках везде."""
+from pathlib import Path
 from datetime import datetime, timedelta
 
 import pytest
@@ -66,9 +67,9 @@ async def test_quiz_skipped_when_quiz_reminders_on(db):
 
 def test_settings_everywhere():
     """Время «Срок скоро» — и в Mini App, и в PWA, и в приложении."""
-    assert "setSoonHours(" in open("webapp/static/js/more.js", encoding="utf-8").read()
-    assert "deadline_soon_hours" in open("webapp/static/app-html/js/screens/settings.js", encoding="utf-8").read()
-    assert "deadline_soon_hours" in open("app/lib/screens/notify.dart", encoding="utf-8").read()
+    assert "setSoonHours(" in Path("webapp/static/js/more.js").read_text(encoding="utf-8")
+    assert "deadline_soon_hours" in Path("webapp/static/app-html/js/screens/settings.js").read_text(encoding="utf-8")
+    assert "deadline_soon_hours" in Path("app/lib/screens/notify.dart").read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio

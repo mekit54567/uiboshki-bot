@@ -1,5 +1,6 @@
 """Обзор недели в воскресенье: пары по дням, другой корпус, свободные дни,
 дедлайны недели; пустую неделю не шлём; тумблер в уведомлениях."""
+from pathlib import Path
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -86,7 +87,7 @@ async def test_send_respects_toggle(db, week, monkeypatch):
 
 
 def test_toggle_in_app():
-    src = open("webapp/static/js/more.js", encoding="utf-8").read()
+    src = Path("webapp/static/js/more.js").read_text(encoding="utf-8")
     assert "toggleNotify('weekly')" in src
 
 

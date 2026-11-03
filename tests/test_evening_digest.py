@@ -1,6 +1,7 @@
 """Вечерняя сводка на завтра (evening_digest.py, Никита 12.10): пары, погода,
 корпус и сроки; пустой день не шлём; тумблер и время в уведомлениях; при
 DESIGN2=0 — ни рассылки, ни пункта в /api/notify."""
+from pathlib import Path
 from datetime import date, datetime
 
 import pytest
@@ -86,7 +87,7 @@ def test_tomorrow_weather_text():
 
 def test_card_in_webapp():
     """Пункт в листе «Уведомления» — только если сервер отдал ключ evening."""
-    src = open("webapp/static/js/more.js", encoding="utf-8").read()
+    src = Path("webapp/static/js/more.js").read_text(encoding="utf-8")
     assert "toggleNotify('evening')" in src and '!("evening" in p)' in src
 
 

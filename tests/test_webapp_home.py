@@ -208,7 +208,7 @@ async def test_bot_undone_returns_deadline(db):
     bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=RecordingSession())
     dp = Dispatcher(storage=MemoryStorage()); dp.include_router(router)
     try:
-        for i, text in enumerate(("/done %d" % did, "/deadlines", "/undone %d" % did, "/deadlines")):
+        for i, text in enumerate((f"/done {did}", "/deadlines", f"/undone {did}", "/deadlines")):
             msg = Message(message_id=900 + i, date=0, chat=Chat(id=222, type="private"), from_user=user, text=text)
             await dp.feed_update(bot, Update(update_id=int(time.time()) + i, message=msg))
     finally:

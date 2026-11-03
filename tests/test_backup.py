@@ -1,4 +1,5 @@
 """Резервная копия базы: консистентный снимок, сжатие, отправка старосте."""
+from pathlib import Path
 import gzip
 import sqlite3
 
@@ -71,7 +72,7 @@ async def test_backup_encrypted_with_key(db, monkeypatch, tmp_path):
     enc = tmp_path / "copy.db.gz.enc"
     enc.write_bytes(data)
     out = backup_decrypt.main(str(enc))
-    assert out.endswith(".db.gz") and gzip.decompress(open(out, "rb").read()).startswith(b"SQLite format 3")
+    assert out.endswith(".db.gz") and gzip.decompress(Path(out).read_bytes()).startswith(b"SQLite format 3")
 
     monkeypatch.setenv("BACKUP_KEY", "другой-ключ")
     with pytest.raises(backup.RestoreError, match="ключ не тот"):

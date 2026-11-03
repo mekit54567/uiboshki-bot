@@ -64,7 +64,7 @@ def test_onclick_handlers_are_defined():
 def test_no_part_redeclares_anothers_globals():
     seen = {}
     for name, text in JS.items():
-        for kind, ident in re.findall(r'^(?:async\s+)?(function|const|let|var)\s+(\w+)', text, re.M):
+        for _kind, ident in re.findall(r'^(?:async\s+)?(function|const|let|var)\s+(\w+)', text, re.M):
             assert ident not in seen, f"{ident} объявлен и в {seen[ident]}, и в {name}"
             seen[ident] = name
 

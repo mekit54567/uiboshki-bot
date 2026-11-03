@@ -131,7 +131,7 @@ def test_pdf_borrows_topic_from_presentation_name():
 def test_course_name_on_every_title_slide_is_not_a_topic():
     # предмет в базе назван коротко, а на всех титульных — полное название курса
     files = [_f(i, f"Лекция {i}", "ОПД", f"l{i}.pdf") for i in range(1, 5)]
-    texts = {i: "Основы предпринимательской деятельности\nЛекция %d\n" % i for i in range(1, 5)}
+    texts = {i: f"Основы предпринимательской деятельности\nЛекция {i}\n" for i in range(1, 5)}
     assert text_titles(files, tidy_titles(files), texts) == {}
 
 

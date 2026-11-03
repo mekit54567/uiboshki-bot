@@ -18,6 +18,7 @@
 """
 
 import asyncio
+import contextlib
 import gzip
 import hashlib
 import logging
@@ -243,21 +244,30 @@ async def keep_local_copy() -> str | None:
 BEFORE_START_SPARE = 200 * 1024 * 1024    # копия перед запуском — только если после неё останется столько
 
 
+def _room_before_start(src: str, path: str) -> bool | None:
+    """Хватит ли места на копию src рядом (старую копию перезапишем — её
+    место тоже свободно). None — базы ещё нет. Синхронно: зовётся в потоке."""
+    import shutil
+    if not os.path.exists(src):
+        return None
+    old = os.path.getsize(path) if os.path.exists(path) else 0
+    free = shutil.disk_usage(os.path.dirname(os.path.abspath(src))).free + old
+    if free < os.path.getsize(src) + BEFORE_START_SPARE:
+        logger.warning(f"копия перед запуском: мало места ({free // 2**20} МБ) — пропускаю")
+        return False
+    return True
+
+
 async def keep_before_start() -> str | None:
     """Копия базы перед init_db() при каждом запуске (02.11): init_db меняет
     схему, и если новая сборка сделала это неудачно, рядом лежит база, какой
     она была до неё (<база>.before-start, одна, перезаписывается). Нет места
     на диске — не копируем, бот запускается как обычно. → путь или None."""
-    import shutil
     src = database.DATABASE_PATH
-    if not os.path.exists(src):
-        return None                     # первый запуск — копировать нечего
     path = src + ".before-start"
-    old = os.path.getsize(path) if os.path.exists(path) else 0
-    free = shutil.disk_usage(os.path.dirname(os.path.abspath(src))).free + old
-    if free < os.path.getsize(src) + BEFORE_START_SPARE:
-        logger.warning(f"копия перед запуском: мало места ({free // 2**20} МБ) — пропускаю")
-        return None
+    room = await asyncio.to_thread(_room_before_start, src, path)
+    if not room:
+        return None                     # первый запуск или мало места — бот запускается как обычно
     try:
         await asyncio.to_thread(_copy_into, src, path)
         return path
@@ -283,7 +293,7 @@ async def apply_backup(tmp_path: str):
     try:
         await asyncio.to_thread(_copy_into, tmp_path, database.DATABASE_PATH)
     finally:
-        if os.path.exists(tmp_path):
+        with contextlib.suppress(FileNotFoundError):
             os.remove(tmp_path)
     try:
         _drop_search_index()

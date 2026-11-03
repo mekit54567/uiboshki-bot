@@ -30,20 +30,15 @@ def _extract_docx(data: bytes) -> str:
     from docx import Document
     doc = Document(io.BytesIO(data))
     parts = [p.text for p in doc.paragraphs if p.text.strip()]
-    for table in doc.tables:
-        for row in table.rows:
-            parts.append(" | ".join(cell.text for cell in row.cells))
+    parts += [" | ".join(cell.text for cell in row.cells) for table in doc.tables for row in table.rows]
     return "\n".join(parts)
 
 
 def _extract_pptx(data: bytes) -> str:
     from pptx import Presentation
     prs = Presentation(io.BytesIO(data))
-    parts = []
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            if getattr(shape, "has_text_frame", False) and shape.text_frame.text.strip():
-                parts.append(shape.text_frame.text.strip())
+    parts = [shape.text_frame.text.strip() for slide in prs.slides for shape in slide.shapes
+             if getattr(shape, "has_text_frame", False) and shape.text_frame.text.strip()]
     return "\n".join(parts)
 
 
