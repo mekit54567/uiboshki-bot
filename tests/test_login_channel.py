@@ -135,9 +135,11 @@ async def test_old_users_and_no_channel_as_before(env, db, monkeypatch):
 async def test_telegram_silent_does_not_block(env, db):
     from kapibara.features.identity import login_channel
 
-    class Broken:
+    from aiogram.exceptions import TelegramBadRequest
+
+    class Broken:                                   # так Telegram отвечает, когда бот не в канале
         async def get_chat_member(self, *a):
-            raise RuntimeError("bot is not a member of the channel chat")
+            raise TelegramBadRequest(method=None, message="bot is not a member of the channel chat")
     await _since_before_user(db)
     assert await login_channel.needed(Broken(), UID) is False
 
@@ -180,3 +182,17 @@ async def test_erase_forgets_channel_mark(db):
     await set_setting(f"login_channel:{UID}", "1")
     await privacy.erase(UID)
     assert await get_setting(f"login_channel:{UID}") is None
+
+
+@pytest.mark.asyncio
+async def test_our_bug_is_not_taken_for_telegram_silence(env, db):
+    """03.11: раньше любая ошибка здесь читалась как «Telegram молчит» — и баг
+    в нашем коде тихо выключал проверку канала. Теперь отказ Telegram — None,
+    а ошибка в нашем коде видна."""
+    from kapibara.features.identity import login_channel
+
+    class Buggy:
+        async def get_chat_member(self, *a):
+            raise AttributeError("опечатка в нашем коде")
+    with pytest.raises(AttributeError):
+        await login_channel.subscribed(Buggy(), UID)

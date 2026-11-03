@@ -28,6 +28,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+from kapibara.core.errors import NETWORK
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ async def _revoke(token: str) -> bool:
     try:
         status, _ = await _post(REVOKE_URL, {"client_id": client_id(), "client_secret": client_secret(),
                                              "token": token, "token_type_hint": "refresh_token"})
-    except Exception as e:  # noqa: BLE001 — удаление аккаунта не должно падать из-за Apple
+    except (*NETWORK, OSError, ValueError) as e:  # ключ не подписал или Apple молчит — удаление аккаунта Apple не ждёт
         logger.warning(f"Apple /auth/revoke: {e}")
         return False
     if status != 200:

@@ -33,7 +33,7 @@ from database import (
 from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
-from kapibara.core.errors import aside
+from kapibara.core.errors import EXTERNAL, aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -121,7 +121,7 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
                                         reply_markup=kb)
         else:
             sent = await bot.send_message(chat, caption, parse_mode="HTML", reply_markup=kb)
-    except Exception as e:
+    except EXTERNAL as e:
         logger.error(f"Не удалось опубликовать в ленту: {e}")
         # Пост так и не появился в группе — помечаем удалённым, иначе
         # неудачная попытка всё равно запускала антиспам-кулдаун

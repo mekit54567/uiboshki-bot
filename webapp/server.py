@@ -22,6 +22,7 @@ index и статика. Обработчики разнесены по тема
 initData и общее для них — webapp/deps.py.
 """
 
+import sqlite3
 import asyncio
 import gzip
 import logging
@@ -194,7 +195,7 @@ async def ready():
         async with connect() as db:
             await db.execute("SELECT 1")
         db_ok = True
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         logging.getLogger(__name__).warning(f"/ready: база не отвечает: {e!r}")
         db_ok = False
     ok = db_ok and not waiting

@@ -43,7 +43,7 @@ import httpx
 
 from kapibara.core import net
 import contextlib
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ async def balance(client: httpx.AsyncClient, key: str) -> float | None:
     try:
         d = (await _get(client, key, "/credits")).get("data") or {}
         return float(d["total_credits"]) - float(d["total_usage"])
-    except Exception:
+    except (*NETWORK, KeyError, TypeError, ValueError):
         return None
 
 

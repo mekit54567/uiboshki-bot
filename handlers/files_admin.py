@@ -1,5 +1,6 @@
 """Команды старосты по файлам и базе: /delfile, /backup, /tidyfiles, /restore, /syncfiles."""
 
+import sqlite3
 import asyncio
 import contextlib
 import json
@@ -297,7 +298,7 @@ async def handle_sync_json(message: Message):
                         created_by=0
                     )
                     added += 1
-                except Exception:
+                except (sqlite3.Error, ValueError, KeyError, TypeError):
                     skipped += 1
 
             await wait.edit_text(

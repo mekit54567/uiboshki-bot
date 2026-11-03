@@ -12,6 +12,8 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from kapibara.core import config
 from kapibara.core.config import is_starosta
 from kapibara.core.utils import esc
+from kapibara.core.errors import EXTERNAL
+from aiogram.exceptions import TelegramAPIError
 
 router = Router()
 
@@ -42,7 +44,7 @@ async def _preview(bot, chat_id, posts, idx, done):
         return
     try:
         await send_post(bot, chat_id, post, config.WEBAPP_URL)
-    except Exception as e:          # битая разметка поста — понятным текстом, а не общим алертом
+    except (*EXTERNAL, OSError, ValueError) as e:  # битая разметка поста — понятным текстом, а не общим алертом
         await bot.send_message(chat_id, f"⚠️ Пост {idx + 1} «{esc(post['title'])}» не отправился: "
                                f"{esc(str(e))[:300]}", parse_mode="HTML")
         return
@@ -159,7 +161,7 @@ async def channel_button(callback: CallbackQuery):
             for chat, ids in by_chat.items():
                 for k in range(0, len(ids), 100):
                     await callback.bot.delete_messages(chat, ids[k:k + 100])
-        except Exception as e:
+        except TelegramAPIError as e:
             await callback.answer("Не вышло удалить", show_alert=True)
             await callback.message.answer(f"⚠️ Не удалил: {esc(str(e))[:300]}\n"
                                           "Удали посты в канале руками, потом снова /channel redo.", parse_mode="HTML")
@@ -195,7 +197,7 @@ async def channel_button(callback: CallbackQuery):
             return
         try:
             ids = await send_post(callback.bot, chat, posts[idx], config.WEBAPP_URL)
-        except Exception as e:
+        except (*EXTERNAL, OSError, ValueError) as e:
             await callback.answer("Не вышло — бот админ канала?", show_alert=True)
             await callback.message.answer(f"⚠️ Не опубликовал: {esc(str(e))[:300]}\n"
                                           "Проверь, что бот — админ канала с правом публиковать.", parse_mode="HTML")
@@ -204,7 +206,7 @@ async def channel_button(callback: CallbackQuery):
     if "pinned" in slug:              # закреп с оглавлением — сразу закрепить
         try:
             await callback.bot.pin_chat_message(chat, ids[0], disable_notification=True)
-        except Exception as e:
+        except TelegramAPIError as e:
             await callback.message.answer(f"Не закрепил сам ({esc(str(e))[:200]}) — закрепи руками.", parse_mode="HTML")
     await callback.message.edit_reply_markup(reply_markup=_kb(slug, True))
     link = post_link(chat, ids[0])

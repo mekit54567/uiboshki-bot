@@ -18,6 +18,7 @@ from kapibara.core import net
 
 from kapibara.features.ai import gemini as gemini_solver
 from kapibara.core.config import DEEPSEEK_API_KEY
+from kapibara.core.errors import NETWORK
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ async def _gemini_then_deepseek(history: list, system: str, ds_system: str,
         try:
             msg = await _deepseek_chat([{"role": "system", "content": ds_system}, *(ds_history or history)],
                                        max_tokens=2048, temperature=0.3)
-        except Exception as ds_error:
+        except (*NETWORK, RuntimeError, KeyError, IndexError, ValueError) as ds_error:
             logger.warning(f"Запасной DeepSeek тоже не ответил: {ds_error}")
             raise e from ds_error
         return msg["content"] + FALLBACK_NOTE_DS
@@ -195,7 +196,7 @@ async def _gemini_then_deepseek(history: list, system: str, ds_system: str,
 async def _deepseek_then_gemini(history: list, ds_system: str, gemini_system: str, **params) -> dict:
     try:
         return await _deepseek_chat([{"role": "system", "content": ds_system}, *history], **params)
-    except Exception as e:
+    except (*NETWORK, RuntimeError, KeyError, IndexError, ValueError) as e:
         logger.warning(f"DeepSeek не ответил ({type(e).__name__}) — отвечает Gemini")
         text = await _gemini_with_retry(history, gemini_system)
         return {"content": text + FALLBACK_NOTE_GEMINI, "reasoning_content": ""}

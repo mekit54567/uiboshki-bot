@@ -18,6 +18,7 @@ from kapibara.core.config import GROUP_NAME
 from kapibara.features.lectures.day import NIGHT_UNTIL
 from kapibara.core.utils import TZ, today_msk
 from kapibara.core.errors import aside
+from kapibara.features.schedule.parser import FETCH_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ async def _schedule_lines(days: int = 2, user_id: int | None = None) -> list[str
     from kapibara.features.schedule.parser import format_day, parse_events_for_date, raw_for_user
     try:
         raw = await raw_for_user(user_id or 0)
-    except Exception as e:
+    except FETCH_ERRORS as e:
         logger.info(f"group_context: расписание недоступно: {e}")
         return []
     today = today_msk()
@@ -82,7 +83,7 @@ def _lecture_numbers(raw: bytes, events: list[dict], day: date) -> list[str]:
         seen.add(title)
         try:
             dates = attendance.lecture_dates(raw, title, day)
-        except Exception:
+        except (ValueError, KeyError, TypeError, AttributeError):
             continue
         if day in dates:
             out.append(f"  {title} (лк) {day:%d.%m} — лекция №{dates.index(day) + 1} по этому предмету в семестре")

@@ -14,7 +14,7 @@ sdo_parser.sync_deadlines). Другой группе хватает одног�
 import logging
 
 from kapibara.features.sdo import net as sdo_net
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def sync_group(group_id: int) -> dict:
         except sdo_parser.SdoSessionExpired as e:
             last = f"вход {donor['user_id']} погас: {e}"
             continue                                    # keepalive сам пометит и напишет человеку
-        except Exception as e:
+        except (*NETWORK, RuntimeError, ValueError) as e:
             last = f"{type(e).__name__}: {e}"
             continue
         res = await sdo_parser.apply_items(items, group_id=group_id)

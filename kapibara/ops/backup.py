@@ -101,7 +101,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
     from aiogram.types import BufferedInputFile
     try:
         data, name = await make_backup()
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         logger.error(f"backup: не снялась копия базы: {e}")
         await health.note("backup", False, "копия не снялась")
         await bot.send_message(chat_id, f"⚠️ Не получилось снять копию базы: {e}")

@@ -28,7 +28,7 @@ import httpx
 
 from kapibara.core.config import TIMEZONE
 from database import _conn
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ async def _scan_type(client: httpx.AsyncClient, target_type: int):
                 for attempt in range(3):
                     try:
                         return i, await fetch_title(client, target_type, i)
-                    except Exception as e:
+                    except NETWORK as e:
                         if attempt == 2:
                             raise
                         logger.info(f"schedule_index: {target_type}/{i} повтор после ошибки: {e}")

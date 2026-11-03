@@ -26,6 +26,7 @@ import logging
 import os
 
 from kapibara.core import config
+from kapibara.core.errors import NETWORK
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
         answer = await ai_solver.solve_with_history(history, subject, "gemini", lectures=lectures,
                                                     extra_system=(context + "\n\n" if context else "")
                                                     + (NOTE_FIRST if first else NOTE))
-    except Exception as e:
+    except (*NETWORK, RuntimeError, ValueError) as e:
         logger.warning(f"«Подумать ещё»: {MODEL} не ответил: {e!r}")
         await _settle(uid, None)
         why = str(e) if isinstance(e, RuntimeError) and str(e) else type(e).__name__

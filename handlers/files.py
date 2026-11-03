@@ -10,6 +10,7 @@ from aiogram.types import (
 
 from database import get_files, search_files
 from kapibara.core.utils import esc
+from kapibara.core.errors import EXTERNAL
 
 router = Router()
 
@@ -187,7 +188,7 @@ async def send_file(callback: CallbackQuery, bot: Bot):
             f"📄 {f['title']}" + (f"\n📚 {f['subject']}" if f.get("subject") else "")
         )
         await callback.answer()
-    except Exception as e:
+    except EXTERNAL as e:
         await callback.answer(f"Ошибка: {e}", show_alert=True)
 
 

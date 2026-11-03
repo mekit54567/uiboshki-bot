@@ -24,7 +24,7 @@ from aiogram.types import (
     InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResultArticle, InlineQueryResultPhoto,
     InputTextMessageContent,
 )
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -161,7 +161,7 @@ async def _target_results(query: str) -> list:
     async def one(t):
         try:
             text = await asyncio.wait_for(render_target_schedule(t["id"], t["type"], t["title"]), TARGET_TIMEOUT)
-        except Exception as e:
+        except (*NETWORK, ValueError) as e:
             logger.info(f"inline: {t['title']}: {type(e).__name__}")
             return None
         return _article(f"t:{t['type']}:{t['id']}:{hash(text)}", f"{_TARGET_EMOJI[t['type']]} {t['title']}",

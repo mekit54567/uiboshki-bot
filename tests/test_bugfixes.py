@@ -552,7 +552,8 @@ async def test_hw_file_that_fails_to_send_is_reported(hw_db):
     class Session(RecordingSession):
         async def make_request(self, bot, method, timeout=None):
             if type(method).__name__ == "SendDocument":
-                raise RuntimeError("wrong file_id")
+                from aiogram.exceptions import TelegramBadRequest       # так Telegram отвечает на битый file_id
+                raise TelegramBadRequest(method=method, message="wrong file identifier")
             if type(method).__name__ == "EditMessageText":
                 return True
             return await super().make_request(bot, method, timeout)

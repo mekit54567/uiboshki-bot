@@ -8,7 +8,7 @@ RuStore, APNs — сервисы доставки видят только шиф
 
 import logging
 import re
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def push(user_id: int, kind: str, html: str, tab: str | None = None, title
     for sub in subs:
         try:
             code = await webpush.send(sub, data)
-        except Exception as e:
+        except (*NETWORK, ValueError, KeyError) as e:
             logger.info(f"пуш {user_id}: {type(e).__name__}: {e}")
             continue
         if code in (404, 410):

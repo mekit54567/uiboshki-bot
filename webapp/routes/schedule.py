@@ -131,7 +131,7 @@ async def api_today(user: dict = CurrentUser):
 
     try:
         weather = await weather_task
-    except Exception:
+    except (*NETWORK, KeyError, ValueError, TypeError):
         weather = ""
 
     items = await get_active_deadlines(user["id"])
@@ -378,7 +378,7 @@ async def api_lesson_groups(start: str, room: str = "", teacher: str = "", user:
             continue
         try:
             found = groups_at(ical, when)
-        except Exception as e:
+        except (ValueError, KeyError, TypeError) as e:
             logger.info(f"api_lesson_groups: календарь {target_type}/{target_id} не разобрался: {e!r}")
             continue
         if found:

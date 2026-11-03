@@ -6,7 +6,7 @@ import time
 from zoneinfo import ZoneInfo
 
 from kapibara.core import net
-from kapibara.core.errors import aside
+from kapibara.core.errors import NETWORK, aside
 
 # имя логгера — прежнее: раздел «Погода» в /status не меняется
 logger = logging.getLogger("handlers.weather")
@@ -60,7 +60,7 @@ async def _fetch_weather() -> dict | None:
             resp = await client.get(url)
             resp.raise_for_status()
             return resp.json()
-    except Exception as e:
+    except (*NETWORK, KeyError, ValueError, TypeError) as e:
         # сбой чужого сервиса, а не бота: предупреждение, не ошибка — иначе
         # 503 Open-Meteo будил «всплеск ошибок» старосте (health.alert_errors)
         logger.warning(f"Weather error: {e}")

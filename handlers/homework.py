@@ -13,7 +13,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from database import add_hw, delete_hw, get_hw_by_subject, get_hw_subjects, init_hw_table, is_editor
 from database.homework import get_hw
 from kapibara.core.utils import esc, parse_day_month, today_msk, utc_to_msk_date
-from kapibara.core.errors import aside
+from kapibara.core.errors import EXTERNAL, aside
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ async def hw_subject(callback: CallbackQuery):
                     await callback.message.answer_photo(item["file_id"], caption=item["content"] or "")
                 else:
                     await callback.message.answer_document(item["file_id"], caption=item["content"] or "")
-            except Exception as e:
+            except EXTERNAL as e:
                 logger.warning(f"ДЗ {item.get('id')}: файл не отправился: {e!r}")
                 await callback.message.answer("⚠️ Один файл ДЗ не отправился — попроси старосту залить его заново.")
 

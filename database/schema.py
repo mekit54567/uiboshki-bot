@@ -591,7 +591,7 @@ async def init_db():
             # На случай, если files_fts только что создалась, а files уже не пустая
             # (апгрейд существующей базы) — досыпаем индекс задним числом.
             await db.execute("INSERT INTO files_fts(files_fts) VALUES ('rebuild')")
-        except Exception as e:
+        except sqlite3.OperationalError as e:
             logging.getLogger(__name__).warning(f"FTS5 недоступен, поиск по файлам работать не будет: {e}")
 
         # Отпечаток текста лекции (этап 1 (в)): та же лекция у другой группы —
