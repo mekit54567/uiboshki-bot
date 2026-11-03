@@ -4,3 +4,4 @@ pytest-asyncio==1.4.0
 reportlab==4.4.4
 ruff==0.15.8
 import-linter==2.15
+mypy==2.4.1

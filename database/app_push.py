@@ -54,7 +54,8 @@ async def update_app_push_key(row_id: int, key_enc: str, only_if: str) -> bool:
 
 
 async def delete_app_push(platform: str, token: str, user_id: int | None = None) -> int:
-    sql, args = "DELETE FROM app_push WHERE platform = ? AND token = ?", [platform, token]
+    sql = "DELETE FROM app_push WHERE platform = ? AND token = ?"
+    args: list[object] = [platform, token]
     if user_id is not None:
         sql, args = sql + " AND user_id = ?", args + [user_id]
     async with connect() as db:

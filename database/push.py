@@ -35,7 +35,8 @@ async def get_push_subs(user_id: int) -> list[dict]:
 
 
 async def delete_push_sub(endpoint: str, user_id: int | None = None) -> int:
-    sql, args = "DELETE FROM push_subs WHERE endpoint = ?", [endpoint]
+    sql = "DELETE FROM push_subs WHERE endpoint = ?"
+    args: list[object] = [endpoint]
     if user_id is not None:
         sql, args = sql + " AND user_id = ?", args + [user_id]
     async with connect() as db:

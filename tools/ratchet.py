@@ -20,6 +20,9 @@ tools/ratchet.json и пускает их только вниз, как храп
                    которые ловят баги, но в старом коде ещё есть (ревью 03.11).
                    Правило дошло до нуля — переносим в select в ruff.toml,
                    тогда CI красный от первого же нового случая.
+  mypy_errors    — ошибки проверки типов (mypy.ini) по всему коду сервера;
+  mypy_core      — они же в ядре (kapibara/core, bot, jobs, database, bot.py):
+                   03.11 там ноль — ядро проверяется без поблажек.
 """
 from __future__ import annotations
 
@@ -49,6 +52,21 @@ def ruff_debt(root: Path) -> int:
         cwd=root, capture_output=True, text=True, check=True,
     )
     return len(json.loads(out.stdout or "[]"))
+
+
+MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "bot.py")
+
+
+def mypy_errors(root: Path) -> tuple[int, int]:
+    """(ошибок всего, из них в ядре). Без mypy.ini (чужое дерево в тестах) — нули."""
+    if not (root / "mypy.ini").exists():
+        return 0, 0
+    out = subprocess.run([sys.executable, "-m", "mypy", "--no-error-summary"],
+                         cwd=root, capture_output=True, text=True, check=False)
+    if out.returncode not in (0, 1):                    # 2 — mypy сам не запустился
+        raise RuntimeError(f"mypy не запустился:\n{out.stdout}{out.stderr}")
+    errors = [line for line in out.stdout.splitlines() if ": error:" in line]
+    return len(errors), sum(1 for line in errors if line.startswith(MYPY_CORE))
 
 
 def server_files(root: Path) -> list[Path]:
@@ -169,12 +187,15 @@ def measure(root: Path) -> dict[str, int]:
                     t = target(f"{mod}.{a.name}") or target(mod)
                     if t and t != name:
                         graph[name].add(t)
+    typed, typed_core = mypy_errors(root)
     return {
         "broad_except": broad,
         "silent_except": silent,
         "cycle_modules": _cycle_modules(graph),
         "root_py_files": len(list(root.glob("*.py"))),
         "ruff_debt": ruff_debt(root),
+        "mypy_errors": typed,
+        "mypy_core": typed_core,
     }
 
 
@@ -199,6 +220,7 @@ def main(argv: list[str]) -> int:
     if worse:
         print("\n❌ Стало хуже — новый код должен быть не хуже старого:\n  " + "\n  ".join(worse))
         print("Узкий тип ошибки вместо except Exception, лог вместо pass, импорт без нового цикла.")
+        print("mypy_errors / mypy_core — что именно: python -m mypy")
         if RUFF_DEBT:
             print("ruff_debt — что именно: ruff check . --select " + ",".join(RUFF_DEBT) + " --ignore " + ",".join(RUFF_DEBT_IGNORE))
         return 1

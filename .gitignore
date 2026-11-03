@@ -6,3 +6,4 @@ __pycache__/
 .env
 # сведения о сборке для /api/meta — пишет deploy/timeweb/update.sh
 build-info.json
+.mypy_cache/

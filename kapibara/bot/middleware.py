@@ -15,7 +15,7 @@ import logging
 import re
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message
+from aiogram.types import Message, TelegramObject
 
 from kapibara.bot.keyboards import MENU_BUTTON_TEXTS
 from kapibara.core.errors import aside
@@ -36,7 +36,7 @@ def is_command(text: str | None) -> bool:
 
 
 def _command_name(text: str | None) -> str:
-    if not is_command(text):
+    if not text or not is_command(text):
         return ""
     return text[1:].split(maxsplit=1)[0].split("@", 1)[0].lower()
 
@@ -46,7 +46,9 @@ def is_anonymous(text: str | None, raw_state: str | None) -> bool:
 
 
 class MenuInterruptMiddleware(BaseMiddleware):
-    async def __call__(self, handler, event: Message, data):
+    async def __call__(self, handler, event: TelegramObject, data):
+        if not isinstance(event, Message):              # стоит на сообщениях; другое — мимо
+            return await handler(event, data)
         state = data.get("state")
         text = event.text
         if state is not None and text and (text in MENU_BUTTON_TEXTS or is_command(text)):
