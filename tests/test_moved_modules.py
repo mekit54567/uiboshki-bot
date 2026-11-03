@@ -203,3 +203,21 @@ def test_database_path_lives_in_conn(monkeypatch):
     monkeypatch.setattr(database, "DATABASE_PATH", "elsewhere.db")
     assert _conn.DATABASE_PATH == "elsewhere.db" == database.DATABASE_PATH
     assert homework.get_setting is settings.get_setting is database.get_setting
+
+
+def test_cycle_split_keeps_old_names_cycles_4():
+    """03.11: СДО, расписание и уведомления по слоям — на старом месте тот же объект."""
+    from kapibara.core import crypto
+    from kapibara.features.deadlines import names, quiz_opens
+    from kapibara.features.groups import optional_subjects
+    from kapibara.features.notifications import new_tasks, push_text, quiz_alerts
+    from kapibara.features.schedule import hidden
+    from kapibara.features.sdo import accounts, courses, files, grades, net, pages, parser
+    assert optional_subjects.HIDE is hidden.HIDE and optional_subjects.unfiltered is hidden.unfiltered
+    assert parser.get_checked is net.get_checked and parser.SdoSessionExpired is net.SdoSessionExpired
+    assert files.make_client is net.make_client and files.match_subject is courses.match_subject
+    assert parser.course_of is courses.course_of and names.SEP == courses.SEP
+    assert grades.parse_assign_page is pages.parse_assign_page
+    assert accounts.encrypt is crypto.encrypt and accounts.decrypt is crypto.decrypt
+    assert quiz_alerts.note_opens is quiz_opens.note_opens
+    assert new_tasks.when is push_text.date_line
