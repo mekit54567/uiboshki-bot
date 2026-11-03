@@ -114,10 +114,10 @@ async def award(bot, month: str | None = None) -> dict | None:
         result = {"group": win["id"], "name": win["name"], "avg": win["avg"], "people": win["people"],
                   "granted": given}
         await set_setting(key, json.dumps(result, ensure_ascii=False))
-    from kapibara.jobs import scheduler
+    from kapibara.features.notifications.broadcast import pace
     for uid, until in sent:
         await billing.notify(bot, uid, text(win["name"], month, until))
-        await scheduler.pace()
+        await pace()
     if STAROSTA_ID:
         from kapibara.core.utils import esc
         runner = ", ".join(f"{esc(g['name'])} ({g['avg']})" for g in table[1:3])

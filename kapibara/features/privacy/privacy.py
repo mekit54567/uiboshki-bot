@@ -136,10 +136,10 @@ def backup_texts() -> dict:
                          "оператора;",
             "BACKUP_ERASE": "когда копия сменится новой, не позже чем через 7 дней",
         }
-    from kapibara.ops import backup
     # 20.10: с BACKUP_KEY копия зашифрована ключом, который есть только у оператора
+    # (тот же признак, что backup.backup_key(); не импортируем ops — слой выше)
     enc = (", зашифрованная ключом, который есть только у оператора (AES-256-GCM): Telegram хранит "
-           "нечитаемый файл") if backup.backup_key() else ""
+           "нечитаемый файл") if os.getenv("BACKUP_KEY", "").strip() else ""
     return {
         "PROXY": proxy,
         "BACKUP_WHERE": "Раз в сутки делается резервная копия базы и приходит оператору в Telegram "

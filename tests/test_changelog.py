@@ -163,7 +163,8 @@ def test_build_info_in_meta(tmp_path, monkeypatch):
     """/api/meta показывает коммит и номер PR (Никита 23.10: версия раз в ~10
     PR, а видеть, что сервер обновился, — после каждого мержа)."""
     from webapp.routes import meta
-    monkeypatch.setattr(meta, "BUILD_INFO", tmp_path / "build-info.json")
+    from kapibara.ops import build
+    monkeypatch.setattr(build, "BUILD_INFO", tmp_path / "build-info.json")
     meta.build_info.cache_clear()
     assert meta.build_info()["commit"] == "" and meta.build_info()["started"]
     (tmp_path / "build-info.json").write_text(
