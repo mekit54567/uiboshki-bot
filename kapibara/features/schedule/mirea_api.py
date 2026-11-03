@@ -82,11 +82,11 @@ def teaches(raw: bytes, subject: str, days: int = 120) -> bool:
     """Ведёт ли этот преподаватель (или есть ли у этой цели) пары предмета
     subject в пределах ±days дней — по названию без «ЛК/ПР»."""
     from datetime import datetime, timedelta
-    from kapibara.features.schedule.events import TZ, _calendar_query
+    from kapibara.features.schedule.events import TZ, occurrences_between
     from kapibara.features.schedule.format import _split_kind
     now = datetime.now(TZ)
     want = subject.strip().lower()
-    for comp in _calendar_query(raw).between(now - timedelta(days=days), now + timedelta(days=days)):
+    for comp in occurrences_between(raw, now - timedelta(days=days), now + timedelta(days=days)):
         if _split_kind(str(comp.get("SUMMARY", "")))[0].strip().lower() == want:
             return True
     return False

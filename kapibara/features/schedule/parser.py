@@ -22,7 +22,7 @@ from kapibara.features.schedule.format import (  # noqa: F401
 )
 from kapibara.features.schedule.events import (  # noqa: F401
     TEACHER_RE, parse_events_for_date, lessons_for_date, week_number, week_overview, target_weeks,
-    summarize_target, list_upcoming_events, _calendar_query,
+    summarize_target, list_upcoming_events, occurrences_between,
 )
 
 # ── Простой TTL-кэш сырого ical-фида ────────────────────────────────────────────
@@ -248,7 +248,7 @@ async def get_group_subjects(days_back: int = 14, days_ahead: int = 28, group_id
     start = datetime.combine(today - timedelta(days=days_back), datetime.min.time(), TZ)
     end = datetime.combine(today + timedelta(days=days_ahead), datetime.min.time(), TZ)
     names = set()
-    for component in _calendar_query(raw).between(start, end):
+    for component in occurrences_between(raw, start, end):
         summary = str(component.get("SUMMARY", ""))
         if not summary or summary.strip().endswith("неделя"):
             continue
