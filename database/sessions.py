@@ -174,7 +174,8 @@ def group_sessions(items: list[dict], current_id: int | None = None) -> list[dic
 async def revoke_session(user_id: int, session_id: int | None = None, token: str | None = None,
                          ids: list[int] | None = None) -> int:
     """Выйти: одно устройство (по id, списку id или токену) или все (все None)."""
-    sql, args = "UPDATE sessions SET revoked = 1 WHERE user_id = ?", [user_id]
+    sql = "UPDATE sessions SET revoked = 1 WHERE user_id = ?"
+    args: list[object] = [user_id]
     if ids is not None:
         ids = [int(i) for i in ids] or [-1]
         sql, args = sql + f" AND id IN ({','.join('?' * len(ids))})", args + ids

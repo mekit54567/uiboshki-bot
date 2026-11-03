@@ -161,8 +161,7 @@ async def send_group_morning(bot: Bot, chat_id: int | None = None) -> str:
     from kapibara.features.schedule import card
     from kapibara.features.schedule.parser import lessons_for_date
     from handlers.schedule import _notes_block
-    preview = chat_id is not None
-    if not preview:
+    if chat_id is None:                                  # не превью старосте — в чат группы
         if await get_setting("group_morning") == "off":
             return "off"
         if not (chat_id := await group_chat()):
@@ -324,11 +323,10 @@ async def check_lesson_reminders(bot: Bot):
                     by_hide[key_h] = parse_events_for_date(raw, today)
                 finally:
                     HIDE.reset(token)
-            hide = key_h
 
             # У каждой пары свой сценарий: первая за день, после короткой
             # перемены или после большого перерыва — и своё «за сколько».
-            for e, remind_mins, kind in notify_prefs.plan_reminders(by_hide[hide], prefs):
+            for e, remind_mins, kind in notify_prefs.plan_reminders(by_hide[key_h], prefs):
                 t = e["time_start"]
                 diff = abs((t - (now + timedelta(minutes=remind_mins))).total_seconds())
                 if diff > 60:
@@ -409,7 +407,7 @@ async def sdo_keepalive(bot: Bot | None = None):
     if ok and sdo_parser.IDLE_TIMEOUT:
         from database import set_setting
         await set_setting("sdo:idle_timeout", str(sdo_parser.IDLE_TIMEOUT))
-    if ok and any(changed):
+    if ok and bot and any(changed):                     # changed копит только peek, а он — с ботом
         await sync_sdo_deadlines(bot)
     from kapibara.features.notifications import grade_alerts
     if ok and bot and grade_alerts.daytime():

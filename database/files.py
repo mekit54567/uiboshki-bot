@@ -99,7 +99,7 @@ async def file_visible(fid: int, group_id: int) -> bool:
     return row is not None
 
 
-async def get_files(subject: str = None, group_id: int | None = None) -> list[dict]:
+async def get_files(subject: str | None = None, group_id: int | None = None) -> list[dict]:
     where, params = _fscope(group_id)
     async with connect() as db:
         db.row_factory = aiosqlite.Row

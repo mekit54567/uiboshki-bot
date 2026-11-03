@@ -3,5 +3,7 @@
   "silent_except": 8,
   "cycle_modules": 0,
   "root_py_files": 1,
-  "ruff_debt": 0
+  "ruff_debt": 0,
+  "mypy_errors": 637,
+  "mypy_core": 0
 }

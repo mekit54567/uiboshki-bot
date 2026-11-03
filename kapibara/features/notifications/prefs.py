@@ -12,6 +12,7 @@
 import json
 import re
 from collections import Counter
+from typing import TypedDict
 
 ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
 REMINDER_CHOICES = (5, 10, 15, 30)      # /settings в чате: одно время на все сценарии
@@ -19,7 +20,14 @@ REMINDER_CHOICES = (5, 10, 15, 30)      # /settings в чате: одно вре
 # Напоминание перед парой — по сценарию (минут до начала, 0 — не напоминать):
 # первая пара дня, после короткой перемены (10 мин между парами МИРЭА) и
 # после большого перерыва (30 мин и больше). Пресеты — кнопки, «своё» — поле.
-REMIND = {
+class RemindSpec(TypedDict):
+    title: str
+    presets: list[int]
+    max: int          # минут, больше нельзя
+    default: int
+
+
+REMIND: dict[str, RemindSpec] = {
     "remind_first": {"title": "Первая пара дня", "presets": [30, 60, 180], "max": 300, "default": 60},
     "remind_short": {"title": "После короткой перемены", "presets": [5], "max": 30, "default": 5},
     "remind_long": {"title": "После большого перерыва", "presets": [5, 10, 15], "max": 120, "default": 10},
@@ -197,8 +205,8 @@ def campus_note(events: list[dict], home: str | None) -> str:
     """Строка для утренней рассылки, если сегодня пары не в своём корпусе."""
     if not home:
         return ""
-    other = [(e.get("time_start"), campus_of(e.get("location"))) for e in events]
-    other = [(t, c) for t, c in other if c and c != home]
+    other = [(e.get("time_start"), c) for e in events
+             if (c := campus_of(e.get("location"))) and c != home]
     if not other:
         return ""
     names = sorted({c for _, c in other})

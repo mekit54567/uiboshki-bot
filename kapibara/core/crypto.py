@@ -40,8 +40,8 @@ def _keys() -> list[bytes]:
     можно сменить ключ (задать фразу) без потери уже подключённых СДО —
     старые записи перешифровываются при проверке входа (keepalive_all)."""
     keys = []
-    if os.getenv("SDO_CRYPT_KEY"):
-        key = os.getenv("SDO_CRYPT_KEY").strip().encode()
+    if raw := os.getenv("SDO_CRYPT_KEY"):
+        key = raw.strip().encode()
         try:
             Fernet(key)
             keys.append(key)
@@ -49,8 +49,8 @@ def _keys() -> list[bytes]:
             # не ключ Fernet (например, фраза вместо SDO_CRYPT_PASSPHRASE): без
             # проверки MultiFernet падал целиком и все входы считались протухшими
             logger.error("SDO_CRYPT_KEY — не ключ Fernet (нужны 32 байта в base64), пропускаю его")
-    if os.getenv("SDO_CRYPT_PASSPHRASE"):
-        keys.append(_passphrase_key(os.getenv("SDO_CRYPT_PASSPHRASE")))
+    if phrase := os.getenv("SDO_CRYPT_PASSPHRASE"):
+        keys.append(_passphrase_key(phrase))
     keys.append(_bot_token_key())
     return keys
 
@@ -69,7 +69,7 @@ def _key_ok(key: str) -> bool:
 
 def key_source() -> str:
     """Откуда ключ — для экрана «Безопасность» (без самого ключа)."""
-    if os.getenv("SDO_CRYPT_KEY") and _key_ok(os.getenv("SDO_CRYPT_KEY")):
+    if (raw := os.getenv("SDO_CRYPT_KEY")) and _key_ok(raw):
         return "key"
     if os.getenv("SDO_CRYPT_PASSPHRASE"):
         return "passphrase"

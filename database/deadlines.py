@@ -206,9 +206,11 @@ async def get_deadline_mine(user_id: int) -> dict[int, dict]:
         return {r["deadline_id"]: dict(r) for r in rows}
 
 
-async def _apply_mine(rows: list[dict], viewer_id: int) -> list[dict]:
+async def _apply_mine(rows: list[dict], viewer_id: int | None) -> list[dict]:
     """Подставить свои правки зрителя поверх общих полей; mine_changed — есть
-    своя правка (кнопка «Вернуть как у всех»)."""
+    своя правка (кнопка «Вернуть как у всех»). Зритель не задан — правок нет."""
+    if viewer_id is None:
+        return rows
     mine = await get_deadline_mine(viewer_id)
     if not mine:
         return rows

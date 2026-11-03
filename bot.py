@@ -146,8 +146,8 @@ async def notify_rollback(bot: Bot):
     /ready): он кладёт rollback.txt «плохой_коммит прошлый_коммит» рядом с
     базой, а вернувшийся бот говорит старосте и убирает отметку."""
     import os
-    import database
-    path = os.path.join(os.path.dirname(database.DATABASE_PATH), "rollback.txt")
+    from database import _conn
+    path = os.path.join(os.path.dirname(_conn.DATABASE_PATH), "rollback.txt")
     try:
         bad, _, prev = (await anyio.Path(path).read_text(encoding="utf-8")).strip().partition(" ")
     except OSError:
@@ -174,8 +174,12 @@ def start_webapp(port: int):
     except ImportError as e:
         logger.error(f"WebApp не запустился: {e}")
         return None, None
-    server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
-    server.capture_signals = contextlib.nullcontext
+    class Server(uvicorn.Server):
+        @contextlib.contextmanager
+        def capture_signals(self):                      # сигналы — у aiogram, не у uvicorn
+            yield
+
+    server = Server(uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning"))
 
     async def serve():
         with aside(logger, "WebApp упал"):

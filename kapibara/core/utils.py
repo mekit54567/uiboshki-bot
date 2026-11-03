@@ -70,7 +70,8 @@ def parse_day_month(raw: str, today: date) -> date | None:
     match = _DAY_MONTH_RE.match((raw or "").strip())
     if not match:
         return None
-    day, month, year = (int(g) if g else None for g in match.groups())
+    day, month = int(match.group(1)), int(match.group(2))
+    year = int(match.group(3)) if match.group(3) else None
     if year:
         try:
             return date(year, month, day)
@@ -287,7 +288,10 @@ def _table_html(rows: list[str]) -> str:
 
 
 def _md_to_tg_html(text: str) -> str:
-    lines, code, in_code, table = [], [], False, []
+    lines: list[str] = []
+    code: list[str] = []
+    table: list[str] = []
+    in_code = False
     for line in text.split("\n"):
         if table and (in_code or not _TABLE_RE.match(line)):
             lines.append(_table_html(table))
