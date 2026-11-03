@@ -13,13 +13,10 @@
 """
 
 import logging
-from contextlib import contextmanager
-from contextvars import ContextVar
 
 from kapibara.core.config import OPTIONAL_SUBJECTS
-
-HIDE: ContextVar[frozenset] = ContextVar("hide_subjects", default=frozenset())
-
+# сам фильтр — у расписания (schedule/hidden): его читает разбор календаря
+from kapibara.features.schedule.hidden import HIDE, no_filter, unfiltered  # noqa: F401 — их брали отсюда
 
 async def hidden_for(user_id: int) -> frozenset:
     """Что скрыть этому человеку: предметы по выбору без ответа «хожу».
@@ -38,7 +35,7 @@ async def pending_for(user_id: int) -> list[str]:
     человек ещё не ответил."""
     from database import get_optional_answers
     from kapibara.features.schedule.parser import get_group_subjects
-    from kapibara.features.sdo.parser import SEMESTER_WINDOW
+    from kapibara.features.sdo.courses import SEMESTER_WINDOW
     answers = await get_optional_answers(user_id)
     subjects = set(await get_group_subjects(**SEMESTER_WINDOW))
     return [s for s in OPTIONAL_SUBJECTS if s not in answers and s in subjects]
@@ -47,24 +44,3 @@ async def pending_for(user_id: int) -> list[str]:
 async def apply_for(user_id: int):
     """Выставить фильтр на остаток текущего запроса/задачи."""
     HIDE.set(await hidden_for(user_id))
-
-
-@contextmanager
-def no_filter():
-    token = HIDE.set(frozenset())
-    try:
-        yield
-    finally:
-        HIDE.reset(token)
-
-
-def unfiltered(fn):
-    """Для расписания чужой группы/преподавателя/аудитории (поиск): без
-    фильтра текущего человека."""
-    import functools
-
-    @functools.wraps(fn)
-    def wrapper(*a, **kw):
-        with no_filter():
-            return fn(*a, **kw)
-    return wrapper

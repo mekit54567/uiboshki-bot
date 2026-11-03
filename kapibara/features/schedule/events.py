@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from icalendar import Calendar
 import recurring_ical_events
 
-from kapibara.features.groups.optional_subjects import unfiltered
+from kapibara.features.schedule.hidden import unfiltered
 from kapibara.features.schedule.format import TZ, _merge_runs, _short_teacher, _split_kind
 
 
@@ -99,7 +99,7 @@ def parse_events_for_date(ical_data: bytes, target: date) -> list[dict]:
     events_raw = _occurrences(ical_data, target)
     events = []
 
-    from kapibara.features.groups.optional_subjects import HIDE
+    from kapibara.features.schedule.hidden import HIDE
     hide = HIDE.get()
     for component in events_raw:
         summary = str(component.get("SUMMARY", "Без названия"))

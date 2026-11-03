@@ -14,22 +14,15 @@
 import logging
 from datetime import date
 
+from kapibara.features.notifications.push_text import date_line as when
+
 logger = logging.getLogger(__name__)
 
 MASS = 8            # больше за один синк — это не новые задания, а выгрузка всего
-WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
-
-
-def when(due_date: str, due_time: str | None) -> str:
-    """«чт, 8 октября до 23:59»."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
-    d = date.fromisoformat(due_date)
-    text = f"{WEEKDAYS[d.weekday()]}, {d.day} {MONTHS_GEN[d.month - 1]}"
-    return text + (f" до {due_time}" if due_time else "")
 
 
 def _was(iso: str) -> str:
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     d = date.fromisoformat(iso)
     return f"{d.day} {MONTHS_GEN[d.month - 1]}"
 

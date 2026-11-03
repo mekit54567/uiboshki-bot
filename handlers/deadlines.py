@@ -391,7 +391,7 @@ async def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
     """Прошлый семестр по метке в названии курса или курса нет в нынешнем
     расписании группы (sdo_parser.not_this_semester)."""
     from kapibara.features.schedule.parser import get_group_subjects
-    from kapibara.features.sdo.parser import SEMESTER_WINDOW, not_this_semester
+    from kapibara.features.sdo.courses import SEMESTER_WINDOW, not_this_semester
     subjects = await get_group_subjects(**SEMESTER_WINDOW)
     return [d for d in items if not_this_semester(d, subjects)]
 
@@ -402,7 +402,7 @@ async def cmd_sdo_clean(message: Message):
         await message.answer("❌ Только для старосты.")
         return
     from database import get_sdo_deadlines
-    from kapibara.features.sdo.parser import current_semester_tag
+    from kapibara.features.sdo.courses import current_semester_tag
     old = await _old_sdo_deadlines(await get_sdo_deadlines())
     if not old:
         await message.answer(f"✅ Дедлайнов не этого семестра нет (нынешний — [{current_semester_tag()}], курсы сверяю с расписанием).")

@@ -23,7 +23,7 @@ import httpx
 
 from kapibara.features.pulse import probe as pulse_probe
 from database._conn import connect
-from kapibara.features.sdo.accounts import decrypt, encrypt, needs_rotation
+from kapibara.core.crypto import decrypt, encrypt, needs_rotation
 
 logger = logging.getLogger(__name__)
 

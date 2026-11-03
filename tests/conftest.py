@@ -91,9 +91,9 @@ def _fixed_semester(monkeypatch):
     26.09.2026, иначе с февраля 2027 они бы считались прошлым семестром и
     тесты синка СДО упали бы сами собой. Явная дата — по-прежнему своя."""
     from datetime import date
-    from kapibara.features.sdo import parser as sdo_parser
-    real = sdo_parser.current_semester_tag
-    monkeypatch.setattr(sdo_parser, "current_semester_tag", lambda today=None: real(today or date(2026, 9, 26)))
+    from kapibara.features.sdo import courses as sdo_courses
+    real = sdo_courses.current_semester_tag
+    monkeypatch.setattr(sdo_courses, "current_semester_tag", lambda today=None: real(today or date(2026, 9, 26)))
     # сроки работ ТК (срок прошёл / 15 дней ждём оценку) — от той же даты
     from datetime import datetime
     from kapibara.features.sdo import grades as sdo_grades

@@ -76,9 +76,9 @@ async def learn_missing(cookie: str | None = None, limit: int = MAX_PER_RUN) -> 
         return 0
     import httpx
     from kapibara.core.config import SDO_BASE_URL
-    from kapibara.features.sdo.files import make_client
-    from kapibara.features.sdo.grades import parse_assign_page
-    from kapibara.features.sdo.parser import get_checked
+    from kapibara.features.sdo.net import make_client
+    from kapibara.features.sdo.pages import parse_assign_page
+    from kapibara.features.sdo.net import get_checked
     pages: dict[int, dict | None] = {}
     async with make_client(cookie) as client:
         for cmid in todo:

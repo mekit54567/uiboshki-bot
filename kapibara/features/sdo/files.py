@@ -31,10 +31,10 @@ from urllib.parse import unquote, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-from kapibara.features.sdo import net as sdo_net
 from kapibara.core.config import SDO_BASE_URL
 from kapibara.core.categories import detect_category
-from kapibara.features.sdo.parser import SdoSessionExpired
+from kapibara.features.sdo.courses import clean_course_name, is_old_semester, match_subject, off_schedule  # noqa: F401
+from kapibara.features.sdo.net import SdoSessionExpired, get_checked, make_client  # noqa: F401 — make_client брали отсюда
 from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
@@ -66,16 +66,11 @@ class SdoCourse:
     old: bool = False               # курс прошлого семестра — не выгружаем
 
 
-def make_client(cookie: str) -> httpx.AsyncClient:
-    return sdo_net.client(cookie, timeout=60)
-
-
 def _logged_out(resp: httpx.Response) -> bool:
     return "/login/index.php" in str(resp.url)
 
 
 async def _get_html(client: httpx.AsyncClient, url: str) -> str:
-    from kapibara.features.sdo.parser import get_checked
     resp = await get_checked(client, url)
     resp.raise_for_status()
     return resp.text
@@ -131,53 +126,6 @@ async def list_courses(client: httpx.AsyncClient) -> list[dict]:
 
 
 # ── предмет по названию курса ────────────────────────────────────────────────
-
-_COURSE_NOISE = re.compile(
-    r"\[[^\]]*\]|\([^)]*\)|\b(?:экзамен|зач[её]т|диф\w*|курсов\w+|кп|кр|семестр|осень|весна)\b|\d{2,4}[-/.]\d{2,4}",
-    re.I,
-)
-
-
-def clean_course_name(name: str) -> str:
-    """«Архитектура_Экзамен [I.26-27]» → «Архитектура»."""
-    text = _COURSE_NOISE.sub(" ", name.replace("_", " "))
-    return re.sub(r"\s+", " ", text).strip(" .,-—:") or name.strip()
-
-
-def _stems(text: str) -> set[str]:
-    return {w[:5] for w in re.findall(r"[а-яёa-z]{3,}", text.lower().replace("ё", "е"))
-            if w not in {"для", "and", "the", "при", "основы"}}
-
-
-def match_subject(course_name: str, subjects: list[str]) -> str:
-    """Предмет из расписания группы, похожий на курс СДО (чтобы файлы и
-    решалка жили под одним названием), иначе — очищенное имя курса.
-
-    Главное — доля слов меньшего названия, найденных в большем
-    («Архитектура» → «Архитектура вычислительных машин…»). При равенстве
-    решает доля общих слов от всех: «Учетная деятельность на предприятии» и
-    «Основы предпринимательской деятельности» делят «деятельность» и
-    «предпр…», раньше побеждал первый по списку. Полная ничья — не угадываем."""
-    clean = clean_course_name(course_name)
-    course_stems = _stems(clean)
-    scored = []
-    for subject in subjects:
-        subj_stems = _stems(subject)
-        if not subj_stems or not course_stems:
-            continue
-        common = len(course_stems & subj_stems)
-        if common:
-            scored.append((common / min(len(course_stems), len(subj_stems)),
-                           common / len(course_stems | subj_stems), subject))
-    scored.sort(key=lambda t: t[:2], reverse=True)
-    if not scored or scored[0][0] < 0.6:
-        return clean
-    if len(scored) > 1 and scored[1][:2] == scored[0][:2]:
-        return clean
-    return scored[0][2]
-
-
-# ── материалы курса ──────────────────────────────────────────────────────────
 
 _MOD_LINK = re.compile(r"/mod/(resource|folder)/view\.php\?id=(\d+)")
 
@@ -280,7 +228,6 @@ async def scan_course(client: httpx.AsyncClient, course: dict, subject: str) -> 
 
 
 async def scan(client: httpx.AsyncClient, subjects: list[str]) -> list[SdoCourse]:
-    from kapibara.features.sdo.parser import is_old_semester, off_schedule
     courses = await list_courses(client)
     out = []
     for c in courses:

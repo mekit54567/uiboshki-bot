@@ -44,7 +44,7 @@ def resolve(d: dict, preset: str | None, at: str | None, now: datetime | None = 
 
 def label(at: str, now: datetime | None = None) -> str:
     """«завтра в 18:00», «сегодня в 21:00», «5 окт в 9:00»."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     now = now or datetime.now(TZ)
     t = datetime.strptime(at, FMT)
     days = (t.date() - now.date()).days

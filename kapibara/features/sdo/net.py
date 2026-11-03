@@ -89,3 +89,26 @@ def client(cookie: str, timeout: float = 30) -> httpx.AsyncClient:
 
     c.send = guarded
     return c
+
+
+class SdoSessionExpired(Exception):
+    """Кука MoodleSession больше не валидна — нужен ручной релогин."""
+
+
+async def get_checked(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """GET в СДО. Протухшая сессия бывает не только редиректом на
+    /login/index.php, но и бесконечным кругом «вход → единый вход МИРЭА →
+    обратно» — httpx тогда бросает TooManyRedirects. Живой тест 26.09:
+    это приходило старосте как «СДО недоступен с сервера», хотя дело в куке."""
+    try:
+        resp = await client.get(url)
+    except httpx.TooManyRedirects:
+        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла") from None
+    if "/login/index.php" in str(resp.url):
+        raise SdoSessionExpired(f"Похоже, сессия СДО протухла (итоговый URL: {resp.url})")
+    return resp
+
+
+def make_client(cookie: str) -> httpx.AsyncClient:
+    """Клиент для страниц и файлов СДО — с долгим таймаутом (файлы курсов большие)."""
+    return client(cookie, timeout=60)

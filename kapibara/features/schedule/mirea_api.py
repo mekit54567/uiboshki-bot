@@ -104,7 +104,7 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
     results — [{"id", "fullTitle", "scheduleTarget"}]; остальные не трогаются."""
     import asyncio
     from collections import Counter
-    from kapibara.features.schedule.parser import summarize_target
+    from kapibara.features.schedule.events import summarize_target
     counts = Counter(r["fullTitle"] for r in results)
     dupes = [r for r in results if counts[r["fullTitle"]] > 1][:limit]
     if not dupes:

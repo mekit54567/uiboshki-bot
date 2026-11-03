@@ -91,7 +91,7 @@ def build(raw: bytes, monday: date, deadlines: list[dict], home: str | None,
     """Сообщение в Telegram; None — неделя пустая. Первой строкой — то же,
     что в заголовке пуша, дальше сроки (что делать), потом дни.
     grades — прирост баллов за прошедшую неделю (week_grades)."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     head = headline(raw, monday, deadlines, home, grades)
     if not head:
         return None

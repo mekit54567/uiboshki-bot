@@ -133,7 +133,7 @@ def plan_reminders(events: list[dict], prefs: dict) -> list[tuple[dict, int, str
     пары подряд — одним блоком (как в расписании): одно напоминание перед
     первой, а не «через 5 мин пара» после каждой перемены внутри блока."""
     from kapibara.features.schedule.format import _merge_runs
-    from kapibara.features.schedule.parser import is_self_study
+    from kapibara.features.schedule.format import is_self_study
     timed = sorted((e for e in events if e.get("time_start") and not is_self_study(e.get("summary", ""))),
                    key=lambda e: e["time_start"])
     out, prev_end = [], None

@@ -29,7 +29,6 @@ Moodle по умолчанию — только 21 день вперёд и не
 """
 
 import html as html_lib
-import os
 import re
 import logging
 from datetime import datetime
@@ -39,6 +38,10 @@ import httpx
 from bs4 import BeautifulSoup
 
 from kapibara.features.sdo import net as sdo_net
+from kapibara.features.sdo.courses import (  # noqa: F401 — их брали отсюда
+    KEEP_COURSES, SEMESTER_WINDOW, course_of, current_semester_tag, is_old_semester, not_this_semester, off_schedule,
+)
+from kapibara.features.sdo.net import SdoSessionExpired, get_checked  # noqa: F401 — их брали отсюда
 from kapibara.core.config import SDO_SESSION_COOKIE, SDO_BASE_URL, TIMEZONE
 
 logger = logging.getLogger(__name__)
@@ -58,24 +61,6 @@ DEADLINE_EVENTS = {
     ("mod_workshop", "submissionend"),  # семинар: конец приёма работ
     ("mod_forum", "due"),               # форум с оценкой: срок
 }
-
-
-class SdoSessionExpired(Exception):
-    """Кука MoodleSession больше не валидна — нужен ручной релогин."""
-
-
-async def get_checked(client: httpx.AsyncClient, url: str) -> httpx.Response:
-    """GET в СДО. Протухшая сессия бывает не только редиректом на
-    /login/index.php, но и бесконечным кругом «вход → единый вход МИРЭА →
-    обратно» — httpx тогда бросает TooManyRedirects. Живой тест 26.09:
-    это приходило старосте как «СДО недоступен с сервера», хотя дело в куке."""
-    try:
-        resp = await client.get(url)
-    except httpx.TooManyRedirects:
-        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла") from None
-    if "/login/index.php" in str(resp.url):
-        raise SdoSessionExpired(f"Похоже, сессия СДО протухла (итоговый URL: {resp.url})")
-    return resp
 
 
 IDLE_TIMEOUT: int | None = None     # сек: сколько сессия живёт без запросов (для /status)
@@ -197,77 +182,6 @@ def parse_deadlines(html: str) -> list[dict]:
 
 
 # Метка семестра в названии курса СДО: «Архитектура_Экзамен [I.26-27]» —
-# первый (осенний) семестр 2026/27, «[II.25-26]» — весенний 2025/26.
-# Владелец: дедлайны курсов прошлого семестра не нужны.
-_SEM_TAG = re.compile(r"\[\s*(I{1,2})\s*\.\s*(\d{2})\s*-\s*(\d{2})\s*\]")
-
-
-def current_semester_tag(today=None) -> str:
-    """Сентябрь–январь (с сессией) — «I.26-27», февраль–июль — «II.25-26».
-    С августа — уже осенний: курсы на новый год открывают заранее."""
-    d = today or datetime.now(TZ).date()
-    if d.month >= 8:
-        return f"I.{d.year % 100:02d}-{(d.year + 1) % 100:02d}"
-    if d.month == 1:
-        return f"I.{(d.year - 1) % 100:02d}-{d.year % 100:02d}"
-    return f"II.{(d.year - 1) % 100:02d}-{d.year % 100:02d}"
-
-
-def is_old_semester(text: str, today=None) -> bool:
-    """Есть метка семестра, и она не нынешняя. Без метки — не знаем, не трогаем."""
-    tags = [f"{a}.{b}-{c}" for a, b, c in _SEM_TAG.findall(text or "")]
-    return bool(tags) and current_semester_tag(today) not in tags
-
-
-def course_of(subject: str) -> str:
-    """Курс из названия дедлайна: последняя скобка верхнего уровня —
-    «ПР 1 (Анализ данных (УИБО-03-24))» → «Анализ данных (УИБО-03-24)»."""
-    s = (subject or "").rstrip()
-    from kapibara.features.deadlines.names import SEP
-    if SEP in s:          # уже понятное название: «Практика 2 · Анализ данных (Экз)»
-        return re.sub(r"\s*\((?:Зач|Экз)\)$", "", s.rsplit(SEP, 1)[1]).strip()
-    if not s.endswith(")"):
-        return ""
-    depth = 0
-    for i in range(len(s) - 1, -1, -1):
-        if s[i] == ")":
-            depth += 1
-        elif s[i] == "(":
-            depth -= 1
-            if depth == 0:
-                return s[i + 1:-1].strip()
-    return ""
-
-
-# Курсы не из расписания, которые всё равно нужны (владелец: «оставь
-# Учебный отдел»): приказы, объявления, документы института. Через запятую,
-# по вхождению без учёта регистра; переопределяется SDO_KEEP_COURSES.
-KEEP_COURSES = [c.strip().lower() for c in os.getenv("SDO_KEEP_COURSES", "Учебный отдел").split(",") if c.strip()]
-
-# Предметы для сверки с курсами СДО — за весь семестр, а не за ±пару недель:
-# предмет, у которого пары через раз или ещё не начались, иначе не попадал в
-# список, и его курс уходил к похожему по словам («Учетная деятельность на
-# предприятии» → «Основы предпринимательской деятельности»).
-SEMESTER_WINDOW = {"days_back": 60, "days_ahead": 120}
-
-
-def off_schedule(course: str, subjects: list[str]) -> bool:
-    """Курса нет среди предметов нынешнего расписания группы. Живой тест:
-    «Методы принятия управленческих решений», «Физкультура 3/3» и т.п.
-    прошлых семестров были без метки «[II.25-26]». Нет расписания или
-    курса — не выбрасываем (лучше лишний дедлайн, чем пропущенный)."""
-    if not course or not subjects:
-        return False
-    if any(k in course.lower() for k in KEEP_COURSES):
-        return False
-    from kapibara.features.sdo.files import match_subject
-    return match_subject(course, subjects) not in subjects
-
-
-def not_this_semester(item: dict, subjects: list[str]) -> bool:
-    return is_old_semester(item["subject"]) or off_schedule(item.get("course") or course_of(item["subject"]), subjects)
-
-
 async def fetch_calendar_events(client: httpx.AsyncClient, months: int = CALENDAR_MONTHS) -> list[dict] | None:
     """Все события календаря за months месяцев начиная с текущего (JSON
     Moodle). None — AJAX недоступен, пусть работает запасной путь."""
@@ -460,11 +374,11 @@ async def apply_items(items: list[dict], group_id: int | None = None) -> dict:
         for i in old:
             i["external_id"] = i["external_id"].replace("sdo:", f"sdo:{group_id}:", 1)
     gone = await drop_vanished(items + old, group_id)
-    try:                                  # тесты: когда открываются (quiz_alerts.py, «Тест открылся»)
-        from kapibara.features.notifications import quiz_alerts
-        await quiz_alerts.note_opens(items + old)
+    try:                                  # тесты: когда открываются (quiz_opens.py, «Тест открылся»)
+        from kapibara.features.deadlines import quiz_opens
+        await quiz_opens.note_opens(items + old)
         if not group_id and items + old and all(i.get("calendar") for i in items + old):
-            await quiz_alerts.remember(items + old)
+            await quiz_opens.remember(items + old)
     except Exception as e:
         logger.warning(f"СДО sync: открытие тестов не записал: {e}")
     return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old), "new_ids": new_ids,

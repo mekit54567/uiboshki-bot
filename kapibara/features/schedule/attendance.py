@@ -162,8 +162,8 @@ async def for_course(user_id: int, course: dict, manual: dict[str, str] | None =
     from database import get_attendance_marks, get_attendance_points
     from kapibara.features.schedule.events import TZ
     from kapibara.features.schedule.parser import fetch_schedule_raw, get_group_subjects
-    from kapibara.features.sdo.files import match_subject
-    from kapibara.features.sdo.parser import SEMESTER_WINDOW
+    from kapibara.features.sdo.courses import match_subject
+    from kapibara.features.sdo.courses import SEMESTER_WINDOW
     cat = next((k for k in course.get("categories") or [] if "посещ" in (k.get("name") or "").lower()), None)
     if not cat or not cat.get("max"):
         return None
@@ -187,7 +187,7 @@ async def _pulse(user_id: int, subject: str, subjects: list[str]) -> tuple[dict[
     """Отметки Пульса по лекциям предмета и состояние входа (pulse_accounts)."""
     from kapibara.features.pulse import accounts as pulse_accounts
     from kapibara.features.pulse import attendance as pulse_attendance
-    from kapibara.features.sdo.files import match_subject
+    from kapibara.features.sdo.courses import match_subject
     rows = await pulse_attendance.stored(user_id)
     state = (await pulse_accounts.status_for(user_id)).get("state", "off")
     return pulse_attendance.lecture_marks(rows, subject, lambda n: match_subject(n, subjects)), state

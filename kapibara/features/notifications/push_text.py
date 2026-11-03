@@ -27,7 +27,7 @@ def split_subject(subject: str) -> tuple[str, str]:
 
 def when(due_date: str, due_time: str | None, today: date) -> str:
     """«сегодня до 23:59», «завтра», «в чт до 18:00», «8 октября»."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
+    from kapibara.features.schedule.format import MONTHS_GEN
     d = date.fromisoformat(due_date)
     delta = (d - today).days
     tail = f" до {due_time}" if due_time else ""
@@ -47,3 +47,11 @@ def cap(text: str) -> str:
 def num(x: float) -> str:
     """5.0 → «5», 2.5 → «2,5»."""
     return f"{x:g}".replace(".", ",")
+
+
+def date_line(due_date: str, due_time: str | None) -> str:
+    """«чт, 8 октября до 23:59» — дата целиком (новые задания, «Открыли тест»)."""
+    from kapibara.features.schedule.format import MONTHS_GEN
+    d = date.fromisoformat(due_date)
+    text = f"{DAYS[d.weekday()]}, {d.day} {MONTHS_GEN[d.month - 1]}"
+    return text + (f" до {due_time}" if due_time else "")
