@@ -14,6 +14,7 @@ sdo_parser.sync_deadlines). Другой группе хватает одног�
 import logging
 
 from kapibara.features.sdo import net as sdo_net
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,6 @@ async def sync_all(bot=None) -> dict[int, dict]:
         res = await sync_group(gid)
         out[gid] = res
         if bot and (res.get("new_ids") or res.get("moved")):
-            try:
+            with aside(logger, f"новые задания группы {gid}"):
                 await new_tasks.announce(bot, res["new_ids"], res["moved"])
-            except Exception as e:
-                logger.warning(f"новые задания группы {gid}: {e}")
     return out

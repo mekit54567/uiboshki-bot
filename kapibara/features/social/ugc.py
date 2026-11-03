@@ -23,6 +23,7 @@
 """
 
 import logging
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +140,8 @@ async def _notify_owner(bot, rid: int, kind: str, row: dict, reason: str):
         InlineKeyboardButton(text="🗑 Удалить", callback_data=f"rep:del:{rid}"),
         InlineKeyboardButton(text="Оставить", callback_data=f"rep:keep:{rid}"),
     ]])
-    try:
+    with aside(logger, f"жалоба {rid}: не отправилась владельцу"):
         await bot.send_message(config.STAROSTA_ID, text, parse_mode="HTML", reply_markup=kb)
-    except Exception as e:
-        logger.warning(f"жалоба {rid}: не отправилась владельцу: {e}")
 
 
 async def get_report(rid: int) -> dict | None:
@@ -251,10 +250,8 @@ async def tell_author(bot, rid: int):
             + f"Правила — /rules. Считаешь, что зря, — нажми «Оспорить» и напиши, с чем не согласен "
             f"({DISPUTE_DAYS} дней).")
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Оспорить", callback_data=f"dis:{rid}")]])
-    try:
+    with aside(logger, f"жалоба {rid}: автору не сказать", level=logging.INFO):
         await deliver(bot, rep["author_id"], text, kind="ugc", reply_markup=kb)
-    except Exception as e:
-        logger.info(f"жалоба {rid}: автору не сказать: {e!r}")
 
 
 async def can_dispute(rid: int, user_id: int) -> str:
@@ -293,10 +290,8 @@ async def dispute(bot, rid: int, user_id: int, appeal: str = "") -> str:
                 f"<blockquote>{esc(_snap_preview(rep))}</blockquote>\n"
                 + (f"Жалоба была: {esc(rep['reason'])}\n" if rep["reason"] else "Жалоба без причины\n")
                 + (f"\n<b>Автор не согласен:</b>\n<blockquote>{esc(appeal)}</blockquote>" if appeal else ""))
-        try:
+        with aside(logger, f"спор {rid}: не отправился владельцу"):
             await bot.send_message(config.STAROSTA_ID, text, parse_mode="HTML", reply_markup=kb)
-        except Exception as e:
-            logger.warning(f"спор {rid}: не отправился владельцу: {e!r}")
     return "disputed"
 
 
@@ -320,10 +315,8 @@ async def settle(bot, rid: int, restore: bool) -> str:
     text = ("↩️ Посмотрели ещё раз: твою запись вернули, группа снова её видит." if status == "restored" else
             "Посмотрели ещё раз: запись остаётся скрытой, она нарушает правила (/rules).")
     if rep["author_id"] and bot is not None:
-        try:
+        with aside(logger, f"спор {rid}: автору не сказать", level=logging.INFO):
             await deliver(bot, rep["author_id"], text, kind="ugc")
-        except Exception as e:
-            logger.info(f"спор {rid}: автору не сказать: {e!r}")
     return status
 
 

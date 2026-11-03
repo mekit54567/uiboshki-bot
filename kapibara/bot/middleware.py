@@ -18,6 +18,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message
 
 from kapibara.bot.keyboards import MENU_BUTTON_TEXTS
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +74,8 @@ class OptionalSubjectsMiddleware(BaseMiddleware):
         user = data.get("event_from_user")
         if user:
             from kapibara.features.groups.optional_subjects import apply_for
-            try:
+            with aside(logger, "предметы по выбору"):
                 await apply_for(user.id)
-            except Exception as e:
-                logger.warning(f"optional subjects: {e}")
         return await handler(event, data)
 
 
@@ -88,15 +87,13 @@ class GroupContextMiddleware(BaseMiddleware):
         if user:
             from database.groups import enter
             from kapibara.features.groups import members
-            try:
+            with aside(logger, "группа человека"):
                 chat = data.get("event_chat")
                 if chat and chat.type != "private" and chat.id == await members.chat_id():
                     await members.remember(user.id, True)      # пишет в чате своей группы — участник
                 else:
                     await members.refresh_later(data.get("bot"), user.id)
                 await enter(user.id)
-            except Exception as e:
-                logger.warning(f"группа человека: {e}")
         return await handler(event, data)
 
 
@@ -185,15 +182,13 @@ class ConsentMiddleware(BaseMiddleware):
     async def _unavailable(self, event):
         from aiogram.types import CallbackQuery, InlineQuery
         text = "Бот на минуту недоступен — попробуй чуть позже"
-        try:
+        with aside(logger, "согласие: не смог ответить"):
             if isinstance(event, CallbackQuery):
                 await event.answer(text, show_alert=True)
             elif isinstance(event, InlineQuery):
                 await event.answer([], cache_time=0, is_personal=True)
             elif (chat := getattr(event, "chat", None)) and chat.type == "private":
                 await event.answer(text)
-        except Exception as e:
-            logger.warning(f"согласие: не смог ответить: {e!r}")
         return None
 
     async def _erasing(self, event, text: str):
@@ -217,10 +212,8 @@ class ConsentMiddleware(BaseMiddleware):
         if not chat or chat.type != "private" or _command_name(text) in self.FREE_COMMANDS \
                 or is_anonymous(text, data.get("raw_state")):
             return
-        try:
+        with aside(logger, "согласие"):
             from kapibara.features.privacy import privacy
             if await privacy.ask_once(user_id):
                 from handlers.privacy import ask_consent
                 await ask_consent(data["bot"], chat.id)
-        except Exception as e:
-            logger.warning(f"согласие: {e}")

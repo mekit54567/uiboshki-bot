@@ -21,6 +21,7 @@ PER_FILE кусков из одного файла.
 import logging
 import re
 from collections import OrderedDict
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -138,14 +139,12 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
         lex: list[int] = []
         q = fts_query(query)
         if q:
-            try:
+            with aside(logger, "поиск по словам", level=logging.INFO):
                 rows = await (await db.execute(
                     "SELECT c.id FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid "
                     "JOIN m.files f ON f.id = c.file_id WHERE chunks_fts MATCH ?" + subj_sql +
                     " ORDER BY bm25(chunks_fts) LIMIT ?", [q, *subj_args, POOL])).fetchall()
                 lex = [r[0] for r in rows]
-            except Exception as e:
-                logger.info(f"поиск по словам: {e}")
         sem: list[int] = []
         sims: dict[int, float] = {}
         vecs: dict[int, list[float]] = {}

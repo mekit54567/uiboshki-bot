@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Dispatcher, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -20,6 +22,7 @@ from .plus     import router as plus_router
 from .reports  import router as reports_router
 from .rating   import router as rating_router
 from .solver   import router as solver_router  # всегда последним
+from kapibara.core.errors import aside
 
 # Общий /cancel для любого диалога — первым роутером. Раньше /cancel был не
 # во всех сценариях (/add, /addhw, /upload…), и там он становился вводом:
@@ -38,12 +41,9 @@ async def cmd_cancel_any(message: Message, state: FSMContext, interrupted_fsm_st
 
 async def _anonymize_feed_on_startup():
     """Старые посты «Подслушано» — с хэшем вместо id автора (database/social.py)."""
-    import logging
     from database.social import anonymize_feed_authors
-    try:
+    with aside(logging.getLogger(__name__), "Подслушано: старые авторы не обезличены"):
         await anonymize_feed_authors()
-    except Exception as e:
-        logging.getLogger(__name__).warning(f"Подслушано: старые авторы не обезличены: {e!r}")
 
 
 async def _ensure_home_group():

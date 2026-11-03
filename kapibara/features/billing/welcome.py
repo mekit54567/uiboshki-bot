@@ -9,6 +9,7 @@ plus_grant.py). Отметка «отправлено» — таблица plus_
 import asyncio
 import logging
 import os
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +85,8 @@ def later(bot, uid: int):
     _checked.add(uid)
 
     async def run():
-        try:
+        with aside(logger, f"приветствие «Капибары+» {uid}", level=logging.INFO):
             await maybe_send(bot, uid)
-        except Exception as e:
-            logger.info(f"приветствие «Капибары+» {uid}: {type(e).__name__}: {e}")
     task = asyncio.get_running_loop().create_task(run())
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)

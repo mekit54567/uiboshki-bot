@@ -17,6 +17,7 @@ award:<ГГГГ-ММ> в settings."""
 import json
 import logging
 from datetime import datetime
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -121,12 +122,10 @@ async def award(bot, month: str | None = None) -> dict | None:
     if STAROSTA_ID:
         from kapibara.core.utils import esc
         runner = ", ".join(f"{esc(g['name'])} ({g['avg']})" for g in table[1:3])
-        try:
+        with aside(logger, "группа месяца: не написать Никите", level=logging.INFO):
             await bot.send_message(
                 STAROSTA_ID,
                 f"Группа месяца за {MONTHS[int(month[5:]) - 1]}: <b>{esc(win['name'])}</b> — {win['avg']} опыта на "
                 f"человека ({win['people']} с опытом). +{DAYS} дней «Капибары+»: {given} чел."
                 + (f"\nДальше: {runner}." if runner else ""), parse_mode="HTML")
-        except Exception as e:
-            logger.info(f"группа месяца: не написать Никите: {e}")
     return result

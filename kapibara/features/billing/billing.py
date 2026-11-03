@@ -37,6 +37,7 @@ import uuid
 from datetime import date, timedelta
 
 from kapibara.core import config
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -549,10 +550,8 @@ async def donate_status_line() -> str:
 
 async def notify(bot, uid: int, text: str):
     from kapibara.features.notifications import delivery
-    try:
+    with aside(logger, f"подписка: не написать {uid}", level=logging.INFO):
         await delivery.deliver(bot, uid, text, kind="plus", tab="more", always_tg=True)
-    except Exception as e:
-        logger.info(f"подписка: не написать {uid}: {e}")
 
 
 def fmt_day(iso: str) -> str:

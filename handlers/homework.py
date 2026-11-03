@@ -13,6 +13,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 from database import add_hw, delete_hw, get_hw_by_subject, get_hw_subjects, init_hw_table, is_editor
 from database.homework import get_hw
 from kapibara.core.utils import esc, parse_day_month, today_msk, utc_to_msk_date
+from kapibara.core.errors import aside
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -146,10 +147,8 @@ async def hw_del_last(callback: CallbackQuery):
         text, kb = _subject_view(subject, items, True)
     else:
         text, kb = _board_view(await get_hw_subjects(gid))
-    try:
+    with aside(logger, "ДЗ: доска после удаления не перерисовалась"):
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
-    except Exception as e:
-        logger.warning(f"ДЗ: доска после удаления не перерисовалась: {e!r}")
 
 
 @router.message(Command("addhw"))

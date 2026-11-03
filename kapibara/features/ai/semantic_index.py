@@ -32,7 +32,7 @@ from contextlib import asynccontextmanager
 import aiosqlite
 from aiogram.exceptions import TelegramAPIError
 
-from kapibara.core.errors import NETWORK
+from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
@@ -365,10 +365,8 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
                 data = (await bot.download_file(tg.file_path)).read()
             except (TelegramAPIError, *NETWORK, OSError) as e:   # больше 20 МБ или файл недоступен — по сохранённому тексту
                 logger.info(f"индекс: файл {fid} не скачался ({type(e).__name__}) — без страниц")
-        try:
+        with aside(logger, f"индекс: файл {fid}"):
             await index_file(fid, data, name)
-        except Exception as e:
-            logger.warning(f"индекс: файл {fid}: {type(e).__name__}: {e}")
     embedded = await embed_pending(max_batches)
     from kapibara.features.ai import embedder
     if embedder.precompute():           # векторы другой модели заранее (до переезда)

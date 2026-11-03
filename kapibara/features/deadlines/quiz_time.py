@@ -14,6 +14,7 @@ sdo_grades.course_detail, экран теста — task_detail), и фоном 
 
 import logging
 import re
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +45,9 @@ async def remember(pages: dict[int, dict | None]):
     rows = {int(c): v for c, p in pages.items() if c and (v := learned(p)) is not None}
     if not rows:
         return
-    try:
+    with aside(logger, f"время тестов: не сохранил {len(rows)}"):
         from database import save_quiz_limits
         await save_quiz_limits(rows)
-    except Exception as e:
-        logger.warning(f"время тестов: не сохранил {len(rows)}: {e}")
 
 
 async def attach(items: list[dict]):

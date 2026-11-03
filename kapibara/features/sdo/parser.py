@@ -46,7 +46,7 @@ from kapibara.core.config import SDO_SESSION_COOKIE, SDO_BASE_URL, TIMEZONE
 
 logger = logging.getLogger(__name__)
 
-from kapibara.core.errors import NETWORK  # noqa: E402
+from kapibara.core.errors import NETWORK, aside  # noqa: E402
 TZ = ZoneInfo(TIMEZONE)
 
 UPCOMING_URL = f"{SDO_BASE_URL}/calendar/view.php?view=upcoming"
@@ -99,10 +99,8 @@ async def keepalive(peek=None) -> bool | None:
             resp = await get_checked(client, f"{SDO_BASE_URL}/my/")
             IDLE_TIMEOUT = await _time_remaining(client, resp.text) or IDLE_TIMEOUT
             if peek:
-                try:
+                with aside(logger, "СДО keepalive: peek", level=logging.INFO):
                     await peek(client, resp.text)
-                except Exception as e:
-                    logger.info(f"СДО keepalive: peek: {type(e).__name__}: {e}")
         return True
     except SdoSessionExpired as e:
         logger.info(f"СДО keepalive: {e}")
@@ -374,13 +372,11 @@ async def apply_items(items: list[dict], group_id: int | None = None) -> dict:
         for i in old:
             i["external_id"] = i["external_id"].replace("sdo:", f"sdo:{group_id}:", 1)
     gone = await drop_vanished(items + old, group_id)
-    try:                                  # тесты: когда открываются (quiz_opens.py, «Тест открылся»)
+    with aside(logger, "СДО sync: открытие тестов не записал"):  # тесты: когда открываются (quiz_opens.py, «Тест открылся»)
         from kapibara.features.deadlines import quiz_opens
         await quiz_opens.note_opens(items + old)
         if not group_id and items + old and all(i.get("calendar") for i in items + old):
             await quiz_opens.remember(items + old)
-    except Exception as e:
-        logger.warning(f"СДО sync: открытие тестов не записал: {e}")
     return {"added": added, "updated": updated, "skipped": skipped, "old_semester": len(old), "new_ids": new_ids,
             "moved": moved, "gone": gone,
             "old_courses": sorted({i.get("course") or course_of(i["subject"]) for i in old} - {""}),

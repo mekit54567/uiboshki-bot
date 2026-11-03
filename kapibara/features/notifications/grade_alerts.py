@@ -13,6 +13,7 @@ import logging
 
 from kapibara.core.utils import esc
 from datetime import UTC
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 PAUSE_SEC = 20          # между людьми: не открывать журналы всех разом
@@ -199,10 +200,8 @@ async def check_one(bot, user_id: int, cookie: str):
     if not user or not cookie:
         return
     notify = bool(user.get("subscribed")) and bool(notify_prefs.merge(user.get("notify")).get("grades"))
-    try:
+    with aside(logger, f"новые баллы {user_id}", level=logging.INFO):
         await check_user(bot, user_id, cookie, notify=notify)
-    except Exception as e:
-        logger.info(f"новые баллы {user_id}: {type(e).__name__}")
 
 
 def check_soon(bot, user_id: int, cookie: str, now=None):
@@ -234,9 +233,7 @@ async def check_all(bot, pause: float = PAUSE_SEC):
         notify = bool(user.get("subscribed")) and bool(notify_prefs.merge(user.get("notify")).get("grades"))
         if not cookie:
             continue
-        try:
+        with aside(logger, f"новые баллы {uid}", level=logging.INFO):  # вход устарел, СДО лежит — молча до следующего раза
             await check_user(bot, uid, cookie, notify=notify)
-        except Exception as e:          # вход устарел, СДО лежит — молча до следующего раза
-            logger.info(f"новые баллы {uid}: {type(e).__name__}")
         if pause:
             await asyncio.sleep(pause)

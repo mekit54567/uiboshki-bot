@@ -43,6 +43,7 @@ import httpx
 
 from kapibara.core import net
 import contextlib
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -369,14 +370,12 @@ async def _question_prompt(question: str, subject: str) -> tuple[str, str, str]:
     → (system, user, лекции)."""
     from kapibara.features.ai import solver as ai_solver
     lectures = ""
-    try:
+    with aside(logger, "aitest: поиск для вопроса не сработал", level=logging.INFO):
         from kapibara.features.ai import semantic_search
         if await semantic_search.ready():
             hits = await semantic_search.search(question, subject)
             if hits:
                 lectures, _ = semantic_search.build_context(hits)
-    except Exception as e:
-        logger.info(f"aitest: поиск для вопроса не сработал: {e}")
     if not lectures:
         return ai_solver.build_system_prompt(subject), question, ""
     user = ai_solver.with_lectures([{"role": "user", "content": question}], lectures)[-1]["content"]

@@ -30,6 +30,7 @@ from kapibara.features.sdo import net as sdo_net
 from kapibara.core.config import SDO_BASE_URL, SDO_SESSION_COOKIE, is_starosta
 # шифрование — общее для всех секретов в базе (kapibara/core/crypto); отсюда его брали раньше
 from kapibara.core.crypto import decrypt, encrypt, key_source, needs_rotation  # noqa: F401
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 
@@ -163,13 +164,11 @@ async def _check_one(row: dict, bot=None, now: datetime | None = None):
         from kapibara.features.notifications import grade_alerts             # новые баллы — у каждого в его время (Никита 02.11)
         grade_alerts.check_soon(bot, uid, cookie, now)
     elif bot:
-        try:
+        with aside(logger, f"СДО: не смог сказать {uid}, что вход устарел", level=logging.INFO):
             from kapibara.features.notifications.delivery import deliver
             from kapibara.core.telegram import app_button
             await deliver(bot, uid, expired_text(row.get("via")), kind="sdo", tab="sdo",
                           title="Вход в СДО устарел", body=expired_push(row.get("via")), reply_markup=app_button("🎓 Подключить СДО", "sdo"))
-        except Exception as e:
-            logger.info(f"СДО: не смог сказать {uid}, что вход устарел: {e!r}")
 
 
 async def keepalive_due(bot=None, now: datetime | None = None):

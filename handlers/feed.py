@@ -33,6 +33,7 @@ from database import (
 from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -73,7 +74,7 @@ async def cmd_feed_start(message: Message, state: FSMContext):
 
     last = await get_last_feed_post_time(message.from_user.id)
     if last:
-        try:
+        with aside(logger, "Подслушано: не проверился антиспам"):
             last_dt = datetime.fromisoformat(last)
             elapsed = datetime.utcnow() - last_dt
             cooldown = timedelta(minutes=FEED_COOLDOWN_MINUTES)
@@ -84,8 +85,6 @@ async def cmd_feed_start(message: Message, state: FSMContext):
                     f"(антиспам, лимит {FEED_COOLDOWN_MINUTES} мин между постами)"
                 )
                 return
-        except Exception as e:
-            logger.warning(f"Подслушано: не проверился антиспам: {e!r}")
 
     await state.set_state(FeedPost.waiting)
     await message.answer(
@@ -174,10 +173,8 @@ async def cmd_delpost(message: Message, bot: Bot):
         return
 
     if post.get("message_id"):
-        try:
+        with aside(logger, "Не смог удалить сообщение из чата"):
             await bot.delete_message(await _chat(), post["message_id"])
-        except Exception as e:
-            logger.warning(f"Не смог удалить сообщение из чата: {e}")
 
     await delete_feed_post(post_id)
     await message.answer(f"🗑 Пост #{post_id} удалён из ленты.")

@@ -17,6 +17,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from kapibara.core.utils import esc
+from kapibara.core.errors import aside
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -37,7 +38,7 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     await set_setting("group_chat_id", str(event.chat.id))
     members.forget_chat()
     logger.info(f"чат своей группы: {event.chat.id} ({event.chat.title})")
-    try:
+    with aside(logger, "сообщение старосте о чате", level=logging.INFO):
         await event.bot.send_message(
             event.from_user.id,
             f"👥 Запомнил чат <b>{esc(event.chat.title or '')}</b> как чат своей группы.\n\n"
@@ -49,8 +50,6 @@ async def bot_added_to_group(event: ChatMemberUpdated):
             "🗣 Написать в чат от моего имени — /say.\n"
             "📌 Чтобы я мог закреплять, дай мне в чате права админа «Закреплять сообщения».",
             parse_mode="HTML")
-    except Exception as e:
-        logger.info(f"сообщение старосте о чате: {e}")
 
 
 # ── Староста пишет в чат группы от имени бота (Никита 03.11) ────────────────

@@ -33,7 +33,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-from kapibara.core.errors import NETWORK  # noqa: E402
+from kapibara.core.errors import NETWORK, aside  # noqa: E402
 
 BASE = "https://schedule-of.mirea.ru/schedule/api"
 
@@ -121,10 +121,8 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
         r["pairs"] = pairs
         r["hint"] = main if pairs else "нет пар в ближайшие 2 недели"
         if subject:
-            try:
+            with aside(logger, f"поиск: не разобрал, ведёт ли {r.get('id')} предмет"):  # подсказка — необязательная
                 r["match"] = teaches(raw, subject)
-            except Exception:           # подсказка «ведёт этот предмет» — необязательная
-                logger.warning("поиск: не разобрал, ведёт ли %s предмет", r.get("id"), exc_info=True)
 
     await asyncio.gather(*(hint(r) for r in dupes))
     # Порядок выдачи (совпадения с начала, свежие группы выше) сохраняем —
