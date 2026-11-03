@@ -29,12 +29,14 @@ def forget_user(user_id: int | None = None):
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 async def upsert_user(user_id: int, username: str, full_name: str, named: bool = True, wait: bool = True):
-    """До согласия на обработку данных (privacy.blocked) — только id, без
-    имени и ника (152-ФЗ); имя запишется при следующем заходе после согласия.
+    """Запись человека. named=False — только id, без имени и ника.
     wait=False (запросы WebApp): уже есть в базе — запись в фоне
-    (_conn.write_later), новый — сразу: дальше запрос читает его строку."""
-    from kapibara.features.privacy import privacy
-    if not named or await privacy.blocked(user_id):
+    (_conn.write_later), новый — сразу: дальше запрос читает его строку.
+
+    152-ФЗ: бот и API зовут не эту функцию, а privacy.upsert_user — она до
+    согласия ставит named=False (03.11: база больше не зовёт фичи; тест
+    test_privacy.test_upsert_only_through_privacy следит)."""
+    if not named:
         username = full_name = ""
     key, now = (database.DATABASE_PATH, user_id), time.monotonic()
     last = _upserted.get(key)

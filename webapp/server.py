@@ -127,7 +127,7 @@ class ApiV1:
         await self.app(scope, receive, send)
 
 
-from kapibara.features.content.review_demo import ReviewDemo  # noqa: E402 — демо-вход проверяющих магазинов: ответы из записи стенда
+from webapp.review_demo import ReviewDemo  # noqa: E402 — демо-вход проверяющих магазинов: ответы из записи стенда
 
 app.add_middleware(ReviewDemo)      # внутри ApiV1: пути уже без /v1
 app.add_middleware(ApiV1)

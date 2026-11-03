@@ -100,7 +100,7 @@ async def test_validation(client):
 
 @pytest.mark.asyncio
 async def test_not_member_has_no_group_counts(client, monkeypatch):
-    from kapibara.features.groups import members
+    from database import members
     c, h = client
 
     async def known(uid):
