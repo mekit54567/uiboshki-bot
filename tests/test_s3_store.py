@@ -1,7 +1,7 @@
 """Бэкап в российское S3 (s3_store.py, backup.send_backup): подпись AWS
 Signature V4 по эталону из документации AWS, ключи копий по кругу, старосте
 — только отметка, файл базы в Telegram не уходит."""
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import httpx
 import pytest
@@ -11,7 +11,7 @@ from kapibara.ops import s3_store
 
 def test_sigv4_matches_aws_example():
     # пример GET Object из документации AWS (Signature Version 4, «Example: GET Object»)
-    now = datetime(2013, 5, 24, tzinfo=timezone.utc)
+    now = datetime(2013, 5, 24, tzinfo=UTC)
     empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     headers = {"host": "examplebucket.s3.amazonaws.com", "range": "bytes=0-9",
                "x-amz-content-sha256": empty, "x-amz-date": "20130524T000000Z"}

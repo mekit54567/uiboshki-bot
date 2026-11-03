@@ -7,7 +7,7 @@
 (delivery.deliver)."""
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import aiosqlite
 
@@ -27,7 +27,7 @@ def _ts(dt: datetime) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def new_state(provider: str, verifier: str, code: str, client: str, link_user: int | None) -> str:

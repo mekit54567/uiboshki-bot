@@ -1,6 +1,6 @@
 """Реакции на пару (5.100, Никита 18.10): четыре позы, одна на человека,
 счёт видит своя группа, кто как отметил — нет."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +49,7 @@ async def test_group_sees_counts_not_who(client):
     assert r["counts"] == {"joy": 1, "calm": 0, "hard": 0, "sleep": 0, "angry": 0} and r["mine"] == "joy"
     c.post("/api/lesson/reactions", json={**body, "kind": "hard"}, headers=h(MATE))
     # одна пара у всех: время в UTC и название другим регистром — та же
-    utc = datetime.fromisoformat(s).astimezone(timezone.utc)
+    utc = datetime.fromisoformat(s).astimezone(UTC)
     mate = c.get(_q(utc.isoformat().replace("+00:00", "Z"), "анализ  ДАННЫХ"), headers=h(MATE)).json()
     assert mate["counts"]["joy"] == 1 and mate["counts"]["hard"] == 1 and mate["mine"] == "hard"
     assert mate["open"] is True and "users" not in mate

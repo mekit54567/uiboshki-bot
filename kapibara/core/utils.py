@@ -24,7 +24,7 @@ md_to_tg_html_chunks() — ответ модели (Markdown) -> куски HTML
 """
 
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from html import escape
 from zoneinfo import ZoneInfo
 
@@ -104,7 +104,7 @@ def utc_to_msk_date(sqlite_ts: str) -> str:
     дата "YYYY-MM-DD" по Москве, для показа пользователю. Иначе запись,
     добавленная с 00:00 до 03:00 МСК, показывалась вчерашним числом."""
     try:
-        dt = datetime.fromisoformat(sqlite_ts).replace(tzinfo=timezone.utc)
+        dt = datetime.fromisoformat(sqlite_ts).replace(tzinfo=UTC)
     except (TypeError, ValueError):
         return (sqlite_ts or "")[:10]
     return dt.astimezone(TZ).date().isoformat()

@@ -28,7 +28,7 @@ legal_texts.RATING_ALL), а чужим группам виден только с
 
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from database._conn import connect
 
@@ -106,7 +106,7 @@ def _totals(raw: dict, end: datetime | None = None) -> dict[int, dict]:
     cut_ms = None
     if end is not None:
         cut_day = (end.astimezone(MSK) - timedelta(microseconds=1)).date().isoformat()
-        cut_utc = end.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        cut_utc = end.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
         cut_ms = int(end.timestamp() * 1000)
     out: dict[int, dict] = {}
 
@@ -242,7 +242,7 @@ async def board() -> dict:
     ranked, by_inst = _rank(groups)
     # история: та же раскладка на конец каждой недели (неделя подписана своим понедельником)
     history: dict[int, list] = {}
-    ends = _week_ends(datetime.now(timezone.utc))
+    ends = _week_ends(datetime.now(UTC))
     for i, end in enumerate(ends):
         start = end - timedelta(weeks=1) if i < len(ends) - 1 else ends[-2]
         label = start.strftime("%d.%m")
@@ -412,8 +412,8 @@ async def save(user_id: int, *, nick: str | None = None, show: bool | None = Non
 
 
 def _now() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    from datetime import datetime
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
 # ── Модерация ников (Никита: «ручную модерацию раз в пару дней») ─────────────

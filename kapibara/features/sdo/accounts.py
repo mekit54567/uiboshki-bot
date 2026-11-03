@@ -25,7 +25,7 @@ import logging
 import os
 import random
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
@@ -174,7 +174,7 @@ def _utc(dt: datetime) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def next_interval(jitter_left: int) -> int:

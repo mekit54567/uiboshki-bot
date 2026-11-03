@@ -1,5 +1,5 @@
 """Вход в Пульс на сервере: хранение зашифрованным и поддержание, как у СДО."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 
 import httpx
 import pytest
@@ -61,7 +61,7 @@ async def test_connect_keepalive_expire(db, monkeypatch):
     row = await pulse_accounts._row(1)
     assert "sid=abc" not in row["cookie_enc"]                          # в базе — только шифр
 
-    later = datetime.now(timezone.utc) + timedelta(minutes=pulse_accounts.keepalive_minutes() + 1)
+    later = datetime.now(UTC) + timedelta(minutes=pulse_accounts.keepalive_minutes() + 1)
     await pulse_accounts.keepalive_due(later)
     st = await pulse_accounts.status_for(1)
     assert st["state"] == "ok" and st["lived_min"] >= pulse_accounts.keepalive_minutes()

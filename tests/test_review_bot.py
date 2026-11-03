@@ -124,7 +124,7 @@ def _all_states():
             handlers.homework, handlers.schedule, handlers.social, handlers.solver]
     groups = {obj for m in mods for obj in vars(m).values()
               if inspect.isclass(obj) and issubclass(obj, StatesGroup) and obj is not StatesGroup}
-    return sorted((s.state for g in groups for s in g.__all_states__))
+    return sorted(s.state for g in groups for s in g.__all_states__)
 
 
 ALL_STATES = _all_states()
