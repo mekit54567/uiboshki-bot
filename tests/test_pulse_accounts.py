@@ -102,3 +102,22 @@ def test_endpoints_only_for_starosta(db, monkeypatch):
     assert c.get("/api/v1/pulse/status", headers=me).json()["state"] == "ok"
     assert c.post("/api/pulse/disconnect", headers=me).json() == {"ok": True}
     assert c.get("/api/pulse/status", headers=me).json() == {"state": "off"}
+
+
+async def test_connect_starts_attendance_in_background(db, monkeypatch):
+    """pulse.service: вход удался — посещения подтягиваются фоном (через
+    spawn, задача не теряется); не удался — посещения не трогаем."""
+    import asyncio
+    started = []
+
+    async def fake_check(cookie):
+        return "ok" if cookie == "sid=good" else "blocked"
+
+    async def fake_sync(uid, now=None):
+        started.append(uid)
+    monkeypatch.setattr(pulse_accounts, "check", fake_check)
+    monkeypatch.setattr(pulse_attendance, "sync_due", fake_sync)
+    assert (await pulse_service.connect_from_app(7, "sid=bad"))["state"] == "blocked"
+    assert (await pulse_service.connect_from_app(8, "sid=good"))["state"] == "ok"
+    await asyncio.sleep(0)
+    assert started == [8]
