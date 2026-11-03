@@ -343,10 +343,10 @@ async def auth_apple(body: AppleBody, request: Request):
     try:
         claims = await apple_signin.verify(body.id_token[:8000], body.nonce[:200])
     except apple_signin.AppleError as e:
-        raise HTTPException(401, f"Apple не подтвердил вход: {e}")
+        raise HTTPException(401, f"Apple не подтвердил вход: {e}") from e
     except Exception as e:  # noqa: BLE001 — сеть до Apple
         log_failure(logging.getLogger(__name__), "вход Apple", e)
-        raise HTTPException(502, "Apple не ответил — попробуй через минуту")
+        raise HTTPException(502, "Apple не ответил — попробуй через минуту") from e
     name = " ".join(body.name.split())[:80]
     owner = await find_user("apple", claims["sub"])
     if not owner:

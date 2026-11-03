@@ -63,7 +63,7 @@ def _validate_deadline(body: NewDeadline) -> tuple[str, str, str | None, str]:
     try:
         due = date_cls.fromisoformat(body.due_date)
     except ValueError:
-        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД") from None
     due_time = None
     if body.due_time.strip():
         ok, due_time = parse_due_time(body.due_time)
@@ -185,7 +185,7 @@ async def api_deadline_remind(deadline_id: int, body: RemindBody, user: dict = C
     try:
         at = deadline_reminders.resolve(d, body.preset, body.at)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if len((await get_user_deadline_reminders(user["id"])).get(deadline_id, [])) >= 5:
         raise HTTPException(status_code=400, detail="хватит пяти напоминаний на дедлайн")
     await add_deadline_reminder(user["id"], deadline_id, at)

@@ -22,7 +22,7 @@ async def of_user(user_id: int) -> dict[str, int]:
     async with connect() as db:
         rows = await (await db.execute(
             "SELECT ach_id, at FROM achievements WHERE user_id = ?", (user_id,))).fetchall()
-    return {a: at for a, at in rows}
+    return dict(rows)
 
 
 async def add(user_id: int, items: dict, now_ms: int) -> dict[str, int]:

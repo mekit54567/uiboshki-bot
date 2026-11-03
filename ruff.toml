@@ -13,4 +13,4 @@ target-version = "py312"   # как в образе сервера
 line-length = 130
 
 [lint]
-select = ["F", "E9", "PLE", "PIE", "RUF006"]
+select = ["F", "E9", "PLE", "PIE", "RUF006", "C4"]

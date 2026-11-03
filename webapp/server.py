@@ -142,9 +142,8 @@ async def security_headers(request: Request, call_next):
       оседают в кэше устройства/прокси."""
     from fastapi.responses import JSONResponse
     length = request.headers.get("content-length")
-    if length and length.isdigit():
-        if int(length) > body_limit(request.url.path):
-            return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
+    if length and length.isdigit() and int(length) > body_limit(request.url.path):
+        return JSONResponse({"detail": "слишком большой запрос"}, status_code=413)
     started = time.monotonic()
     from kapibara.core import timing
     spent = timing.start()          # база и СДО за этот запрос (timing.py)

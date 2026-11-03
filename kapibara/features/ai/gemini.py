@@ -267,9 +267,9 @@ async def _generate_once(model: str, payload: dict, timeout: float, mark_truncat
             # в Telegram (реальный баг, v1.6.3).
             resp = await client.post(url, headers={"x-goog-api-key": GEMINI_API_KEY}, json=payload)
     except httpx.TimeoutException:
-        raise GeminiError("Gemini не ответил вовремя — попробуй ещё раз", transient=True)
+        raise GeminiError("Gemini не ответил вовремя — попробуй ещё раз", transient=True) from None
     except httpx.HTTPError as e:
-        raise GeminiError(f"Не достучался до Gemini ({type(e).__name__})", transient=True)
+        raise GeminiError(f"Не достучался до Gemini ({type(e).__name__})", transient=True) from e
 
     if resp.status_code != 200:
         logger.warning(f"Gemini HTTP {resp.status_code}: {resp.text[:1000]}")
@@ -345,7 +345,7 @@ async def _openrouter_once(contents: list[dict], system_instruction: str | None,
             resp = await client.post(OPENROUTER_URL, json=payload,
                                      headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"})
     except httpx.HTTPError as e:
-        raise GeminiError(f"Не достучался до модели ({type(e).__name__})", transient=not model)
+        raise GeminiError(f"Не достучался до модели ({type(e).__name__})", transient=not model) from e
     if resp.status_code != 200:
         logger.warning(f"OpenRouter HTTP {resp.status_code}: {resp.text[:500]}")
         raise GeminiError(f"Модель ответила ошибкой HTTP {resp.status_code}", status=resp.status_code)
@@ -503,9 +503,9 @@ async def embed(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", titles: list
             resp = await client.post(GEMINI_EMBED_URL.format(model=GEMINI_EMBED_MODEL),
                                      headers={"x-goog-api-key": GEMINI_API_KEY}, json={"requests": reqs})
     except httpx.TimeoutException:
-        raise GeminiError("Gemini не ответил вовремя", transient=True)
+        raise GeminiError("Gemini не ответил вовремя", transient=True) from None
     except httpx.HTTPError as e:
-        raise GeminiError(f"Не достучался до Gemini ({type(e).__name__})", transient=True)
+        raise GeminiError(f"Не достучался до Gemini ({type(e).__name__})", transient=True) from e
     if resp.status_code != 200:
         logger.warning(f"Gemini embed HTTP {resp.status_code}: {resp.text[:500]}")
         if _geoblocked(resp):

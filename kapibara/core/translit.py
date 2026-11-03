@@ -20,7 +20,7 @@ _EN = re.compile(r"w|q|x|th|oa|ee|oo|ea|ou|ck|c(?!h|iya|ii)|[^aeiouy]e$")
 _KNOWN = {"biznes", "tema", "analiz"}         # без примет, но русские
 _PAIRS = [("shch", "щ"), ("sch", "щ"), ("zh", "ж"), ("kh", "х"), ("ts", "ц"), ("ch", "ч"), ("sh", "ш"),
           ("yu", "ю"), ("ya", "я"), ("yo", "ё"), ("ye", "е")]
-_ONE = dict(zip("abvgdezijklmnoprstufhcy", "абвгдезийклмнопрстуфхцы"))
+_ONE = dict(zip("abvgdezijklmnoprstufhcy", "абвгдезийклмнопрстуфхцы", strict=False))
 _VOWELS = "aeiouy"
 
 

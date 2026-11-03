@@ -41,7 +41,7 @@ async def get_attendance_marks(user_id: int, course_id: int) -> dict[str, str]:
     async with connect() as db:
         rows = await (await db.execute("SELECT day, mark FROM attendance_marks WHERE user_id=? AND course_id=?",
                                        (user_id, course_id))).fetchall()
-        return {d: m for d, m in rows}
+        return dict(rows)
 
 
 async def set_attendance_mark(user_id: int, course_id: int, day: str, mark: str | None):
@@ -63,7 +63,7 @@ async def get_last_scores(user_id: int) -> dict[int, float]:
             "SELECT h.course_id, h.score FROM sdo_score_history h JOIN (SELECT course_id, MAX(day) d "
             "FROM sdo_score_history WHERE user_id=? GROUP BY course_id) m "
             "ON h.course_id=m.course_id AND h.day=m.d WHERE h.user_id=?", (user_id, user_id))).fetchall()
-        return {cid: sc for cid, sc in rows}
+        return dict(rows)
 
 
 async def save_sdo_session(user_id: int, cookie_enc: str, next_check_at: str | None = None, via: str | None = None):
@@ -186,7 +186,7 @@ async def get_quiz_limits(cmids) -> dict[int, int]:
     async with connect() as db:
         rows = await (await db.execute(
             f"SELECT cmid, minutes FROM quiz_limits WHERE cmid IN ({','.join('?' * len(cmids))})", cmids)).fetchall()
-        return {c: m for c, m in rows}
+        return dict(rows)
 
 
 async def get_quiz_deadline_links(since: str) -> list[str]:
@@ -212,7 +212,7 @@ async def get_quiz_opens(cmids=None) -> dict[int, str]:
             rows = await (await db.execute(
                 f"SELECT cmid, open_at FROM quiz_opens WHERE cmid IN ({','.join('?' * len(cmids))})",
                 cmids)).fetchall()
-        return {c: a for c, a in rows}
+        return dict(rows)
 
 
 async def save_quiz_opens(opens: dict[int, str]):

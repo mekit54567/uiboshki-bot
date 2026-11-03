@@ -68,7 +68,7 @@ def decrypt(raw: bytes, key: bytes | None = None) -> bytes:
     try:
         return AESGCM(key).decrypt(body[:12], body[12:], MAGIC)
     except (InvalidTag, ValueError):
-        raise RestoreError("копия не расшифровалась — ключ не тот (BACKUP_KEY) или файл повреждён")
+        raise RestoreError("копия не расшифровалась — ключ не тот (BACKUP_KEY) или файл повреждён") from None
 
 
 def _snapshot(db_path: str) -> bytes:
@@ -182,7 +182,7 @@ def inspect_backup(raw: bytes) -> tuple[str, dict]:
             if len(raw) > MAX_UNPACKED_BYTES or d.unconsumed_tail:
                 raise RestoreError(f"распакованная копия больше {MAX_UNPACKED_BYTES // 1024 // 1024} МБ")
         except zlib.error:
-            raise RestoreError("архив повреждён — не распаковался")
+            raise RestoreError("архив повреждён — не распаковался") from None
     if not raw.startswith(b"SQLite format 3\x00"):
         raise RestoreError("это не база SQLite (нужен файл uiboshki-….db.gz из /backup)")
     fd, tmp = tempfile.mkstemp(suffix=".db")

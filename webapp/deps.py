@@ -48,7 +48,7 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
         try:
             data = validate_init_data(x_telegram_init_data, BOT_TOKEN)
         except InitDataError as e:
-            raise HTTPException(status_code=401, detail=str(e))
+            raise HTTPException(status_code=401, detail=str(e)) from e
         user = data.get("user")
         if not user or "id" not in user:
             raise HTTPException(status_code=401, detail="нет данных пользователя в initData")

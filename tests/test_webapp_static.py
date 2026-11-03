@@ -310,8 +310,7 @@ def _quick_dates_on(*days):
         re.search(r"const MONTHS_SHORT = .*?;", core).group(0),     # п. 15 перенёс в core.js
         re.search(r"const QD_DOW = .*?;", dl).group(0),
         re.search(r"function quickDates\(now\) \{.*?\n\}", dl, re.S).group(0),
-        "console.log(JSON.stringify(%s.map(([y, m, d]) => quickDates(new Date(y, m - 1, d)))));"
-        % json.dumps(days),
+        f"console.log(JSON.stringify({json.dumps(days)}.map(([y, m, d]) => quickDates(new Date(y, m - 1, d)))));",
     ])
     res = subprocess.run(["node", "-e", src], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
@@ -323,12 +322,12 @@ def _sdo_js(expr):
     # histScale и historyCard из sdo.js — в node, результат выражения как JSON
     import json
     sdo = JS["js/sdo.js"]
-    fns = "".join(re.search(r"function %s\(.*?\n}\n" % n, sdo, re.S).group(0)
+    fns = "".join(re.search(rf"function {n}\(.*?\n}}\n", sdo, re.S).group(0)
                   for n in ("fmtNum", "histScale", "historyCard"))
     core = JS["js/core.js"]       # подписи оси — словами (п. 15): MONTHS_SHORT и humanDate из core.js
     dates = "\n".join([re.search(r"const MONTHS_SHORT = .*?;", core).group(0),
                        re.search(r"const WEEKDAYS_SHORT = .*?;", core).group(0)] +
-                      [re.search(r"function %s\(.*?\n}\n" % n, core, re.S).group(0) for n in ("isoDays", "humanDate")])
+                      [re.search(rf"function {n}\(.*?\n}}\n", core, re.S).group(0) for n in ("isoDays", "humanDate")])
     code = "function escapeHtml(s){return String(s)}" + dates + fns + "console.log(JSON.stringify(" + expr + "))"
     res = subprocess.run(["node", "-e", code], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
@@ -427,7 +426,7 @@ def test_home_sdo_tile_shares_logic_and_loads_after_home():
 
 
 def _js_fn(src, name):
-    return re.search(r"(?:async )?function %s\(.*?\n}\n" % name, src, re.S).group(0)
+    return re.search(rf"(?:async )?function {name}\(.*?\n}}\n", src, re.S).group(0)
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="нужен node")
@@ -451,7 +450,7 @@ def test_home_sdo_tile_renders_states():
         + "".join(_js_fn(sdo, n) for n in ("fmtNum", "sdoSummary", "autoWorksText", "shortCourse", "fetchSdoGrades"))
         + "".join(_js_fn(home, n) for n in ("plural", "tileFromGrades", "renderSdoTile", "updateSdoTile", "readSdoTile", "loadSdoTile"))
         + "const out = [];"
-        + "updateSdoTile({courses: %s});" % json.dumps(courses, ensure_ascii=False)
+        + f"updateSdoTile({{courses: {json.dumps(courses, ensure_ascii=False)}}});"
         + "out.push(els['home-sdo-big'].textContent, els['home-sdo-sub'].innerHTML, readSdoTile().closed);"
         + "loadSdoTile().then(() => { out.push(els['home-sdo-sub'].textContent, readSdoTile().state);"
         + "  api = () => Promise.reject(new Error('ошибка сети')); delete store['home.sdoTile'];"
@@ -479,22 +478,22 @@ CREDIT_MARKS = [{"at": 40, "label": "зачёт"}]
 @pytest.mark.skipif(not shutil.which("node"), reason="нужен node")
 def test_history_scale_up_to_next_threshold():
     # баллы 10–50 на шкале 0–130 лежали внизу: верх — ближайший порог с запасом
-    s = _sdo_js("histScale([12, 20, 28], %s, 130)" % _js_arg(EXAM_MARKS))
+    s = _sdo_js(f"histScale([12, 20, 28], {_js_arg(EXAM_MARKS)}, 130)")
     assert (s["lo"], s["hi"], s["goal"]) == (0, 50, 40) and [m["at"] for m in s["marks"]] == [40]
-    s = _sdo_js("histScale([18, 33], %s, 130)" % _js_arg(CREDIT_MARKS))
+    s = _sdo_js(f"histScale([18, 33], {_js_arg(CREDIT_MARKS)}, 130)")
     assert (s["lo"], s["hi"], s["goal"]) == (0, 50, 40)
     # все точки высоко — низ чуть ниже минимума, пройденный порог тоже в шкале
-    s = _sdo_js("histScale([45, 55], %s, 130)" % _js_arg(EXAM_MARKS))
+    s = _sdo_js(f"histScale([45, 55], {_js_arg(EXAM_MARKS)}, 130)")
     assert (s["goal"], s["hi"]) == (60, 75) and 0 < s["lo"] < 45
     assert [m["at"] for m in s["marks"]] == [40, 60]
     # выше всех порогов — до максимума БРС
-    s = _sdo_js("histScale([82, 95], %s, 130)" % _js_arg(EXAM_MARKS))
+    s = _sdo_js(f"histScale([82, 95], {_js_arg(EXAM_MARKS)}, 130)")
     assert s["hi"] == 130 and s["goal"] is None and s["lo"] < 82
-    s = _sdo_js("histScale([41, 44], %s, 130)" % _js_arg(CREDIT_MARKS))
+    s = _sdo_js(f"histScale([41, 44], {_js_arg(CREDIT_MARKS)}, 130)")
     assert (s["lo"], s["hi"]) == (0, 130)
     # ровная линия на нуле и на максимуме — шкала не схлопывается
-    assert _sdo_js("histScale([0, 0], %s, 130).hi" % _js_arg(EXAM_MARKS)) == 50
-    s = _sdo_js("histScale([130, 130], %s, 130)" % _js_arg(EXAM_MARKS))
+    assert _sdo_js(f"histScale([0, 0], {_js_arg(EXAM_MARKS)}, 130).hi") == 50
+    s = _sdo_js(f"histScale([130, 130], {_js_arg(EXAM_MARKS)}, 130)")
     assert s["hi"] == 130 and s["lo"] < 130
 
 
@@ -502,7 +501,7 @@ def test_history_scale_up_to_next_threshold():
 def test_history_card_threshold_labels_and_last_value():
     c = {"max": 130, "marks": EXAM_MARKS, "history": {"week_delta": 8, "points": [
         ["2026-09-10", 12], ["2026-09-20", 20], ["2026-10-01", 28.5]]}}
-    html = _sdo_js("historyCard(%s)" % _js_arg(c))
+    html = _sdo_js(f"historyCard({_js_arg(c)})")
     assert "на «3» · 40" in html and " goal" in html               # порог-цель — пунктир с подписью
     assert "на «4»" not in html                                     # вне шкалы — без линии
     assert 'class="hist-val' in html and ">28,5<" in html          # последнее значение у точки
@@ -511,8 +510,8 @@ def test_history_card_threshold_labels_and_last_value():
     assert ".hist-plot .hist-area { fill: url(#hist-fill); }" in CSS
     # одна точка — подсказка без графика, нет истории — ничего
     one = {**c, "history": {"week_delta": None, "points": [["2026-10-01", 5]]}}
-    assert "График появится" in _sdo_js("historyCard(%s)" % _js_arg(one))
-    assert _sdo_js("historyCard(%s)" % _js_arg({**c, "history": {"points": []}})) == ""
+    assert "График появится" in _sdo_js(f"historyCard({_js_arg(one)})")
+    assert _sdo_js("historyCard({})".format(_js_arg({**c, "history": {"points": []}}))) == ""
 
 
 # ── Дизайн-ревью, п. 18 ──
@@ -1304,7 +1303,7 @@ def test_plus_sheet_invite_limit_from_server():
     fn = re.search(r"function inviteText\(.*?\n}\n", more, re.S).group(0)
 
     def run(inv):
-        res = subprocess.run(["node", "-e", fn + "console.log(JSON.stringify(inviteText(%s)))" % _js_arg(inv)],
+        res = subprocess.run(["node", "-e", fn + f"console.log(JSON.stringify(inviteText({_js_arg(inv)})))"],
                              capture_output=True, text=True)
         assert res.returncode == 0, res.stderr
         return json.loads(res.stdout)

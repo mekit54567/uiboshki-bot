@@ -330,7 +330,7 @@ async def embed_pending(max_batches: int = 8, pause: float = 1.0, p: str | None 
                 logger.info(f"эмбеддинги: {e} — продолжу в следующий проход")
                 break
             await db.executemany(f"INSERT OR REPLACE INTO {table} (rowid, embedding) VALUES (?, ?)",
-                                 [(r[0], _pack(v)) for r, v in zip(rows, vecs)])
+                                 [(r[0], _pack(v)) for r, v in zip(rows, vecs, strict=False)])
             if done_t:
                 await db.executemany(f"INSERT OR IGNORE INTO {done_t} (id) VALUES (?)", [(r[0],) for r in rows])
             else:

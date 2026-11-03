@@ -21,6 +21,7 @@ import zipfile
 
 from kapibara.features.pulse import probe as pulse_probe
 from kapibara.core.paths import ROOT
+import contextlib
 
 MAX_BODY = 40 * 1024 * 1024      # = предел пути в webapp/server.BODY_LIMITS
 # Подмена скриптов обхода в приложении (ключи — как в PulseKit, app/lib/screens/pulse_lab.dart)
@@ -42,10 +43,8 @@ def jwt_shape(token: str) -> dict:
         return {"jwt": "не разобран", "len": len(token)}
     out = {k: claims[k] for k in JWT_KEEP if k in claims}
     if "exp" in claims and "iat" in claims:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             out["lifetime_min"] = round((int(claims["exp"]) - int(claims["iat"])) / 60, 1)
-        except (TypeError, ValueError):
-            pass
     return {"jwt": out, "len": len(token)}
 
 
@@ -78,10 +77,8 @@ def _bytes(item: dict, key: str) -> bytes:
     # grpc-web-text: тело — ещё раз base64
     ctype = str((item.get("resp_headers" if key == "resp" else "req_headers") or {}).get("content-type", ""))
     if "grpc-web-text" in ctype:
-        try:
+        with contextlib.suppress(ValueError):
             data = base64.b64decode(data)
-        except ValueError:
-            pass
     return data
 
 

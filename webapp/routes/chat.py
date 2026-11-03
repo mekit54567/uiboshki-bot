@@ -237,7 +237,7 @@ async def _solve(history: list, subject: str, context: str, lectures: str,
     try:
         raw = base64.b64decode(attachment.data, validate=False)
     except (ValueError, TypeError):     # binascii.Error — тоже ValueError
-        raise HTTPException(status_code=400, detail="вложение повреждено")
+        raise HTTPException(status_code=400, detail="вложение повреждено") from None
     if len(raw) > MAX_ATTACHMENT_BYTES:
         raise HTTPException(status_code=413, detail="файл больше 10 МБ")
     name = attachment.name or "файл"
@@ -284,7 +284,7 @@ async def reply(history: list, subject: str, context: str, lectures: str, source
         from kapibara.features.ai import think
         log_failure(logger, f"webapp chat failed: {_short_reason(e)}", e,
                     expected=(gemini_solver.GeminiError, think.ThinkError))
-        raise HTTPException(status_code=502, detail=BUSY_TEXT)
+        raise HTTPException(status_code=502, detail=BUSY_TEXT) from e
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
     # Под ответом — только материалы, на которые ИИ сослался номером: на
@@ -418,7 +418,7 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
                                                      first=body.think_first),
                         "reasoning": ""}
             except think.ThinkError as e:
-                raise HTTPException(status_code=502, detail=str(e))
+                raise HTTPException(status_code=502, detail=str(e)) from e
     result = await reply(history, subject, context, lectures, sources, body.attachment, solve)
     # кнопка «Подумать ещё» под ответом (подписчикам, не на iPhone); к фото и
     # файлу — нет: модель второго уровня читает только текст

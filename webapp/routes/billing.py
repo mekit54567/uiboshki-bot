@@ -97,7 +97,7 @@ async def api_plus_rank(body: RankBody, user: dict = CurrentUser):
     try:
         got = await referrals.claim_rank(user["id"], body.rank)
     except referrals.BonusError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
     return {"ok": True, **got}
 
 
@@ -429,10 +429,9 @@ async def donate_state(k: str = ""):
         raise HTTPException(403, "ссылка устарела")
     last = await user_donations(uid, 1)
     if last and last[0]["status"] == "pending" and billing.provider() == "yookassa" \
-            and not last[0]["id"].startswith("local-"):
-        if await billing.yookassa_check(last[0]["id"]) == "succeeded":
-            await billing.settle(last[0]["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
-            last = await user_donations(uid, 1)
+            and not last[0]["id"].startswith("local-") and await billing.yookassa_check(last[0]["id"]) == "succeeded":
+        await billing.settle(last[0]["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
+        last = await user_donations(uid, 1)
     paid = bool(last) and last[0]["status"] == "succeeded"
     return {"paid": paid, "amount": last[0]["amount"] if paid else 0}
 
@@ -449,7 +448,7 @@ async def yookassa_hook(request: Request):
         data = await request.json()
         pid = str(data["object"]["id"])
     except Exception:
-        raise HTTPException(400, "не то")
+        raise HTTPException(400, "не то") from None
     if not await billing.is_ours(pid):
         return {"ok": True}           # не наш платёж — не дёргаем кассу зря
     st = await billing.yookassa_check(pid)

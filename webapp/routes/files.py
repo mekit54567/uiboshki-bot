@@ -124,7 +124,7 @@ async def api_file_link(file_id: int, request: Request, user: dict = CurrentUser
         tf = await deps.tg_bot().get_file(f["file_id"])
     except (TelegramAPIError, *NETWORK) as e:      # больше 20 МБ — Bot API не отдаёт
         logger.info(f"файл {file_id} не скачать через Bot API: {e}")
-        raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат")
+        raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат") from e
     name = _download_name(f, tf.file_path or "")
     exp = int(time.time()) + DL_TTL
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
@@ -257,10 +257,10 @@ async def api_summary_make(file_id: int, user: dict = CurrentUser):
     try:
         made = await lecture_summary.make(file_id, f["title"], f.get("subject") or "", user["id"])
     except lecture_summary.NoText:
-        raise HTTPException(422, "В файле нет текста — конспект делать не из чего")
+        raise HTTPException(422, "В файле нет текста — конспект делать не из чего") from None
     except Exception as e:
         log_failure(logger, f"конспект файла {file_id}", e)
-        raise HTTPException(502, "ИИ сейчас не ответил — попробуй через минуту")
+        raise HTTPException(502, "ИИ сейчас не ответил — попробуй через минуту") from e
     return await _summary_view(f, made)
 
 
@@ -299,7 +299,7 @@ async def api_lecture_search(q: str = "", subject: str = "", user: dict = Curren
         hits = await semantic_search.search(q, subject=subject, k=8)
     except Exception as e:
         log_failure(logger, "поиск в лекциях", e)
-        raise HTTPException(502, "Поиск в лекциях сейчас не работает")
+        raise HTTPException(502, "Поиск в лекциях сейчас не работает") from e
     return {"ready": True, "items": [{
         "file_id": h["file_id"], "title": h["title"], "subject": h["subject"],
         "place": semantic_search.place(h), "page": h["page_from"], "snippet": _snippet(h["text"], q),
@@ -384,7 +384,7 @@ async def file_page_image(file_id: int, page: int, exp: int, sig: str):
                 data = (await bot.download_file(tf.file_path)).read()
             except (TelegramAPIError, *NETWORK, OSError) as e:
                 logger.info(f"страница {file_id}/{page}: файл не скачался: {e}")
-                raise HTTPException(413, "Файл слишком большой — открой его целиком")
+                raise HTTPException(413, "Файл слишком большой — открой его целиком") from e
             _pdf_cache[file_id] = data
             while len(_pdf_cache) > 4:
                 _pdf_cache.pop(next(iter(_pdf_cache)))
@@ -392,7 +392,7 @@ async def file_page_image(file_id: int, page: int, exp: int, sig: str):
             _page_cache[key] = await asyncio.to_thread(_render_pdf_page, data, page)
         except (RuntimeError, IndexError, ValueError, OSError) as e:      # PdfiumError — RuntimeError; нет такой страницы — IndexError
             logger.info(f"страница {file_id}/{page}: не нарисовалась: {e}")
-            raise HTTPException(422, "Страница не нарисовалась")
+            raise HTTPException(422, "Страница не нарисовалась") from e
         while len(_page_cache) > 60:
             _page_cache.pop(next(iter(_page_cache)))
     return Response(_page_cache[key], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=600"})

@@ -114,7 +114,7 @@ async def _gemini_run(hay, targets, questions) -> dict:
     missing = [h for h in hay if h[0] not in have]
     for i in range(0, len(missing), 64):
         part = missing[i:i + 64]
-        for h, v in zip(part, await embedder.embed([h[1] for h in part], titles=[h[2] for h in part], p="gemini")):
+        for h, v in zip(part, await embedder.embed([h[1] for h in part], titles=[h[2] for h in part], p="gemini"), strict=False):
             have[h[0]] = v
     qv = await embedder.embed(questions, query=True, p="gemini")
     off = await embedder.embed(OFFTOPIC, query=True, p="gemini")

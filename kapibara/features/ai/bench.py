@@ -42,6 +42,7 @@ from collections import Counter
 import httpx
 
 from kapibara.core import net
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -449,10 +450,8 @@ def parse_scores(raw: str, letters: str) -> dict[str, int]:
     for k, v in data.items():
         k = str(k).strip().upper()
         if k in letters:
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 out[k] = max(1, min(10, round(float(v))))
-            except (TypeError, ValueError):
-                pass
     return out
 
 

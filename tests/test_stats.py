@@ -48,7 +48,7 @@ async def test_collect_and_render(db, monkeypatch):
     assert (s2["ai_today"], s2["ai_top"]) == (4, 3) and "ИИ сегодня: <b>4</b>" in stats.summary(s2)
     p = await stats.people(7)
     assert all(a["new"] for a in p["active"]) and "🆕" in stats.people_text(p)   # пришли сегодня
-    assert dict((label, n) for label, _, n in s["screens"])["Приложение"] == 3
+    assert {label: n for label, _, n in s["screens"]}["Приложение"] == 3
     assert dict(s["actions"])["сдано работ"] == 1
     assert sum(map(sum, s["heat"])) == 5
     png = stats.render(s)

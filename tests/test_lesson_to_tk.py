@@ -9,7 +9,7 @@ JS = (Path(__file__).parent.parent / "webapp/static/js/sdo.js").read_text()
 
 
 def _match(title, courses):
-    fns = "".join(re.search(r"function %s\(.*?\n}\n" % n, JS, re.S).group(0) for n in ("courseWords", "matchCourse"))
+    fns = "".join(re.search(rf"function {n}\(.*?\n}}\n", JS, re.S).group(0) for n in ("courseWords", "matchCourse"))
     code = fns + f"const r = matchCourse({json.dumps(title)}, {json.dumps(courses)}); console.log(JSON.stringify(r ? r.id : null));"
     return json.loads(subprocess.run(["node", "-e", code], capture_output=True, text=True, check=True).stdout)
 
@@ -44,8 +44,8 @@ def test_week_lessons_show_sdo_score():
     assert "(tap ? lessonScore(l.title) : '')" in home        # только у своих пар недели
     fn = re.search(r"function lessonScore\(.*?\n}\n", sdo, re.S).group(0)
     code = ("function fmtNum(x){return String(x)}" + "".join(
-        re.search(r"function %s\(.*?\n}\n" % n, sdo, re.S).group(0) for n in ("courseWords", "matchCourse")) + fn +
-        "let sdoData = {courses: %s};" % json.dumps([{**c, "score": 41, "max": 60, "closed": c["id"] == 3} for c in COURSES]) +
+        re.search(rf"function {n}\(.*?\n}}\n", sdo, re.S).group(0) for n in ("courseWords", "matchCourse")) + fn +
+        "let sdoData = {{courses: {}}};".format(json.dumps([{**c, "score": 41, "max": 60, "closed": c["id"] == 3} for c in COURSES])) +
         "console.log(JSON.stringify([lessonScore('Моделирование бизнес-процессов'), lessonScore('Физкультура')]))")
     out = json.loads(subprocess.run(["node", "-e", code], capture_output=True, text=True, check=True).stdout)
     assert "41/60" in out[0] and "ok" in out[0] and out[1] == ""

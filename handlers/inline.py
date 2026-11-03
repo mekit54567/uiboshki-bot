@@ -132,7 +132,7 @@ async def _own_results(only: str | None, user_id: int | None = None) -> list:
         urls = await asyncio.gather(*(schedule_card.prepare(base, key, *((1, gid) if other else ()))
                                       for key, _, _ in cards))
         return [_photo(f"own:{key}:{url}", url, title, desc, title)
-                for (key, title, desc), url in zip(cards, urls)]
+                for (key, title, desc), url in zip(cards, urls, strict=False)]
     from kapibara.features.schedule import parser
     g = (gid,) if other else ()
     out = []
@@ -154,7 +154,7 @@ async def _target_results(query: str) -> list:
         from kapibara.features.schedule import card as schedule_card
         urls = await asyncio.gather(*(schedule_card.prepare(base, "target", t["type"], t["id"]) for t in found))
         out = []
-        for t, url in zip(found, urls):
+        for t, url in zip(found, urls, strict=False):
             title = f"{_TARGET_EMOJI[t['type']]} {t['title']}"
             out.append(_photo(f"t:{url}", url, title, "расписание на неделю", title))
         return out

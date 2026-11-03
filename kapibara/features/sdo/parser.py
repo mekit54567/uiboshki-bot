@@ -72,7 +72,7 @@ async def get_checked(client: httpx.AsyncClient, url: str) -> httpx.Response:
     try:
         resp = await client.get(url)
     except httpx.TooManyRedirects:
-        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла")
+        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла") from None
     if "/login/index.php" in str(resp.url):
         raise SdoSessionExpired(f"Похоже, сессия СДО протухла (итоговый URL: {resp.url})")
     return resp

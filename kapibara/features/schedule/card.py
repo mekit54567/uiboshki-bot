@@ -45,24 +45,24 @@ def _rgb(h: str) -> tuple[int, int, int]:
 
 def _mix(a, b, t: float) -> tuple[int, int, int]:
     """a → b на долю t."""
-    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b, strict=False))
 
 
 # Оформления. heading/body/num — (файл, вес); texture — фон: бумага, доска мелом, клетка.
 STYLES = {
-    "paper": dict(                                     # «Тетрадь» приложения
-        bg="#E9E3D8", card="#F3EEE5", line="#DBD3C4", text="#2A2721", muted="#7D776B", accent="#B75438",
-        subjects=SUBJECTS_INK, tint=0.16, heading=("SourceSerif4.ttf", 640), body=("Onest.ttf", 400),
-        bold=("Onest.ttf", 640), num=("SourceSerif4.ttf", 640), texture="paper", outline=False),
-    "chalk": dict(                                     # «Мел»: доска, как иконка
-        bg="#1F2321", card="#272C2A", line="#3A403D", text="#ECEBE4", muted="#A4A89F", accent="#F2D492",
-        subjects=["#B9AEF7", "#F7CB79", "#86E0D6", "#FF9E9E", "#94B8FF", "#F2A6CF", "#A9DCAB", "#F6BC88"],
-        tint=0.22, heading=("Neucha.ttf", 0), body=("Onest.ttf", 400), bold=("Onest.ttf", 600),
-        num=("Neucha.ttf", 0), texture="chalk", outline=True),
-    "grid": dict(                                      # тетрадь в клетку, поля красным
-        bg="#FBF9F3", card="#FFFFFF", line="#D9E1EA", text="#24304A", muted="#6E7787", accent="#C2453A",
-        subjects=SUBJECTS_INK, tint=0.14, heading=("Neucha.ttf", 0), body=("Onest.ttf", 400),
-        bold=("Onest.ttf", 640), num=("Onest.ttf", 700), texture="grid", outline=False),
+    "paper": {                                     # «Тетрадь» приложения
+        "bg": "#E9E3D8", "card": "#F3EEE5", "line": "#DBD3C4", "text": "#2A2721", "muted": "#7D776B", "accent": "#B75438",
+        "subjects": SUBJECTS_INK, "tint": 0.16, "heading": ("SourceSerif4.ttf", 640), "body": ("Onest.ttf", 400),
+        "bold": ("Onest.ttf", 640), "num": ("SourceSerif4.ttf", 640), "texture": "paper", "outline": False},
+    "chalk": {                                     # «Мел»: доска, как иконка
+        "bg": "#1F2321", "card": "#272C2A", "line": "#3A403D", "text": "#ECEBE4", "muted": "#A4A89F", "accent": "#F2D492",
+        "subjects": ["#B9AEF7", "#F7CB79", "#86E0D6", "#FF9E9E", "#94B8FF", "#F2A6CF", "#A9DCAB", "#F6BC88"],
+        "tint": 0.22, "heading": ("Neucha.ttf", 0), "body": ("Onest.ttf", 400), "bold": ("Onest.ttf", 600),
+        "num": ("Neucha.ttf", 0), "texture": "chalk", "outline": True},
+    "grid": {                                      # тетрадь в клетку, поля красным
+        "bg": "#FBF9F3", "card": "#FFFFFF", "line": "#D9E1EA", "text": "#24304A", "muted": "#6E7787", "accent": "#C2453A",
+        "subjects": SUBJECTS_INK, "tint": 0.14, "heading": ("Neucha.ttf", 0), "body": ("Onest.ttf", 400),
+        "bold": ("Onest.ttf", 640), "num": ("Onest.ttf", 700), "texture": "grid", "outline": False},
 }
 STYLE = "chalk"                # Никита 03.11: «Мел», как иконка
 

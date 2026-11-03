@@ -35,7 +35,7 @@ SERVER_DIRS = ("kapibara", "handlers", "database", "webapp")
 # B — bugbear (замыкание на переменной цикла, raise без from, zip без strict…),
 # ASYNC — блокирующие вызовы внутри async (бот замирает для всех), SIM/C4/PERF/UP
 # — лишний и устаревший код. ASYNC109 (параметр timeout у async-функции) — не баг.
-RUFF_DEBT = ["B", "ASYNC", "SIM", "C4", "PERF", "UP"]
+RUFF_DEBT = ["B", "ASYNC", "SIM", "PERF", "UP"]
 RUFF_DEBT_IGNORE = ["ASYNC109"]
 
 

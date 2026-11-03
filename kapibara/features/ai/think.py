@@ -190,7 +190,7 @@ async def solve(uid: int, history: list, subject: str = "", lectures: str = "", 
         logger.warning(f"«Подумать ещё»: {MODEL} не ответил: {e!r}")
         await _settle(uid, None)
         why = str(e) if isinstance(e, RuntimeError) and str(e) else type(e).__name__
-        raise ThinkError(FAIL_TEXT.format(why=why[:120].rstrip(".")))
+        raise ThinkError(FAIL_TEXT.format(why=why[:120].rstrip("."))) from e
     finally:
         gemini_solver.forced_model.reset(t_model)
         gemini_solver.ai_usage.reset(t_usage)

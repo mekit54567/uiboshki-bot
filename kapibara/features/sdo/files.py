@@ -317,7 +317,7 @@ async def download(client: httpx.AsyncClient, f: SdoFile) -> tuple[bytes, str]:
     except httpx.TooManyRedirects:
         # протухшая кука — круг редиректов «вход → единый вход → обратно»
         # (как в sdo_parser.get_checked): остановить выгрузку, а не гонять каждый файл
-        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла")
+        raise SdoSessionExpired("СДО гоняет по кругу редиректов на вход — кука протухла") from None
 
 
 async def _download(client: httpx.AsyncClient, f: SdoFile) -> tuple[bytes, str]:

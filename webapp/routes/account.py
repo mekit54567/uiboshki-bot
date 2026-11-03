@@ -194,7 +194,7 @@ async def api_pulse_lab(request: Request, user: dict = CurrentUser):
     try:
         report = json.loads(raw or b"{}")
     except ValueError:
-        raise HTTPException(status_code=400, detail="не JSON")
+        raise HTTPException(status_code=400, detail="не JSON") from None
     if not isinstance(report, dict):
         raise HTTPException(status_code=400, detail="не JSON")
     data, summary = pulse_lab.build(report)

@@ -64,13 +64,13 @@ async def check(key: str) -> bool:
         ref_ids = st.tokenize(texts)
         same = []
         for i, e in enumerate(enc.tok.encode_batch(texts)):
-            theirs = [int(x) for x, m in zip(ref_ids["input_ids"][i], ref_ids["attention_mask"][i]) if m]
+            theirs = [int(x) for x, m in zip(ref_ids["input_ids"][i], ref_ids["attention_mask"][i], strict=False) if m]
             same.append(theirs == e.ids)
             if theirs != e.ids:
-                diff = next((j for j, (a, b) in enumerate(zip(theirs, e.ids)) if a != b), min(len(theirs), len(e.ids)))
+                diff = next((j for j, (a, b) in enumerate(zip(theirs, e.ids, strict=False)) if a != b), min(len(theirs), len(e.ids)))
                 print(f"    текст {i}: токены расходятся с transformers с позиции {diff} "
                       f"(наши {e.ids[diff:diff + 5]}, их {theirs[diff:diff + 5]}), косинус {cos[i]:.6f}")
-        checked = [c for c, s in zip(cos, same) if s]
+        checked = [c for c, s in zip(cos, same, strict=False) if s]
         worst = min(checked) if checked else 0.0
         print(f"  {key} «{prefix}»: косинус с эталоном min {worst:.6f} по {len(checked)} из {len(texts)} текстов "
               f"(все: {', '.join(f'{c:.6f}' for c in cos)})")
