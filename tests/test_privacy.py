@@ -650,3 +650,34 @@ def test_consent_names_pulse():
     assert "Пульс МИРЭА" in text and "pulse.mirea.ru" in text and "QR" in text
     assert "СДО и Пульс" in text
     assert privacy.HOSTS["timeweb"]["version"] == "5"
+
+
+def test_upsert_only_through_privacy():
+    """152-ФЗ (03.11): база больше не спрашивает согласие сама — имя до
+    согласия не пишет privacy.upsert_user. Бот и API зовут только её."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    bad = []
+    for d in ("handlers", "webapp", "kapibara", "bot.py"):
+        files = [root / d] if d.endswith(".py") else (root / d).rglob("*.py")
+        for p in files:
+            if p.name == "privacy.py" and p.parent.name == "privacy":
+                continue
+            text = p.read_text(encoding="utf-8")
+            if re.search(r"from database(\.users)? import[^\n]*\bupsert_user\b", text) or \
+                    re.search(r"from database import \([^)]*\bupsert_user\b", text) or "database.upsert_user(" in text:
+                bad.append(str(p.relative_to(root)))
+    assert not bad, f"upsert_user — через kapibara.features.privacy.privacy: {bad}"
+
+
+async def test_upsert_before_consent_has_no_name(db, monkeypatch):
+    from database import get_user
+    from kapibara.features.privacy import privacy
+
+    async def blocked(uid):
+        return True
+    monkeypatch.setattr(privacy, "blocked", blocked)
+    await privacy.upsert_user(777001, "nick", "Имя Фамилия")
+    u = await get_user(777001)
+    assert u and not u.get("username") and not u.get("full_name")

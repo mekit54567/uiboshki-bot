@@ -6,7 +6,8 @@ from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-from database import upsert_user, set_subscription, get_user
+from database import set_subscription, get_user
+from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.core.config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE_HOUR, SCHEDULE_MINUTE
 from kapibara.bot.keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
 from kapibara.core.utils import esc, split_by_lines

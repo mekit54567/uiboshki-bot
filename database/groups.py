@@ -105,7 +105,7 @@ async def viewer_group(user_id: int | None) -> int:
     gid = await get_user_group(user_id) if user_id else None
     if gid and gid != home():
         return gid
-    from kapibara.features.groups import members
+    from database import members
     return 0 if user_id and await members.known(user_id) is False else home()
 
 
