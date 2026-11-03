@@ -1,5 +1,6 @@
 """Новые баллы в СДО: сравнение с последней точкой истории, первый раз —
 молча, сообщение со всеми изменившимися предметами, тумблер в уведомлениях."""
+from pathlib import Path
 import pytest
 
 from kapibara.features.notifications import grade_alerts
@@ -55,7 +56,7 @@ async def test_check_all(db, monkeypatch):
 def test_toggle_in_app():
     from kapibara.features.notifications import prefs as notify_prefs
     assert notify_prefs.merge(None)["grades"] is True
-    assert "toggleNotify('grades')" in open("webapp/static/js/more.js", encoding="utf-8").read()
+    assert "toggleNotify('grades')" in Path("webapp/static/js/more.js").read_text(encoding="utf-8")
 
 
 def _course(works):

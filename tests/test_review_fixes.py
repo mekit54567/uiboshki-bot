@@ -1,9 +1,11 @@
 """Ревью кода 04.10 (семь независимых ревьюеров) — на каждую подтверждённую
 находку по СДО, базе, бэкапу, каналу и серверу свой тест."""
 import asyncio
+import contextlib
 import gzip
 import os
 from datetime import date
+from pathlib import Path
 
 import httpx
 import pytest
@@ -63,10 +65,8 @@ def test_overview_fresh_drops_course_screens(monkeypatch):
     sdo_grades._cache[("all", 5)] = (0, {})                                   # протух — пойдёт в СДО
 
     async def run():
-        try:
+        with contextlib.suppress(Exception):                                  # сети нет — важно, что кэш сброшен
             await sdo_grades.overview(5, "cookie", fresh=True)
-        except Exception:
-            pass                                                              # сети нет — важно, что кэш сброшен
     asyncio.run(run())
     assert ("detail", 5, 7) not in sdo_grades._cache and ("detail", 6, 7) in sdo_grades._cache
 
@@ -265,11 +265,11 @@ async def test_channel_double_tap_publishes_once(db, tmp_path, monkeypatch):
 async def test_restore_drops_search_index_and_limits_unpack(db, monkeypatch):
     from kapibara.ops import backup
     from kapibara.features.ai import semantic_index
-    open(semantic_index.index_path(), "wb").write(b"old index")
+    Path(semantic_index.index_path()).write_bytes(b"old index")
     data, _ = await backup.make_backup()
     tmp, info = await asyncio.to_thread(backup.inspect_backup, data)
     await backup.apply_backup(tmp)
-    assert not os.path.exists(semantic_index.index_path())                  # старые куски не подклеятся к чужим id
+    assert not Path(semantic_index.index_path()).exists()                   # старые куски не подклеятся к чужим id
     monkeypatch.setattr(backup, "MAX_UNPACKED_BYTES", 1000)
     with pytest.raises(backup.RestoreError):
         backup.inspect_backup(gzip.compress(b"SQLite format 3\x00" + b"\x00" * 5000))

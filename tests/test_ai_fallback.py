@@ -1,6 +1,7 @@
 """Запасной ИИ: Gemini упал (таймаут/5xx — ещё попытка; лимит — сразу) →
 DeepSeek с пометкой; DeepSeek упал → Gemini. Постоянная ошибка (ключ,
 модель) не маскируется."""
+from pathlib import Path
 import pytest
 
 from kapibara.features.ai import solver as ai_solver
@@ -98,6 +99,6 @@ def test_gemini_errors_marked_transient():
     import httpx
     assert GeminiError("x", transient=True).transient and not GeminiError("x").transient
     # 429 и 5xx временные, 400/403/404 — нет (по коду в _generate)
-    src = open(gemini_solver.__file__, encoding="utf-8").read()
+    src = Path(gemini_solver.__file__).read_text(encoding="utf-8")
     assert "resp.status_code == 429 or resp.status_code >= 500" in src
     assert httpx  # noqa

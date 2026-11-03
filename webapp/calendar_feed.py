@@ -90,8 +90,7 @@ async def build_ics_for_user(token: str, group_id: int | None = None) -> bytes:
                 desc_lines.append("ДЗ: см. файл в боте (/hw)")
 
         matched_notes = [n for n in notes_cache[date_str] if _matches_subject(n.get("subject"), ev["summary"])]
-        for n in matched_notes:
-            desc_lines.append(f"Заметка: {n['text']}")
+        desc_lines += [f"Заметка: {n['text']}" for n in matched_notes]
 
         event = Event()
         event.add("uid", _event_uid(token, ev))

@@ -1,7 +1,10 @@
 """Команды старосты по файлам и базе: /delfile, /backup, /tidyfiles, /restore, /syncfiles."""
 
 import asyncio
+import contextlib
 import json
+
+import anyio
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -166,8 +169,9 @@ async def restore_file(message: Message, state: FSMContext):
         await message.answer(f"❌ Копия не подходит: {esc(str(e))}", parse_mode="HTML")
         return
     old = _restore_pending.pop(message.from_user.id, None)
-    if old and os.path.exists(old):
-        os.remove(old)
+    if old:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(old)
     _restore_pending[message.from_user.id] = tmp
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="♻️ Да, восстановить", callback_data="restore:yes"),
@@ -194,7 +198,7 @@ async def restore_confirm(callback: CallbackQuery):
     import os
     uid = callback.from_user.id
     tmp = _restore_pending.pop(uid, None)
-    if not is_starosta(uid) or not tmp or not os.path.exists(tmp):
+    if not is_starosta(uid) or not tmp or not await anyio.Path(tmp).exists():
         await callback.answer("Нечего восстанавливать — пришли копию заново через /restore", show_alert=True)
         return
     if callback.data != "restore:yes":

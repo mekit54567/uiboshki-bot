@@ -1,5 +1,6 @@
 """Своё напоминание о дедлайне: за день / 3 часа / час / своё время; приходит
 один раз; если дедлайн уже отмечен сделанным — не приходит."""
+from pathlib import Path
 from datetime import datetime
 
 import pytest
@@ -72,7 +73,7 @@ async def test_api_remind(db, monkeypatch):
 
 def test_scheduler_runs_every_minute():
     from kapibara.jobs import scheduler
-    src = open(scheduler.__file__, encoding="utf-8").read()       # где бы ни лежал (kapibara/jobs/)
+    src = Path(scheduler.__file__).read_text(encoding="utf-8")       # где бы ни лежал (kapibara/jobs/)
     assert "send_deadline_custom_reminders" in src
 
 

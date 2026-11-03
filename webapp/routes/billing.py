@@ -328,9 +328,9 @@ async def plus_state(k: str = ""):
         raise HTTPException(403, "ссылка устарела")
     if billing.provider() == "yookassa":
         for p in await user_payments(uid, 3):
-            if p["status"] == "pending" and not p["id"].startswith("local-"):
-                if await billing.yookassa_check(p["id"]) == "succeeded":
-                    await billing.paid(p["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
+            if (p["status"] == "pending" and not p["id"].startswith("local-")
+                    and await billing.yookassa_check(p["id"]) == "succeeded"):
+                await billing.paid(p["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
     st = await billing.status(uid)
     return {"active": st["active"], "until": st["until"],
             "until_text": billing.fmt_day(st["until"]) if st["until"] else ""}

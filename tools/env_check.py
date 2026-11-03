@@ -75,8 +75,7 @@ async def check_telegram() -> list[tuple[str, Result]]:
         elif want:
             out.append(("BOT_USERNAME", Result(OK, "совпадает с ботом")))
         out.append(("STAROSTA_ID", await _starosta(bot)))
-        for name in ("CHANNEL_ID", "LOGIN_CHANNEL"):
-            out.append((name, await _channel(bot, me.id, env(name))))
+        out += [(name, await _channel(bot, me.id, env(name))) for name in ("CHANNEL_ID", "LOGIN_CHANNEL")]
         out.append(("GROUP_CHAT_ID", await _group_chat(bot)))
     finally:
         await bot.session.close()
@@ -192,9 +191,7 @@ async def check_gemini() -> list[tuple[str, Result]]:
     models = [os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()]
     fallback = os.getenv("GEMINI_FALLBACK_MODELS", "gemini-flash-latest,gemini-2.5-flash")
     models += [m.strip() for m in fallback.split(",") if m.strip() and m.strip() not in models]
-    lines = []
-    for m in models:
-        lines.append(await _gemini_one(m))
+    lines = [await _gemini_one(m) for m in models]
     name_ok = [r for r in lines if r.mark in (OK, WARN)]
     if not name_ok:
         mark = BAD
@@ -621,12 +618,10 @@ def known_names() -> set[str]:
 
 
 def env_file_problems(names: list[str], known: set[str]) -> list[tuple[str, Result]]:
-    out = []
-    for name in sorted(set(names) - known - SKIP_UNKNOWN):
-        out.append((name, Result(BAD, "код такую переменную не знает — опечатка?")))
-    for name in sorted(set(names)):
-        if name in os.environ and not os.environ[name].strip():
-            out.append((name, Result(WARN, "задана пустой — это не то же, что «не задана»; лучше закомментировать #")))
+    out = [(name, Result(BAD, "код такую переменную не знает — опечатка?"))
+           for name in sorted(set(names) - known - SKIP_UNKNOWN)]
+    out += [(name, Result(WARN, "задана пустой — это не то же, что «не задана»; лучше закомментировать #"))
+            for name in sorted(set(names)) if name in os.environ and not os.environ[name].strip()]
     return out
 
 

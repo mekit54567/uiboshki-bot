@@ -116,9 +116,8 @@ def check(root: Path) -> tuple[int, list[str]]:
         rel = path.relative_to(root).as_posix()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                for a in node.names:
-                    if a.name.split(".")[0] in ours and a.name not in mods:
-                        errors.append(f"{rel}:{node.lineno}: нет модуля {a.name}")
+                errors += [f"{rel}:{node.lineno}: нет модуля {a.name}" for a in node.names
+                           if a.name.split(".")[0] in ours and a.name not in mods]
             elif isinstance(node, ast.ImportFrom):
                 target = resolve(name, mods[name].is_package, node.level, node.module)
                 if not target or target.split(".")[0] not in ours:

@@ -1,4 +1,5 @@
 """История баллов СДО: точка в день на предмет, прирост за неделю."""
+from pathlib import Path
 from datetime import date
 
 import pytest
@@ -31,5 +32,5 @@ async def test_first_day_no_delta_and_current_appended(db, day):
 
 
 def test_chart_in_subject_screen():
-    src = open("webapp/static/js/sdo.js", encoding="utf-8").read()
+    src = Path("webapp/static/js/sdo.js").read_text(encoding="utf-8")
     assert "historyCard(c)" in src and "week_delta" in src

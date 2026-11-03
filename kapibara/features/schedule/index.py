@@ -113,7 +113,7 @@ async def _scan_type(client: httpx.AsyncClient, target_type: int):
         ids = list(range(next_id, next_id + CONCURRENCY * 5))
         sem = asyncio.Semaphore(CONCURRENCY)
 
-        async def one(i):
+        async def one(i, sem=sem):          # семафор этой пачки, а не последней (B023)
             async with sem:
                 for attempt in range(3):
                     try:

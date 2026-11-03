@@ -2,6 +2,8 @@ import asyncio
 import contextlib
 import logging
 import time
+
+import anyio
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, ErrorEvent, MenuButtonWebApp, WebAppInfo
@@ -156,8 +158,7 @@ async def notify_rollback(bot: Bot):
     import database
     path = os.path.join(os.path.dirname(database.DATABASE_PATH), "rollback.txt")
     try:
-        with open(path, encoding="utf-8") as f:
-            bad, _, prev = f.read().strip().partition(" ")
+        bad, _, prev = (await anyio.Path(path).read_text(encoding="utf-8")).strip().partition(" ")
     except OSError:
         return
     if STAROSTA_ID:

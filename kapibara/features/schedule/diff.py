@@ -275,7 +275,8 @@ async def check_schedule_changes(bot):
         head = f"📢 <b>Изменения в расписании на {weekday_label} ({d.strftime('%d.%m')}):</b>\n\n"
         texts: dict[frozenset, str] = {}
 
-        def text_for(hide: frozenset) -> str:
+        def text_for(hide: frozenset, texts=texts, head=head, old_events=old_events, new_events=new_events) -> str:
+            # переменные цикла — в аргументах: замыкание видит этот день, а не последний
             if hide not in texts:
                 changes = diff_events(_visible(old_events, hide), _visible(new_events, hide))
                 texts[hide] = head + "\n".join(changes) if changes else ""

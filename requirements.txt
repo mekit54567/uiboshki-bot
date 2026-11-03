@@ -2,6 +2,7 @@ aiogram==3.13.1
 aiosqlite==0.20.0
 apscheduler==3.10.4
 httpx==0.27.2
+anyio==4.15.1      # файлы в async-коде без блокировки цикла (anyio.Path); и так ставится с httpx
 h2==4.4.1
 socksio==1.0.0
 aiohttp-socks==0.12.0

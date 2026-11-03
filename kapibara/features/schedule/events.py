@@ -242,9 +242,5 @@ def list_upcoming_events(raw: bytes, days_ahead: int = 14) -> list[dict]:
     ical (не обязательно своей группы — годится и для чужого препода/
     аудитории, полученных через mirea_schedule_api.fetch_ical)."""
     today = datetime.now(TZ).date()
-    results = []
-    for i in range(days_ahead):
-        d = today + timedelta(days=i)
-        for e in parse_events_for_date(raw, d):
-            results.append({**e, "date": d})
-    return results
+    days = [today + timedelta(days=i) for i in range(days_ahead)]
+    return [{**e, "date": d} for d in days for e in parse_events_for_date(raw, d)]
