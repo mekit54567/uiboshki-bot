@@ -282,8 +282,8 @@ async def test_starosta_switches_and_launch_news(db, bot, dp, monkeypatch):  # n
     from database import get_setting
     from tests.conftest import STAROSTA_ID
     from tests.test_review_bot import press
-    from kapibara.jobs import scheduler
-    monkeypatch.setattr(scheduler, "PACE_SECONDS", 0)
+    from kapibara.features.notifications import broadcast
+    monkeypatch.setattr(broadcast, "PACE_SECONDS", 0)
     await send(dp, bot, "/plus stage full", uid=ME)                          # не староста — обычный /plus
     assert await get_setting("plus:stage") is None
     await send(dp, bot, "/plus stage full", uid=STAROSTA_ID)

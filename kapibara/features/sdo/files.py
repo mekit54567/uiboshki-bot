@@ -238,7 +238,7 @@ def _category(*candidates: str) -> str:
 
 
 def _title_from_name(name: str) -> str:
-    from handlers.files_upload import title_from_filename
+    from kapibara.features.lectures.names import title_from_filename
     return title_from_filename(name)
 
 

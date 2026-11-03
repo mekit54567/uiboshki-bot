@@ -16,6 +16,7 @@ from database import get_all_subscribed_users, get_deadlines_soon
 from kapibara.features.schedule.parser import get_today_schedule, fetch_schedule_raw, parse_events_for_date, format_lesson
 from kapibara.core.utils import esc, today_msk, esc_attr
 from kapibara.bot.keyboards import app_button
+from kapibara.features.notifications.broadcast import pace
 
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
@@ -46,28 +47,10 @@ def progress_bar(delta: int, max_days: int = 14) -> str:
 
 
 async def _group_raws(fetch_home=None):
-    """Календари групп для рассылки: {группа: (raw, свой корпус)} — каждый
-    качается один раз на рассылку; своя группа — прежним вызовом (с кэшем и
-    запасной копией), чужие — через общий кэш календарей МИРЭА."""
-    from kapibara.features.notifications import prefs as notify_prefs
-    cache: dict = {}
-
-    async def get(gid):
-        from kapibara.features.groups import groups
-        key = None if not gid or gid == groups.home_id() else gid
-        if key not in cache:
-            try:
-                if key is None:
-                    raw = await (fetch_home or fetch_schedule_raw)()
-                else:
-                    from kapibara.features.schedule import parser as schedule_parser
-                    raw = await schedule_parser.fetch_schedule_raw(group_id=key)
-                cache[key] = (raw, notify_prefs.home_campus(raw))
-            except Exception as e:
-                logger.error(f"Рассылка: расписание группы {key or 'своей'} не загрузилось: {e}")
-                cache[key] = (None, None)
-        return cache[key]
-    return get
+    """Календари групп для рассылки — kapibara.features.notifications.broadcast;
+    своя группа — fetch_schedule_raw этого модуля (тесты его подменяют)."""
+    from kapibara.features.notifications import broadcast
+    return await broadcast.group_raws(fetch_home or fetch_schedule_raw)
 
 
 async def deliver(bot, user_id: int, html: str, **kw):
@@ -76,14 +59,6 @@ async def deliver(bot, user_id: int, html: str, **kw):
     return await delivery.deliver(bot, user_id, html, **kw)
 
 
-async def pace():
-    """Пауза между сообщениями рассылки: Telegram пускает ~30 в секунду, а
-    групп и людей станет много (этап 1 (г))."""
-    import asyncio
-    await asyncio.sleep(PACE_SECONDS)
-
-
-PACE_SECONDS = 0.05
 INDEX_FIRST_DELAY = 10          # мин после запуска до первого прохода индекса лекций
 
 
@@ -217,7 +192,7 @@ async def send_group_morning_digest(bot: Bot):
 
 
 def _format_deadline_reminders(deadlines: list[dict]) -> str:
-    from handlers.deadlines import due_label
+    from kapibara.features.deadlines.labels import due_label
     today = today_msk()
     lines = ["⏳ <b>Ближайшие дедлайны группы</b>"]
     for d in deadlines:
@@ -607,7 +582,10 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
 
     async def index_lectures():
         try:
-            await semantic_index.index_pending(bot)
+            st = await semantic_index.index_pending(bot)
+            from kapibara.ops import health
+            await health.note("semantic", True, f"{st['chunks']} фрагментов из {st['files']} файлов, "
+                                                f"с векторами {st['embedded']}")
         except Exception as e:
             logger.warning(f"индекс поиска: {type(e).__name__}: {e}")
     # первый проход — не сразу: после выкладки все разом открывают приложение,

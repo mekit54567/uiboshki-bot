@@ -1,7 +1,7 @@
 # Охранник слоёв (docs/adr/0002-layers.md): импорты идут только сверху вниз.
 #     bot | jobs  →  ops  →  features  →  core;   database — только core
 # CI: «lint-imports». Новый прямой импорт против правил — CI красный.
-# ignore_imports — нарушения, которые были на 02.11 (25 штук; 03.11 — 21). Это список
+# ignore_imports — нарушения, которые были на 02.11 (25 штук; 03.11 — 12). Это список
 # долга: его можно только сокращать (как храповик, docs/adr/0006-ratchet.md).
 # Починил — удали строку отсюда (одинаковый список во всех правилах).
 
@@ -28,25 +28,16 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards
 
 [importlinter:contract:features]
@@ -62,25 +53,16 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards
 
 [importlinter:contract:ops]
@@ -93,25 +75,16 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards
 
 [importlinter:contract:bot]
@@ -123,25 +96,16 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards
 
 [importlinter:contract:jobs]
@@ -153,25 +117,16 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards
 
 [importlinter:contract:database]
@@ -188,23 +143,14 @@ forbidden_modules =
 allow_indirect_imports = True
 ignore_imports =
     database.files -> kapibara.features.lectures.categories
-    kapibara.features.ai.bench -> kapibara.bot.intent_router
-    kapibara.features.ai.semantic_index -> kapibara.ops.health
-    kapibara.features.deadlines.reminders -> handlers.deadlines
     kapibara.features.deadlines.reminders -> kapibara.bot.keyboards
     kapibara.features.deadlines.soon -> kapibara.bot.keyboards
     kapibara.features.notifications.evening_digest -> handlers.weather
     kapibara.features.notifications.evening_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.evening_digest -> kapibara.jobs.scheduler
     kapibara.features.notifications.grade_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.new_tasks -> kapibara.bot.keyboards
     kapibara.features.notifications.quiz_alerts -> kapibara.bot.keyboards
     kapibara.features.notifications.weekly_digest -> kapibara.bot.keyboards
-    kapibara.features.notifications.weekly_digest -> kapibara.jobs.scheduler
-    kapibara.features.privacy.privacy -> kapibara.ops.backup
     kapibara.features.privacy.privacy -> kapibara.ops.s3_store
     kapibara.features.sdo.accounts -> kapibara.bot.keyboards
-    kapibara.features.sdo.check -> kapibara.ops.health
-    kapibara.features.sdo.files -> handlers.files_upload
-    kapibara.features.social.group_award -> kapibara.jobs.scheduler
     kapibara.jobs.scheduler -> kapibara.bot.keyboards

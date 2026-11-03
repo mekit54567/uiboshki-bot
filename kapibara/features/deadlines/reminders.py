@@ -58,7 +58,7 @@ def label(at: str, now: datetime | None = None) -> str:
 
 async def send_due(bot, now: datetime | None = None):
     from database import due_deadline_reminders, mark_deadline_reminder_sent
-    from handlers.deadlines import due_label
+    from kapibara.features.deadlines.labels import due_label
     from kapibara.bot.keyboards import app_button
     from kapibara.core.utils import esc
     now = now or datetime.now(TZ)
