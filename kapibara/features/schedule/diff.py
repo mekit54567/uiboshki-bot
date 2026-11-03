@@ -298,8 +298,10 @@ async def check_schedule_changes(bot):
         # надёжнее, чем личка (не у всех она включена). В общем чате — без
         # предметов по выбору, как и утренний дайджест.
         text = text_for(frozenset(OPTIONAL_SUBJECTS))
-        if GROUP_CHAT_ID and text:
+        from kapibara.features.groups import members
+        chat = GROUP_CHAT_ID or await members.chat_id()     # или запомненный чат (handlers/members_chat.py)
+        if chat and text:
             try:
-                await bot.send_message(GROUP_CHAT_ID, text, parse_mode="HTML")
+                await bot.send_message(chat, text, parse_mode="HTML")
             except Exception as e:
                 logger.warning(f"Не смог отправить diff расписания в группу: {e}")

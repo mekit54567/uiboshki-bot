@@ -216,6 +216,17 @@ async def get_tomorrow_schedule(group_id: int | None = None) -> str:
         return "⚠️ Не удалось загрузить расписание."
 
 
+async def get_date_schedule(d: date, group_id: int | None = None) -> str:
+    """Любой день (inline «пятница», «12 ноября»)."""
+    from kapibara.core.errors import NETWORK
+    try:
+        raw = await _raw(group_id)
+        return format_day(parse_events_for_date(raw, d), d) + ("" if _other_group(group_id) else stale_note())
+    except (*NETWORK, ValueError, OSError) as e:
+        logger.error(f"Ошибка расписания: {e}")
+        return "⚠️ Не удалось загрузить расписание."
+
+
 _subjects_cache: dict[tuple, list[str]] = {}
 
 

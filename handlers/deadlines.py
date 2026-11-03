@@ -468,8 +468,10 @@ async def deadline_post_confirm(callback: CallbackQuery):
     if STAROSTA_ID and not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    if not GROUP_CHAT_ID:
-        await callback.answer("GROUP_CHAT_ID не настроен", show_alert=True)
+    from kapibara.features.groups import members
+    chat = GROUP_CHAT_ID or await members.chat_id()     # или запомненный чат (handlers/members_chat.py)
+    if not chat:
+        await callback.answer("Чат группы не задан — добавь бота в чат группы", show_alert=True)
         return
     text = callback.message.html_text
     group_text = text.removesuffix(DEADLINE_POST_QUESTION.strip()).rstrip()
@@ -482,7 +484,7 @@ async def deadline_post_confirm(callback: CallbackQuery):
             await callback.answer("Уже опубликовано")
             return
         try:
-            await callback.bot.send_message(GROUP_CHAT_ID, group_text, parse_mode="HTML")
+            await callback.bot.send_message(chat, group_text, parse_mode="HTML")
         except Exception as e:
             await callback.answer(f"Ошибка отправки: {e}", show_alert=True)
             return
