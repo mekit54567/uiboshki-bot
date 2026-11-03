@@ -1,5 +1,10 @@
-"""Подключение к базе. Путь читается в момент вызова (database.DATABASE_PATH),
-а не копируется при импорте: тесты и /restore подменяют его в одном месте."""
+"""Подключение к базе. Путь читается в момент вызова, а не копируется при
+импорте: тесты и /restore подменяют его в одном месте.
+
+Путь хранится здесь (DATABASE_PATH), а снаружи по-старому —
+database.DATABASE_PATH: пакет пересылает чтение и запись сюда
+(database/__init__.py). Подмодули базы берут путь отсюда и не импортируют
+сам пакет — иначе пакет и подмодули сцепляются в клубок (03.11)."""
 
 import asyncio
 import logging
@@ -7,7 +12,9 @@ import sqlite3
 
 import aiosqlite
 
-import database
+from kapibara.core import config
+
+DATABASE_PATH: str = config.DATABASE_PATH
 
 # Сколько ждать занятую базу, прежде чем «database is locked». У sqlite3 по
 # умолчанию 5 с — на Amvera (16.10, диск /data медленнее Railway) напоминания,
@@ -31,7 +38,7 @@ class _Tuned(sqlite3.Connection):
 
 def connect():
     from kapibara.core import timing                # время в базе — в «Долгие запросы» /status
-    return timing.Timed(aiosqlite.connect(database.DATABASE_PATH, timeout=BUSY_SECONDS, factory=_Tuned), "db")
+    return timing.Timed(aiosqlite.connect(DATABASE_PATH, timeout=BUSY_SECONDS, factory=_Tuned), "db")
 
 
 # Отметки «заходил» на каждом запросе (сессия устройства, users.last_seen) —

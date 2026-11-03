@@ -1,4 +1,4 @@
-"""Доска ДЗ (таблица homework) и настройки группы (settings: зам старосты);
+"""Доска ДЗ (таблица homework) и зам старосты (настройки — database/settings);
 is_editor — кто правит доску ДЗ и общие дедлайны: староста и зам.
 Раньше жило в handlers/announce.py со своей копией DATABASE_PATH."""
 
@@ -7,9 +7,10 @@ import sqlite3
 
 import aiosqlite
 
-import database
 from kapibara.core.config import is_starosta
+from database import _conn
 from database._conn import connect
+from database.settings import get_setting, init_settings_table, set_setting  # noqa: F401 — их брали отсюда
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ _ready: set[str] = set()
 
 
 async def init_hw_table():
-    if database.DATABASE_PATH in _ready:
+    if _conn.DATABASE_PATH in _ready:
         return
     async with connect() as db:
         await db.execute("""
@@ -42,30 +43,9 @@ async def init_hw_table():
                 await db.execute(f"ALTER TABLE homework ADD COLUMN {column}")
             except sqlite3.OperationalError as e:      # колонка уже есть — так при каждом запуске
                 logger.debug(f"homework: {column}: {e}")
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                key   TEXT PRIMARY KEY,
-                value TEXT
-            )
-        """)
         await db.commit()
-    _ready.add(database.DATABASE_PATH)
-
-
-async def get_setting(key: str) -> str | None:
-    # settings создаётся лениво в init_hw_table — без этого вызова is_editor
-    # на свежей базе (первый /addhw до любого /hw) падал с "no such table".
-    await init_hw_table()
-    async with connect() as db:
-        cur = await db.execute("SELECT value FROM settings WHERE key=?", (key,))
-        row = await cur.fetchone()
-        return row[0] if row else None
-
-
-async def set_setting(key: str, value: str):
-    async with connect() as db:
-        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
-        await db.commit()
+    await init_settings_table()
+    _ready.add(_conn.DATABASE_PATH)
 
 
 async def is_editor(user_id: int, group_id: int | None = None) -> bool:

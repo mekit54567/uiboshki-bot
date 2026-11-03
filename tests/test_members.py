@@ -98,7 +98,7 @@ async def test_bot_added_to_chat_by_starosta_remembers_it(db, monkeypatch):
 async def test_chat_id_and_settings_without_extra_db_opens(db, monkeypatch):
     """19.10, медленный диск: chat_id открывал базу по 5 раз на запрос, а каждое
     чтение настройки — ещё раз ради проверки таблиц (init_hw_table)."""
-    import database.homework as hw
+    import database.settings as hw
     from kapibara.features.groups import members
     monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
     await db.set_setting("group_chat_id", str(CHAT))

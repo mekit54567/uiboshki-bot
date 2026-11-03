@@ -10,7 +10,10 @@ files (и тексты лекций); sdo (входы и история балл
 Подключение — database._conn.connect().
 """
 
-from kapibara.core.config import DATABASE_PATH
+import sys
+import types
+
+from database import _conn
 
 from database.schema import (
     init_db,
@@ -307,3 +310,19 @@ __all__ = ["DATABASE_PATH",
     "is_group_admin",
     "set_subscription_until",
 ]
+
+
+class _Package(types.ModuleType):
+    """database.DATABASE_PATH — по-старому, но живёт в database._conn: тесты
+    и /restore пишут сюда, подключение читает там (см. _conn)."""
+
+    @property
+    def DATABASE_PATH(self) -> str:
+        return _conn.DATABASE_PATH
+
+    @DATABASE_PATH.setter
+    def DATABASE_PATH(self, value: str) -> None:
+        _conn.DATABASE_PATH = value
+
+
+sys.modules[__name__].__class__ = _Package
