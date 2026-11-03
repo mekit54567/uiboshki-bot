@@ -65,8 +65,8 @@ def test_privacy_names_hosting_from_env(monkeypatch):
     monkeypatch.setenv("HOSTING", "timeweb")
     monkeypatch.setenv("HOSTING_ORG", "ООО «Облако» (ИНН 123, Санкт-Петербург)")     # старый адрес с сервера
     host = privacy._host()
-    # 3 — новый получатель (19.10), 4 — комментарии, оценки и пуши приложения к магазинам (20.10)
-    assert host["version"] == "4" and host["policy"] >= host["version"]
+    # 3 — новый получатель (19.10), 4 — комментарии, оценки и пуши приложения к магазинам (20.10), 5 — Пульс в согласии (03.11)
+    assert host["version"] == "5" and host["policy"] >= host["version"]
     monkeypatch.setattr(privacy, "HOST", host)
     text = str(legal_texts.doc("privacy"))
     # юрлицо и адрес — как в уведомлении в РКН, ЦОД — в Москве (22.10); HOSTING_ORG не перебивает

@@ -640,3 +640,13 @@ async def test_consent_check_failure_does_not_let_in(db, bot, monkeypatch):  # n
         assert await _events(db.DATABASE_PATH, ME) == 0
     finally:
         _release(d)
+
+
+def test_consent_names_pulse():
+    """03.11: Пульс МИРЭА — в согласии (кука, посещения, QR не через сервер) и среди получателей;
+    версия согласия поднята, чтобы все приняли новый текст."""
+    from kapibara.features.privacy import legal_texts, privacy
+    text = str(legal_texts.CONSENT)
+    assert "Пульс МИРЭА" in text and "pulse.mirea.ru" in text and "QR" in text
+    assert "СДО и Пульс" in text
+    assert privacy.HOSTS["timeweb"]["version"] == "5"
