@@ -12,12 +12,16 @@
 import json
 import logging
 import math
+import sqlite3
 import time
 from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from aiogram.exceptions import TelegramAPIError
+
 from kapibara.core.config import TIMEZONE
+from kapibara.core.errors import NETWORK
 
 TZ = ZoneInfo(TIMEZONE)
 STARTED = datetime.now(TZ)
@@ -112,7 +116,7 @@ async def alert_errors(bot):
     if text and STAROSTA_ID:
         try:
             await bot.send_message(STAROSTA_ID, text, parse_mode="HTML")
-        except Exception as e:
+        except (TelegramAPIError, *NETWORK) as e:
             logging.getLogger(__name__).info(f"тревога об ошибках не ушла: {e}")
 
 
@@ -135,7 +139,7 @@ async def note(key: str, ok: bool, detail: str = ""):
         from database import set_setting
         await set_setting(f"health:{key}", json.dumps(
             {"at": datetime.now(TZ).isoformat(), "ok": ok, "detail": detail[:200]}, ensure_ascii=False))
-    except Exception as e:
+    except sqlite3.Error as e:      # отметка для /status — без неё работа не встаёт
         logging.getLogger(__name__).info(f"health.note {key}: {e}")
 
 
@@ -293,7 +297,7 @@ async def report() -> str:
         mode, read, write = await db_probe()
         warn = "⚠️ " if mode != "wal" or read > 300 or write > 300 else ""
         lines.append(f"{warn}База: {mode}, чтение {read:.0f} мс, запись {write:.0f} мс")
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         lines.append(f"⚠️ база: {type(e).__name__}: {e}")
     lag = loop_lag()
     lines.append(("⚠️ " if lag >= LAG_WARN else "") + f"Самое долгое зависание за час: {lag:.1f} с")

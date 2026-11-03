@@ -16,6 +16,9 @@ import httpx
 
 from kapibara.core import net
 
+from aiogram.exceptions import TelegramAPIError
+from kapibara.core.errors import NETWORK
+
 TIMEOUT = 10
 
 # (название, адрес, что считать «не пускает» — коды ответа)
@@ -76,7 +79,7 @@ async def _telegram(bot) -> dict:
     started = time.monotonic()
     try:
         await asyncio.wait_for(bot.get_me(), TIMEOUT)
-    except Exception as e:
+    except (TelegramAPIError, *NETWORK, OSError) as e:
         return {"name": "Telegram", "route": route, "ok": False, "status": 0, "ms": _ms(started),
                 "why": f"не отвечает ({type(e).__name__})"}
     return {"name": "Telegram", "route": route, "ok": True, "status": 200, "ms": _ms(started), "why": ""}
@@ -89,7 +92,7 @@ async def _exit_ip(proxy: str = "") -> str:
         async with httpx.AsyncClient(timeout=TIMEOUT, **kw) as c:
             data = (await c.get(IP_URL)).json()
         return f"{data.get('ip', '?')} ({data.get('country', '?')})"
-    except Exception as e:
+    except (*NETWORK, OSError, ValueError, AttributeError) as e:      # не ответил или не JSON-объект
         return f"не узнал ({type(e).__name__})"
 
 
@@ -106,7 +109,7 @@ async def _dns(host: str) -> dict:
     started = time.monotonic()
     try:
         await asyncio.wait_for(_resolve(host), TIMEOUT)
-    except Exception as e:
+    except (OSError, TimeoutError, UnicodeError) as e:      # gaierror — тоже OSError
         return {"host": host, "ms": _ms(started), "error": type(e).__name__}
     return {"host": host, "ms": _ms(started), "error": ""}
 

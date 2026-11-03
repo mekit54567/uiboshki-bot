@@ -31,6 +31,9 @@ from zoneinfo import ZoneInfo
 from kapibara.core.config import TIMEZONE
 from kapibara.core.paths import ROOT
 
+from aiogram.exceptions import TelegramAPIError
+from kapibara.core.errors import NETWORK
+
 logger = logging.getLogger(__name__)
 TZ = ZoneInfo(TIMEZONE)
 
@@ -103,7 +106,7 @@ async def track(user_id: int, kind: str | None):
     try:
         from database import add_event
         await add_event(user_id, kind)
-    except Exception as e:
+    except sqlite3.Error as e:      # статистика не должна ронять ответ человеку
         logger.info(f"stats: {e}")
 
 
@@ -268,7 +271,7 @@ async def send_evening(bot, now: datetime | None = None):
     if text:
         try:
             await bot.send_message(STAROSTA_ID, text, parse_mode="HTML")
-        except Exception as e:
+        except (TelegramAPIError, *NETWORK) as e:
             logger.info(f"вечерняя сводка: {e}")
 
 
@@ -409,7 +412,7 @@ async def report(days: int = 30) -> tuple[bytes, str]:
     s = await collect(days)
     try:
         s["groups"] = await group_counts()
-    except Exception as e:
+    except sqlite3.Error as e:
         logger.info(f"/stats: группы: {e}")
     png = await asyncio.to_thread(render, s)
     return png, summary(s)
