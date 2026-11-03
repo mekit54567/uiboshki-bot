@@ -336,7 +336,7 @@ def donate_amount(value) -> int:
     try:
         amount = int(str(value).strip().replace(" ", "").replace("₽", ""))
     except (TypeError, ValueError):
-        raise PayError(f"сумма — целым числом рублей, от {DONATE_MIN} ₽")
+        raise PayError(f"сумма — целым числом рублей, от {DONATE_MIN} ₽") from None
     if amount < DONATE_MIN or amount > DONATE_MAX:
         raise PayError(f"сумма — от {DONATE_MIN} до {DONATE_MAX} ₽")
     return amount
@@ -382,7 +382,7 @@ async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: st
     except Exception as e:
         logger.warning(f"ЮKassa: платёж не создан: {e}")
         await (store.mark_donation if donation else store.mark_payment)(local, "canceled")
-        raise PayError("касса не отвечает — попробуй через минуту")
+        raise PayError("касса не отвечает — попробуй через минуту") from e
     await (store.set_donation_id if donation else store.set_payment_id)(local, data["id"])
     return data["confirmation"]["confirmation_url"]
 

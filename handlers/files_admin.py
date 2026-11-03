@@ -267,10 +267,7 @@ async def handle_sync_json(message: Message):
             deadlines = json.loads(data.read().decode('utf-8'))
 
             # Поддержка формата {"assignments": [...]} и просто [...]
-            if isinstance(deadlines, dict):
-                assignments = deadlines.get('assignments', [])
-            else:
-                assignments = deadlines
+            assignments = deadlines.get('assignments', []) if isinstance(deadlines, dict) else deadlines
 
             today = today_msk().isoformat()
 

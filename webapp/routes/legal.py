@@ -153,7 +153,7 @@ async def api_give_consent(body: ConsentBody, user: dict = CurrentUser,
     try:
         await privacy.give(user["id"], body.kind, _via(x_telegram_init_data, x_app))
     except privacy.Erasing as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, str(e)) from e
     return await api_consent(user)
 
 

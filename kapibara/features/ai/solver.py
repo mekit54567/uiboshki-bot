@@ -188,7 +188,7 @@ async def _gemini_then_deepseek(history: list, system: str, ds_system: str,
                                        max_tokens=2048, temperature=0.3)
         except Exception as ds_error:
             logger.warning(f"Запасной DeepSeek тоже не ответил: {ds_error}")
-            raise e
+            raise e from ds_error
         return msg["content"] + FALLBACK_NOTE_DS
 
 

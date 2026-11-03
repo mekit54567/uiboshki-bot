@@ -104,7 +104,7 @@ async def test_no_winner_marks_month(db, bot):  # noqa: F811
     await _people(db, ROWS[:3])
     month = _month()[0]
     assert await group_award.award(bot, month) is None
-    assert not [m for m in bot.session.named("SendMessage")]
+    assert not list(bot.session.named("SendMessage"))
 
 
 def test_prev_month_and_bounds():

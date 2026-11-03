@@ -65,7 +65,7 @@ def pair_events(old: list[dict], new: list[dict]) -> list[tuple[str, dict | None
                     olds.remove(oe)
                     news.remove(ne)
                     break
-        out += [("change", oe, ne) for oe, ne in zip(olds, news)]
+        out += [("change", oe, ne) for oe, ne in zip(olds, news, strict=False)]
         out += [("add", None, ne) for ne in news[len(olds):]]
         out += [("cancel", oe, None) for oe in olds[len(news):]]
     for key, olds in old_groups.items():

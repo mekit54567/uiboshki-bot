@@ -57,7 +57,7 @@ async def cmd_files(message: Message):
     if not files:
         await message.answer("📁 Файлов пока нет.\n\nЗагрузить: /upload")
         return
-    subjects = sorted(set(f["subject"] for f in files if f.get("subject")))
+    subjects = sorted({f["subject"] for f in files if f.get("subject")})
     await message.answer(
         f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
         parse_mode="HTML",
@@ -92,7 +92,7 @@ def _subject_files(all_files: list[dict], idx: str) -> tuple[str, list[dict]] | 
     from kapibara.features.lectures.categories import sort_files
     if idx == "all":
         return "Все файлы", sort_files(all_files)
-    subjects = sorted(set(f["subject"] for f in all_files if f.get("subject")))
+    subjects = sorted({f["subject"] for f in all_files if f.get("subject")})
     try:
         subject = subjects[int(idx)]
     except (ValueError, IndexError):
@@ -163,7 +163,7 @@ async def files_by_category(callback: CallbackQuery):
 @router.callback_query(F.data == "fbk")
 async def files_back(callback: CallbackQuery):
     files = await get_files()
-    subjects = sorted(set(f["subject"] for f in files if f.get("subject")))
+    subjects = sorted({f["subject"] for f in files if f.get("subject")})
     await callback.message.edit_text(
         f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
         parse_mode="HTML",

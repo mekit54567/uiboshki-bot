@@ -77,7 +77,7 @@ async def embed(texts: list[str], *, query: bool = False, titles: list[str] | No
         except gemini_solver.GeminiError as e:
             raise EmbedError(str(e)) from e
     if titles and not query:
-        texts = [f"{t}\n{x}" if t else x for t, x in zip(titles, texts)]
+        texts = [f"{t}\n{x}" if t else x for t, x in zip(titles, texts, strict=False)]
     try:
         return await local_embed.embed(p, texts, query=query)
     except Exception as e:

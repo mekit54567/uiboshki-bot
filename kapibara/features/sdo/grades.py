@@ -401,7 +401,7 @@ def order_works(works: list[dict]) -> list[dict]:
             fams.setdefault(m.group(1).strip().lower(), []).append(i)
     for idx in fams.values():
         ordered = sorted((out[i] for i in idx), key=lambda w: int(num.match(w["name"]).group(2)))
-        for i, w in zip(idx, ordered):
+        for i, w in zip(idx, ordered, strict=False):
             out[i] = w
 
     def when(w):
@@ -429,8 +429,8 @@ def recount(s: dict, pages: list[dict | None]) -> dict:
     статус ok из work_status — с проходным баллом и вердиктом со страницы
     задания, а без страницы — по оценке журнала. Отсюда же works_need и
     «автомат»."""
-    works = [with_pass(w, p) for w, p in zip(s["works"], pages)]
-    passed = sum(1 for w, p in zip(works, pages) if work_status(w, p) == "ok")
+    works = [with_pass(w, p) for w, p in zip(s["works"], pages, strict=False)]
+    passed = sum(1 for w, p in zip(works, pages, strict=False) if work_status(w, p) == "ok")
     need = max(0, math.ceil(len(works) * PASS_SHARE) - passed)
     first = s["marks"][0]["at"] if s.get("marks") else 0
     return dict(s, works=works, works_passed=passed, works_need=need, auto=s["score"] >= first and not need)
@@ -625,15 +625,15 @@ async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
             logger.info(f"предмет {course_id}: {len(late)} из {len(tasks)} страниц работ не успели за {PAGES_BUDGET} с")
         # не успевшую страницу берём из прошлого раза (если была) — лучше старый порог, чем никакого
         pages = [t.result() if t.done() and not t.cancelled() else (_pages.get((user_id, w["cmid"])) or (0, None))[1]
-                 for t, w in zip(tasks, s["works"])]
-    for t, w, p in zip(tasks, s["works"], pages):
+                 for t, w in zip(tasks, s["works"], strict=False)]
+    for t, w, p in zip(tasks, s["works"], pages, strict=False):
         if p is not None and t.done() and not t.cancelled():
             _pages[(user_id, w["cmid"])] = (time.time(), p)
     from kapibara.features.deadlines import quiz_time        # время тестов — одно на всех, видно в «Сдать»
-    await quiz_time.remember({w["cmid"]: p for w, p in zip(s["works"], pages) if w["module"] == "quiz"})
+    await quiz_time.remember({w["cmid"]: p for w, p in zip(s["works"], pages, strict=False) if w["module"] == "quiz"})
     s = recount(s, pages)
     works = []
-    for w, p in zip(s["works"], pages):
+    for w, p in zip(s["works"], pages, strict=False):
         p = p or {}
         works.append(dict(w, pass_mark=p.get("pass"), status=work_status(w, p), due=p.get("due", ""),
                           opens=p.get("opens", ""), remaining=p.get("remaining", ""), time_limit=p.get("time_limit"),

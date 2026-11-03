@@ -16,7 +16,7 @@ def _when(start: str) -> datetime:
     try:   # «…Z» из приложения: fromisoformat до Python 3.11 его не понимает
         when = datetime.fromisoformat(start[:-1] + "+00:00" if start[-1:] in ("Z", "z") else start)
     except ValueError:
-        raise HTTPException(status_code=400, detail="start — время ISO")
+        raise HTTPException(status_code=400, detail="start — время ISO") from None
     return when.replace(tzinfo=TZ) if when.tzinfo is None else when
 
 

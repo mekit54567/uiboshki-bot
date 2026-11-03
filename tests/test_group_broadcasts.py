@@ -83,6 +83,6 @@ async def test_lesson_reminder_for_other_group(two_groups, monkeypatch):
     monkeypatch.setattr(scheduler, "_sent_reminders", set())
     bot = FakeBot()
     await scheduler.check_lesson_reminders(bot)
-    texts = {uid: t for uid, t in bot.sent}
+    texts = dict(bot.sent)
     assert "Пара УИБО-01" in texts.get(OTHER_USER, "")
     assert "Своя пара" in texts.get(HOME_USER, "")

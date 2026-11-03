@@ -61,8 +61,8 @@ def rules(css: str):
 
 
 def build(css: str) -> str:
-    out = [":root{--paper:%s;--ink:%s;--secondary:%s;--line:%s;--accent:%s;--peach:%s}" % tuple(
-        flip(c) for c in ("#f8f6f0", "#282720", "#66635b", "#dcd8ce", "#b75438", "#eee1d3")),
+    out = [":root{{--paper:{};--ink:{};--secondary:{};--line:{};--accent:{};--peach:{}}}".format(*tuple(
+        flip(c) for c in ("#f8f6f0", "#282720", "#66635b", "#dcd8ce", "#b75438", "#eee1d3"))),
            'img[src$="capy.svg"]{filter:invert(.84) sepia(.12)}']   # капибара нарисована чернилами
     for media, sel, body in rules(css):
         if sel.startswith(":root") or any(s in sel for s in SKIP):

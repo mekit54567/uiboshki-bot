@@ -138,9 +138,9 @@ def split_by_lines(text: str, limit: int = 3500) -> list[str]:
 # что пишут от руки: 6⁷, √x, x₁, ≤, a/b. Только вне `кода`.
 
 _SUP = dict(zip("0123456789+-−=()abcdefghijklmnoprstuvwxyzABDEGHIJKLMNOPRTUVW",
-                "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻⁼⁽⁾ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁⱽᵂ"))
+                "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻⁼⁽⁾ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁⱽᵂ", strict=False))
 _SUB = dict(zip("0123456789+-−=()aehijklmnoprstuvx",
-                "₀₁₂₃₄₅₆₇₈₉₊₋₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ"))
+                "₀₁₂₃₄₅₆₇₈₉₊₋₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ", strict=False))
 
 _LATEX_SYMBOLS = {
     "cdot": "·", "times": "×", "div": "÷", "pm": "±", "mp": "∓",
@@ -273,14 +273,14 @@ def _table_html(rows: list[str]) -> str:
              for r in cells]
     widths = [max(len(r[i]) for r in plain) for i in range(n)]
     if sum(widths) + 3 * (n - 1) <= TABLE_PRE_WIDTH:
-        lines = [" │ ".join(c.ljust(w) for c, w in zip(r, widths)).rstrip() for r in plain]
+        lines = [" │ ".join(c.ljust(w) for c, w in zip(r, widths, strict=False)).rstrip() for r in plain]
         lines.insert(1, "─┼─".join("─" * w for w in widths))
         return f"<pre>{esc(chr(10).join(lines))}</pre>"
     head, body = cells[0], cells[1:] or [cells[0]]
     out = []
     for r in body:
         rest = "; ".join(f"{_md_inline(h)}: {_md_inline(c)}" if h else _md_inline(c)
-                         for h, c in zip(head[1:], r[1:]) if c)
+                         for h, c in zip(head[1:], r[1:], strict=False) if c)
         first = _md_inline(_BOLD_RE.sub(lambda m: m.group(1) or m.group(2), r[0]))   # и так жирный
         out.append(f"• <b>{first}</b>" + (f" — {rest}" if rest else ""))
     return "\n".join(out)

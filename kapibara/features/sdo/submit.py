@@ -227,7 +227,7 @@ async def submission_rules(cookie: str, cmid: int) -> dict:
             except SubmitError as e:
                 return {"closed": str(e)}
         except httpx.HTTPError:
-            raise SdoUnavailable(DOWN)
+            raise SdoUnavailable(DOWN) from None
     return {k: page[k] for k in ("accepted", "labels", "maxfiles", "maxbytes")}
 
 
@@ -270,7 +270,7 @@ async def _upload(client: httpx.AsyncClient, page: dict, name: str, data: bytes)
     try:
         res = resp.json()
     except ValueError:
-        raise SubmitError("СДО не принял файл (ответ не JSON)")
+        raise SubmitError("СДО не принял файл (ответ не JSON)") from None
     if isinstance(res, dict) and res.get("error"):
         raise SubmitError("СДО не принял файл: " + str(res["error"])[:200])
     if isinstance(res, dict) and res.get("event") == "fileexists":
@@ -337,7 +337,7 @@ async def submit_file(cookie: str, cmid: int, name: str = "", data: bytes = b"",
                 why = str(e) or submission_summary(view.text)
                 logger.warning(f"СДО: нет формы сдачи в задании {cmid} (итоговый URL {resp.url}): {why}")
                 raise SubmitError("СДО не даёт прикрепить файл"
-                                  + (f": {why}" if why else " — сдача закрыта или срок вышел. Проверь задание на сайте"))
+                                  + (f": {why}" if why else " — сдача закрыта или срок вышел. Проверь задание на сайте")) from e
             if page["maxbytes"] > 0 and any(len(d) > page["maxbytes"] for _, d in files):
                 raise SubmitError(f"в этом задании файл не больше {page['maxbytes'] // (1024 * 1024) or 1} МБ")
             if page["maxfiles"] > 0 and len(files) > page["maxfiles"]:
@@ -371,7 +371,7 @@ async def submit_file(cookie: str, cmid: int, name: str = "", data: bytes = b"",
             resp = await get_checked(client, url)
         except httpx.HTTPError as e:
             logger.warning(f"СДО: сдача в задание {cmid} оборвалась: {type(e).__name__}")
-            raise SdoUnavailable(UNAVAILABLE)
+            raise SdoUnavailable(UNAVAILABLE) from e
     return {"status": status_text(resp.text), "url": url}
 
 
@@ -399,7 +399,7 @@ async def remove_submission(cookie: str, cmid: int) -> dict:
                 raise SdoSessionExpired("вход устарел")
             view = await get_checked(client, url)
         except httpx.HTTPError:
-            raise SdoUnavailable(DOWN)
+            raise SdoUnavailable(DOWN) from None
     page = parse_assign_page(view.text)
     if page["submitted"] or "action=removesubmissionconfirm" in view.text:
         raise SubmitError("СДО не удалил ответ: " + (_notice(BeautifulSoup(resp.text, "html.parser"))

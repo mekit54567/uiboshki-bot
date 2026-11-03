@@ -20,7 +20,7 @@ def test_catalog_matches_app():
     dart = (ROOT / "app" / "lib" / "achievements" / "catalog.dart").read_text(encoding="utf-8")
     pairs = re.findall(r"Achievement\(\s*'(\w+)',\s*Rank\.(\w+)", dart)
     assert pairs, "в catalog.dart не нашлись ачивки"
-    assert {a: r for a, r in pairs} == {a: r for r, ids in achievements.RANKS.items() for a in ids}
+    assert dict(pairs) == {a: r for r, ids in achievements.RANKS.items() for a in ids}
 
 
 @pytest.fixture

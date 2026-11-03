@@ -94,7 +94,7 @@ def background(spec) -> Image.Image:
     lut = []
     for i in range(1024):
         t = i / 1023
-        for (c0, t0), (c1, t1) in zip(stops, stops[1:]):
+        for (c0, t0), (c1, t1) in zip(stops, stops[1:], strict=False):
             if t <= t1:
                 k = 0 if t1 == t0 else (t - t0) / (t1 - t0)
                 lut.append(tuple(round(c0[j] + (c1[j] - c0[j]) * k) for j in range(3)))

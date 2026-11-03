@@ -191,7 +191,7 @@ async def fetch_bundle(client: httpx.AsyncClient) -> tuple[dict[str, bytes], lis
     resp = await client.get(PULSE + "/")
     notes.append(f"GET / → HTTP {resp.status_code}, {len(resp.content)} байт")
     files["index.html"] = resp.content
-    queue = [m for m in _SRC_RE.findall(resp.text)] + _ASSET_RE.findall(resp.text)
+    queue = list(_SRC_RE.findall(resp.text)) + _ASSET_RE.findall(resp.text)
     queue.append("pulse-info.json")
     seen, total = set(), len(resp.content)
     while queue and len(files) < MAX_FILES and total < MAX_BYTES:

@@ -30,7 +30,7 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     status = str(event.new_chat_member.status).split(".")[-1].lower()
     if status not in ("member", "administrator") or not config.is_starosta(event.from_user.id):
         return
-    if config.GROUP_CHAT_ID and config.GROUP_CHAT_ID != event.chat.id:
+    if config.GROUP_CHAT_ID and event.chat.id != config.GROUP_CHAT_ID:
         return                                  # чат задан в переменных хостинга — он главнее
     if await members.chat_id() == event.chat.id:
         return

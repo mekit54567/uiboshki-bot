@@ -404,7 +404,7 @@ def render(s: dict) -> bytes:
 def _mix(a: str, b: str, t: float) -> str:
     ca = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
     cb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
-    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(ca, cb))
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(ca, cb, strict=False))
 
 
 async def report(days: int = 30) -> tuple[bytes, str]:

@@ -29,16 +29,16 @@ async def _from_sdo(user_id: int, what: str, call):
         return await call
     except (KeyError, IndexError) as e:     # тоже LookupError, но это баг разбора, а не «курса нет»
         log_failure(logger, what, e)
-        raise HTTPException(status_code=502, detail=SDO_DOWN)
+        raise HTTPException(status_code=502, detail=SDO_DOWN) from e
     except LookupError:
-        raise HTTPException(status_code=404, detail="курс не найден")
+        raise HTTPException(status_code=404, detail="курс не найден") from None
     except SdoSessionExpired:
         from database import set_sdo_status
         await set_sdo_status(user_id, "expired")
-        raise HTTPException(status_code=403, detail=EXPIRED)
+        raise HTTPException(status_code=403, detail=EXPIRED) from None
     except Exception as e:      # граница: человеку «не отвечает», в лог — сеть строкой, баг с traceback
         log_failure(logger, what, e)
-        raise HTTPException(status_code=502, detail=SDO_DOWN)
+        raise HTTPException(status_code=502, detail=SDO_DOWN) from e
 
 
 _NO = object()      # «шаг не вышел» — отличить от None-ответа
@@ -107,7 +107,7 @@ async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
         alive = await sdo_accounts.check(cookie)
     except Exception as e:
         log_failure(logger, "СДО: проверка куки", e)
-        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже")
+        raise HTTPException(status_code=502, detail="СДО сейчас не отвечает — попробуй позже") from e
     if not alive:
         raise HTTPException(status_code=400, detail="СДО не пускает с этой кукой — войди на сайте заново и скопируй новую")
     if body.agree:
@@ -178,9 +178,9 @@ async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict =
         return await sdo_submit.submission_rules(cookie, cmid)
     except SdoSessionExpired:
         await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
+        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SubmitError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @router.post("/api/sdo/submit")
@@ -216,21 +216,21 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
             clean = re.sub(r'[\\/:*?"<>|]+', "_", it.name).strip() or "работа"
             files.append((clean[:120], base64.b64decode(it.data, validate=False)))
     except (ValueError, TypeError):     # binascii.Error — тоже ValueError
-        raise HTTPException(status_code=400, detail="файл повреждён")
+        raise HTTPException(status_code=400, detail="файл повреждён") from None
     try:
         result = await sdo_submit.submit_file(cookie, cmid, files=files, replace=body.replace)
     except SdoSessionExpired:
         await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
+        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SdoUnavailable as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     except sdo_submit.SubmitError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         # 3.3: что угодно ещё (обрыв, таймаут, странный ответ СДО) — не 500, а
         # понятный текст: файл мог и дойти, человек проверит в СДО
         log_failure(logger, f"СДО: сдача в задание {cmid} у {user['id']} упала", e)
-        raise HTTPException(status_code=502, detail=sdo_submit.UNAVAILABLE)
+        raise HTTPException(status_code=502, detail=sdo_submit.UNAVAILABLE) from e
     logger.info(f"СДО: {user['id']} сдал файл в задание {cmid}")
     from kapibara.features.sdo import grades as sdo_grades
     sdo_grades.forget(user["id"])    # статусы и баллы — заново
@@ -262,9 +262,9 @@ async def api_sdo_remove_submission(body: SdoRemove, user: dict = CurrentUser):
         result = await sdo_submit.remove_submission(cookie, body.cmid)
     except SdoSessionExpired:
         await set_sdo_status(user["id"], "expired")
-        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход")
+        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SubmitError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     logger.info(f"СДО: {user['id']} удалил ответ в задании {body.cmid}")
     sdo_grades.forget(user["id"])
     return result
@@ -441,7 +441,7 @@ async def sdo_download(token: str, name: str):
         async with client_for(cookie, timeout=60) as client:
             resp = await get_checked(client, SDO_BASE_URL + path + "?forcedownload=1")
     except SdoSessionExpired:
-        raise HTTPException(403, "Вход в СДО устарел")
+        raise HTTPException(403, "Вход в СДО устарел") from None
     if resp.status_code != 200 or len(resp.content) > 50 * 1024 * 1024:
         raise HTTPException(404, "Файл не скачался из СДО")
     return Response(resp.content, media_type=resp.headers.get("content-type") or mimetypes.guess_type(name)[0] or "application/octet-stream",

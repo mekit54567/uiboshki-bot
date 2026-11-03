@@ -24,6 +24,7 @@ import re
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from kapibara.core.paths import ROOT
+import contextlib
 
 DEMO_UID = -19_000_000_000          # ниже LOCAL_BASE: «без Telegram», в рассылки не попадёт
 TOKEN_PREFIX = "rv."
@@ -89,7 +90,7 @@ def shift_days(today: date) -> int:
 
 
 _ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
-_LONG = re.compile(r"(?:(%s), )?(\d{1,2}) (%s) (\d{4})" % ("|".join(WEEKDAYS), "|".join(MONTHS)))
+_LONG = re.compile(r"(?:({}), )?(\d{{1,2}}) ({}) (\d{{4}})".format("|".join(WEEKDAYS), "|".join(MONTHS)))
 
 
 def _move_iso(text: str, days: int) -> str:
@@ -180,10 +181,8 @@ def answer(method: str, path: str, query: str, body: bytes, now: datetime):
     q = _move_iso(query, -days)
     key = f"{method} {path}" + (f"?{q}" if q else "")
     if path.startswith("/api/sdo/goal/"):
-        try:
+        with contextlib.suppress(ValueError):
             key += "|" + str(json.loads(body or b"{}").get("label", ""))
-        except ValueError:
-            pass
     if method == "POST" and path == "/api/notify":
         key = "GET /api/notify"
     hit = fx.get(key, fx.get(f"{method} {path}"))

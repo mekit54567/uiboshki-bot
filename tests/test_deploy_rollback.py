@@ -84,7 +84,7 @@ def test_bad_build_rolls_back_and_is_not_retried(server):
     assert (root / "deployed").read_text().strip() == server["first"]    # удачной осталась прошлая
     assert _head(root) == server["first"]                                # и код — прошлый
     assert (root / "data" / "rollback.txt").read_text().split() == [bad[:7], server["first"][:7]]
-    assert '"commit": "%s"' % server["first"][:7] in (root / "app" / "build-info.json").read_text()
+    assert '"commit": "{}"'.format(server["first"][:7]) in (root / "app" / "build-info.json").read_text()
     # следующая минута таймера: тот же коммит не пробуем
     assert server["run"]().returncode == 0
     assert _head(root) == server["first"]

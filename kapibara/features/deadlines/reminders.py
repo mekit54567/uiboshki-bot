@@ -34,7 +34,7 @@ def resolve(d: dict, preset: str | None, at: str | None, now: datetime | None = 
         try:
             when = datetime.strptime((at or "").replace("T", " ")[:16], FMT).replace(tzinfo=TZ)
         except ValueError:
-            raise ValueError("время в формате ГГГГ-ММ-ДД ЧЧ:ММ")
+            raise ValueError("время в формате ГГГГ-ММ-ДД ЧЧ:ММ") from None
     if when <= now:
         raise ValueError("это время уже прошло")
     if when > due_at(d) + timedelta(days=1):

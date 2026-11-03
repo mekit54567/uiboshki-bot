@@ -68,7 +68,7 @@ def dp():
 
 
 def _make_message(text=None, photo=None):
-    kwargs = dict(message_id=int(time.time() * 1000) % 1000000, date=0, chat=CHAT, from_user=USER)
+    kwargs = {"message_id": int(time.time() * 1000) % 1000000, "date": 0, "chat": CHAT, "from_user": USER}
     if text is not None:
         kwargs["text"] = text
     if photo is not None:

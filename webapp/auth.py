@@ -72,6 +72,6 @@ def validate_init_data(init_data: str, bot_token: str) -> dict:
         try:
             data["user"] = json.loads(data["user"])
         except (json.JSONDecodeError, TypeError):
-            raise InitDataError("не смог распарсить поле user")
+            raise InitDataError("не смог распарсить поле user") from None
 
     return data

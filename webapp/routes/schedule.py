@@ -201,12 +201,12 @@ async def api_day(date: str, user: dict = CurrentUser):
     try:
         d = date_cls.fromisoformat(date)
     except ValueError:
-        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД") from None
     try:
         raw = await raw_for_user(user["id"])
     except (*FETCH_ERRORS, sqlite3.Error) as e:      # не загрузилось или база не ответила
         log_failure(logger, "расписание группы", e)
-        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно") from e
     now = datetime.now(TZ)
     lessons = lessons_for_date(raw, d, now=now if d == now.date() else None)
     out = {**_day_label(d), "lessons": lessons, "cancelled": await _changes(user["id"], d, lessons)}
@@ -240,12 +240,12 @@ async def api_week(start: str, user: dict = CurrentUser):
     try:
         monday = date_cls.fromisoformat(start)
     except ValueError:
-        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД") from None
     try:
         raw = await raw_for_user(user["id"])
     except (*FETCH_ERRORS, sqlite3.Error) as e:      # не загрузилось или база не ответила
         log_failure(logger, "расписание группы", e)
-        raise HTTPException(status_code=502, detail="расписание сейчас недоступно")
+        raise HTTPException(status_code=502, detail="расписание сейчас недоступно") from e
     return week_overview(raw, monday)
 
 
@@ -316,7 +316,7 @@ async def api_target(target_type: int, target_id: int, user: dict = CurrentUser)
         weeks = target_weeks(ical, monday, TARGET_WEEKS, now=now)
     except Exception as e:      # обрывок календаря — не 500, а «недоступно»
         log_failure(logger, f"api_target: календарь {target_type}/{target_id} не разобрался", e)
-        raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно")
+        raise HTTPException(status_code=502, detail="расписание МИРЭА сейчас недоступно") from e
     pinned = any(p["type"] == target_type and p["id"] == target_id for p in await get_pins(user["id"]))
     return {
         "type": target_type, "id": target_id,
@@ -367,7 +367,7 @@ async def api_lesson_groups(start: str, room: str = "", teacher: str = "", user:
         start = start.strip()
         when = datetime.fromisoformat(start[:-1] + "+00:00" if start[-1:] in ("Z", "z") else start)
     except ValueError:
-        raise HTTPException(status_code=400, detail="start — время ISO")
+        raise HTTPException(status_code=400, detail="start — время ISO") from None
     if when.tzinfo is None:
         when = when.replace(tzinfo=TZ)
     mine = (await groups_mod.of_user(user["id"]) or {}).get("name") or config.GROUP_NAME
@@ -462,7 +462,7 @@ async def api_note_add(body: NoteBody, user: dict = CurrentUser):
     try:
         day = _date.fromisoformat(body.date)
     except ValueError:
-        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД")
+        raise HTTPException(status_code=400, detail="дата в формате ГГГГ-ММ-ДД") from None
     today = today_msk()
     if not (today - timedelta(days=1) <= day <= today + timedelta(days=180)):
         raise HTTPException(status_code=400, detail="заметку можно на сегодня и вперёд, до полугода")

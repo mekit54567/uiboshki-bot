@@ -26,6 +26,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from kapibara.core import net  # noqa: E402
+import contextlib
 
 TIMEOUT = 15
 ROOT = Path(__file__).resolve().parent.parent
@@ -611,10 +612,8 @@ def known_names() -> set[str]:
     for p in ROOT.rglob("*.py"):
         if any(part in ("tests", ".git", "node_modules", "app") for part in p.relative_to(ROOT).parts[:-1]):
             continue
-        try:
+        with contextlib.suppress(OSError):
             names.update(pat.findall(p.read_text(encoding="utf-8", errors="ignore")))
-        except OSError:
-            pass
     for sh in (ROOT / "docker" / "start.sh", ROOT / "Dockerfile"):
         if sh.exists():
             names.update(re.findall(r"\$\{?([A-Z][A-Z0-9_]{2,})", sh.read_text(encoding="utf-8", errors="ignore")))

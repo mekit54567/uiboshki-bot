@@ -22,7 +22,7 @@ async def api_report(body: ItemBody, user: dict = CurrentUser):
     try:
         await ugc.report(deps.tg_bot(), user["id"], body.kind, body.id, body.reason)
     except ugc.ReportError as e:
-        raise HTTPException(e.status, e.message)
+        raise HTTPException(e.status, e.message) from e
     return {"ok": True}
 
 
@@ -33,7 +33,7 @@ async def api_hide_author(body: ItemBody, user: dict = CurrentUser):
     try:
         await ugc.hide_author(user["id"], body.kind, body.id)
     except ugc.ReportError as e:
-        raise HTTPException(e.status, e.message)
+        raise HTTPException(e.status, e.message) from e
     return {"ok": True}
 
 

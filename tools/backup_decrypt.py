@@ -25,7 +25,7 @@ def main(path: str) -> str:
     try:
         data = backup.decrypt(raw, key)
     except backup.RestoreError as e:
-        raise SystemExit(f"Не вышло: {e}")
+        raise SystemExit(f"Не вышло: {e}") from e
     out = path[:-4] if path.endswith(".enc") else path + ".db.gz"
     with open(out, "wb") as f:
         f.write(data)

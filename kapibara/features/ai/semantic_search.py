@@ -72,7 +72,7 @@ def rrf(*ranked: list[int]) -> dict[int, float]:
 
 
 def _cos(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b))       # векторы уже единичные
+    return sum(x * y for x, y in zip(a, b, strict=False))       # векторы уже единичные
 
 
 def mmr(cands: list[dict], k: int = TOP, lam: float = MMR_LAMBDA, per_file: int = PER_FILE) -> list[dict]:
@@ -194,7 +194,7 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
     rel = embedder.rel_min(p) if qv_all else None
     if rel is not None:
         for cid, v in vecs.items():
-            sims.setdefault(cid, sum(a * b for a, b in zip(qv_all, v)))
+            sims.setdefault(cid, sum(a * b for a, b in zip(qv_all, v, strict=False)))
         rows = [r for r in rows if sims.get(r[0], 0) >= rel]
         if not rows:
             return []

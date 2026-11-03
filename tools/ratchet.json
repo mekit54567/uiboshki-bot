@@ -1,7 +1,7 @@
 {
   "broad_except": 191,
-  "silent_except": 13,
+  "silent_except": 9,
   "cycle_modules": 59,
   "root_py_files": 1,
-  "ruff_debt": 199
+  "ruff_debt": 58
 }

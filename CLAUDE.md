@@ -26,7 +26,7 @@ Telegram-бот и Mini App (WebApp) группы **УИБО-03-24, РТУ МИ�
 - На каждый баг — тест. CI (GitHub Actions) должен быть зелёным до мержа.
 - **Храповик** (`tools/ratchet.py`, 02.11): широкие `except`, молчаливые
   `pass`, модули в клубке импортов, файлы в корне и замечания Ruff из
-  `RUFF_DEBT` (B, ASYNC, SIM, C4, PERF, UP — `ruff_debt`, 03.11) — только вниз.
+  `RUFF_DEBT` (B, ASYNC, SIM, PERF, UP — `ruff_debt`, 03.11; C4 — уже в `select`) — только вниз.
   Семейство Ruff дошло до нуля — перенести в `select` в `ruff.toml`.
   Фоновые задачи — `kapibara.core.tasks.spawn`, не голый `asyncio.create_task`. Стало
   больше — CI красный; стало меньше — `python tools/ratchet.py --update` и

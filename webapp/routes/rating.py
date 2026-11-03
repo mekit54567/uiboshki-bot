@@ -48,4 +48,4 @@ async def api_rating_me(body: ProfileBody, user: dict = CurrentUser,
         return await xp.save(user["id"], nick=body.nick, show=body.show, show_all=body.show_all,
                              consent=body.consent, via=_via(x_telegram_init_data, x_app))
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from e
