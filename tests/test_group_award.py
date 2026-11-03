@@ -5,7 +5,6 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from kapibara.features.social import group_award
-from kapibara.jobs import scheduler
 from kapibara.features.social import xp
 from database.billing import get_sub
 from tests.conftest import STAROSTA_ID
@@ -15,7 +14,8 @@ from tests.test_review_bot import bot, dp  # noqa: F401 — фикстуры
 @pytest.fixture(autouse=True)
 def _fresh(monkeypatch):
     xp.forget()
-    monkeypatch.setattr(scheduler, "PACE_SECONDS", 0)
+    from kapibara.features.notifications import broadcast
+    monkeypatch.setattr(broadcast, "PACE_SECONDS", 0)
     yield
     xp.forget()
 

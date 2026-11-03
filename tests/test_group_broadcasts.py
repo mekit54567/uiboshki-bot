@@ -40,7 +40,8 @@ async def two_groups(db, monkeypatch):
 
     monkeypatch.setattr(scheduler, "fetch_schedule_raw", home_raw)
     monkeypatch.setattr(mirea_schedule_api, "fetch_ical", fetch_ical)
-    monkeypatch.setattr(scheduler, "PACE_SECONDS", 0)
+    from kapibara.features.notifications import broadcast
+    monkeypatch.setattr(broadcast, "PACE_SECONDS", 0)
     return day
 
 

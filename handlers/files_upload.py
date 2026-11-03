@@ -1,7 +1,6 @@
 """Загрузка файлов старостой и участниками: /upload, пачкой, предмет один раз."""
 
 import asyncio
-import re
 from aiogram import Router, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -13,6 +12,7 @@ from aiogram.types import (
 from database import add_file, get_files
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
 from kapibara.core.utils import esc
+from kapibara.features.lectures.names import title_from_filename
 
 router = Router()
 
@@ -38,14 +38,6 @@ UPLOAD_KB = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 _upload_locks: dict[int, asyncio.Lock] = {}
-
-
-def title_from_filename(file_name: str) -> str:
-    """"Лекция_3_Бизнес-анализ.pdf" -> "Лекция 3 Бизнес-анализ"."""
-    stem = re.sub(r"\.[A-Za-z0-9]{1,5}$", "", (file_name or "").strip())
-    stem = re.sub(r"[_]+", " ", stem)
-    stem = re.sub(r"\s+", " ", stem).strip(" .-")
-    return stem[:120] or "Файл"
 
 
 async def _upload_subjects() -> list[str]:

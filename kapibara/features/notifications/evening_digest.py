@@ -115,7 +115,7 @@ async def send_all(bot, now: datetime | None = None):
     from database import get_all_optional_answers, get_deadlines_soon, get_reminder_users
     from kapibara.bot.keyboards import app_button
     from kapibara.features.groups.optional_subjects import HIDE
-    from kapibara.jobs.scheduler import _group_raws, pace
+    from kapibara.features.notifications.broadcast import group_raws as _group_raws, pace
     now = now or datetime.now(TZ)
     at = slot(now)
     users = []

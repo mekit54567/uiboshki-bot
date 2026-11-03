@@ -369,13 +369,7 @@ async def index_pending(bot, max_files: int = 40, max_batches: int = 8) -> dict:
     from kapibara.features.ai import embedder
     if embedder.precompute():           # векторы другой модели заранее (до переезда)
         embedded += await embed_pending(max_batches, pause=0, p=embedder.precompute())
-    st = await stats()
-    try:
-        from kapibara.ops import health
-        await health.note("semantic", True, f"{st['chunks']} фрагментов из {st['files']} файлов, "
-                                            f"с векторами {st['embedded']}")
-    except Exception:
-        pass
+    st = await stats()                  # в /status это пишет планировщик (scheduler.index_lectures)
     return dict(st, new_files=len(todo), new_vectors=embedded)
 
 

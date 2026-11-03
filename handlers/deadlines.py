@@ -18,6 +18,7 @@ from kapibara.core.config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
 from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
 from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
+from kapibara.features.deadlines.labels import WEEKDAY_SHORT, due_label  # noqa: F401 — старое место
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -65,24 +66,6 @@ def progress_bar(delta: int, max_days: int = 14) -> str:
     bar = "━" * filled + "╌" * (10 - filled)
     pct = max(0, min(100, filled * 10))
     return f"{bar} {pct}%"
-
-
-WEEKDAY_SHORT = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
-
-
-def due_label(due: date, today: date, due_time: str | None = None) -> str:
-    """«🔴 сегодня в 23:59», «🟠 завтра», «🟡 пт, 2 октября», «💀 просрочен (29.09)»."""
-    from kapibara.features.schedule.parser import MONTHS_GEN
-    delta = (due - today).days
-    tp = f" в {due_time}" if due_time else ""
-    if delta < 0:
-        return f"💀 просрочен ({due.strftime('%d.%m')})"
-    if delta == 0:
-        return f"🔴 сегодня{tp}"
-    if delta == 1:
-        return f"🟠 завтра{tp}"
-    human = f"{WEEKDAY_SHORT[due.weekday()]}, {due.day} {MONTHS_GEN[due.month - 1]}{tp}"
-    return f"{'🟡' if delta <= 3 else '🟢'} {human} · через {delta} дн."
 
 
 def _deadline_line(d: dict, today: date) -> str:

@@ -270,7 +270,7 @@ async def report() -> str:
     from kapibara.features.schedule.parser import stale_label
     now = datetime.now(TZ)
     up = (now - STARTED).total_seconds()
-    from webapp.routes.meta import build_info
+    from kapibara.ops.build import build_info
     b = build_info()
     build = f" · PR #{b['pr']}" if b["pr"] else ""
     build += f" · {b['commit']}" if b["commit"] else ""

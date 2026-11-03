@@ -384,7 +384,7 @@ async def _question_prompt(question: str, subject: str) -> tuple[str, str, str]:
 
 async def build_tasks(intents: bool = True) -> list[dict]:
     from kapibara.features.ai import gemini as gemini_solver
-    from kapibara.bot import intent_router
+    from kapibara.features.ai import intent as intent_router
     from kapibara.features.lectures import summary as lecture_summary
     tasks = []
     for q, subject in await _questions():
@@ -561,7 +561,7 @@ async def prepare(key: str, wanted: list[str] | None = None, *, intents: bool = 
 
 
 async def _answer_all(client, key: str, tasks: list[dict], ids: list[str]) -> None:
-    from kapibara.bot import intent_router
+    from kapibara.features.ai import intent as intent_router
     sem = asyncio.Semaphore(PARALLEL)
 
     gemini_sem = asyncio.Semaphore(2)        # бесплатный лимит Gemini — по чуть-чуть

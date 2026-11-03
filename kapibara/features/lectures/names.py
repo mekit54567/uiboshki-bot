@@ -261,3 +261,12 @@ def full_list(files: list[dict], changes: dict[int, str], marked: set | None = N
         note = "   (тема из текста)" if marked and fid in marked else ""
         out.append(f"{by_id[fid]['title']}  →  {new}{note}")
     return "\n".join(out) + "\n"
+
+
+# Переехала из handlers/files_upload.py (03.11): её зовёт и выгрузка из СДО
+def title_from_filename(file_name: str) -> str:
+    """"Лекция_3_Бизнес-анализ.pdf" -> "Лекция 3 Бизнес-анализ"."""
+    stem = re.sub(r"\.[A-Za-z0-9]{1,5}$", "", (file_name or "").strip())
+    stem = re.sub(r"[_]+", " ", stem)
+    stem = re.sub(r"\s+", " ", stem).strip(" .-")
+    return stem[:120] or "Файл"

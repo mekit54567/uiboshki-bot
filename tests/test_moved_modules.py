@@ -159,3 +159,24 @@ def test_content_data_found_from_project_root():
 def test_stats_card_finds_fonts():
     from kapibara.ops import stats
     assert stats.FONTS.is_dir()
+
+
+def test_moved_helpers_are_the_same_objects():
+    """03.11: функции, которые нижние слои брали сверху (handlers, jobs, webapp,
+    bot), переехали вниз; на старом месте — тот же объект, а не копия."""
+    import handlers.deadlines
+    import handlers.files_upload
+    from kapibara.bot import intent_router
+    from kapibara.features.ai import intent
+    from kapibara.features.deadlines import labels
+    from kapibara.features.lectures import names
+    from kapibara.features.notifications import broadcast
+    from kapibara.jobs import scheduler
+    from kapibara.ops import build
+    from webapp.routes import meta
+    assert handlers.deadlines.due_label is labels.due_label
+    assert handlers.files_upload.title_from_filename is names.title_from_filename
+    assert intent_router.classify_intent is intent.classify_intent
+    assert intent_router.SYSTEM_PROMPT is intent.SYSTEM_PROMPT
+    assert scheduler.pace is broadcast.pace
+    assert meta.build_info is build.build_info
