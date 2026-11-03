@@ -121,8 +121,8 @@ async def add_hints_for_namesakes(results: list[dict], limit: int = 10, subject:
         if subject:
             try:
                 r["match"] = teaches(raw, subject)
-            except Exception:
-                pass
+            except Exception:           # подсказка «ведёт этот предмет» — необязательная
+                logger.warning("поиск: не разобрал, ведёт ли %s предмет", r.get("id"), exc_info=True)
 
     await asyncio.gather(*(hint(r) for r in dupes))
     # Порядок выдачи (совпадения с начала, свежие группы выше) сохраняем —

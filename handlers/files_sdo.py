@@ -141,12 +141,10 @@ async def sdo_files_move(callback: CallbackQuery):
     await set_files_subject(moves)
     from kapibara.core.utils import plural
     await callback.answer(f"Переложил {len(moves)} {plural(len(moves), 'файл', 'файла', 'файлов')}", show_alert=True)
-    try:
+    with cosmetic("files_sdo: убрать кнопку «переложить»"):
         kb = callback.message.reply_markup
         rows = [r for r in (kb.inline_keyboard if kb else []) if r[0].callback_data != "sdof:mv"]
         await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
-    except Exception:
-        pass
 
 
 @router.callback_query(F.data == "sdof:go")

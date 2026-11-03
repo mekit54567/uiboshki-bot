@@ -10,6 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from database import get_all_subscribed_users
+from kapibara.core.telegram import cosmetic
 from kapibara.core.config import STAROSTA_ID, is_starosta
 
 router = Router()
@@ -115,10 +116,8 @@ async def clearsem_confirm(callback: CallbackQuery):
     if STAROSTA_ID and not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    try:
+    with cosmetic("announce.clearsem: снять кнопки"):      # уже сняты (двойное нажатие) — не страшно
         await callback.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass  # кнопки уже сняты (двойное нажатие) — не страшно
     if callback.data != "clearsem:yes":
         await callback.answer("Ок, ничего не трогаю")
         await callback.message.answer("Отменено — данные сохранены.")

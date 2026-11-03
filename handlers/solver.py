@@ -186,10 +186,8 @@ async def stop_dialog(message: Message, state: FSMContext, bot: Bot, interrupted
     # Удаляем сообщения диалога из чата
     msg_ids = data.get("msg_ids", [])
     for mid in msg_ids:
-        try:
+        with cosmetic("solver: удалить сообщение диалога"):   # уже удалено или старше 48 ч — не страшно
             await bot.delete_message(message.chat.id, mid)
-        except Exception:
-            pass  # сообщение уже удалено или старше 48 ч — не страшно
 
     await message.answer("✅ Диалог завершён.", reply_markup=MAIN_KB)
 
@@ -525,12 +523,10 @@ async def think_again(callback: CallbackQuery, state: FSMContext):
     except think.ThinkError as e:
         await wait.edit_text("⏳ " + str(e))
         if "не списана" in str(e):          # не ответила — кнопка снова под ответом
-            try:
+            with cosmetic("solver: вернуть кнопку «Подумать ещё»"):
                 offer = await think.offer(uid)
                 if offer and offer["left"] != 0:
                     await callback.message.edit_reply_markup(reply_markup=think_kb(offer["left"]))
-            except Exception:
-                pass
         return
     await wait.delete()
     sent = await answer_model_text(callback.message, answer)

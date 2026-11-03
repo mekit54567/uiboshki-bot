@@ -1,6 +1,6 @@
 {
-  "broad_except": 271,
-  "silent_except": 26,
+  "broad_except": 261,
+  "silent_except": 14,
   "cycle_modules": 125,
   "root_py_files": 1
 }

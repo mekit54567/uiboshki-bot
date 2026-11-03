@@ -62,8 +62,8 @@ class ErrorCounter(logging.Handler):
         try:
             self.records.append((time.time(), record.levelno, area_of(record.name),
                                  record.getMessage()[:160]))
-        except Exception:
-            pass                                      # статистика ошибок сама не падает
+        except Exception:                             # статистика ошибок сама не падает и не пишет
+            self.handleError(record)                  # в лог (зациклилась бы) — как обычный logging
 
     def last_day(self) -> list[tuple]:
         since = time.time() - DAY

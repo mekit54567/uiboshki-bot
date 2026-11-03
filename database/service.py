@@ -1,5 +1,8 @@
 """Служебное: история решалки, очистка семестра, события для /stats."""
 
+import logging
+import sqlite3
+
 import aiosqlite
 
 import database
@@ -41,8 +44,8 @@ async def clear_semester_data():
                       "file_text", "file_summaries", "vote_answers", "votes"):
             try:
                 await db.execute(f"DELETE FROM {table}")
-            except Exception:
-                pass  # таблицы homework/votes создаются лениво — их может не быть
+            except sqlite3.OperationalError as e:      # таблицы homework/votes создаются лениво — их может не быть
+                logging.getLogger(__name__).debug(f"очистка семестра: {table}: {e}")
         await db.commit()
 
 
