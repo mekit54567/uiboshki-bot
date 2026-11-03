@@ -15,13 +15,17 @@
 именно о том, что поменялось, а не всё расписание целиком.
 """
 
+import json
 import logging
+import sqlite3
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from kapibara.core.config import GROUP_CHAT_ID, TIMEZONE
 from database import get_schedule_snapshot, save_schedule_snapshot
-from kapibara.features.schedule.parser import fetch_schedule_raw, parse_events_for_date
+from kapibara.features.schedule.parser import FETCH_ERRORS, fetch_schedule_raw, parse_events_for_date
+from kapibara.core.errors import NETWORK
+from aiogram.exceptions import TelegramAPIError
 from kapibara.core.utils import esc
 
 logger = logging.getLogger(__name__)
@@ -140,12 +144,12 @@ async def record_marks(d_str: str, old: list[dict], new: list[dict]):
 
 
 async def marks_for(d_str: str) -> list[dict]:
-    import json
     from database import get_setting
     try:
         raw = await get_setting(MARKS_PREFIX + d_str)
         return json.loads(raw) if raw else []
-    except Exception:
+    except (sqlite3.Error, ValueError) as e:      # отметки — подсказка приложению, без них тоже можно
+        logger.warning(f"отметки расписания за {d_str} не прочитались: {e}")
         return []
 
 
@@ -222,7 +226,7 @@ async def check_schedule_changes(bot):
     from kapibara.features.groups.optional_subjects import no_filter
     try:
         raw = await fetch_schedule_raw()
-    except Exception as e:
+    except FETCH_ERRORS as e:
         logger.error(f"check_schedule_changes: не удалось получить расписание: {e}")
         return
 
@@ -254,7 +258,7 @@ async def check_schedule_changes(bot):
             continue  # первый раз видим этот день — не с чем сравнивать
         try:
             await record_marks(d_str, old_events, new_events)
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:      # битый JSON отметок — без отметок
             logger.warning(f"check_schedule_changes: отметки для приложения не записались: {e}")
         if diff_events(old_events, new_events):
             changed_days.append((d, offset, old_events, new_events))
@@ -303,5 +307,5 @@ async def check_schedule_changes(bot):
         if chat and text:
             try:
                 await bot.send_message(chat, text, parse_mode="HTML")
-            except Exception as e:
+            except (TelegramAPIError, *NETWORK) as e:
                 logger.warning(f"Не смог отправить diff расписания в группу: {e}")

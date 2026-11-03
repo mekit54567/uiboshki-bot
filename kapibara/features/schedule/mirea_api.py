@@ -33,6 +33,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+from kapibara.core.errors import NETWORK  # noqa: E402
+
 BASE = "https://schedule-of.mirea.ru/schedule/api"
 
 TARGET_GROUP   = 1
@@ -71,7 +73,7 @@ async def search_targets(query: str, target_type: int, limit: int = 8) -> list[d
         return [{"id": f["id"], "fullTitle": f["title"], "scheduleTarget": f["type"]} for f in found]
     try:
         return await _official_search(query, target_type, limit)
-    except Exception as e:
+    except (*NETWORK, ValueError, AttributeError) as e:      # не отвечает или ответил не тем JSON
         logger.info(f"official mirea search unavailable: {e}")
         if not await schedule_index.is_ready():
             raise SearchUnavailable() from e
@@ -144,7 +146,7 @@ async def get_baseinfo(target_id: int, target_type: int) -> dict | None:
             resp = await client.get(f"{BASE}/baseinfo", params={"id": target_id, "type": target_type})
             resp.raise_for_status()
             return resp.json()
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:
         logger.warning(f"mirea baseinfo failed: {e}")
         return None
 
@@ -204,6 +206,6 @@ async def _fetch_ical(target_id: int, target_type: int) -> bytes | None:
                 if b"BEGIN:VCALENDAR" not in resp.content[:512]:
                     raise ValueError("ответ не календарь")
                 return resp.content
-        except Exception as e:
+        except (*NETWORK, ValueError) as e:
             logger.warning(f"mirea ical fetch failed ({base}): {e}")
     return None
