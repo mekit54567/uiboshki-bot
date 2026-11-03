@@ -1,5 +1,7 @@
 # Капибара — учёба МИРЭА
 
+![Капибара — студенческое приложение РТУ МИРЭА](docs/screens/social-preview.png)
+
 [![CI](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![aiogram](https://img.shields.io/badge/aiogram-3-2CA5E0?logo=telegram&logoColor=white)
