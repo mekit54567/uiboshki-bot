@@ -230,3 +230,21 @@ def test_history_mobile_layout():
     assert ".screen.now{background:#eae4d8;padding:34px 0 14px}" in css    # полоса под вырезом
     for shot in ("today", "week", "deadlines", "assistant", "more"):
         assert Image.open(site / "history" / f"{shot}.jpg").size == (540, 943), shot   # без обрезка под меню
+
+
+def test_about_promo_film():
+    """Промо-ролик на /about: файл и обложка отдаются, видео без звука и
+    playsinline (иначе iPhone не запустит его сам), Range работает — без него
+    Safari видео не играет."""
+    c = _client()
+    html = c.get("/about").text
+    assert 'id="promo-video"' in html and "muted" in html and "playsinline" in html
+    assert 'src="/site/promo/promo-16x9.mp4"' in html and 'poster="/site/promo/promo-16x9.jpg"' in html
+    r = c.get("/site/promo/promo-16x9.mp4", headers={"Range": "bytes=0-99"})
+    assert r.status_code == 206 and len(r.content) == 100 and r.content[4:8] == b"ftyp"
+    assert c.get("/site/promo/promo-16x9.jpg").content[:3] == b"\xff\xd8\xff"
+    size = len(c.get("/site/promo/promo-16x9.mp4").content)
+    tail = c.get("/site/promo/promo-16x9.mp4", headers={"Range": "bytes=-10"})
+    assert tail.status_code == 206 and tail.headers["content-range"] == f"bytes {size - 10}-{size - 1}/{size}"
+    assert c.get("/site/promo/promo-16x9.mp4", headers={"Range": f"bytes={size}-"}).status_code == 416
+    assert c.get("/site/promo/site.css").status_code == 404 and c.get("/site/promo/none.mp4").status_code == 404

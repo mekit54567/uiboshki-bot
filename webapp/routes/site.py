@@ -13,10 +13,11 @@ Telegram). На ней два живых места:
 
 import hashlib
 import ipaddress
+import re
 import zlib
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from webapp.pages import FLUTTER_DIR, STATIC_DIR, digest, index_page, og_meta  # noqa: F401 — og_meta брали отсюда
 
@@ -50,6 +51,39 @@ def _client_key(request: Request) -> int:
     ip = next((h for h in reversed(hops) if _public(h)), "")      # внутренние адреса прокси — мимо
     ip = ip or (request.client.host if request.client else "?")
     return -(zlib.crc32(ip.encode()) + 1)
+
+
+_PROMO_FILE = re.compile(r"[a-z0-9-]+\.(mp4|jpg)")
+_PROMO_TYPES = {"mp4": "video/mp4", "jpg": "image/jpeg"}
+
+
+@router.get("/site/promo/{name}", include_in_schema=False)
+def promo_file(name: str, request: Request):
+    """Промо-ролик сайта (site/promo/). Отдаётся тут, а не общей статикой: Safari
+    и iPhone играют видео только с ответами на Range (206), а StaticFiles нашей
+    версии Starlette Range не понимает. Обычная функция — FastAPI зовёт её в
+    своём пуле потоков, чтение файла не держит цикл событий."""
+    if not _PROMO_FILE.fullmatch(name):
+        raise HTTPException(status_code=404)
+    path = _site_dir() / "promo" / name
+    if not path.is_file():
+        raise HTTPException(status_code=404)
+    size, kind = path.stat().st_size, _PROMO_TYPES[name.rsplit(".", 1)[1]]
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=86400"}
+    m = re.fullmatch(r"bytes=(\d*)-(\d*)", request.headers.get("range", "").strip())
+    if not m or not (m[1] or m[2]):
+        return FileResponse(path, media_type=kind, headers=headers)
+    if m[1]:
+        start, end = int(m[1]), min(int(m[2]) if m[2] else size - 1, size - 1)
+    else:                                              # bytes=-N — последние N байт
+        start, end = max(0, size - int(m[2])), size - 1
+    if start > end:
+        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+    with path.open("rb") as f:
+        f.seek(start)
+        data = f.read(end - start + 1)
+    return Response(data, status_code=206, media_type=kind,
+                    headers={**headers, "Content-Range": f"bytes {start}-{end}/{size}"})
 
 
 @router.get("/about", include_in_schema=False)
