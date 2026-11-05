@@ -136,7 +136,10 @@ def login_prompt(code: str, login: dict) -> tuple[str, InlineKeyboardMarkup]:
             "Если это не ты нажал «Войти» — жми «Нет». Дальше попрошу нажать число с экрана устройства."), kb
 
 
-@router.callback_query(F.data.startswith("chan:"))
+# только «chan:ok» и «chan:later»: остальные «chan:…» — кнопки постов канала
+# (handlers/channel.py); раньше этот роутер забирал и их — «В канал» и
+# «Следующий» удаляли превью и присылали приветствие (Никита 05.11)
+@router.callback_query(F.data.regexp(r"^chan:(ok|later):"))
 async def channel_decision(callback: CallbackQuery, state: FSMContext | None = None):
     """«Я в канале, дальше» / «Позже» (login_channel.py) → «это вы?» или приветствие."""
     from kapibara.features.identity import login_channel
