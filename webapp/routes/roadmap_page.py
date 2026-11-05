@@ -68,6 +68,7 @@ def _card(i: dict) -> str:
     if st == "now" and isinstance(i.get("progress"), int):
         p = max(0, min(100, i["progress"]))
         bar = f'<div class="bar"><i style="width:{p}%"></i></div><span class="pc">{p}%</span>'
+    more = i.get("label") or more                    # своя подпись ссылки: «Открыть в App Store»
     link = f'<a class="more" href="{escape(i["link"])}" target="_blank" rel="noopener">{more} →</a>' if i.get("link") else ""
     return (f'<li class="it {st}" data-st="{st}"><span class="dot"><svg viewBox="0 0 24 24">{ICONS[st]}</svg></span>'
             f'<div class="card"><span class="badge">{badge}</span><h3>{escape(i["title"])}</h3>'
@@ -78,7 +79,8 @@ def render(data: dict) -> str:
     from kapibara.features.content import roadmap
     done, total = roadmap.score(data)
     res = roadmap.results(data)
-    line = res + [i for i in data["items"] if i["status"] == "now" and i not in res]
+    bonus = [i for i in data["items"] if i["status"] == "done" and i.get("bonus") and i not in res]  # вышло вне плана
+    line = res + bonus + [i for i in data["items"] if i["status"] == "now" and i not in res]
     later = [i for i in data["items"] if i["status"] in ("next", "idea")]
     have = {i["status"] for i in line} | ({"next"} if later else set())
     chips = [("all", "Все"), ("done", "Вышло"), ("failed", "Не вышло"), ("now", "В работе"), ("next", "Дальше")]
