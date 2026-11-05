@@ -381,3 +381,39 @@ async def test_yookassa_test_shop_only_for_nikita(db, bot, client, monkeypatch, 
 
     monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "live_abc")      # боевой магазин — как раньше
     assert not billing.test_mode() and billing.provider(uid=ME) == "yookassa"
+
+
+def _run_done_script(html: str, answer: dict) -> dict:
+    """Скрипт страницы «после оплаты» в node: заглушки document и fetch,
+    касса сразу отвечает answer. → что стало с «s» и подсказкой «h»."""
+    import json
+    import re
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("нет node")
+    script = re.search(r"<script>(.*?)</script>", html, re.S).group(1)
+    harness = """
+var els={s:{textContent:"",innerHTML:""},h:{removed:false,remove:function(){this.removed=true}}};
+var document={getElementById:function(i){return els[i]}};
+function fetch(){return Promise.resolve({json:function(){return ANSWER}})}
+function setTimeout(){}
+SCRIPT
+setImmediate(function(){setImmediate(function(){console.log(JSON.stringify({s:els.s.innerHTML||els.s.textContent,h:els.h.removed}))})});
+""".replace("ANSWER", json.dumps(answer)).replace("SCRIPT", script)
+    out = subprocess.run([node, "-e", harness], capture_output=True, text=True, timeout=20, check=True).stdout
+    return json.loads(out)
+
+
+def test_done_pages_hide_hint_after_payment(client):  # noqa: F811
+    """Никита 05.11: после «50 ₽ дошли до Капибары» ниже висело «Можно закрыть
+    страницу: когда оплата пройдёт, бот напишет». Прошла — подсказку убираем."""
+    c, _ = client
+    page = c.get("/donate/done?k=K").text
+    assert _run_done_script(page, {"paid": True, "amount": 50}) == {
+        "s": "Спасибо за поддержку! <b>50&nbsp;₽</b> дошли до Капибары.", "h": True}
+    assert _run_done_script(page, {"paid": False, "amount": 0})["h"] is False   # ещё ждём — подсказка нужна
+    page = c.get("/plus/done?k=K").text
+    got = _run_done_script(page, {"active": True, "until_text": "5 декабря 2026"})
+    assert "5 декабря 2026" in got["s"] and got["h"] is True
