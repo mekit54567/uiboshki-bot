@@ -309,12 +309,12 @@ async def plus_done(k: str = ""):
     кассы; если оно опаздывает — спросим ЮKassa сами (/plus/state)."""
     key = escape(k)
     return _page(f'<p class="state" id="s">Проверяем оплату…</p>'
-                 f'<p class="small">Можно закрыть страницу: когда оплата пройдёт, бот напишет.</p>'
+                 f'<p class="small" id="h">Можно закрыть страницу: когда оплата пройдёт, бот напишет.</p>'
                  f'<script>(function(){{var k="{key}",n=0;if(!k){{document.getElementById("s").textContent='
                  f'"Спасибо! Когда оплата пройдёт, бот напишет.";return}}function t(){{fetch("/plus/state?k="+'
                  f'encodeURIComponent(k)).then(function(r){{return r.json()}}).then(function(d){{if(d.active)'
                  f'{{document.getElementById("s").innerHTML="Готово: «Капибара+» до <b>"+d.until_text+"</b>. '
-                 f'Вернись в приложение.";return}}if(++n<20)setTimeout(t,3000);else document.getElementById("s")'
+                 f'Вернись в приложение.";document.getElementById("h").remove();return}}if(++n<20)setTimeout(t,3000);else document.getElementById("s")'
                  f'.textContent="Касса ещё не ответила. Когда оплата пройдёт, бот напишет."}}).catch(function()'
                  f'{{if(++n<20)setTimeout(t,3000)}})}}t()}})()</script>')
 
@@ -410,11 +410,12 @@ async def donate_done(k: str = ""):
     key = escape(k)
     return _donate_page(
         f'<p class="state" id="s">Проверяем оплату…</p>'
-        f'<p class="small">Можно закрыть страницу: когда оплата пройдёт, бот напишет.</p>'
+        f'<p class="small" id="h">Можно закрыть страницу: когда оплата пройдёт, бот напишет.</p>'
         f'<script>(function(){{var k="{key}",n=0,s=document.getElementById("s");if(!k){{s.textContent='
         f'"Спасибо! Когда оплата пройдёт, бот напишет.";return}}function t(){{fetch("/donate/state?k="+'
         f'encodeURIComponent(k)).then(function(r){{return r.json()}}).then(function(d){{if(d.paid)'
-        f'{{s.innerHTML="Спасибо за поддержку! <b>"+d.amount+"&nbsp;₽</b> дошли до Капибары.";return}}'
+        f'{{s.innerHTML="Спасибо за поддержку! <b>"+d.amount+"&nbsp;₽</b> дошли до Капибары.";'
+        f'document.getElementById("h").remove();return}}'
         f'if(++n<20)setTimeout(t,3000);else s.textContent="Касса ещё не ответила. Когда оплата пройдёт, бот '
         f'напишет."}}).catch(function(){{if(++n<20)setTimeout(t,3000)}})}}t()}})()</script>')
 
