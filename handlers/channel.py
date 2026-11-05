@@ -47,13 +47,16 @@ async def _list_text(posts, done) -> str:
              "news": esc(login_channel.channel()) or "⚠️ не задан — LOGIN_CHANNEL"}
     parts = []
     for chan in ("news", "dev"):
-        lines = [f"{'✅' if p['slug'] in done else '▫️'} <code>{i + 1}</code> {esc(p['title'])}"
-                 for i, p in enumerate(posts) if _chan(p["slug"]) == chan]
-        if lines:
-            parts.append(f"<b>{CHAN_NAMES[chan]}</b> · {where[chan]}\n" + "\n".join(lines))
-    return ("📣 <b>Посты каналов</b>\n\n" + "\n\n".join(parts) +
-            "\n\nНиже — превью следующего поста ровно как в канале. <code>/channel N</code> — любой по номеру, "
-            "<code>/channel news</code> или <code>/channel dev</code> — следующий в этом канале.")
+        mine = [(i, p) for i, p in enumerate(posts) if _chan(p["slug"]) == chan]
+        if not mine:
+            continue
+        out = sum(p["slug"] in done for _, p in mine)        # вышедшие — одной строкой, не списком
+        lines = [f"▫️ <code>{i + 1}</code> {esc(p['title'])}" for i, p in mine if p["slug"] not in done]
+        head = f"<b>{CHAN_NAMES[chan]}</b> · {where[chan]}" + (f" · уже вышло {out}" if out else "")
+        parts.append(head + "\n" + ("\n".join(lines) if lines else "все вышли ✅"))
+    return ("📣 <b>Посты каналов</b> — ждут выпуска, по порядку сверху вниз\n\n" + "\n\n".join(parts) +
+            "\n\nКак выпускать: под превью жми «📣 В канал», потом «Следующий ▸» — следующий пост этого же "
+            "канала. «↔ Канал …» — перейти в другой канал. <code>/channel N</code> — пост по номеру.")
 
 
 async def _preview(bot, chat_id, posts, idx, done):
