@@ -34,13 +34,39 @@ async def ensure_home():
         await upsert_group(home_id(), GROUP_NAME, own=True)
 
 
+# Латиница → кириллица для названий групп (05.11): проверяющий App Store и
+# иностранцы пишут «UIBO-03-24», а то и забыли переключить раскладку
+# («eb,j» = «уибо»). Названия групп МИРЭА — кириллица, буквы читаются по одной.
+_TRANSLIT = dict(zip("abvgdezijklmnoprstufhcy", "абвгдезийклмнопрстуфхцы", strict=True))
+_LAYOUT = dict(zip("qwertyuiop[]asdfghjkl;'zxcvbnm,.`", "йцукенгшщзхъфывапролджэячсмитьбюё", strict=True))
+
+
+def _cyrillic_variants(q: str) -> list[str]:
+    """Как ещё мог иметься в виду запрос с латиницей: по буквам и по раскладке."""
+    low = q.lower()
+    if not any("a" <= ch <= "z" for ch in low):
+        return []
+    out = []
+    for table in (_TRANSLIT, _LAYOUT):
+        v = "".join(table.get(ch, ch) for ch in low)
+        if v != low and v not in out:
+            out.append(v)
+    return out
+
+
 async def search(query: str, limit: int = 8) -> list[dict]:
-    """Группы по названию (справочник schedule_index): [{id, name}]."""
+    """Группы по названию (справочник schedule_index): [{id, name}].
+    Латиницей тоже находит: «uibo-03» и «eb,j» → УИБО…"""
     from kapibara.features.schedule import index as schedule_index
     q = (query or "").strip()
     if len(q) < 2:
         return []
-    return [{"id": r["id"], "name": r["title"]} for r in await schedule_index.search(q, (1,), limit)]
+    items: list[dict] = []
+    for variant in (q, *_cyrillic_variants(q)):
+        for r in await schedule_index.search(variant, (1,), limit):
+            if len(items) < limit and all(it["id"] != r["id"] for it in items):
+                items.append({"id": r["id"], "name": r["title"]})
+    return items
 
 
 async def name_of(group_id: int | None) -> str:

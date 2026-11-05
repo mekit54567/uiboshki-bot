@@ -215,3 +215,13 @@ def test_webapp_group_api(db, index, monkeypatch):
     assert c.post("/api/me/group", json={"id": HOME}, headers=h).json()["group"]["own"] is True
     me = c.get("/api/me", headers=h).json()
     assert me["group"]["name"] == config.GROUP_NAME and me["plan"] == "sub"   # своя — с подарком «Капибары+»
+
+
+@pytest.mark.asyncio
+async def test_group_search_latin(index):
+    """Проверяющий App Store пишет группу латиницей или забыл раскладку (05.11)."""
+    from kapibara.features.groups import groups
+    want = [{"id": OTHER, "name": "УИБО-01-24"}]
+    assert await groups.search("UIBO-01") == want
+    assert await groups.search("eb,j-01") == want
+    assert await groups.search("УИБО-01") == want
