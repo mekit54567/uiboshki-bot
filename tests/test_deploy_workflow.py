@@ -45,3 +45,12 @@ def test_deploy_skips_failed_builds_and_foreign_commits():
     assert ".headSha ==" in text                             # ждём сборки именно этого мержа
     assert 'select(.conclusion != "success"' in text         # упавший CHANGELOG/PWA — стоп
     assert "github-actions\\[bot\\]" in text                 # чужой коммит — не выкладываем
+
+
+def test_batch_of_merges_still_deploys_the_newest():
+    """03.11: 11 мержей подряд — запуск нового мержа отменял запуск от CI
+    старого, а тот уступал новому, и сервер остался на #336. Теперь запуск
+    сам берёт новый мерж, если CI у того уже зелёный."""
+    text = _text("deploy.yml")
+    assert "--author='^(?!github-actions\\[bot\\])' origin/main" in text   # новый мерж — не коммиты бота
+    assert '--commit "$latest"' in text and 'sha=$latest' in text
