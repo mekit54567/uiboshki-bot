@@ -283,12 +283,14 @@ async def test_roadmap_page(db, client, monkeypatch, robokassa):  # noqa: F811
         {"status": "failed", "from": 2, "title": "Б<script>", "about": "б", "post": "https://t.me/uiboshki_dev/7"},
         {"status": "now", "from": 2, "title": "В", "about": "в", "progress": 40},
         {"status": "done", "title": "старое", "about": "без номера — не в итогах"},
+        {"status": "done", "bonus": True, "title": "Сверх плана", "about": "д", "post": "https://apps.apple.com/app/id1", "label": "Открыть в App Store"},
         {"status": "next", "title": "Г", "about": "г"}]}
     assert roadmap.score(data) == (1, 3)
     html = roadmap_page.render(await roadmap.with_links(data))
     assert "Сделано 1 из 3" in html and "33%" in html and "1 ноября 2026" in html
     assert "https://t.me/uiboshki_dev/42" in html and "Почему не вышло" in html and "width:40%" in html
     assert "<script>" not in html and "старое" not in html and "Дальше" in html
+    assert "Сверх плана" in html and "Открыть в App Store →" in html                 # вышло вне плана, своя подпись
 
 
 def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811
