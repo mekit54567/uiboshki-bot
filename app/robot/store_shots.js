@@ -15,9 +15,9 @@ const TARGETS = {
   rustore: { size: [360, 640], scale: 3 },    // 1080×1920
 };
 
-// цель по предмету — как в robot.js: с экзаменом
+// цель по предмету — как в robot.js: с экзаменом; mode — переключатель «автомат / с экзаменом» (14.10)
 const goal = {};
-for (const m of ['3', '4', '5']) goal[`POST /api/sdo/goal/18673|${m}`] = { ...L.demo[`POST /api/sdo/goal/18673|${m}`], exam_left: 40, best: 134 };
+for (const m of ['3', '4', '5']) goal[`POST /api/sdo/goal/18673|${m}`] = { ...L.demo[`POST /api/sdo/goal/18673|${m}`], exam_left: 40, best: 134, mode: 'exam' };
 
 // ачивки уже открыты — без плашки «Новая ачивка» поверх экрана
 const ACH = ['lesson', 'week_next', 'goal', 'sdo', 'widget', 'look', 'ai', 'summary', 'remind', 'teacher', 'submit',
