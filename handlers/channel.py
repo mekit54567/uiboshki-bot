@@ -18,21 +18,42 @@ from aiogram.exceptions import TelegramAPIError
 router = Router()
 
 
-def _kb(slug: str, done: bool) -> InlineKeyboardMarkup:
+def _chan(slug: str) -> str:
+    """Какой канал у поста: «news» — открытый канал Капибары, иначе — разработка."""
+    return "news" if "news" in slug.split("-") else "dev"
+
+
+CHAN_NAMES = {"news": "Капибара", "dev": "Разработка"}
+
+
+def _next_in(posts, chan: str, after: int = -1, done=None) -> int | None:
+    """Следующий пост того же канала после номера after (done — только не выпущенные)."""
+    return next((i for i, p in enumerate(posts)
+                 if i > after and _chan(p["slug"]) == chan and (done is None or p["slug"] not in done)), None)
+
+
+def _kb(slug: str, done: bool, other: str = "") -> InlineKeyboardMarkup:
     first = (InlineKeyboardButton(text="✅ Уже в канале", callback_data="chan:noop") if done
              else InlineKeyboardButton(text="📣 В канал", callback_data=f"chan:pub:{slug}"))
-    return InlineKeyboardMarkup(inline_keyboard=[[first,
-                                                  InlineKeyboardButton(text="Следующий ▸", callback_data=f"chan:next:{slug}")]])
+    rows = [[first, InlineKeyboardButton(text="Следующий ▸", callback_data=f"chan:next:{slug}")]]
+    if other:          # Никита 05.11: листать посты по каналам — кнопка в другой канал
+        rows.append([InlineKeyboardButton(text=f"↔ Канал «{CHAN_NAMES[other]}»", callback_data=f"chan:other:{slug}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _list_text(posts, done) -> str:
-    lines = [f"{'✅' if p['slug'] in done else '▫️'} <code>{i + 1}</code> {esc(p['title'])}" for i, p in enumerate(posts)]
     from kapibara.features.identity import login_channel
-    where = esc(config.CHANNEL_ID) if config.CHANNEL_ID else "⚠️ канал не задан — переменная CHANNEL_URL или CHANNEL_ID"
-    news = login_channel.channel()
-    where += f" · посты news — в {esc(news)}" if news else ""
-    return (f"📣 <b>Посты канала</b> · {where}\n\n" + "\n".join(lines) +
-            "\n\nНиже — превью следующего поста ровно как в канале. <code>/channel N</code> — любой по номеру.")
+    where = {"dev": esc(config.CHANNEL_ID) if config.CHANNEL_ID else "⚠️ не задан — CHANNEL_URL или CHANNEL_ID",
+             "news": esc(login_channel.channel()) or "⚠️ не задан — LOGIN_CHANNEL"}
+    parts = []
+    for chan in ("news", "dev"):
+        lines = [f"{'✅' if p['slug'] in done else '▫️'} <code>{i + 1}</code> {esc(p['title'])}"
+                 for i, p in enumerate(posts) if _chan(p["slug"]) == chan]
+        if lines:
+            parts.append(f"<b>{CHAN_NAMES[chan]}</b> · {where[chan]}\n" + "\n".join(lines))
+    return ("📣 <b>Посты каналов</b>\n\n" + "\n\n".join(parts) +
+            "\n\nНиже — превью следующего поста ровно как в канале. <code>/channel N</code> — любой по номеру, "
+            "<code>/channel news</code> или <code>/channel dev</code> — следующий в этом канале.")
 
 
 async def _preview(bot, chat_id, posts, idx, done):
@@ -48,7 +69,11 @@ async def _preview(bot, chat_id, posts, idx, done):
         await bot.send_message(chat_id, f"⚠️ Пост {idx + 1} «{esc(post['title'])}» не отправился: "
                                f"{esc(str(e))[:300]}", parse_mode="HTML")
         return
-    await bot.send_message(chat_id, f"👆 Превью · пост {idx + 1} из {len(posts)}", reply_markup=_kb(post["slug"], post["slug"] in done))
+    chan = _chan(post["slug"])
+    other = "dev" if chan == "news" else "news"
+    has_other = any(_chan(p["slug"]) == other for p in posts)
+    await bot.send_message(chat_id, f"👆 Превью · пост {idx + 1} из {len(posts)} · канал «{CHAN_NAMES[chan]}»",
+                           reply_markup=_kb(post["slug"], post["slug"] in done, other if has_other else ""))
 
 
 async def offer_next(bot) -> str | None:
@@ -107,8 +132,14 @@ async def cmd_channel(message: Message):
         return
     await message.answer(await _list_text(posts, done), parse_mode="HTML")
     arg = (message.text or "").split()[1:2]
+    idx: int | None
     if arg and arg[0].isdigit() and 1 <= int(arg[0]) <= len(posts):
         idx = int(arg[0]) - 1
+    elif arg and arg[0] in CHAN_NAMES:
+        idx = _next_in(posts, arg[0], done=done)
+        if idx is None:
+            await message.answer(f"В канале «{CHAN_NAMES[arg[0]]}» все посты уже вышли 🎉")
+            return
     else:
         idx = next((i for i, p in enumerate(posts) if p["slug"] not in done), None)
         if idx is None:
@@ -175,12 +206,21 @@ async def channel_button(callback: CallbackQuery):
     if action == "noop" or idx is None:
         await callback.answer("Уже в канале" if action == "noop" else "Такого поста больше нет")
         return
-    if action == "next":
+    if action == "next":                       # следующий — в том же канале
         await callback.answer()
-        if idx + 1 >= len(posts):
-            await callback.message.answer("Это был последний пост.")
+        nxt = _next_in(posts, _chan(slug), idx)
+        if nxt is None:
+            await callback.message.answer(f"Это был последний пост канала «{CHAN_NAMES[_chan(slug)]}».")
             return
-        await _preview(callback.bot, callback.message.chat.id, posts, idx + 1, done)
+        await _preview(callback.bot, callback.message.chat.id, posts, nxt, done)
+        return
+    if action == "other":                      # в другой канал: его следующий не выпущенный (или первый)
+        await callback.answer()
+        other = "dev" if _chan(slug) == "news" else "news"
+        nxt = _next_in(posts, other, done=done)
+        nxt = _next_in(posts, other) if nxt is None else nxt
+        if nxt is not None:
+            await _preview(callback.bot, callback.message.chat.id, posts, nxt, done)
         return
     # action == "pub"
     chat = target(slug)

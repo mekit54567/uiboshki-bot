@@ -172,7 +172,7 @@ async def test_channel_command_preview_and_publish(db, tmp_path, monkeypatch):
         await channel_posts.mark_published("00-pinned", [1])
         await feed(star, "/channel")
         texts = [t for _, t, _ in bot.session.sent]
-        assert any("Посты канала" in t and "@uiboshki_dev" in t for t in texts)
+        assert any("Посты каналов" in t and "@uiboshki_dev" in t for t in texts)
         assert texts[-2] == "<b>Как всё началось</b>\nтекст"                      # превью старосте — как в канале
         assert bot.session.sent[-1][2] == ["chan:pub:01-start", "chan:next:01-start"]
 
@@ -370,5 +370,48 @@ async def test_edit_published_post_keeps_cover(db, tmp_path, monkeypatch):
         assert "✅ 1" in report and "✅ 2" in report and "ещё не в канале" in report and "9 — такого поста нет" in report
         await feed(star, "/channel edit")
         assert "Номера — как в /channel" in tg.session.sent[-1][1]
+    finally:
+        channel.router._parent_router = None
+
+
+@pytest.mark.asyncio
+async def test_navigate_by_channel(db, tmp_path, monkeypatch):
+    """Никита 05.11: листать посты по каналам — «Следующий» в том же канале,
+    кнопка в другой канал, /channel news|dev; список — по разделам."""
+    from handlers import channel
+    _post(tmp_path, "25-news-hello-pinned", "<b>Привет</b>")
+    _post(tmp_path, "26-news-stores", "<b>Магазины</b>")
+    _post(tmp_path, "30-stores", "<b>Дорога в магазины</b>")
+    _post(tmp_path, "31-kassa", "<b>Касса</b>")
+    monkeypatch.setattr(channel_posts, "POSTS_DIR", tmp_path)
+    monkeypatch.setattr(config, "CHANNEL_ID", "@uiboshki_dev")
+    monkeypatch.setattr(config, "LOGIN_CHANNEL", "@kapibara_mirea")
+    bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=Session())
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(channel.router)
+    star = User(id=STAROSTA_ID, is_bot=False, first_name="S")
+
+    async def feed(text=None, data=None):
+        msg = Message(message_id=1, date=0, chat=Chat(id=STAROSTA_ID, type="private"), from_user=star, text=text or "x")
+        upd = (Update(update_id=int(time.time() * 1e6) % 10**9, message=msg) if text else
+               Update(update_id=int(time.time() * 1e6) % 10**9,
+                      callback_query=CallbackQuery(id="1", from_user=star, chat_instance="c", data=data, message=msg)))
+        await dp.feed_update(bot, upd)
+
+    try:
+        await channel_posts.mark_published("25-news-hello-pinned", [1])
+        await feed("/channel dev")
+        lst = bot.session.sent[0][1]
+        assert lst.index("Капибара") < lst.index("@kapibara_mirea") < lst.index("Разработка") < lst.index("@uiboshki_dev")
+        assert bot.session.sent[-2][1] == "<b>Дорога в магазины</b>"
+        assert bot.session.sent[-1][2] == ["chan:pub:30-stores", "chan:next:30-stores", "chan:other:30-stores"]
+        await feed(data="chan:next:30-stores")                                   # следующий — того же канала
+        assert bot.session.sent[-2][1] == "<b>Касса</b>"
+        await feed(data="chan:next:31-kassa")
+        assert "последний пост канала «Разработка»" in bot.session.sent[-1][1]
+        await feed(data="chan:other:31-kassa")                                   # в другой канал — его невыпущенный
+        assert bot.session.sent[-2][1] == "<b>Магазины</b>"
+        await feed("/channel news")
+        assert bot.session.sent[-2][1] == "<b>Магазины</b>"
     finally:
         channel.router._parent_router = None
