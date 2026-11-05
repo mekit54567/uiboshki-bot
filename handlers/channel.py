@@ -20,7 +20,8 @@ router = Router()
 
 def _chan(slug: str) -> str:
     """Какой канал у поста: «news» — открытый канал Капибары, иначе — разработка."""
-    return "news" if "news" in slug.split("-") else "dev"
+    from kapibara.features.content.channel_posts import channel_of
+    return channel_of(slug)
 
 
 CHAN_NAMES = {"news": "Капибара", "dev": "Разработка"}
@@ -56,7 +57,8 @@ async def _list_text(posts, done) -> str:
         parts.append(head + "\n" + ("\n".join(lines) if lines else "все вышли ✅"))
     return ("📣 <b>Посты каналов</b> — ждут выпуска, по порядку сверху вниз\n\n" + "\n\n".join(parts) +
             "\n\nКак выпускать: под превью жми «📣 В канал», потом «Следующий ▸» — следующий пост этого же "
-            "канала. «↔ Канал …» — перейти в другой канал. <code>/channel N</code> — пост по номеру.")
+            "канала. «↔ Канал …» — перейти в другой канал. <code>/channel N</code> — пост по номеру.\n"
+            "⏱ <code>/channel auto</code> — выпустить всё само по очереди.")
 
 
 async def _preview(bot, chat_id, posts, idx, done):
@@ -133,6 +135,9 @@ async def cmd_channel(message: Message):
     if (message.text or "").split()[1:2] == ["edit"]:
         await _edit(message, posts, done)
         return
+    if (message.text or "").split()[1:2] == ["auto"]:
+        await _auto(message)
+        return
     await message.answer(await _list_text(posts, done), parse_mode="HTML")
     arg = (message.text or "").split()[1:2]
     idx: int | None
@@ -183,10 +188,13 @@ async def channel_button(callback: CallbackQuery):
     if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    from kapibara.features.content.channel_posts import forget_published, load_posts, mark_published, post_link, published, send_post, target
+    from kapibara.features.content.channel_posts import forget_published, load_posts, published, target
     _, action, *rest = callback.data.split(":", 2)
     slug = rest[0] if rest else ""
     posts, done = load_posts(), await published()
+    if action == "auto":
+        await _auto_button(callback, slug)
+        return
     if action == "redo":
         by_chat: dict[str, list[int]] = {}
         for done_slug, v in done.items():
@@ -226,34 +234,87 @@ async def channel_button(callback: CallbackQuery):
             await _preview(callback.bot, callback.message.chat.id, posts, nxt, done)
         return
     # action == "pub"
-    chat = target(slug)
-    if not chat:
-        await callback.answer("Канал не задан: переменная LOGIN_CHANNEL (посты news) или CHANNEL_URL / CHANNEL_ID",
-                              show_alert=True)
+    from kapibara.features.content.channel_posts import publish
+    try:
+        ids, link, pin_error = await publish(callback.bot, slug, config.WEBAPP_URL)
+    except ValueError as e:                   # канал не задан
+        await callback.answer(str(e)[:190], show_alert=True)
         return
-    from kapibara.core.locks import lock
-    # двойное нажатие: оба колбэка видели «ещё не в канале» и, пока шла
-    # отправка, выпускали пост дважды — проверка и отправка под одним замком
-    async with lock("channel:pub"):
-        if slug in await published():
-            await callback.answer("Этот пост уже в канале", show_alert=True)
-            return
-        try:
-            ids = await send_post(callback.bot, chat, posts[idx], config.WEBAPP_URL)
-        except (*EXTERNAL, OSError, ValueError) as e:
-            await callback.answer("Не вышло — бот админ канала?", show_alert=True)
-            await callback.message.answer(f"⚠️ Не опубликовал: {esc(str(e))[:300]}\n"
-                                          "Проверь, что бот — админ канала с правом публиковать.", parse_mode="HTML")
-            return
-        await mark_published(slug, ids)
-    if "pinned" in slug:              # закреп с оглавлением — сразу закрепить
-        try:
-            await callback.bot.pin_chat_message(chat, ids[0], disable_notification=True)
-        except TelegramAPIError as e:
-            await callback.message.answer(f"Не закрепил сам ({esc(str(e))[:200]}) — закрепи руками.", parse_mode="HTML")
+    except (*EXTERNAL, OSError) as e:
+        await callback.answer("Не вышло — бот админ канала?", show_alert=True)
+        await callback.message.answer(f"⚠️ Не опубликовал: {esc(str(e))[:300]}\n"
+                                      "Проверь, что бот — админ канала с правом публиковать.", parse_mode="HTML")
+        return
+    if not ids:
+        await callback.answer("Этот пост уже в канале", show_alert=True)
+        return
+    if pin_error:
+        await callback.message.answer(f"Не закрепил сам ({esc(pin_error)}) — закрепи руками.", parse_mode="HTML")
     await callback.message.edit_reply_markup(reply_markup=_kb(slug, True))
-    link = post_link(chat, ids[0])
     await callback.message.answer(f"✅ В канале: «{esc(posts[idx]['title'])}»" + (f"\n{link}" if link else ""),
                                   parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                                       InlineKeyboardButton(text="Следующий ▸", callback_data=f"chan:next:{slug}")]]))
     await callback.answer("Опубликовано")
+
+
+# ── Очередь: всё само по очереди (Никита 05.11, channel_queue.py) ──────────
+
+def _queue_text(items: list[dict], posts: list[dict], head: str) -> str:
+    from kapibara.features.content import channel_queue
+    titles = {p["slug"]: p["title"] for p in posts}
+    parts = []
+    for chan in ("news", "dev"):
+        lines = [f"{channel_queue.when(it['at'])} — {esc(titles.get(it['slug'], it['slug']))}"
+                 for it in items if _chan(it["slug"]) == chan]
+        if lines:
+            parts.append(f"<b>{CHAN_NAMES[chan]}</b>\n" + "\n".join(lines))
+    return head + "\n\n" + "\n\n".join(parts)
+
+
+async def _auto(message: Message):
+    """/channel auto — что в очереди (и «Отменить») или план и «Запустить»."""
+    from kapibara.features.content import channel_queue
+    from kapibara.features.content.channel_posts import load_posts, published
+    from datetime import datetime
+    from kapibara.core.utils import TZ
+    posts = load_posts()
+    items = await channel_queue.load()
+    if items:
+        await message.answer(_queue_text(items, posts, "⏱ <b>Очередь постов</b> — выйдут сами, время по Москве:"),
+                             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                                 InlineKeyboardButton(text="⏹ Отменить очередь", callback_data="chan:auto:stop")]]))
+        return
+    plan = channel_queue.plan(posts, await published(), datetime.now(TZ))
+    if not plan:
+        await message.answer("Все посты уже в канале 🎉")
+        return
+    await message.answer(_queue_text(plan, posts,
+                                     "⏱ <b>Выпустить всё по очереди?</b>\nПервый пост каждого канала — сразу, дальше: "
+                                     "«Капибара» — раз в 20–30 минут, «Разработка» — раз в 4–6 часов. "
+                                     "С 23 до 9 по Москве — пауза. Примерно так:"),
+                         parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                             InlineKeyboardButton(text="▶️ Запустить", callback_data="chan:auto:go")]]))
+
+
+async def _auto_button(callback: CallbackQuery, what: str):
+    from kapibara.features.content import channel_queue
+    from kapibara.features.content.channel_posts import load_posts
+    await callback.answer()
+    msg = callback.message if isinstance(callback.message, Message) else None
+    if msg:
+        await msg.edit_reply_markup(reply_markup=None)
+    if what == "stop":
+        n = await channel_queue.cancel()
+        if msg:
+            await msg.answer(f"⏹ Очередь отменена, не вышло {n}. Выпустить руками — /channel.")
+        return
+    if await channel_queue.load():
+        if msg:
+            await msg.answer("Очередь уже идёт — посмотреть или отменить: /channel auto")
+        return
+    items = await channel_queue.start()
+    if msg:
+        await msg.answer(_queue_text(items, load_posts(), "▶️ <b>Очередь запущена</b>, время по Москве:") +
+                         "\n\nПро каждый вышедший пост напишу. Посмотреть или отменить — /channel auto.",
+                         parse_mode="HTML")
+    await channel_queue.tick(callback.bot, night_ok=True)        # первые посты — сразу

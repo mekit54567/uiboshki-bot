@@ -539,6 +539,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     from kapibara.features.social import group_award                         # группа месяца: 1-го числа — 7 дней «Капибары+» (5.100.7)
     scheduler.add_job(group_award.award,       "cron", day=1, hour=12, minute=5, args=[bot])
     from kapibara.ops import health
+    from kapibara.features.content import channel_queue
+    scheduler.add_job(channel_queue.tick,      "interval", minutes=1, args=[bot])     # посты каналов по очереди (/channel auto)
     scheduler.add_job(health.alert_errors,     "interval", minutes=15, args=[bot])   # всплеск ошибок — старосте
     from kapibara.ops import stats
     scheduler.add_job(stats.send_evening,      "cron", hour=21, minute=3, args=[bot])  # +N новых за день — старосте

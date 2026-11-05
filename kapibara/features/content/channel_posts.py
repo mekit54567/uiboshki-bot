@@ -225,3 +225,37 @@ async def mark_published(slug: str, ids: list[int]):
 def post_link(channel: str, msg_id: int) -> str:
     """t.me/<канал>/<id> для публичного канала (@имя), иначе пусто."""
     return f"https://t.me/{channel.lstrip('@')}/{msg_id}" if channel.startswith("@") else ""
+
+
+def channel_of(slug: str) -> str:
+    """«news» — открытый канал Капибары, «dev» — канал разработки."""
+    return "news" if "news" in slug.split("-") else "dev"
+
+
+async def publish(bot, slug: str, base_url: str = "") -> tuple[list[int], str, str]:
+    """Выпустить пост в его канал (по кнопке «В канал» и из очереди
+    channel_queue): отправить, запомнить, закрепить пост с «pinned».
+    → (id сообщений, ссылка, что не вышло с закрепом); уже в канале — ([], "", "").
+    Канал не задан или поста нет — ValueError; ошибки Telegram — наружу.
+    Закреп не вышел — не ошибка: пост в канале, закрепить можно руками."""
+    from aiogram.exceptions import TelegramAPIError
+    from kapibara.core.locks import lock
+    post = next((p for p in load_posts() if p["slug"] == slug), None)
+    if post is None:
+        raise ValueError(f"поста {slug} нет в репозитории")
+    chat = target(slug)
+    if not chat:
+        raise ValueError("канал не задан: LOGIN_CHANNEL (посты news) или CHANNEL_URL / CHANNEL_ID")
+    # двойное нажатие или кнопка вместе с очередью: проверка и отправка под одним замком
+    async with lock("channel:pub"):
+        if slug in await published():
+            return [], "", ""
+        ids = await send_post(bot, chat, post, base_url)
+        await mark_published(slug, ids)
+    pin_error = ""
+    if "pinned" in slug:              # закреп с оглавлением — сразу закрепить
+        try:
+            await bot.pin_chat_message(chat, ids[0], disable_notification=True)
+        except TelegramAPIError as e:
+            pin_error = str(e)[:200]
+    return ids, post_link(chat, ids[0]), pin_error
