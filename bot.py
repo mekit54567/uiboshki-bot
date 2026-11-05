@@ -229,6 +229,9 @@ async def main():
     await backup.keep_before_start()
     await init_db()
     health.mark_ready("db")
+    # Сайт и API — сразу после базы, до первых запросов к Telegram: когда Telegram
+    # не отвечает (упал VPN), каждый вызов ждёт таймаут, и сайт лежал минутами (502)
+    webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
     from kapibara.features.identity import login_channel
     await login_channel.start()             # отметка «с какого момента канал для новых»
     register_handlers(dp)
@@ -257,7 +260,6 @@ async def main():
         with aside(logger, "данные оператора", level=logging.INFO):
             await bot.send_message(STAROSTA_ID, "⚠️ В согласии и политике (/consent, /privacy) нет данных "
                                    f"оператора. Задай на хостинге: {', '.join(missing)}.")
-    webapp_server, webapp_task = start_webapp(WEBAPP_PORT) if WEBAPP_PORT else (None, None)
     # Справочник для /teacher, /group, /room и поиска в WebApp — в фоне:
     # первый обход ~полчаса, дальше продолжается с места остановки.
     from kapibara.features.schedule import index as schedule_index
