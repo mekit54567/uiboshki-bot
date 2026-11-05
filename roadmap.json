@@ -4,7 +4,7 @@
   "items": [
     {"status": "done", "from": 2, "title": "Приложение для iPhone в App Store", "about": "5 ноября Apple одобрила версию 1.0 — Капибара ставится из App Store в одно нажатие.", "post": "https://apps.apple.com/app/id6828117584", "label": "Открыть в App Store"},
     {"status": "done", "from": 2, "title": "Приложение для Android в RuStore", "about": "Своё приложение, не браузер: быстрее, с пушами и входом в СДО страницей МИРЭА.", "post": "https://www.rustore.ru/catalog/app/ru.uiboshki.app", "label": "Открыть в RuStore"},
-    {"status": "now", "from": 2, "title": "Вход через Яндекс ID", "about": "Ещё один способ войти без Telegram, рядом с VK ID. Код готов, осталось подключить Яндекс."},
+    {"status": "done", "from": 2, "title": "Вход через Яндекс ID", "about": "Ещё один способ войти без Telegram, рядом с VK ID."},
     {"status": "now", "from": 2, "title": "Отметка на паре через QR", "about": "Отсканировать QR Пульса на паре, не выходя из приложения. Сканер уже в тестовой сборке — проверяю на настоящих парах."},
     {"status": "done", "bonus": true, "title": "Kapi ИИ", "about": "Свой помощник по лекциям группы: отвечает по ним и показывает, на каком слайде это было."},
     {"status": "done", "bonus": true, "title": "Оплата картой на сайте", "about": "Поддержать проект теперь можно обычной картой — через ЮKassa."},
