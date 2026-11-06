@@ -48,6 +48,11 @@ jobs:
         working-directory: app/robot
         run: node robot.js
 
+      - name: Скриншоты для магазинов (только запуск вручную)
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: app/robot
+        run: node store_shots.js appstore && cp -r ../../docs/store/screens out/store
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
