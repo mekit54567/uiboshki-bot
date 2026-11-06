@@ -29,6 +29,7 @@
 @media(max-width:400px){.demo-expand{bottom:21px}}
 /* телефон: длинное ФИО в заголовке расписания рвалось посреди фамилии — метка «Актуальное» уходит под него */
 @media(max-width:680px){.search-results{grid-template-columns:minmax(0,1fr)}.schedule-heading{flex-wrap:wrap}}
+.promo{display:grid;grid-template-columns:1fr 2fr;gap:60px;align-items:center;padding-top:90px}.promo-film{border-radius:10px;overflow:hidden;border:1px solid var(--line);line-height:0}.promo-film video{display:block;width:100%;height:auto;aspect-ratio:16/9}@media(max-width:900px){.promo{gap:35px;padding-top:70px}}@media(max-width:680px){.promo{grid-template-columns:1fr;gap:24px;padding-top:56px}}
 /* dark:start — tools/site_dark.py */
 @media (prefers-color-scheme:dark){
 :root{--paper:#24211a;--ink:#d3d2c8;--secondary:#a19d95;--line:#423d30;--accent:#d17e67;--peach:#373028}

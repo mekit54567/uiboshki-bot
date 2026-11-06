@@ -21,6 +21,18 @@
     frame.addEventListener("load", () => setTimeout(ready, 15000));
   }
 
+  // промо-ролик: играет без звука, только пока виден на экране (не тратит
+  // трафик и батарею вне экрана); «меньше движения» в системе — не включаем
+  // сам, только по кнопке
+  const film = $("promo-video");
+  if (film && "IntersectionObserver" in window &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    new IntersectionObserver((entries) => entries.forEach((e) => {
+      if (e.isIntersecting) { film.preload = "auto"; film.play().catch(() => {}); }
+      else film.pause();
+    }), { threshold: 0.5 }).observe(film);
+  }
+
   // «Поделиться» — системное меню телефона (там же Telegram); где его нет —
   // кнопка скрыта, ссылку и так видно в адресной строке
   const share = $("share-site");
