@@ -75,10 +75,7 @@ async def index_page(request: Request):
     # превью ссылки на корень — как у сайта (гость по www.uiboshki.ru уйдёт на /about);
     # вставляем до подстановки имени группы — в описании оно тоже есть
     base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-    # корень для поисковиков — та же страница, что /about (Яндекс показывал
-    # его заголовком «УИБО-03-24», Никита 09.11)
-    canonical = f'<link rel="canonical" href="{base}/about">'
-    html = html.replace("</head>", og_meta(base) + "\n" + canonical + "\n</head>", 1)
+    html = html.replace("</head>", og_meta(base) + "\n</head>", 1)
     html = html.replace("УИБО-03-24", escape(config.GROUP_NAME)).replace(
         '<script src="js/core.js"', f'<script>window.APP_CONFIG = {cfg};</script>\n<script src="js/core.js"', 1)
     return Response(_ASSET_RE.sub(versioned, html), media_type="text/html",
