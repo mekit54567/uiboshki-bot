@@ -51,7 +51,7 @@ def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
     from kapibara.features.notifications.push_text import word
 
     def name(c):
-        return c.get("name") or c.get("title") or "Предмет"
+        return _course(c)
 
     def delta(old, new):
         d = round(new - old, 1)
@@ -96,22 +96,39 @@ def checked(seen: dict[str, str] | None, courses: list[dict]) -> list[tuple[dict
             if w.get("cmid") and w.get("graded") and seen.get(f"{c.get('id')}:{w['cmid']}") != _mark(w)]
 
 
+def _course(c: dict) -> str:
+    """Предмет без хвостов СДО: «Архитектура предприятия_Экзамен (часть 1/1)
+    [I.26-27]» → «Архитектура предприятия»."""
+    from kapibara.features.sdo.courses import clean_course_name
+    raw = c.get("name") or c.get("title") or ""
+    return clean_course_name(raw) if raw else "Предмет"
+
+
+def _work(w: dict) -> str:
+    """«Практическая работа №2» → «Практика 2» (как у дедлайнов)."""
+    from kapibara.features.deadlines.names import clean_event
+    return clean_event(w.get("name") or "") if w.get("name") else "Работа"
+
+
 def checked_text(items: list[tuple[dict, dict]]) -> str:
     lines = ["✅ <b>Проверили работу</b>" if len(items) == 1 else "✅ <b>Проверили работы</b>"]
     for c, w in items:
-        lines.append(f"• {esc(c.get('name') or c.get('title') or 'Предмет')} — {esc(w.get('name') or '')}: "
-                     f"<b>{_mark(w)}</b>")
+        lines.append(f"• {esc(_work(w))}: <b>{_mark(w)}</b> — {esc(_course(c))}")
     return "\n".join(lines)
 
 
 def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
+    """Пуш (Никита 09.11): оценка — в начале заголовка, чтобы её было видно в
+    свёрнутом уведомлении, а не на второй строке за длинным названием:
+    «5 из 6 · Практика 2», ниже «Проверили · Архитектура предприятия»."""
     from kapibara.features.notifications.push_text import word
     if len(items) == 1:
         c, w = items[0]
-        return f"Проверили: {w.get('name') or 'работу'} — {_mark(w)}", c.get("name") or c.get("title") or ""
+        mark = _mark(w)
+        return f"{mark[:1].upper()}{mark[1:]} · {_work(w)}", f"Проверили · {_course(c)}"
     n = len(items)
     return (f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}",
-            " · ".join(f"{w.get('name')} — {_mark(w)}" for _, w in items[:4]))
+            " · ".join(f"{_work(w)}: {_mark(w)}" for _, w in items[:4]))
 
 
 async def _told(user_id: int) -> dict[int, float] | None:
