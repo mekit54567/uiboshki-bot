@@ -56,16 +56,43 @@ def area_of(name: str) -> str:
     return next((label for prefix, label in AREAS if name.startswith(prefix)), "Прочее")
 
 
+# Опрос Telegram (long polling aiogram): «Failed to fetch updates» — разовый
+# таймаут через прокси или Bad Gateway у самого Telegram (часто ночью); aiogram
+# сам переподключается и пишет «Connection established». Это не ошибка, пока
+# бот снова на связи: считаем предупреждением, а тревога — только если связи
+# нет дольше POLL_DOWN_ALERT подряд (ложная тревога каждый день, Никита 09.11).
+POLL_LOGGER = "aiogram.dispatcher"
+POLL_FAIL = "Failed to fetch updates"
+POLL_OK = "Connection established"
+POLL_SLEEP = "Sleep for"
+POLL_DOWN_ALERT = 10 * 60
+
+
 class ErrorCounter(logging.Handler):
     """Ошибки (ERROR и выше) и предупреждения за последние сутки."""
 
     def __init__(self):
-        super().__init__(level=logging.WARNING)
+        super().__init__(level=logging.INFO)          # INFO — только ради «Connection established»
         self.records: deque = deque(maxlen=2000)     # (время, уровень, раздел, текст)
+        self.poll_down_since: float | None = None    # с какого момента опрос Telegram не проходит
 
     def emit(self, record):
         try:
-            self.records.append((time.time(), record.levelno, area_of(record.name),
+            level = record.levelno
+            if record.name == POLL_LOGGER:
+                msg = record.getMessage()
+                if msg.startswith(POLL_OK):
+                    self.poll_down_since = None
+                    return
+                if msg.startswith(POLL_FAIL):
+                    if self.poll_down_since is None:
+                        self.poll_down_since = record.created
+                    level = logging.WARNING
+                elif msg.startswith(POLL_SLEEP):      # вторая строка того же сбоя — не дублируем
+                    return
+            if level < logging.WARNING:
+                return
+            self.records.append((time.time(), level, area_of(record.name),
                                  record.getMessage()[:160]))
         except Exception:                             # статистика ошибок сама не падает и не пишет
             self.handleError(record)                  # в лог (зациклилась бы) — как обычный logging
@@ -73,6 +100,12 @@ class ErrorCounter(logging.Handler):
     def last_day(self) -> list[tuple]:
         since = time.time() - DAY
         return [r for r in self.records if r[0] >= since]
+
+    def poll_down_for(self, now: float | None = None) -> float:
+        """Сколько секунд подряд опрос Telegram не проходит (0 — на связи)."""
+        if self.poll_down_since is None:
+            return 0.0
+        return max(0.0, (now or time.time()) - self.poll_down_since)
 
 
 counter = ErrorCounter()
@@ -98,16 +131,24 @@ def error_spike(now: float | None = None) -> str | None:
     global _alerted_at
     now = now or time.time()
     errs = [r for r in counter.records if r[0] >= now - 3600 and r[1] >= logging.ERROR]
-    if len(errs) < ALERT_MIN or now - _alerted_at < ALERT_EVERY:
+    down = counter.poll_down_for(now)
+    poll_down = down >= POLL_DOWN_ALERT
+    if (len(errs) < ALERT_MIN and not poll_down) or now - _alerted_at < ALERT_EVERY:
         return None
     _alerted_at = now
-    by_area: dict[str, int] = {}
-    for r in errs:
-        by_area[r[2]] = by_area.get(r[2], 0) + 1
-    areas = " · ".join(f"{a} — {n}" for a, n in sorted(by_area.items(), key=lambda x: -x[1]))
     from kapibara.core.utils import esc
-    return (f"⚠️ <b>За час {len(errs)} ошибок</b>: {esc(areas)}\n"
-            f"Последняя: <code>{esc(errs[-1][3])}</code>\nПодробнее — /status")
+    parts = []
+    if poll_down:
+        parts.append(f"⚠️ <b>Бот не получает сообщения из Telegram уже {round(down / 60)} мин</b>"
+                     " — проверь прокси (/netcheck)")
+    if len(errs) >= ALERT_MIN:
+        by_area: dict[str, int] = {}
+        for r in errs:
+            by_area[r[2]] = by_area.get(r[2], 0) + 1
+        areas = " · ".join(f"{a} — {n}" for a, n in sorted(by_area.items(), key=lambda x: -x[1]))
+        parts.append(f"⚠️ <b>За час {len(errs)} ошибок</b>: {esc(areas)}\n"
+                     f"Последняя: <code>{esc(errs[-1][3])}</code>")
+    return "\n".join(parts) + "\nПодробнее — /status"
 
 
 async def alert_errors(bot):
