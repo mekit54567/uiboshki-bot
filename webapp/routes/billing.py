@@ -151,6 +151,8 @@ a{{color:var(--link)}}
   background:var(--card);color:var(--ink)}}
 .own input:focus{{outline:none;border-color:var(--accent)}}
 .own button{{width:auto;justify-content:center;background:var(--accent);border-color:var(--accent);color:#fff}}
+a.btn{{display:block;text-align:center;padding:14px 16px;border-radius:14px;background:var(--accent);
+color:#fff;text-decoration:none;font-weight:600}}
 </style>
 </head>
 <body>
@@ -345,15 +347,14 @@ def _donate_page(body: str, status: int = 200) -> HTMLResponse:
     return _page(body, status, DONATE_H1)
 
 
-def _donate_no_key() -> HTMLResponse:
-    return _donate_page(
-        f'<p class="lead">Поддержать — по личной ссылке, она живёт сутки: команда /donate в боте или '
-        f'«Ещё → Поддержать проект» в приложении (в Telegram, на Android и на uiboshki.ru/app).</p>'
-        f'<p><a href="https://t.me/{escape(config.BOT_USERNAME)}?start=donate">Открыть бота</a> · '
-        f'<a href="/app">Открыть приложение</a></p>', 403)
+SBP_HINT = ('<p class="small">Платишь через СБП или SberPay и телефон пишет «Safari не удаётся открыть '
+            'страницу, адрес недействителен»? Нажми «OK»: это страница кассы пробует открыть приложение '
+            'банка, которого нет на телефоне. Выбери свой банк в списке или заплати картой — оплата не '
+            'пропадёт.</p>')
 
 
-def _donate_form(key: str) -> str:
+def _donate_form(key: str = "") -> str:
+    """Суммы доната. Без key — донат без входа (открытая страница /donate)."""
     from kapibara.features.billing import billing
     rows = "".join(f'<button name="amount" value="{a}"><span>Сказать спасибо</span><b>{a}&nbsp;₽</b></button>'
                    for a in billing.DONATE_AMOUNTS)
@@ -366,22 +367,29 @@ def _donate_form(key: str) -> str:
 
 @router.get("/donate", response_class=HTMLResponse)
 async def donate_page(k: str = ""):
+    """«Поддержать проект». По личной ссылке (?k=) донат сразу привязан к
+    аккаунту; без неё (или с устаревшей) — тоже можно, без входа (09.11, отзыв
+    папы Никиты: искал кнопку в приложении на iPhone, входил на сайт, попал в
+    Mini App) — роадмап потом открывается кнопкой в бота на странице «спасибо»."""
     from kapibara.features.billing import billing
-    uid = billing.read_key(k)
-    if not uid:
-        return _donate_no_key()
+    uid = billing.read_key(k) if k else None
     lead = ('<p class="lead">Если Капибара помогает тебе учиться — можно сказать спасибо рублём. '
             'Деньги идут на сервер, ИИ и время на новые функции.</p>')
     note = (f'<p class="state"><b>{DONATE_NOTE}</b> Расписание, дедлайны, баллы и файлы остаются '
             'бесплатными, «Капибара+» — отдельно, дней подписки донат не даёт.</p>')
-    if not billing.provider(uid=uid):
+    if not billing.provider(uid=uid or 0):
         return _donate_page(lead + note + '<p class="state">Поддержать можно будет совсем скоро — оплата ещё '
                                           'подключается.</p>')
+    who = ""
+    if not uid:
+        who = ('<p class="small">Входить никуда не нужно: выбери сумму — и сразу на оплату. '
+               + ('Личная ссылка устарела — ничего страшного, так тоже можно. ' if k else '')
+               + 'После оплаты кнопка «Открыть роадмап в Telegram» привяжет спасибо к твоему аккаунту.</p>')
     return _donate_page(
-        lead + note + _donate_form(k) +
+        lead + note + who + _donate_form(k if uid else "") +
         '<p class="small">Разово, без автосписаний. Нажимая на сумму, ты принимаешь <a href="/offer">оферту</a> '
         '(раздел «Поддержка проекта»). Чек придёт от ФНС («Мой налог»): «Добровольная поддержка проекта '
-        '«Капибара»».</p>')
+        '«Капибара»».</p>' + SBP_HINT)
 
 
 @router.post("/donate/pay")
@@ -392,49 +400,69 @@ async def donate_pay(request: Request):
     amount = (form.get("amount") or [""])[0]
     if amount == "own":
         amount = (form.get("own") or [""])[0]
-    uid = billing.read_key(key)
-    if not uid:
-        return _donate_no_key()
+    uid = billing.read_key(key) if key else None
+    claim = None if uid else billing.new_claim()
+    back = f"/donate?k={escape(key)}" if uid else "/donate"
+    done = f"{billing.site()}/donate/done?" + (f"k={key}" if uid else f"c={claim}")
     try:
-        url = await billing.create_donation(uid, amount, f"{billing.site()}/donate/done?k={key}")
+        url = await billing.create_donation(uid, amount, done, claim)
     except billing.PayError as e:
-        return _donate_page(f'<p class="state">{escape(str(e))}</p>'
-                            f'<p><a href="/donate?k={escape(key)}">Назад</a></p>', 400)
+        return _donate_page(f'<p class="state">{escape(str(e))}</p><p><a href="{back}">Назад</a></p>', 400)
     return RedirectResponse(url, status_code=303)
 
 
 @router.get("/donate/done", response_class=HTMLResponse)
-async def donate_done(k: str = ""):
+async def donate_done(k: str = "", c: str = ""):
     """Сюда касса возвращает после доната; засчитывает уведомление кассы,
-    опаздывает — спросим ЮKassa сами (/donate/state)."""
-    key = escape(k)
+    опаздывает — спросим ЮKassa сами (/donate/state). Донат без входа (?c=) —
+    после оплаты кнопка в бота: привязать и открыть роадмап."""
+    from kapibara.features.billing import billing
+    q = f"k={escape(k)}" if k else (f"c={escape(c)}" if c else "")
+    later = ("Когда оплата пройдёт, бот напишет." if k else
+             "Спасибо! Если оплата прошла — она дошла, даже если эта страница не успела это показать.")
+    claim = ""
+    if c and not k:
+        claim = (f'<p id="cl" hidden><a class="btn" href="{escape(billing.claim_link(c))}">Открыть роадмап '
+                 f'в Telegram</a></p><p class="small" id="cn" hidden>Кнопка привяжет спасибо к твоему аккаунту '
+                 f'в боте — и откроется роадмап: что я делаю сейчас и что дальше.</p>')
     return _donate_page(
         f'<p class="state" id="s">Проверяем оплату…</p>'
-        f'<p class="small" id="h">Можно закрыть страницу: когда оплата пройдёт, бот напишет.</p>'
-        f'<script>(function(){{var k="{key}",n=0,s=document.getElementById("s");if(!k){{s.textContent='
-        f'"Спасибо! Когда оплата пройдёт, бот напишет.";return}}function t(){{fetch("/donate/state?k="+'
-        f'encodeURIComponent(k)).then(function(r){{return r.json()}}).then(function(d){{if(d.paid)'
+        f'<p class="small" id="h">Можно закрыть страницу: {"когда оплата пройдёт, бот напишет." if k else "оплата не пропадёт."}</p>'
+        f'{claim}'
+        f'<script>(function(){{var q="{q}",n=0,s=document.getElementById("s");if(!q){{s.textContent='
+        f'"Спасибо! Когда оплата пройдёт, бот напишет.";return}}function t(){{fetch("/donate/state?"+q)'
+        f'.then(function(r){{return r.json()}}).then(function(d){{if(d.paid)'
         f'{{s.innerHTML="Спасибо за поддержку! <b>"+d.amount+"&nbsp;₽</b> дошли до Капибары.";'
-        f'document.getElementById("h").remove();return}}'
-        f'if(++n<20)setTimeout(t,3000);else s.textContent="Касса ещё не ответила. Когда оплата пройдёт, бот '
-        f'напишет."}}).catch(function(){{if(++n<20)setTimeout(t,3000)}})}}t()}})()</script>')
+        f'document.getElementById("h").remove();["cl","cn"].forEach(function(i){{var e=document.getElementById(i);'
+        f'if(e&&!d.claimed)e.hidden=false}});return}}'
+        f'if(++n<20)setTimeout(t,3000);else s.textContent="Касса ещё не ответила. {later}"}})'
+        f'.catch(function(){{if(++n<20)setTimeout(t,3000)}})}}t()}})()</script>')
 
 
 @router.get("/donate/state")
-async def donate_state(k: str = ""):
-    """Последний донат человека: прошёл ли."""
+async def donate_state(k: str = "", c: str = ""):
+    """Последний донат человека (?k=) или донат без входа (?c=): прошёл ли."""
     from kapibara.features.billing import billing
-    from database.billing import user_donations
-    uid = billing.read_key(k)
-    if not uid:
-        raise HTTPException(403, "ссылка устарела")
-    last = await user_donations(uid, 1)
+    from database.billing import donation_by_claim, get_donation, user_donations
+    if c and not k:
+        last = [d] if (d := await donation_by_claim(c)) else []
+        if not last:
+            raise HTTPException(404, "платёж не найден")
+    else:
+        uid = billing.read_key(k)
+        if not uid:
+            raise HTTPException(403, "ссылка устарела")
+        last = await user_donations(uid, 1)
     if last and last[0]["status"] == "pending" and billing.provider() == "yookassa" \
             and not last[0]["id"].startswith("local-") and await billing.yookassa_check(last[0]["id"]) == "succeeded":
         await billing.settle(last[0]["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
-        last = await user_donations(uid, 1)
+        fresh = await get_donation(last[0]["id"])
+        last = [fresh] if fresh else []
     paid = bool(last) and last[0]["status"] == "succeeded"
-    return {"paid": paid, "amount": last[0]["amount"] if paid else 0}
+    out = {"paid": paid, "amount": last[0]["amount"] if paid else 0}
+    if c and not k:
+        out["claimed"] = bool(last[0]["payer_id"])
+    return out
 
 
 # ── Уведомления касс ─────────────────────────────────────────────────────────

@@ -717,6 +717,10 @@ async def init_db():
                 paid_at    TEXT
             )
         """)
+        # Донат без входа с открытой страницы /donate (09.11, отзыв папы
+        # Никиты): payer_id NULL, claim — код, по которому человек потом
+        # привязывает донат к Telegram (/start dn_<claim>) и видит роадмап.
+        await _add_column(db, "donations", "claim TEXT")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS bonuses (
                 user_id  INTEGER NOT NULL,

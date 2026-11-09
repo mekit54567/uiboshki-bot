@@ -75,11 +75,33 @@ async def user_payments(user_id: int, limit: int = 20) -> list[dict]:
 
 # ── «Поддержать проект» (донаты: своя таблица, дней подписки не дают) ─────────
 
-async def add_donation(pid: str, provider: str, payer_id: int, amount: int):
+async def add_donation(pid: str, provider: str, payer_id: int | None, amount: int, claim: str | None = None):
     async with connect() as db:
-        await db.execute("INSERT INTO donations (id, provider, payer_id, amount) VALUES (?, ?, ?, ?)",
-                         (pid, provider, payer_id, amount))
+        await db.execute("INSERT INTO donations (id, provider, payer_id, amount, claim) VALUES (?, ?, ?, ?, ?)",
+                         (pid, provider, payer_id, amount, claim))
         await db.commit()
+
+
+async def donation_by_claim(claim: str) -> dict | None:
+    """Донат без входа по коду из ссылки «вернуться» (/donate/done?c=…)."""
+    if not claim:
+        return None
+    async with connect() as db:
+        db.row_factory = aiosqlite.Row
+        row = await (await db.execute("SELECT * FROM donations WHERE claim = ?", (claim,))).fetchone()
+        return dict(row) if row else None
+
+
+async def claim_donation(claim: str, user_id: int) -> dict | None:
+    """Привязать донат без входа к человеку — только ничей и только раз.
+    Вернёт донат (уже с payer_id) или None."""
+    async with connect() as db:
+        cur = await db.execute("UPDATE donations SET payer_id = ? WHERE claim = ? AND payer_id IS NULL",
+                               (user_id, claim))
+        await db.commit()
+        if cur.rowcount != 1:
+            return None
+    return await donation_by_claim(claim)
 
 
 async def get_donation(pid: str) -> dict | None:
