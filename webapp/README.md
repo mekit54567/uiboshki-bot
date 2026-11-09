@@ -1,89 +1,45 @@
-# WebApp (Telegram Mini App)
+# Веб-часть Капибары (FastAPI)
 
-HTTP-бэкенд (FastAPI) + статический фронтенд для бота УИБО-03-24. Крутится
-**в том же процессе, что и бот** (`bot.py` → `start_webapp`, порт — `$PORT`):
-одна служба на хостинге и один диск с SQLite — отдельный процесс не видел бы
-ту же базу. Все модули (`database.py`, `schedule_parser.py`, `ai_solver.py`)
-общие — WebApp просто даёт им HTTP-фасад.
+HTTP-сервер Капибары: API для Mini App в Telegram, PWA `uiboshki.ru/app` и
+своего приложения (Flutter, `app/`), сайт `/about`, страницы оплаты и
+документов. Крутится **в том же процессе, что и бот** (`bot.py` →
+`start_webapp`, порт — `$PORT`, по умолчанию 8080): одна служба и одна база
+SQLite.
 
-## Как включить (один раз)
+## Где что
 
-Сервер — Amvera (Москва, `amvera.yml`: Dockerfile, диск `/data`, порт 8080).
+- `server.py` — каркас: CORS, заголовки безопасности, `/health`, `/ready`,
+  `/api/v1/…` = `/api/…`, подключение роутеров, статика (последней).
+- `deps.py` — кто спрашивает (`CurrentUser`): подпись Telegram `initData`
+  (`auth.py`, HMAC-SHA256 по `BOT_TOKEN`) или токен сессии устройства
+  (`Authorization: Bearer`, вход через бота, VK ID, Яндекс ID или Apple).
+- `routes/*.py` — обработчики по темам: расписание, сроки, файлы, ИИ-чат,
+  СДО, аккаунт и вход, пуши, оплата, сайт, документы и другие. Новый модуль —
+  в цикл `include_router` в `server.py`.
+- `pages.py` — `index.html` Mini App с метками версий файлов (`?v=хэш`).
+- `static/` — Mini App (`index.html`, `app.css`, `js/`), PWA на HTML
+  (`app-html/`), сайт (`site/`), иконки PWA и `sw.js`.
+- `flutter/` — запасная веб-сборка приложения (`/app-flutter`), её собирает
+  GitHub Actions — руками не править.
 
-1. **Домен.** Amvera → проект → **Домены**: `www.uiboshki.ru` (в Cloudflare
-   CNAME `www` → `edge.msk1.amvera.tech`, серое облако).
-2. **Переменные.** Amvera → **Переменные**: `WEBAPP_URL` =
-   `https://www.uiboshki.ru` (без `/` в конце); порт 8080 уже в образе. После
-   перезапуска в логах — «🌐 WebApp слушает порт 8080».
-3. **Всё.** При старте бот сам ставит кнопку меню «Приложение» слева от поля
-   ввода (`setup_bot_menu` в `bot.py`), `/app` и `/start` показывают кнопку
-   запуска, `/calendar` начинает выдавать ссылки.
-4. **(По желанию) BotFather** — чтобы у бота в профиле была кнопка «Открыть»
-   и работала ссылка `t.me/<бот>/app`: `/mybots` → бот → **Bot Settings →
-   Configure Mini App → Enable Mini App** → тот же адрес. Для кнопки меню это
-   не нужно — её ставит сам бот.
-
-Проверка: `https://<домен>/health` в браузере → `{"ok":true}`. Сам
-WebApp вне Telegram покажет «Не удалось авторизоваться» — так и должно быть:
-данные отдаются только с подписью Telegram (`initData`, см. ниже).
-
-**Подпись initData** — `webapp/auth.py`, HMAC-SHA256 по `BOT_TOKEN`, ровно по
-алгоритму из офдоков Telegram Mini Apps; настраивать ничего не нужно.
-
-**Чат** — DeepSeek `deepseek-reasoner` с трейсом «хода мыслей», если задан
-`DEEPSEEK_API_KEY`; без него — Gemini, как решалка в боте.
-
-## API
-
-Каждый запрос — заголовок `X-Telegram-Init-Data: <Telegram.WebApp.initData>`,
-без него 401. См. `/docs` (Swagger, включён по умолчанию FastAPI) на живом
-сервере для полного списка полей.
-
-- `GET  /api/me`
-- `GET  /api/schedule/today|tomorrow|week|next`
-- `GET  /api/deadlines?include_done=false` — общая таблица дедлайнов/ДЗ
-  (поле `done` — это и есть чекбокс доски ДЗ, отдельной сущности "homework"
-  в базе нет, см. PLAN.md)
-- `POST /api/deadlines/{id}/toggle` `{"done": true|false}`
-- `GET  /api/search?q=&type=` — преподаватели/группы/аудитории по
-  подстроке (`type`: 0 все, 1 группы, 2 преподаватели, 3 аудитории) из своего
-  справочника (`schedule_index.py`); `ready: false` — он ещё собирается
-- `GET  /api/target/{type}/{id}` — `{"title", "html"}`: расписание на 2 недели
-- `GET  /api/files?q=&subject=`
-- `GET  /api/notes?date=YYYY-MM-DD`
-- `GET  /api/calendar/link` — возвращает `{"token", "ics_path"}` для личной
-  ICS-подписки (см. ниже)
-- `POST /api/chat` `{"history": [{"role":"user","content":"..."}]}` →
-  `{"content": "...", "reasoning": "...", "html": "..."}` — DeepSeek
-  `deepseek-reasoner` (`reasoning` — трейс "мышления" для сворачиваемого
-  блока), без его ключа — Gemini (`reasoning` пустой); `html` — ответ в том же
-  виде, что и в боте (жирный, код, x² вместо x^2), уже экранированный.
+Полный список путей — `/docs` (Swagger) на сервере, снимок контракта —
+`tests/api_contract.json` (убрал путь — CI красный, добавил — `python
+tools/api_snapshot.py`).
 
 ## Личный ICS-календарь
 
-`GET /ics/{token}` — **БЕЗ** `X-Telegram-Init-Data` (календарные приложения
-не умеют слать кастомные заголовки при периодической автоподписке).
-Токен — случайная непредсказуемая строка на студента (`/calendar` в самом
-боте её выдаёт, генерится лениво при первом обращении), секретность держится
-на непредсказуемости токена в пути, как у обычных calendar-share ссылок.
-Отдаёт `.ics` с конкретными `VEVENT` на каждую пару (не `RRULE`) на 45 дней
-вперёд, с ДЗ/заметками в `DESCRIPTION`, если они привязаны к этой дате и
-предмету (см. `webapp/calendar_feed.py`, `handlers/announce.py:
-parse_lesson_date`).
+`GET /ics/{token}` — без входа: календарные приложения не умеют слать свои
+заголовки. Токен — случайная строка на человека (`/calendar` в боте или
+`/api/calendar/link`). Отдаёт `.ics` с парами на 45 дней вперёд и ДЗ/заметками
+в описании (`calendar_feed.py`).
 
-Файлы отдаются не напрямую (Telegram `file_id` не резолвится в URL без похода
-через `getFile` от лица бота) — кнопка "Открыть" в WebApp делает
-`Telegram.WebApp.openTelegramLink("https://t.me/<bot>?start=file_<id>")`,
-бот ловит этот диплинк (`handlers/start.py: cmd_start_deeplink`) и присылает
-документ в чат.
-
-## Локальный прогон/тест
+## Локальный запуск
 
 ```
 pip install -r requirements.txt
-BOT_TOKEN=... DATABASE_PATH=mirea_bot.db uvicorn webapp.server:app --reload
+BOT_TOKEN=... DATABASE_PATH=kapibara.db uvicorn webapp.server:app --reload
 ```
-Открыть `http://localhost:8000` — API отдаст 401 на реальные данные (initData
-нет вне Telegram), но статика и структура страницы видны. Полноценно
-протестировать WebApp можно только через настоящий Telegram-клиент (кнопка
-меню бота или `/app`) — локальный браузер не выдаёт `initData`.
+
+`http://localhost:8000/about` — сайт, `/app` — PWA (вход через бота).
+API без входа отвечает 401. Тесты фронта — `tests/test_webapp_static.py` и
+дымовой прогон в Chromium (`tests/test_webapp_smoke_browser.py`).

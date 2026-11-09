@@ -124,6 +124,39 @@ async def history_page(request: Request):
     return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
 
+# Поисковики (Никита 09.11: Яндекс показывал корень как «УИБО-03-24»): что
+# индексировать и где лежит главное. Приложение, API и служебное — мимо.
+_SITEMAP_PAGES = ("/about", "/history", "/app", "/plus", "/offer", "/privacy", "/rules")
+
+
+@router.get("/robots.txt", include_in_schema=False)
+async def robots_txt(request: Request):
+    from webapp import deps
+    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
+    body = ("User-agent: *\n"
+            "Disallow: /api/\n"
+            "Disallow: /dl/\n"
+            "Disallow: /sdl/\n"
+            "Disallow: /pg/\n"
+            "Disallow: /card/\n"
+            "Disallow: /aitest\n"
+            "Disallow: /roadmap\n"
+            "Disallow: /about/demo\n"
+            f"Host: {base.split('://', 1)[-1]}\n"
+            f"Sitemap: {base}/sitemap.xml\n")
+    return Response(body, media_type="text/plain", headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml(request: Request):
+    from webapp import deps
+    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
+    urls = "".join(f"<url><loc>{base}{path}</loc></url>" for path in _SITEMAP_PAGES)
+    body = ('<?xml version="1.0" encoding="UTF-8"?>'
+            f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
+    return Response(body, media_type="application/xml", headers={"Cache-Control": "public, max-age=3600"})
+
+
 @router.get("/about/demo", include_in_schema=False)
 async def about_demo(request: Request):
     """Демо на сайте — само приложение (веб-сборка Flutter, как на iPhone и в

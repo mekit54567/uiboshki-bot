@@ -9,7 +9,7 @@
 ![SQLite](https://img.shields.io/badge/SQLite-FTS5_+_sqlite--vec-003B57?logo=sqlite&logoColor=white)
 ![Flutter](https://img.shields.io/badge/Flutter-Android_·_iOS-02569B?logo=flutter&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-uiboshki.ru%2Fapp-5A0FC8?logo=pwa&logoColor=white)
-![tests](https://img.shields.io/badge/tests-1100+-brightgreen)
+![tests](https://img.shields.io/badge/tests-1200+-brightgreen)
 
 **Вся учёба — в Telegram, в браузере и в своём приложении.** Расписание всего
 университета, баллы и сдача работ из СДО, дедлайны с напоминаниями, файлы
@@ -23,6 +23,9 @@
 **[Сайт с живым демо](https://www.uiboshki.ru)** ·
 **[Бот в Telegram](https://t.me/UiboshkiBot)** ·
 **[Без Telegram — uiboshki.ru/app](https://www.uiboshki.ru/app)** ·
+**[App Store](https://apps.apple.com/ru/app/id6828117584)** ·
+**[RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app)** ·
+**[Новости — @kapibara_mirea](https://t.me/kapibara_mirea)** ·
 **[Канал о разработке](https://t.me/uiboshki_dev)**
 
 > **In English.** «Kapibara» — an unofficial, student-made Telegram bot,
@@ -32,9 +35,9 @@
 > group's own lecture slides (hybrid RAG: SQLite FTS5/BM25 + sqlite-vec,
 > RRF + MMR, answers cite the exact slide). Works in Telegram, as an installable PWA
 > with web push (uiboshki.ru/app, login via Telegram, VK ID or Yandex ID) and as
-> a native Flutter app for Android (RuStore) and iOS on the same versioned API.
-> Python · aiogram 3 · FastAPI · SQLite · Flutter. Solo project: ~36k lines of
-> Python, ~17k of web frontend, ~28k of Dart, 1100+ backend tests, CI on every
+> a native Flutter app for Android (RuStore) and iOS (App Store) on the same versioned API.
+> Python · aiogram 3 · FastAPI · SQLite · Flutter. Solo project: ~40k lines of
+> Python, ~17k of web frontend, ~28k of Dart, 1200+ backend tests, CI on every
 > PR, deploys only after green CI, with a readiness check and automatic rollback,
 > self-hosted on Timeweb Cloud (Moscow).
 
@@ -62,7 +65,7 @@
 | **Telegram** | [@UiboshkiBot](https://t.me/UiboshkiBot) → «Открыть приложение» | бот сам пишет про пары и сроки, inline-режим в любом чате |
 | **Телефон без Telegram (PWA)** | [uiboshki.ru/app](https://www.uiboshki.ru/app) → iPhone: «Поделиться → На экран „Домой“», Android: «Установить приложение» | вход через Telegram, VK ID или Яндекс ID, уведомления пушем, расписание без сети |
 | **Компьютер** | тот же адрес в Chrome, Edge или Яндекс Браузере → «Установить» | отдельное окно, как обычная программа |
-| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`) — сборки APK и IPA в [GitHub Actions](https://github.com/mekit54567/uiboshki-bot/actions/workflows/app-build.yml) | Android — [в RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app); iPhone — скоро |
+| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`): iPhone — [в App Store](https://apps.apple.com/ru/app/id6828117584), Android — [в RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app) | вход в СДО обычной страницей МИРЭА, пуши, ачивки |
 
 Данные везде одни: что отметил в Telegram — видно в PWA и в приложении.
 
@@ -71,10 +74,10 @@
 | | |
 |---|---|
 | Срок | апрель 2026 → сейчас, один разработчик |
-| Код | ~36 тыс. строк Python, ~17 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~28 тыс. — приложение на Flutter |
+| Код | ~40 тыс. строк Python, ~17 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~28 тыс. — приложение на Flutter |
 | Платформы | Telegram (бот + Mini App), PWA с веб-пушами, Android и iOS (Flutter) — одно API `/api/v1` |
-| Тесты | 1100+ автотестов бэкенда и фронта, 350+ тестов приложения, CI (GitHub Actions) на каждый pull request |
-| История | 1100+ коммитов, 300+ pull request'ов, 500+ версий в [CHANGELOG](CHANGELOG.md) |
+| Тесты | 1200+ автотестов бэкенда и фронта, 350+ тестов приложения, CI (GitHub Actions) на каждый pull request |
+| История | 1100+ коммитов, 350+ pull request'ов, 500+ версий в [CHANGELOG](CHANGELOG.md) |
 
 ## Что умеет
 
@@ -122,17 +125,18 @@
 без входа, светлая и тёмная тема.
 
 **📱 Без Telegram** — [uiboshki.ru/app](https://www.uiboshki.ru/app): то же
-приложение ставится на экран телефона или компьютера (PWA), вход через бота или
-VK ID, уведомления — веб-пушем, последнее открытое — без сети. Своё приложение
-«Капибара» для Android и iPhone на Flutter — на том же API.
+приложение ставится на экран телефона или компьютера (PWA), вход через бота,
+VK ID или Яндекс ID, уведомления — веб-пушем, последнее открытое — без сети. Своё
+приложение «Капибара» — в [App Store](https://apps.apple.com/ru/app/id6828117584)
+и [RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app), на том же API.
 
 **👑 Для старосты** — рассылки, статистика (`/stats`), состояние бота
 (`/status`), тревога при всплеске ошибок, посты канала, ночной бэкап базы.
 
 ## Инженерные задачи, которые пришлось решить
 
-**Расписание, когда API недоступен.** Официальный поиск МИРЭА не отвечает
-серверу за рубежом, а у зеркала поиска нет вовсе. Бот сам собирает
+**Расписание, когда API недоступен.** Официальный поиск МИРЭА не отвечал
+серверу за рубежом (пока бот жил там), а у зеркала поиска нет вовсе. Бот сам собирает
 справочник: перебирает id календарей и с каждого читает только первый
 килобайт (HTTP `Range`) — там название группы или преподавателя. Тысячи
 групп, преподавателей и аудиторий, обновление раз в месяц, поиск — обычный
@@ -178,14 +182,14 @@ CI. Перед запуском новой версии бот сохраняе�
 
 ```mermaid
 flowchart LR
-    TG[Telegram] --> BOT["bot.py · aiogram 3<br/>handlers/"]
+    TG[Telegram] --> BOT["bot.py · aiogram 3<br/>handlers/ · kapibara/bot"]
     TG --> APP["Mini App<br/>webapp/static"]
     WEB["PWA<br/>uiboshki.ru/app"] --> API
     FL["Приложение<br/>Flutter · app/"] --> API
     APP --> API["FastAPI<br/>webapp/routes · /api/v1"]
-    BOT --> SCH["scheduler.py<br/>рассылки · синк · бэкап"]
+    BOT --> SCH["kapibara/jobs/scheduler<br/>рассылки · синк · бэкап"]
     BOT & API & SCH --> DB[("SQLite<br/>+ FTS5 + sqlite-vec")]
-    API & SCH --> SDO["СДО Moodle<br/>sdo_*.py"]
+    API & SCH --> SDO["СДО Moodle<br/>kapibara/features/sdo"]
     API & BOT --> MIREA["Расписание МИРЭА<br/>ical-зеркало"]
     API & BOT --> AI["ИИ: OpenRouter · Gemini"]
 ```
@@ -205,7 +209,7 @@ flowchart LR
 | Картинки | Pillow — карточки расписания, статистика, обложки постов |
 | Вне Telegram | PWA (service worker, веб-пуши RFC 8291 + VAPID без внешних библиотек), OAuth VK ID и Яндекс ID |
 | Приложение | Flutter (Android и iOS), общие дизайн-токены с вебом, сборки APK/IPA в GitHub Actions |
-| Качество | pytest (1100+), ruff, flutter test, робот-проверка приложения в Chromium, GitHub Actions |
+| Качество | pytest (1200+), ruff, flutter test, робот-проверка приложения в Chromium, GitHub Actions |
 | Сервер | Timeweb Cloud, Docker Compose, Caddy; выкладка после зелёного CI, `/ready` и автооткат |
 
 Подробно для разработки — [CLAUDE.md](CLAUDE.md), история версий —
@@ -229,7 +233,7 @@ pip install -r requirements.txt
 python bot.py          # бот; с WEBAPP_URL — и Mini App в том же процессе (порт PORT, по умолчанию 8080)
 ```
 
-Главные переменные окружения (основные — в `config.py`, остальные — в модулях,
+Главные переменные окружения (основные — в `kapibara/core/config.py`, остальные — в модулях,
 которые их читают; шаблон для сервера — `deploy/timeweb/env.example`):
 
 | Переменная | Зачем |
@@ -250,7 +254,7 @@ python bot.py          # бот; с WEBAPP_URL — и Mini App в том же п
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 1100+ тестов, без сети
+pytest          # 1200+ тестов, без сети
 ruff check .    # линтер
 ```
 

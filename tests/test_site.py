@@ -170,6 +170,33 @@ def test_root_has_site_link_preview(monkeypatch):
     assert "__BASE__" not in r.text and r.text.index("og:title") < r.text.index("</head>")
 
 
+def test_root_title_for_search_engines(monkeypatch):
+    """Яндекс показывал корень uiboshki.ru заголовком «УИБО-03-24» (Никита 09.11):
+    у корня — имя Капибары и canonical на /about, есть robots.txt и sitemap."""
+    import webapp.deps as deps
+    monkeypatch.setattr(deps, "WEBAPP_URL", "https://www.uiboshki.ru")
+    c = _client()
+    r = c.get("/")
+    assert "<title>Капибара — учёба МИРЭА</title>" in r.text and "<title>УИБО" not in r.text
+    assert '<link rel="canonical" href="https://www.uiboshki.ru/about">' in r.text
+    about = c.get("/about").text
+    assert '<link rel="canonical" href="https://www.uiboshki.ru/about">' in about
+    assert "apps.apple.com" in about and "rustore.ru" in about                # оба стора
+    robots = c.get("/robots.txt")
+    assert robots.status_code == 200 and "Disallow: /api/" in robots.text
+    assert "Sitemap: https://www.uiboshki.ru/sitemap.xml" in robots.text
+    sm = c.get("/sitemap.xml")
+    assert sm.status_code == 200 and "<loc>https://www.uiboshki.ru/about</loc>" in sm.text
+
+
+def test_no_iphone_coming_soon():
+    """iPhone-приложение вышло (05.11): нигде не «Для iPhone — скоро»."""
+    root = Path(__file__).resolve().parent.parent
+    for rel in ("README.md", "webapp/static/js/more.js", "webapp/static/site/index.html"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert "iPhone — скоро" not in text and "iPhone — скоро." not in text, rel
+
+
 def test_app_has_site_link_preview(monkeypatch):
     """Ссылка uiboshki.ru/app из /help — превью Капибары, а не старое «УИБО-бот»:
     у /app своих og-тегов не было, Telegram держал давнее превью (Никита 20.10)."""
