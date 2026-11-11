@@ -129,7 +129,7 @@ async def test_api_donate_hidden_on_iphone_and_closed_without_requisites(db, cli
 async def test_donate_page(db, client, robokassa):  # noqa: F811
     c, _ = client
     await db.upsert_user(ME, "", "u")
-    assert c.get("/donate").status_code == 403 and "/donate" in c.get("/donate").text
+    assert c.get("/donate").status_code == 200 and 'name="own"' in c.get("/donate").text   # без входа тоже
     key = billing.make_key(ME)
     page = c.get(f"/donate?k={key}").text
     assert "<h1>Поддержать проект</h1>" in page and "Это не подписка — просто спасибо" in page and "роадмап" in page
@@ -138,10 +138,12 @@ async def test_donate_page(db, client, robokassa):  # noqa: F811
     assert r.status_code == 303 and "OutSum=250.00" in r.headers["location"]
     r = c.post("/donate/pay", data={"k": key, "amount": "own", "own": "10"}, follow_redirects=False)
     assert r.status_code == 400 and "от 50" in r.text
-    assert c.post("/donate/pay", data={"k": "чужой", "amount": "300"}).status_code == 403
+    r = c.post("/donate/pay", data={"k": "чужой", "amount": "300"}, follow_redirects=False)
+    assert r.status_code == 303 and "c%3D" in r.headers["location"]          # устаревшая ссылка — донат без входа
+    assert (await _rows(db, "donations"))[-1]["payer_id"] is None
     assert c.get(f"/donate/done?k={key}").status_code == 200
     assert c.get(f"/donate/state?k={key}").json() == {"paid": False, "amount": 0}
-    inv = (await _rows(db, "donations"))[-1]["id"]
+    inv = [d for d in await _rows(db, "donations") if d["payer_id"] == ME][-1]["id"]
     await billing.settle(inv)
     assert c.get(f"/donate/state?k={key}").json() == {"paid": True, "amount": 250}
     assert c.get("/donate/state?k=битый").status_code == 403
@@ -419,3 +421,49 @@ def test_done_pages_hide_hint_after_payment(client):  # noqa: F811
     page = c.get("/plus/done?k=K").text
     got = _run_done_script(page, {"active": True, "until_text": "5 декабря 2026"})
     assert "5 декабря 2026" in got["s"] and got["h"] is True
+
+
+@pytest.mark.asyncio
+async def test_anonymous_donation_and_claim(db, bot, dp, client, monkeypatch, robokassa):  # noqa: F811
+    """Отзыв папы Никиты (09.11): на iPhone доната нет, на сайте просило войти.
+    Теперь /donate без входа: платёж ничей, после оплаты — кнопка в бота,
+    которая привязывает донат и открывает роадмап."""
+    c, _ = client
+    monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
+    page = c.get("/donate").text
+    assert "Входить никуда не нужно" in page and "адрес недействителен" in page
+    assert 'name="k" value=""' in page
+    assert "Личная ссылка устарела" in c.get("/donate?k=битый").text
+    r = c.post("/donate/pay", data={"k": "", "amount": "300"}, follow_redirects=False)
+    assert r.status_code == 303 and "OutSum=300.00" in r.headers["location"]
+    don = (await _rows(db, "donations"))[-1]
+    assert don["payer_id"] is None and len(don["claim"]) >= 20
+    claim = don["claim"]
+    assert "c%3D" + claim in r.headers["location"] or "c=" + claim in r.headers["location"]
+    done = c.get(f"/donate/done?c={claim}").text
+    assert f"start=dn_{claim}" in done and "Открыть роадмап в Telegram" in done
+    assert c.get(f"/donate/state?c={claim}").json() == {"paid": False, "amount": 0, "claimed": False}
+    assert c.get("/donate/state?c=nope").status_code == 404
+    await billing.settle(don["id"], bot)
+    assert "без аккаунта" in _to(bot, STAROSTA_ID)[-1]
+    assert c.get(f"/donate/state?c={claim}").json() == {"paid": True, "amount": 300, "claimed": False}
+
+    from kapibara.features.content import roadmap
+    await db.upsert_user(ME, "", "u")
+    assert not await roadmap.can_see(ME)
+    await send(dp, bot, f"/start dn_{claim}", uid=ME)
+    m = bot.session.named("SendMessage")[-1]
+    assert "Спасибо за поддержку! 300 ₽" in m.text and "/roadmap?k=" in m.reply_markup.inline_keyboard[0][0].url
+    assert await roadmap.can_see(ME)
+    assert c.get(f"/donate/state?c={claim}").json()["claimed"] is True
+    await send(dp, bot, f"/start dn_{claim}", uid=ME + 1)                            # чужой — не перехватит
+    assert "Не нашёл" in bot.session.texts()[-1]
+    assert (await _rows(db, "donations"))[-1]["payer_id"] == ME
+
+
+@pytest.mark.asyncio
+async def test_anonymous_donation_closed_in_test_mode(db, client, monkeypatch, robokassa):  # noqa: F811
+    c, _ = client
+    monkeypatch.setattr(billing, "ROBOKASSA_TEST", True)
+    assert "совсем скоро" in c.get("/donate").text
+    assert c.post("/donate/pay", data={"k": "", "amount": "300"}, follow_redirects=False).status_code == 400

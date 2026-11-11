@@ -98,6 +98,10 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
         text, kb = await plus_text(user.id)
         await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
         return
+    if payload.startswith("dn_"):               # донат без входа с сайта: привязать и открыть роадмап
+        from handlers.plus import claim_donation
+        await claim_donation(message, message.chat.id, payload[3:])
+        return
     if payload == "donate" and existed:         # с сайта /donate без ссылки — «Поддержать проект»
         from handlers.plus import send_donate
         await send_donate(message, user.id)

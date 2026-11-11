@@ -142,6 +142,16 @@ def donate_link(uid: int) -> str:
     return f"{site()}/donate?k={make_key(uid)}"
 
 
+def new_claim() -> str:
+    """Код доната без входа: 22 знака [A-Za-z0-9_-] — влезает в /start (до 64)."""
+    return secrets.token_urlsafe(16)
+
+
+def claim_link(claim: str) -> str:
+    """Ссылка в бота: привязать донат без входа к Telegram и открыть роадмап."""
+    return f"https://t.me/{config.BOT_USERNAME}?start=dn_{claim}"
+
+
 # ── Срок ─────────────────────────────────────────────────────────────────────
 
 def add_days(start: date, days: int) -> date:
@@ -343,34 +353,37 @@ def donate_amount(value) -> int:
     return amount
 
 
-async def create_donation(uid: int, amount, return_url: str) -> str:
+async def create_donation(uid: int | None, amount, return_url: str, claim: str | None = None) -> str:
     """Донат «Поддержать проект»: платёж в кассе → адрес её страницы. Та же
-    касса и те же условия, что у подписки (без реквизитов — закрыто)."""
+    касса и те же условия, что у подписки (без реквизитов — закрыто).
+    uid None — донат без входа с открытой страницы /donate, claim — код,
+    по которому его потом привязывают к Telegram (claim_link)."""
     from database.billing import add_donation
-    kind = provider(uid=uid)
+    kind = provider(uid=uid or 0)          # 0: без входа в тестовом режиме касса закрыта
     if not kind:
         raise PayError("оплата ещё не подключена")
     amount = donate_amount(amount)
     if kind == "yookassa":
         try:
-            return await _yookassa_create(uid, "donation", amount, 0, DONATE_TITLE, return_url, donation=True)
+            return await _yookassa_create(uid, "donation", amount, 0, DONATE_TITLE, return_url,
+                                          donation=True, claim=claim)
         except PayError:
             if "robokassa" not in _kassas():
                 raise
             logger.warning("ЮKassa не ответила — донат через Robokassa")
     inv = await _new_inv_id()
-    await add_donation(str(inv), "robokassa", uid, amount)
+    await add_donation(str(inv), "robokassa", uid, amount, claim)
     return robokassa_url(inv, amount, DONATE_TITLE, return_url)
 
 
-async def _yookassa_create(uid: int, plan: str, price: int, days: int, title: str, return_url: str,
-                           donation: bool = False) -> str:
+async def _yookassa_create(uid: int | None, plan: str, price: int, days: int, title: str, return_url: str,
+                           donation: bool = False, claim: str | None = None) -> str:
     from database import billing as store
     local = f"local-{uuid.uuid4()}"
     if donation:
-        await store.add_donation(local, "yookassa", uid, price)
+        await store.add_donation(local, "yookassa", uid, price, claim)
     else:
-        await store.add_payment(local, "yookassa", uid, plan, price, days)
+        await store.add_payment(local, "yookassa", uid or 0, plan, price, days)   # подписка — всегда с uid
     body = {"amount": {"value": f"{price}.00", "currency": "RUB"}, "capture": True,
             "confirmation": {"type": "redirect", "return_url": return_url},
             "description": title,        # без id человека (152-ФЗ): связь — в payments/donations
