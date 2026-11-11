@@ -35,6 +35,7 @@
 
 import json
 import math
+from typing import Any
 
 OPEN = ("todo", "soon", "offline", "wait", "late")   # ещё могут дать баллы и зачёт
 # late — срок прошёл, оценки нет, но не больше 15 дней: могли сдать на паре (sdo_grades.GRACE_DAYS)
@@ -144,7 +145,7 @@ def plan(course: dict, attendance: dict | None = None, label: str | None = None,
     lost = [w for w in works if w.get("status") in LOST]
     open_points = sum(float(w.get("max") or 0) for w in open_)
     att_ok = bool(attendance and attendance.get("ok"))
-    att_left = float(attendance.get("can_get") or 0) if att_ok else 0.0
+    att_left = float(attendance.get("can_get") or 0) if attendance and att_ok else 0.0
     semester_best = score + open_points + att_left
     exam_in = 0.0 if mode == "auto" else exam
     best = semester_best + exam_in
@@ -153,7 +154,7 @@ def plan(course: dict, attendance: dict | None = None, label: str | None = None,
     passed = sum(1 for w in works if w.get("status") == "ok")
     need = math.ceil(total * float(course.get("pass_share") or 0.75)) if total else 0
     left = max(0, need - passed)
-    tk = {"total": total, "passed": passed, "need": need, "left": left, "open": len(open_),
+    tk: dict[str, Any] = {"total": total, "passed": passed, "need": need, "left": left, "open": len(open_),
           "ok": passed >= need, "reachable": len(open_) >= left}
 
     auto_ok = not pending or mark is not all_marks[-1]
@@ -186,7 +187,7 @@ def plan(course: dict, attendance: dict | None = None, label: str | None = None,
         out["must"] = [str(w.get("name") or "") for w in must]
     # «что если пропущу лекцию»: минус одна лекция из того, что дают посещения
     future = [x for x in (attendance or {}).get("lectures") or [] if x.get("status") == "future"]
-    if att_ok and future and attendance.get("unit"):
+    if attendance and att_ok and future and attendance.get("unit"):
         unit = min(float(attendance["unit"]), att_left)
         out["skip"] = {"value": round(unit, 2), "date": future[0]["date"],
                        "status": _status(score, at, best - unit, tk, auto_ok)}

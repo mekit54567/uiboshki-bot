@@ -56,7 +56,7 @@ def ruff_debt(root: Path) -> int:
 
 # 11.11 сюда же — разделы, где ошибки убраны: назад они уже не вернутся.
 MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "bot.py",
-             "kapibara/features/schedule/")
+             "kapibara/features/schedule/", "kapibara/features/sdo/", "kapibara/features/ai/")
 
 
 def mypy_errors(root: Path) -> tuple[int, int]:

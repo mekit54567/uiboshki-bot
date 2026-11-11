@@ -315,7 +315,8 @@ SAMPLE_QUESTIONS = [
 def pick_questions(rows: list[tuple[str, str]], n: int = QUESTIONS) -> list[tuple[str, str]]:
     """Разные вопросы, по кругу по предметам: без команд, коротышек, повторов и
     задач с фото (в истории — только подпись «[фото] …», самой картинки нет)."""
-    seen, by_subject = set(), {}
+    seen: set[str] = set()
+    by_subject: dict[str, list[tuple[str, str]]] = {}
     for text, subject in rows:
         t = (text or "").strip()
         key = " ".join(t.lower().split())
@@ -323,7 +324,8 @@ def pick_questions(rows: list[tuple[str, str]], n: int = QUESTIONS) -> list[tupl
             continue
         seen.add(key)
         by_subject.setdefault(subject or "", []).append((t, subject or ""))
-    out, queues = [], list(by_subject.values())
+    out: list[tuple[str, str]] = []
+    queues = list(by_subject.values())
     while len(out) < n and any(queues):
         for q in queues:
             if q and len(out) < n:
@@ -775,8 +777,9 @@ paint();
 def tally(key: dict, picks: dict[str, int]) -> str:
     """Итог слепого теста текстом — для Claude по той же ссылке (&view=result)."""
     names, blocks = key.get("names", {}), key.get("blocks", [])
-    wins = {m: Counter() for m in names}
-    cost, secs = Counter(), Counter()
+    wins: dict[str, Counter[str]] = {m: Counter() for m in names}
+    cost: Counter[str] = Counter()
+    secs: Counter[str] = Counter()
     lines = []
     for i, b in enumerate(blocks):
         for model, c, t in b["answers"]:

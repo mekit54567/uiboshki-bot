@@ -52,7 +52,7 @@ async def mark(user_id: int, cmids) -> int:
         return 0
     n = 0
     for d in await get_active_deadlines(user_id, include_done=True):
-        if cmid_of(d.get("description")) in cmids:
+        if cmid_of(d.get("description") or "") in cmids:
             # и поверх своей галочки: подтверждение СДО идёт в опыт (xp.py)
             await mark_deadline_done(d["id"], user_id, via="sdo")
             n += not d.get("done")
