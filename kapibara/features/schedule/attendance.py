@@ -20,6 +20,7 @@
 """
 
 from datetime import date, datetime, timedelta
+from typing import Any
 
 TOL = 0.051           # СДО показывает баллы и с одним знаком («3,8» за 3 лекции из 16 = 3,75)
 SETTLE_DAYS = 10      # столько ждём отметку после лекции, потом — «пропуск»
@@ -74,7 +75,7 @@ def build(score: float | None, max_pts: float, lectures: list[date],
     total = len(lectures)
     past_on = lambda d: sum(1 for x in lectures if x <= d)  # noqa: E731
     past = past_on(today)
-    base = {"score": score or 0, "max": max_pts, "total": total, "past": past, "left": total - past}
+    base: dict[str, Any] = {"score": score or 0, "max": max_pts, "total": total, "past": past, "left": total - past}
     if not total or not max_pts:
         return dict(base, ok=False, why="в расписании нет лекций по этому предмету")
     pts = [(date.fromisoformat(d), s) for d, s in history if s is not None]
@@ -83,7 +84,8 @@ def build(score: float | None, max_pts: float, lectures: list[date],
     pts = [(d, s) for d, s in pts if d <= today]
 
     status: dict[date, str] = {}
-    prev, prev_day = None, None
+    prev: tuple[int, int] | None = None
+    prev_day: date | None = None
     baseline = None
     for d, s in pts:
         cur = _pick(solve(s, max_pts, total, past_on(d)), prev)
@@ -105,7 +107,7 @@ def build(score: float | None, max_pts: float, lectures: list[date],
                 # прошедшие после прошлого замера (отметку обычно ставят в
                 # ближайшие дни), потом более старые — с опозданием, от новых
                 open_ = [x for x in lectures if x <= d and status.get(x) is None]
-                new_ = [x for x in open_ if x > prev_day]
+                new_ = [x for x in open_ if prev_day is None or x > prev_day]
                 order = sorted(new_) + sorted((x for x in open_ if x not in new_), reverse=True)
                 # не хватило — значит, отметили лекции ещё до начала истории
                 order += sorted((x for x in lectures if status.get(x) == "before"), reverse=True)

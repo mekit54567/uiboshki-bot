@@ -95,7 +95,7 @@ async def _save_backup(data: bytes):
         return
     try:
         from database import save_schedule_backup
-        await save_schedule_backup(data, _ok_at.isoformat())
+        await save_schedule_backup(data, (_ok_at or datetime.now(TZ)).isoformat())
         _backup_hash = h
     except sqlite3.Error as e:
         logger.info(f"Копия расписания не сохранилась: {e}")
@@ -159,9 +159,9 @@ async def fetch_schedule_raw(force: bool = False, group_id: int | None = None) -
     """Календарь группы: своей (ICAL_URL) — с кэшем, запасной копией в базе и
     single-flight ниже; другой — через общий кэш календарей МИРЭА
     (mirea_schedule_api.fetch_ical, 10 минут, при сбое — последний удачный)."""
-    if _other_group(group_id):
+    if group_id and _other_group(group_id):
         from kapibara.features.schedule.mirea_api import fetch_ical
-        raw = await fetch_ical(int(group_id), 1)
+        raw = await fetch_ical(group_id, 1)
         if raw is None:
             raise RuntimeError("расписание группы не загрузилось")
         return raw
@@ -172,7 +172,7 @@ async def fetch_schedule_raw(force: bool = False, group_id: int | None = None) -
         return _cache_data
     if not force and _fail_exc is not None and _fail_at is not None and now - _fail_at < RETRY_AFTER_FAIL:
         raise _fail_exc               # ни кэша, ни копии, и только что не вышло — не ждём снова 30 с
-    if not force and _fail_exc is None and await _from_backup():
+    if not force and _fail_exc is None and await _from_backup() and _cache_data is not None:
         return _cache_data
     return await asyncio.shield(_start_refresh())
 

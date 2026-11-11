@@ -54,7 +54,9 @@ def ruff_debt(root: Path) -> int:
     return len(json.loads(out.stdout or "[]"))
 
 
-MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "bot.py")
+# 11.11 сюда же — разделы, где ошибки убраны: назад они уже не вернутся.
+MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "bot.py",
+             "kapibara/features/schedule/")
 
 
 def mypy_errors(root: Path) -> tuple[int, int]:
