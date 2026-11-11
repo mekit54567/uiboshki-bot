@@ -117,18 +117,29 @@ def checked_text(items: list[tuple[dict, dict]]) -> str:
     return "\n".join(lines)
 
 
+def _plus(points: float) -> str:
+    from kapibara.features.notifications.push_text import word
+    n = int(points) if float(points).is_integer() else 5   # дробное — «баллов» («2,5 балла» редко)
+    return f"+{_num(points)} {word(n, 'балл', 'балла', 'баллов')}"
+
+
 def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
-    """Пуш (Никита 09.11): оценка — в начале заголовка, чтобы её было видно в
-    свёрнутом уведомлении, а не на второй строке за длинным названием:
-    «5 из 6 · Практика 2», ниже «Проверили · Архитектура предприятия»."""
+    """Пуш (Никита 11.11): сначала сколько баллов и за какой предмет —
+    «+5 баллов · Архитектура предприятия», ниже «Практика 2 — 5 из 6».
+    Без баллов (зачтено/не зачтено, 0) — оценка вместо «+N баллов»."""
     from kapibara.features.notifications.push_text import word
     if len(items) == 1:
         c, w = items[0]
         mark = _mark(w)
-        return f"{mark[:1].upper()}{mark[1:]} · {_work(w)}", f"Проверили · {_course(c)}"
+        if w.get("grade"):
+            return f"{_plus(w['grade'])} · {_course(c)}", f"{_work(w)} — {mark}"
+        return f"{mark[:1].upper()}{mark[1:]} · {_course(c)}", f"Проверили: {_work(w)}"
     n = len(items)
-    return (f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}",
-            " · ".join(f"{_work(w)}: {_mark(w)}" for _, w in items[:4]))
+    total = sum(w.get("grade") or 0 for _, w in items)
+    courses = {_course(c) for c, _ in items}
+    where = next(iter(courses)) if len(courses) == 1 else f"{n} {word(n, 'работа', 'работы', 'работ')}"
+    head = f"{_plus(total)} · {where}" if total else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
+    return head, " · ".join(f"{_work(w)}: {_mark(w)}" for _, w in items[:4])
 
 
 async def _told(user_id: int) -> dict[int, float] | None:
