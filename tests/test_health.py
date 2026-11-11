@@ -183,3 +183,38 @@ async def test_keepalive_network_is_not_dead_cookie(monkeypatch):
     sdo_net.reset()
     monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(login), **kw))
     assert await sdo_parser.keepalive() is False
+
+
+def test_polling_hiccups_not_errors(monkeypatch):
+    """«Failed to fetch updates» (таймаут прокси, Bad Gateway Telegram ночью) —
+    не ошибка, пока aiogram снова на связи: в тревогу не идёт (Никита 09.11:
+    приходило каждый день). Нет связи 10 минут подряд — тревога своя."""
+    import logging
+    from kapibara.ops import health
+    c = health.ErrorCounter()
+    monkeypatch.setattr(health, "counter", c)
+    monkeypatch.setattr(health, "_alerted_at", 0.0)
+    log = logging.getLogger("aiogram.dispatcher")
+
+    def rec(level, msg, created):
+        r = log.makeRecord(log.name, level, __file__, 1, msg, (), None)
+        r.created = created
+        c.handle(r)
+
+    now = 1_000_000.0
+    for i in range(7):                                                   # 7 сбоев за час, каждый раз восстановилась
+        rec(logging.ERROR, "Failed to fetch updates - TelegramServerError: Bad Gateway", now - 600 + i)
+        rec(logging.WARNING, "Sleep for 1.0 seconds and try again... (tryings = 0, bot id = 1)", now - 600 + i)
+        rec(logging.INFO, "Connection established (tryings = 1, bot id = 1)", now - 599 + i)
+    rec(logging.INFO, "Start polling", now)                              # обычный INFO не копится
+    assert len(c.records) == 7 and all(r[1] == logging.WARNING for r in c.records)
+    assert c.poll_down_for(now) == 0
+    assert health.error_spike(now) is None
+
+    rec(logging.ERROR, "Failed to fetch updates - TelegramNetworkError: Request timeout error", now)
+    rec(logging.ERROR, "Failed to fetch updates - TelegramNetworkError: Request timeout error", now + 300)
+    assert health.error_spike(now + 300) is None                         # 5 минут — ещё ждём
+    text = health.error_spike(now + 11 * 60)
+    assert "не получает сообщения из Telegram уже 11 мин" in text and "За час" not in text
+    rec(logging.INFO, "Connection established (tryings = 5, bot id = 1)", now + 12 * 60)
+    assert c.poll_down_for(now + 13 * 60) == 0
