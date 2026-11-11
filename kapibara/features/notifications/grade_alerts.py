@@ -51,7 +51,7 @@ def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
     from kapibara.features.notifications.push_text import word
 
     def name(c):
-        return c.get("name") or c.get("title") or "Предмет"
+        return _course(c)
 
     def delta(old, new):
         d = round(new - old, 1)
@@ -96,22 +96,50 @@ def checked(seen: dict[str, str] | None, courses: list[dict]) -> list[tuple[dict
             if w.get("cmid") and w.get("graded") and seen.get(f"{c.get('id')}:{w['cmid']}") != _mark(w)]
 
 
+def _course(c: dict) -> str:
+    """Предмет без хвостов СДО: «Архитектура предприятия_Экзамен (часть 1/1)
+    [I.26-27]» → «Архитектура предприятия»."""
+    from kapibara.features.sdo.courses import clean_course_name
+    raw = c.get("name") or c.get("title") or ""
+    return clean_course_name(raw) if raw else "Предмет"
+
+
+def _work(w: dict) -> str:
+    """«Практическая работа №2» → «Практика 2» (как у дедлайнов)."""
+    from kapibara.features.deadlines.names import clean_event
+    return clean_event(w.get("name") or "") if w.get("name") else "Работа"
+
+
 def checked_text(items: list[tuple[dict, dict]]) -> str:
     lines = ["✅ <b>Проверили работу</b>" if len(items) == 1 else "✅ <b>Проверили работы</b>"]
     for c, w in items:
-        lines.append(f"• {esc(c.get('name') or c.get('title') or 'Предмет')} — {esc(w.get('name') or '')}: "
-                     f"<b>{_mark(w)}</b>")
+        lines.append(f"• {esc(_work(w))}: <b>{_mark(w)}</b> — {esc(_course(c))}")
     return "\n".join(lines)
 
 
+def _plus(points: float) -> str:
+    from kapibara.features.notifications.push_text import word
+    n = int(points) if float(points).is_integer() else 5   # дробное — «баллов» («2,5 балла» редко)
+    return f"+{_num(points)} {word(n, 'балл', 'балла', 'баллов')}"
+
+
 def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
+    """Пуш (Никита 11.11, вариант Б): предмет и сколько баллов —
+    «Архитектура предприятия: +5 баллов», ниже «Практика 2 — 5 из 6».
+    Без баллов (зачтено/не зачтено, 0) — оценка вместо «+N баллов»."""
     from kapibara.features.notifications.push_text import word
     if len(items) == 1:
         c, w = items[0]
-        return f"Проверили: {w.get('name') or 'работу'} — {_mark(w)}", c.get("name") or c.get("title") or ""
+        mark = _mark(w)
+        if w.get("grade"):
+            return f"{_course(c)}: {_plus(w['grade'])}", f"{_work(w)} — {mark}"
+        return f"{_course(c)}: {mark}", f"Проверили: {_work(w)}"
     n = len(items)
-    return (f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}",
-            " · ".join(f"{w.get('name')} — {_mark(w)}" for _, w in items[:4]))
+    total = sum(w.get("grade") or 0 for _, w in items)
+    courses = {_course(c) for c, _ in items}
+    where = next(iter(courses)) if len(courses) == 1 else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
+    head = f"{where}: {_plus(total)}" if total else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
+    return head, " · ".join(f"{_work(w)}: {_mark(w)}" for _, w in items[:4])
 
 
 async def _told(user_id: int) -> dict[int, float] | None:
