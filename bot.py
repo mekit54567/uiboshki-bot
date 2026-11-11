@@ -5,6 +5,7 @@ import time
 
 import anyio
 from aiogram import Bot, Dispatcher
+from aiogram.filters import ExceptionTypeFilter
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, ErrorEvent, MenuButtonWebApp, WebAppInfo
 
@@ -17,7 +18,8 @@ from kapibara.bot.middleware import (ConsentMiddleware, GroupContextMiddleware, 
                         OptionalSubjectsMiddleware, StatsMiddleware)
 from kapibara.core.telegram import cosmetic
 from kapibara.core.tasks import spawn
-from kapibara.core.errors import EXTERNAL, aside
+from kapibara.core.errors import EXTERNAL, StaleMessage, aside
+from kapibara.bot.tg import stale_message
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 health.install()   # ошибки из логов за сутки — в /status у старосты
@@ -219,6 +221,7 @@ async def main():
     dp.message.outer_middleware(consent)
     dp.callback_query.outer_middleware(consent)
     dp.inline_query.outer_middleware(consent)
+    dp.error.register(stale_message, ExceptionTypeFilter(StaleMessage))   # кнопка под старым сообщением — не баг
     dp.error.register(notify_starosta_on_error)
 
     async def polling_started():            # /ready: бот принимает сообщения

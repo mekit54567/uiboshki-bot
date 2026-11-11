@@ -7,6 +7,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from kapibara.bot.tg import data_of, msg, sender
 from kapibara.core.config import is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
@@ -17,7 +18,7 @@ router = Router(name="rating")
 
 @router.message(Command("nicks"))
 async def cmd_nicks(message: Message):
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.social import xp
     rows = await xp.unreviewed()
@@ -42,15 +43,16 @@ async def nick_reset(callback: CallbackQuery):
         await callback.answer("Это кнопка владельца бота", show_alert=True)
         return
     from kapibara.features.social import xp
-    await xp.reset_nick(int(callback.data.rsplit(":", 1)[1]))
+    await xp.reset_nick(int(data_of(callback).rsplit(":", 1)[1]))
     await callback.answer("Сброшено: теперь имя, свой ник поставить нельзя")
     with cosmetic("rating.nick_reset"):
-        await callback.message.edit_text(f"{callback.message.html_text}\n\n<b>Сброшено.</b>", parse_mode="HTML")
+        m = msg(callback)
+        await m.edit_text(f"{m.html_text}\n\n<b>Сброшено.</b>", parse_mode="HTML")
 
 
 @router.message(Command("institutes"))
 async def cmd_institutes(message: Message):
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.groups import institutes
     from database._conn import connect
