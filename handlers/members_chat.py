@@ -29,7 +29,13 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     from kapibara.features.groups import members
     from database import set_setting
     status = str(event.new_chat_member.status).split(".")[-1].lower()
-    if status not in ("member", "administrator") or not config.is_starosta(event.from_user.id):
+    if status not in ("member", "administrator"):
+        return
+    if event.chat.id == await members.chat_id():            # чат своей группы — приветствие один раз (group_talk)
+        from handlers.group_talk import send_intro
+        if event.bot:
+            await send_intro(event.bot, event.chat.id)
+    if not config.is_starosta(event.from_user.id):
         return
     if config.GROUP_CHAT_ID and event.chat.id != config.GROUP_CHAT_ID:
         return                                  # чат задан в переменных хостинга — он главнее
@@ -38,6 +44,9 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     await set_setting("group_chat_id", str(event.chat.id))
     members.forget_chat()
     logger.info(f"чат своей группы: {event.chat.id} ({event.chat.title})")
+    from handlers.group_talk import send_intro
+    if event.bot:
+        await send_intro(event.bot, event.chat.id)
     with aside(logger, "сообщение старосте о чате", level=logging.INFO):
         await event.bot.send_message(
             event.from_user.id,
