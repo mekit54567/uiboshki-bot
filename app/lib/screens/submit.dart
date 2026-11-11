@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
@@ -124,6 +125,7 @@ class _SubmitSheetState extends State<SubmitSheet> {
   String? _error, _done;
   // submitted / draft / unknown (сервер, sdo_done.submit_state); старый сервер без state — как раньше
   String _state = 'submitted';
+  String _url = '';
   // why — почему задание не примет (только в новом дизайне: плохой файл
   // остаётся в списке с причиной, а не отбрасывается молча).
   final _files = <({Picked f, String? why})>[];
@@ -206,15 +208,19 @@ class _SubmitSheetState extends State<SubmitSheet> {
       setState(() {
         _done = (r is Map && r['status'] is String) ? r['status'] as String : 'Отправлено в СДО';
         _state = (r is Map && r['state'] is String) ? r['state'] as String : 'submitted';
+        final u = (r is Map && r['url'] is String) ? r['url'] as String : '';
+        _url = u.startsWith('https://') ? u : '';
       });
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
       // связь могла оборваться уже после сдачи — не пишем «не ушёл» наугад
       if (mounted) {
-        setState(() => _error = isOffline(e)
-            ? 'Связь оборвалась — не знаем, дошёл ли файл. Проверь задание в СДО, прежде чем сдавать снова.'
-            : errorText(e));
+        setState(
+          () => _error = isOffline(e)
+              ? 'Связь оборвалась — не знаем, дошёл ли файл. Проверь задание в СДО, прежде чем сдавать снова.'
+              : errorText(e),
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -236,7 +242,7 @@ class _SubmitSheetState extends State<SubmitSheet> {
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
           child: _done != null
-              ? _Done(status: _done!, state: _state, onClose: () => Navigator.pop(context, true))
+              ? _Done(status: _done!, state: _state, url: _url, onClose: () => Navigator.pop(context, true))
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,9 +398,9 @@ class _SubmitSheetState extends State<SubmitSheet> {
 /// «Сдано» — только когда СДО подтвердил отправку; черновик и непонятный
 /// ответ — свой заголовок и цвет (аудит 21.10, R5).
 class _Done extends StatelessWidget {
-  final String status, state;
+  final String status, state, url;
   final VoidCallback onClose;
-  const _Done({required this.status, this.state = 'submitted', required this.onClose});
+  const _Done({required this.status, this.state = 'submitted', this.url = '', required this.onClose});
 
   @override
   Widget build(BuildContext context) {
@@ -406,8 +412,10 @@ class _Done extends StatelessWidget {
     final hint = ok
         ? status
         : state == 'draft'
-        ? 'На проверку ещё не отправлено — открой задание в СДО и нажми «Отправить». Статус: $status'
+        ? 'Файл лежит в СДО, но на проверку ещё не отправлен. Открой задание и нажми там «Отправить на проверку». Статус: $status'
         : 'СДО не подтвердил сдачу — загляни в задание, чтобы убедиться.${status.isEmpty ? '' : ' Статус: $status'}';
+    // не сдано — без прыжка: дело ещё не доделано (UX-аудит 02.11, п. 6)
+    final capy = ok ? CapyHop(size: 104, color: color) : CapyImage(pose: CapyPose.day, size: 104, color: color);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -421,7 +429,7 @@ class _Done extends StatelessWidget {
             height: 112,
             child: Stack(
               children: [
-                CapyHop(size: 104, color: color),
+                capy,
                 Positioned(
                   right: 0,
                   bottom: 0,
@@ -433,8 +441,11 @@ class _Done extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: p.cardSolid, width: 3),
                     ),
-                    child: Icon(ok ? Icons.check_rounded : Icons.priority_high_rounded,
-                        color: state == 'unknown' ? p.onAccent : Colors.white, size: 22),
+                    child: Icon(
+                      ok ? Icons.check_rounded : Icons.priority_high_rounded,
+                      color: state == 'unknown' ? p.onAccent : Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
@@ -458,10 +469,17 @@ class _Done extends StatelessWidget {
               foregroundColor: state == 'unknown' ? p.onAccent : Colors.white,
               shape: const StadiumBorder(),
             ),
-            onPressed: onClose,
-            child: Text(ok ? 'Отлично' : 'Понятно'),
+            onPressed: !ok && url.isNotEmpty
+                ? () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
+                : onClose,
+            child: Text(ok ? 'Отлично' : (url.isNotEmpty ? 'Открыть задание в СДО' : 'Понятно')),
           ),
         ),
+        if (!ok && url.isNotEmpty)
+          TextButton(
+            onPressed: onClose,
+            child: Text('Закрыть', style: s.body(14, color: p.muted)),
+          ),
       ],
     );
   }

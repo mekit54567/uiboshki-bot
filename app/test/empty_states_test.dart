@@ -1,7 +1,7 @@
 // «Пусто и ошибка» (дизайн 5.80, Никита выбрал А, Б, В): пусто и сбой
 // выглядят по-разному. «Сдать» без сроков — радостная капибара и «СДО
 // проверено в 12:40»; СДО не ответил — грустная, «Показываю сроки от 09:41»
-// и «Попробовать ещё раз» (только перечитать экран). «Учёба» без входа в
+// и «Проверить СДО» (только перечитать экран). «Учёба» без входа в
 // СДО — польза, а не ошибка. Выключен новый дизайн — всё как было.
 import 'dart:convert';
 
@@ -91,7 +91,7 @@ void main() {
     expect(find.text('Ближайших сроков нет'), findsOneWidget);
     expect(find.text('СДО проверено в 12:40'), findsOneWidget);
     expect(hasCapy(t, CapyPose.joy), isTrue);
-    expect(find.text('Попробовать ещё раз'), findsNothing);
+    expect(find.text('Проверить СДО'), findsNothing);
   });
 
   testWidgets('А: группа без СДО — без строки о проверке', (t) async {
@@ -102,7 +102,7 @@ void main() {
     expect(find.textContaining('СДО проверено'), findsNothing);
   });
 
-  testWidgets('Б: СДО не ответил, сроков нет — грустная капибара и «Попробовать ещё раз»', (t) async {
+  testWidgets('Б: СДО не ответил, сроков нет — грустная капибара и «Проверить СДО»', (t) async {
     phone(t);
     var retried = 0;
     await t.pumpWidget(view([], down, onRetry: () => retried++));
@@ -112,7 +112,7 @@ void main() {
     expect(find.text('Ближайших сроков нет'), findsNothing);
     expect(hasCapy(t, CapyPose.sad), isTrue);
     expect(hasCapy(t, CapyPose.joy), isFalse);
-    await t.tap(find.text('Попробовать ещё раз'));
+    await t.tap(find.text('Проверить СДО'));
     expect(retried, 1);
   });
 
@@ -124,7 +124,7 @@ void main() {
     expect(find.text('СДО не ответил'), findsOneWidget);
     expect(find.text('Кейс 1'), findsOneWidget);
     expect(t.getTopLeft(find.text('СДО не ответил')).dy, lessThan(t.getTopLeft(find.text('Кейс 1')).dy));
-    expect(find.text('Попробовать ещё раз'), findsOneWidget);
+    expect(find.text('Проверить СДО'), findsOneWidget);
     // СДО ответил — строки нет
     await t.pumpWidget(view(items, ok));
     await settle(t);
@@ -143,7 +143,7 @@ void main() {
     expect(find.text('СДО не ответил'), findsNothing);
   });
 
-  testWidgets('«Попробовать ещё раз» перечитывает сроки, синк не зовёт', (t) async {
+  testWidgets('«Проверить СДО» зовёт синк и перечитывает сроки', (t) async {
     phone(t);
     final asked = <String>[];
     final api = fakeApi(
@@ -156,10 +156,11 @@ void main() {
     await settle(t);
     expect(find.text('СДО не ответил'), findsOneWidget);
     asked.clear();
-    await t.tap(find.text('Попробовать ещё раз'));
+    await t.tap(find.text('Проверить СДО'));
     await settle(t);
-    expect(asked, [list]);
-    expect(find.text('СДО пока молчит — бот проверит его сам'), findsOneWidget);
+    // сначала просим сервер заново спросить СДО, потом перечитываем (UX-аудит, п. 7)
+    expect(asked, ['POST /api/sdo/recheck', list]);
+    expect(find.text('СДО всё ещё молчит — проверю его сам чуть позже'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
 

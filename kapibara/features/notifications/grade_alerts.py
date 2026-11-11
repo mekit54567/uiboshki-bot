@@ -59,7 +59,10 @@ def headline(diff: list[tuple[dict, float, float]]) -> tuple[str, str]:
 
     if len(diff) == 1:
         c, old, new = diff[0]
-        return f"{name(c)}: {delta(old, new)}", f"Было {_num(old)}, стало {_num(new)}"
+        # минус — не новая оценка, а замеченное изменение в журнале (UX-аудит, п. 21)
+        was = f"Было {_num(old)}, стало {_num(new)}" if new >= old else \
+            f"В СДО изменились баллы: было {_num(old)}, стало {_num(new)}"
+        return f"{name(c)}: {delta(old, new)}", was
     n = len(diff)
     items = sorted(diff, key=lambda x: -abs(x[2] - x[1]))
     return (f"Новые баллы по {n} {word(n, 'предмету', 'предметам', 'предметам')}",

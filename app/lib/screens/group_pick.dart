@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
 import '../theme/app_theme.dart';
@@ -18,6 +19,10 @@ class GroupPickScreen extends StatefulWidget {
   /// true — первый вход, без группы дальше нельзя (нет «назад»).
   final bool required;
   const GroupPickScreen({super.key, required this.api, this.required = false});
+
+  /// Открыть ссылку в системе; тесты подменяют.
+  @visibleForTesting
+  static Future<bool> Function(Uri) openUrl = (u) => launchUrl(u, mode: LaunchMode.externalApplication);
 
   @override
   State<GroupPickScreen> createState() => _GroupPickScreenState();
@@ -84,15 +89,37 @@ class _GroupPickScreenState extends State<GroupPickScreen> {
       if (my != _seq || !mounted) return;
       setState(() {
         _items = [for (final g in r['items'] as List) Map<String, dynamic>.from(g)];
-        _note = _items.isEmpty ? 'Такой группы не нашёл — проверь, как написано: «УИБО-03-24» (можно и латиницей: UIBO-03-24).' : null;
+        _note = _items.isEmpty
+            ? 'Такой группы не нашёл — проверь, как написано: «УИБО-03-24» (можно и латиницей: UIBO-03-24).'
+            : null;
       });
     } catch (e) {
       if (mounted) setState(() => _note = errorText(e));
     }
   }
 
+  /// «Посмотреть демо» на первом шаге (Никита 11.11): приложение на примере —
+  /// страница сайта с демо-данными, группу выбирать не нужно.
+  void _demo() {
+    tick();
+    final origin = Api.base.isEmpty ? Uri.base.origin : Api.base; // на стенде base пустой — тот же сайт
+    GroupPickScreen.openUrl(Uri.parse('$origin/about/demo'));
+  }
+
   Future<void> _choose(Map<String, dynamic> g) async {
     tick();
+    // из «Ещё»: нажатие сразу меняло основную группу, хотя человек мог хотеть
+    // только посмотреть расписание (UX-аудит 02.11, п. 30) — сначала спросим
+    final cur = _current;
+    if (cur != null && cur['id'] != g['id']) {
+      final ok = await confirmSheet(
+        context,
+        title: 'Сменить группу на ${g['name']}?',
+        text: 'Расписание, сроки и файлы станут как у этой группы. Просто посмотреть чужое расписание можно поиском во вкладке «Неделя».',
+        action: 'Сменить',
+      );
+      if (!ok || !mounted) return;
+    }
     try {
       final r = await widget.api.post('/me/group', {'id': g['id']});
       if (mounted) Navigator.pop(context, Map<String, dynamic>.from(r['group']));
@@ -193,6 +220,28 @@ class _GroupPickScreenState extends State<GroupPickScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.xl, vertical: Space.s),
                     child: Text(_note!, style: s.body(14, color: p.muted)),
+                  ),
+                if (widget.required)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Пока просто смотришь? Открой пример — приложение с демо-данными.',
+                          textAlign: TextAlign.center,
+                          style: s.body(13, color: p.muted),
+                        ),
+                        TextButton.icon(
+                          key: const Key('group:demo'),
+                          onPressed: _demo,
+                          icon: Icon(Icons.play_circle_outline_rounded, color: p.accent, size: 20),
+                          label: Text(
+                            'Посмотреть демо',
+                            style: s.body(15, weight: FontWeight.w600, color: p.accent),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 // своей группой у бота заведует владелец — там просить нечего
                 if (_current != null && _current!['own'] != true)

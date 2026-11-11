@@ -47,7 +47,7 @@ def text(d: dict, hours: int, now: datetime) -> tuple[str, str, str]:
     name, course = split_subject(d["subject"])
     title = f"Через {minutes_text(left)} срок: {name}"
     deadline = when(d["due_date"], d.get("due_time") or "23:59", now.date())
-    body = " · ".join(x for x in (course, deadline, "ещё не сдано") if x)
+    body = " · ".join(x for x in (course, deadline, "отметки о сдаче нет") if x)
     html = (f"⏰ <b>{esc(title)}</b>\n" + (f"{esc(course)} · " if course else "") + f"срок {esc(deadline)}\n"
             "Работа ещё не отмечена сданной.")
     return title, body, html

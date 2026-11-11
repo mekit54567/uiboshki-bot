@@ -83,7 +83,7 @@ async function scenario(name, opts, fn) {
   await scenario('Сдать', {}, async (s, p) => {
     await L.tap(p, 'Сдать', { wait: 1500 });
     check(await L.has(p, 'Впереди · 2') && await L.has(p, 'Сдано · 1'), 'счётчики «Впереди · 2», «Сдано · 1»');
-    check(await L.has(p, 'горит · до 23:59'), 'горящий срок сверху');
+    check(await L.has(p, 'горит · до конца дня'), 'горящий срок сверху');
     await L.swipe(p, { from: [0.1, 0.52], to: [0.9, 0.52] });
     check(asked(s, /POST \/api\/deadlines\/\d+\/toggle/), 'свайп вправо по сроку отмечает «сдано»');
     await L.tap(p, 'Свой срок', { wait: 1500 });

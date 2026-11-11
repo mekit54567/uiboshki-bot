@@ -70,7 +70,7 @@ def test_build_no_pairs_but_deadline(day):
     dls = [{"subject": "Практика 2", "due_date": "2026-10-19", "due_time": "18:00"}]
     title, text = evening_digest.build(b"", TUE, dls, "В-78", "+2°, дождь")
     assert title == "Завтра пар нет"
-    assert text == "🌙 <b>Завтра пар нет</b>\nСдать до пн: Практика 2. Отдыхай."
+    assert text == "🌙 <b>Завтра пар нет</b>\nСдать до пн: Практика 2."
 
 
 def test_build_nothing(day):
@@ -154,7 +154,7 @@ async def test_send_empty_day_and_far_deadline(db, world, day):
     assert sent == []
     await db.add_deadline("Практика 2", "", "2026-10-14", None, 0, external_id="sdo:2")
     await evening_digest.send_all(bot, NOW)
-    assert sent == [(1, "🌙 <b>Завтра пар нет</b>\nСдать до ср: Практика 2. Отдыхай.")]
+    assert sent == [(1, "🌙 <b>Завтра пар нет</b>\nСдать до ср: Практика 2.")]
 
 
 @pytest.mark.asyncio
