@@ -14,6 +14,23 @@ void main() {
     expect(sameSubject('Анализ данных', 'Архитектура предприятия'), isFalse);
   });
 
+  test('лекции вокруг текущей: прошлая · текущая · следующая, у границ окно сдвигается', () {
+    List<Map<String, dynamic>> sched(int n) => [
+      for (var i = 1; i <= n; i++) {'n': i, 'date': '2026-10-${(i * 2).toString().padLeft(2, '0')}'},
+    ];
+    // лекции 2,4,6,8,10 октября: 11 октября — текущая пятая
+    expect(currentLecture(sched(5), DateTime(2026, 10, 7)), 3);
+    expect(currentLecture(sched(5), DateTime(2026, 10, 8)), 4); // в день лекции она текущая
+    expect(currentLecture(sched(5), DateTime(2026, 9, 1)), 1); // курс не начался
+    expect(currentLecture(sched(5), DateTime(2026, 12, 1)), 5); // курс кончился
+    expect(lectureWindow(5, 9), [4, 5, 6]);
+    expect(lectureWindow(1, 9), [1, 2, 3]);
+    expect(lectureWindow(9, 9), [7, 8, 9]);
+    expect(lectureWindow(2, 2), [1, 2]);
+    expect(lectureNumber('Лекция 12'), 12);
+    expect(lectureNumber('Введение'), isNull);
+  });
+
   test('этаж по номеру аудитории — как на табличках', () {
     expect(roomFloor('А-223'), '2 этаж');
     expect(roomFloor('ИВЦ-102'), '1 этаж');
@@ -31,11 +48,12 @@ void main() {
     final api = fakeApi(
       requests: asked,
       overrides: {
-        'GET /api/search?q=%D0%A1%D0%B8%D0%B3%D0%B0%D0%BD%D1%8C%D0%BA%D0%BE%D0%B2+%D0%90.+%D0%90.&type=2&subject=%D0%9C%D0%BE%D0%B4%D0%B5%D0%BB%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5+%D0%B1%D0%B8%D0%B7%D0%BD%D0%B5%D1%81-%D0%BF%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D0%BE%D0%B2': {
-          'items': [
-            {'type': 2, 'id': 77, 'title': 'Сиганьков А. А.'},
-          ],
-        },
+        'GET /api/search?q=%D0%A1%D0%B8%D0%B3%D0%B0%D0%BD%D1%8C%D0%BA%D0%BE%D0%B2+%D0%90.+%D0%90.&type=2&subject=%D0%9C%D0%BE%D0%B4%D0%B5%D0%BB%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5+%D0%B1%D0%B8%D0%B7%D0%BD%D0%B5%D1%81-%D0%BF%D1%80%D0%BE%D1%86%D0%B5%D1%81%D1%81%D0%BE%D0%B2':
+            {
+              'items': [
+                {'type': 2, 'id': 77, 'title': 'Сиганьков А. А.'},
+              ],
+            },
         'GET /api/target/2/77': {
           'title': 'Сиганьков А. А.',
           'weeks': [
