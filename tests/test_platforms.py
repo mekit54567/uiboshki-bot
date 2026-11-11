@@ -74,3 +74,12 @@ def test_start_html_balanced_and_ios_without_pay():
         assert text.count(f"<{tag}>") == text.count(f"</{tag}>")
     ios = without_pay(text)
     assert "/plus" not in ios and "Капибара+" not in ios and "Сюда пришлю сам" in ios
+
+
+def test_no_iphone_coming_soon():
+    """iPhone-приложение вышло (05.11): нигде не «для iPhone — скоро», на сайте и в Mini App — ссылка на App Store."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    for rel in ("README.md", "webapp/static/js/more.js", "webapp/static/site/index.html"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert "iPhone — скоро" not in text and "apps.apple.com" in text, rel
