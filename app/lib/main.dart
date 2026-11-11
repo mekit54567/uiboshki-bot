@@ -37,6 +37,7 @@ Future<void> main() async {
       theme: themeFromPrefs(prefs.getString('uib_theme')),
       look: Look.fromPrefs(prefs),
       design2: design2FromPrefs(prefs),
+      design3: design3FromPrefs(prefs),
     ),
   );
 }
@@ -56,6 +57,9 @@ class UiboApp extends StatefulWidget {
 
   /// Новый дизайн (5.79) — по последнему ответу сервера; тесты включают сами.
   final bool design2;
+
+  /// Дизайн по брендбуку v1: 'off' / 'opt' / 'on' — последнее слово сервера.
+  final String design3;
   const UiboApp({
     super.key,
     required this.api,
@@ -63,6 +67,7 @@ class UiboApp extends StatefulWidget {
     this.theme = ThemeChoice.system,
     this.look = Look.classic,
     this.design2 = false,
+    this.design3 = 'opt',
   });
 
   @override
@@ -74,6 +79,7 @@ class _UiboAppState extends State<UiboApp> {
   late ThemeChoice _theme = widget.theme;
   late Look _look = widget.look;
   late bool _design2 = widget.design2;
+  late String _design3 = widget.design3;
   late bool _loggedIn = widget.api.token != null;
   bool _cached = false;
   Timer? _sun;
@@ -85,6 +91,16 @@ class _UiboAppState extends State<UiboApp> {
     refreshDesign2(widget.api.get).then((on) {
       if (on == false) HomeWidgets.clear(); // откат дизайна — виджеты без данных
       if (on != null && on != _design2 && mounted) setState(() => _design2 = on);
+      // дизайн по брендбуку: сервер мог выключить его или включить всем
+      SharedPreferences.getInstance().then((prefs) {
+        final d3 = design3FromPrefs(prefs);
+        if (on == null || !mounted) return;
+        final chosen = prefs.getBool('uib_look_fresh');
+        setState(() {
+          _design3 = d3;
+          if (chosen == null) _look = _look.copyWith(fresh: d3 == 'on');
+        });
+      });
       // иконка на телефоне — по выбору, а без нового дизайна — обычная
       // (откат DESIGN2=0 убирает и её; включат снова — выбор вернётся)
       final d2 = on ?? _design2;
@@ -146,8 +162,10 @@ class _UiboAppState extends State<UiboApp> {
   @override
   Widget build(BuildContext context) {
     // новый дизайн выключен сервером — всё как до 5.79
-    final look = _design2 ? _look : Look.classic;
-    final font = _design2 || _font.index < 2 ? _font : FontChoice.book;
+    final fresh = _design2 && _design3 != 'off' && _look.fresh;
+    final look = _design2 ? _look.copyWith(fresh: fresh) : Look.classic;
+    // «Новое» — всегда «Книжный» (брендбук); свой шрифт остаётся в «Классике»
+    final font = fresh ? FontChoice.book : (_design2 || _font.index < 2 ? _font : FontChoice.book);
     final theme = _theme == ThemeChoice.sunset && !_design2 ? ThemeChoice.system : _theme;
     final sun = theme == ThemeChoice.sunset ? sunsetPhase(now()) : null;
     final dark = switch (theme) {
@@ -156,7 +174,7 @@ class _UiboAppState extends State<UiboApp> {
       ThemeChoice.sunset => sun!.dark,
       ThemeChoice.system => MediaQuery.platformBrightnessOf(context) == Brightness.dark,
     };
-    final p = dark ? Palette.ofDark(look.dark) : Palette.ofLight(look.light).dusk(sun?.dusk ?? 0);
+    final p = dark ? Palette.of(look, dark: true) : Palette.of(look, dark: false).dusk(sun?.dusk ?? 0);
     SystemChrome.setSystemUIOverlayStyle(dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark);
     if (kIsWeb) paintPage(p.bg);
     return AppStyle(
@@ -165,6 +183,7 @@ class _UiboAppState extends State<UiboApp> {
       theme: theme,
       look: look,
       design2: _design2,
+      design3: _design3,
       child: MaterialApp(
         title: 'Капибара',
         navigatorKey: appNavigator,

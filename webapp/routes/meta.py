@@ -44,7 +44,9 @@ async def api_meta():
         # design2 — новый дизайн приложения (5.79, «Оформление»): DESIGN2=0 —
         # откат одной переменной, приложение вернётся к прежнему виду без выпуска
         "features": {"groups": True, "sessions": True, "offline": True,
-                     "design2": config.design2_on()},
+                     "design2": config.design2_on(),
+                     # design3 — дизайн по брендбуку v1: off / opt / on (DESIGN3)
+                     "design3": config.design3()},
         # ссылки для меню «Ещё» и экрана «Вход в СДО» своего приложения (как APP_CONFIG у WebApp)
         "links": await _links(),
     }

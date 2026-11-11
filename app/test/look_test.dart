@@ -124,6 +124,7 @@ void main() {
     expect(find.text('Идёт первая пара'), findsOneWidget);
     expect(find.byKey(const Key('look:reset')), findsNothing); // ничего не менял
 
+    await reach(t, 'look:light:campus'); // выше — строка «Новое / Классика» (11.11)
     await t.tap(find.byKey(const Key('look:light:campus')));
     await settle(t);
     expect(styleOf(t).p.bg, Palette.campus.bg);

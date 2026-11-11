@@ -13,6 +13,7 @@
 :root {
   --bg: var(--t-bg); --glow1: var(--t-bg-glow-1); --glow2: var(--t-bg-glow-2);
   --card: var(--t-card); --card-solid: var(--t-card-solid); --line: var(--t-line);
+  --edge: var(--t-edge);
   --text: var(--t-text); --muted: var(--t-muted); --accent: var(--t-accent); --on-accent: var(--t-on-accent);
   --ok: var(--t-ok); --warn: var(--t-warn); --danger: var(--t-danger); --tabbar: var(--t-tabbar);
   --xs: 4px; --s: 8px; --m: 12px; --l: 18px; --xl: 24px; --xxl: 32px;
@@ -49,7 +50,7 @@ img { -webkit-user-drag: none; }
 .acc { color: var(--accent); }
 .b6 { font-weight: 600; } .b7 { font-weight: 700; } .b5 { font-weight: 500; }
 .eyebrow { font-family: Onest; font-size: 12px; font-weight: 600; letter-spacing: 1px; color: var(--muted); }
-:root[data-font="book"] .eyebrow { font-family: SourceSerif; font-style: italic; font-size: 15px; font-weight: 400; letter-spacing: 0; }
+:root[data-font="book"]:not([data-fresh="1"]) .eyebrow { font-family: SourceSerif; font-style: italic; font-size: 15px; font-weight: 400; letter-spacing: 0; }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .clamp3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -77,6 +78,8 @@ html.ios-home body { min-height: var(--screen-h, 100%); }
     radial-gradient(110% 60% at 0% 108%, color-mix(in srgb, var(--glow2) var(--g2a, 50%), transparent), transparent 70%),
     var(--bg); }
 :root[data-dark="1"] .screen > .bg { --g1a: 85%; --g2a: 80%; }
+/* «Тетрадь» и «Ночная тетрадь» нового дизайна — ровная бумага без свечений (брендбук v1) */
+:root[data-app-theme="paper"] .screen > .bg, :root[data-app-theme="night"] .screen > .bg { background: var(--bg); }
 .scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain; padding-top: var(--sat); }
 .scroll::-webkit-scrollbar { display: none; }
