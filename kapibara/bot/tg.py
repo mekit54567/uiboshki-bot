@@ -20,7 +20,7 @@ aiogram честно говорит, что у события многое мо�
 import logging
 
 from aiogram import Bot
-from aiogram.types import CallbackQuery, ErrorEvent, Message, User
+from aiogram.types import CallbackQuery, ChatMemberUpdated, ErrorEvent, InaccessibleMessage, Message, User
 
 from kapibara.core.errors import StaleMessage
 from kapibara.core.telegram import cosmetic
@@ -41,7 +41,7 @@ def sender(event: Message | CallbackQuery) -> User:
 def msg(callback: CallbackQuery) -> Message:
     """Сообщение, под которым нажали кнопку. Нет доступа — `StaleMessage`."""
     m = callback.message
-    if not isinstance(m, Message):
+    if m is None or isinstance(m, InaccessibleMessage):   # не «not Message»: тесты подсовывают заглушки
         raise StaleMessage(type(m).__name__)
     return m
 
@@ -56,7 +56,7 @@ def data_of(callback: CallbackQuery) -> str:
     return callback.data or ""
 
 
-def bot_of(event: Message | CallbackQuery) -> Bot:
+def bot_of(event: Message | CallbackQuery | ChatMemberUpdated) -> Bot:
     """Бот, через которого пришло событие (в диспетчере он есть всегда)."""
     bot = event.bot
     if bot is None:

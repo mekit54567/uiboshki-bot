@@ -16,7 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from kapibara.bot.tg import msg, sender
+from kapibara.bot.tg import bot_of, msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.errors import aside
 
@@ -40,7 +40,7 @@ async def bot_added_to_group(event: ChatMemberUpdated):
     members.forget_chat()
     logger.info(f"чат своей группы: {event.chat.id} ({event.chat.title})")
     with aside(logger, "сообщение старосте о чате", level=logging.INFO):
-        await event.bot.send_message(
+        await bot_of(event).send_message(
             event.from_user.id,
             f"👥 Запомнил чат <b>{esc(event.chat.title or '')}</b> как чат своей группы.\n\n"
             "Теперь своя группа — это его участники: только они могут выбрать её в боте и "
