@@ -124,21 +124,21 @@ def _plus(points: float) -> str:
 
 
 def checked_head(items: list[tuple[dict, dict]]) -> tuple[str, str]:
-    """Пуш (Никита 11.11): сначала сколько баллов и за какой предмет —
-    «+5 баллов · Архитектура предприятия», ниже «Практика 2 — 5 из 6».
+    """Пуш (Никита 11.11, вариант Б): предмет и сколько баллов —
+    «Архитектура предприятия: +5 баллов», ниже «Практика 2 — 5 из 6».
     Без баллов (зачтено/не зачтено, 0) — оценка вместо «+N баллов»."""
     from kapibara.features.notifications.push_text import word
     if len(items) == 1:
         c, w = items[0]
         mark = _mark(w)
         if w.get("grade"):
-            return f"{_plus(w['grade'])} · {_course(c)}", f"{_work(w)} — {mark}"
-        return f"{mark[:1].upper()}{mark[1:]} · {_course(c)}", f"Проверили: {_work(w)}"
+            return f"{_course(c)}: {_plus(w['grade'])}", f"{_work(w)} — {mark}"
+        return f"{_course(c)}: {mark}", f"Проверили: {_work(w)}"
     n = len(items)
     total = sum(w.get("grade") or 0 for _, w in items)
     courses = {_course(c) for c, _ in items}
-    where = next(iter(courses)) if len(courses) == 1 else f"{n} {word(n, 'работа', 'работы', 'работ')}"
-    head = f"{_plus(total)} · {where}" if total else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
+    where = next(iter(courses)) if len(courses) == 1 else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
+    head = f"{where}: {_plus(total)}" if total else f"Проверили {n} {word(n, 'работу', 'работы', 'работ')}"
     return head, " · ".join(f"{_work(w)}: {_mark(w)}" for _, w in items[:4])
 
 

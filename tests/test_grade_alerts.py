@@ -73,11 +73,11 @@ def test_checked_works():
     w2 = dict(w2, grade=5.0, graded=True, passed=True)
     done = grade_alerts.checked(seen, [_course([w1, w2])])
     assert [w["cmid"] for _, w in done] == [12]
-    assert grade_alerts.checked_head(done) == ("+5 баллов · Моделирование", "Практика 2 — 5 из 8")
+    assert grade_alerts.checked_head(done) == ("Моделирование: +5 баллов", "Практика 2 — 5 из 8")
     assert "Практика 2: <b>5 из 8</b>" in grade_alerts.checked_text(done)
     w3 = {"cmid": 13, "name": "Тест", "grade": None, "max": None, "graded": True, "passed": False}
     done = grade_alerts.checked(seen, [_course([w1, w2, w3])])
-    assert grade_alerts.checked_head(done) == ("+5 баллов · Моделирование", "Практика 2: 5 из 8 · Тест: не зачтено")
+    assert grade_alerts.checked_head(done) == ("Моделирование: +5 баллов", "Практика 2: 5 из 8 · Тест: не зачтено")
 
 
 @pytest.mark.asyncio
@@ -203,10 +203,10 @@ def test_checked_head_score_first():
     имена — короткие."""
     c = {"id": 3, "name": "Архитектура предприятия_Экзамен (часть 1/1) [I.26-27]"}
     w = {"cmid": 5, "name": "Практическая работа №2", "grade": 5.0, "max": 6.0, "graded": True}
-    assert grade_alerts.checked_head([(c, w)]) == ("+5 баллов · Архитектура предприятия", "Практика 2 — 5 из 6")
+    assert grade_alerts.checked_head([(c, w)]) == ("Архитектура предприятия: +5 баллов", "Практика 2 — 5 из 6")
     w = dict(w, grade=None, max=None, passed=True)
-    assert grade_alerts.checked_head([(c, dict(w, grade=7.0, max=8.0))])[0] == "+7 баллов · Архитектура предприятия"
-    assert grade_alerts.checked_head([(c, dict(w, grade=1.0))])[0] == "+1 балл · Архитектура предприятия"
+    assert grade_alerts.checked_head([(c, dict(w, grade=7.0, max=8.0))])[0] == "Архитектура предприятия: +7 баллов"
+    assert grade_alerts.checked_head([(c, dict(w, grade=1.0))])[0] == "Архитектура предприятия: +1 балл"
     w = dict(w, grade=None, max=None, passed=True)
-    assert grade_alerts.checked_head([(c, w)]) == ("Зачтено · Архитектура предприятия", "Проверили: Практика 2")
+    assert grade_alerts.checked_head([(c, w)]) == ("Архитектура предприятия: зачтено", "Проверили: Практика 2")
     assert "[I.26-27]" not in grade_alerts.checked_text([(c, w)])
