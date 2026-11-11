@@ -34,6 +34,7 @@ from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 from kapibara.core.errors import EXTERNAL, aside
+from kapibara.bot.tg import data_of, msg, sender, text_of
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -72,7 +73,7 @@ async def cmd_feed_start(message: Message, state: FSMContext):
         )
         return
 
-    last = await get_last_feed_post_time(message.from_user.id)
+    last = await get_last_feed_post_time(sender(message).id)
     if last:
         with aside(logger, "Подслушано: не проверился антиспам"):
             last_dt = datetime.fromisoformat(last)
@@ -107,7 +108,7 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
         await message.answer("Пустой пост не отправлю. Попробуй ещё раз через /feed.")
         return
 
-    post_id = await add_feed_post(text, photo_file_id, message.from_user.id)
+    post_id = await add_feed_post(text, photo_file_id, sender(message).id)
     caption = f"🗣 <b>Подслушано</b>\n\n{esc(text)}" if text else "🗣 <b>Подслушано</b>"
     # Реакции — сразу при отправке: id поста уже есть. Раньше вешались потом
     # через edit_message_reply_markup(GROUP_CHAT_ID, …) позиционно, а первый
@@ -140,8 +141,8 @@ async def publish_feed_post(message: Message, state: FSMContext, bot: Bot):
 
 @router.callback_query(F.data.startswith("freact:"))
 async def handle_reaction(callback: CallbackQuery):
-    _, post_id, emoji = callback.data.split(":")
-    post_id = int(post_id)
+    _, raw_id, emoji = data_of(callback).split(":")
+    post_id = int(raw_id)
 
     post = await get_feed_post(post_id)
     if not post or post.get("deleted"):
@@ -152,16 +153,16 @@ async def handle_reaction(callback: CallbackQuery):
     counts = await get_feed_reaction_counts(post_id)
 
     with cosmetic("feed.handle_reaction"):
-        await callback.message.edit_reply_markup(reply_markup=feed_keyboard(post_id, counts))
+        await msg(callback).edit_reply_markup(reply_markup=feed_keyboard(post_id, counts))
     await callback.answer(f"{emoji} учтено")
 
 
 @router.message(Command("delpost"))
 async def cmd_delpost(message: Message, bot: Bot):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
-    parts = message.text.split()
+    parts = text_of(message).split()
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /delpost ID")
         return

@@ -9,6 +9,7 @@ from database import create_vote, get_active_vote, add_vote_answer, get_vote_res
 from kapibara.core.config import STAROSTA_ID, STAROSTA_IDS
 from kapibara.core.utils import esc
 from kapibara.core.errors import EXTERNAL
+from kapibara.bot.tg import bot_of, data_of, msg, sender, text_of
 
 router = Router()
 
@@ -27,12 +28,12 @@ def vote_keyboard(vote_id: int) -> InlineKeyboardMarkup:
 @router.message(F.text == "🗳 Голосование")
 async def cmd_vote(message: Message):
     # Показать текущее голосование или создать новое
-    parts = message.text.split(maxsplit=1) if message.text.startswith("/vote") else []
+    parts = text_of(message).split(maxsplit=1) if text_of(message).startswith("/vote") else []
 
     if len(parts) >= 2:
         # Создать новое голосование
         question = parts[1].strip()
-        vote_id  = await create_vote(question, message.from_user.id)
+        vote_id  = await create_vote(question, sender(message).id)
         kb = vote_keyboard(vote_id)
         await message.answer(
             f"🗳 <b>Голосование создано!</b>\n\n❓ {esc(question)}",
@@ -61,8 +62,8 @@ async def cmd_vote(message: Message):
 
 @router.callback_query(F.data.startswith("vote:"))
 async def handle_vote(callback: CallbackQuery):
-    _, vote_id, answer = callback.data.split(":")
-    vote_id = int(vote_id)
+    _, raw_id, answer = data_of(callback).split(":")
+    vote_id = int(raw_id)
 
     vote = await get_active_vote()
     if not vote or vote["id"] != vote_id:
@@ -85,7 +86,7 @@ async def handle_vote(callback: CallbackQuery):
     # а старосте уходил алерт об ошибке.
     await callback.answer(f"Твой голос: {answer} ✅")
     try:
-        await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=vote_keyboard(vote_id))
+        await msg(callback).edit_text("\n".join(lines), parse_mode="HTML", reply_markup=vote_keyboard(vote_id))
     except TelegramBadRequest as e:
         if "not modified" not in str(e):
             raise
@@ -98,7 +99,7 @@ async def cmd_closevote(message: Message):
         await message.answer("Нет активного голосования.")
         return
     # Раньше закрыть чужое голосование мог кто угодно.
-    if STAROSTA_ID and message.from_user.id not in (vote["created_by"], *STAROSTA_IDS):
+    if STAROSTA_ID and sender(message).id not in (vote["created_by"], *STAROSTA_IDS):
         await message.answer("❌ Закрыть голосование может только его автор или староста.")
         return
     await close_vote(vote["id"])
@@ -132,7 +133,7 @@ async def send_anon(message: Message, state: FSMContext):
     await state.clear()
 
     try:
-        bot = message.bot
+        bot = bot_of(message)
         await bot.send_message(
             STAROSTA_ID,
             f"❓ <b>Анонимный вопрос от группы:</b>\n\n{esc(message.text)}",

@@ -10,6 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from database import get_all_subscribed_users
+from kapibara.bot.tg import msg, sender
 from kapibara.core.telegram import cosmetic
 from kapibara.core.config import STAROSTA_ID, is_starosta
 
@@ -24,7 +25,7 @@ class AnnounceState(StatesGroup):
 
 @router.message(Command("announce"))
 async def cmd_announce(message: Message, state: FSMContext):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await state.set_state(AnnounceState.waiting)
@@ -47,7 +48,7 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
     from database.identities import is_local
     from kapibara.features.privacy import privacy
     for uid in users:
-        if uid == message.from_user.id or await privacy.blocked(uid):   # без согласия — не шлём (152-ФЗ)
+        if uid == sender(message).id or await privacy.blocked(uid):   # без согласия — не шлём (152-ФЗ)
             continue
         if is_local(uid):                 # без Telegram — текст пушем, вложения не дойдут
             if message.text:
@@ -92,7 +93,7 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(Command("clearsem"))
 async def cmd_clearsem(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -117,15 +118,15 @@ async def clearsem_confirm(callback: CallbackQuery):
         await callback.answer("Только для старосты", show_alert=True)
         return
     with cosmetic("announce.clearsem: снять кнопки"):      # уже сняты (двойное нажатие) — не страшно
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await msg(callback).edit_reply_markup(reply_markup=None)
     if callback.data != "clearsem:yes":
         await callback.answer("Ок, ничего не трогаю")
-        await callback.message.answer("Отменено — данные сохранены.")
+        await msg(callback).answer("Отменено — данные сохранены.")
         return
     from database import clear_semester_data
     await clear_semester_data()
     await callback.answer()
-    await callback.message.answer("🧹 Готово! Доска чистого семестра.")
+    await msg(callback).answer("🧹 Готово! Доска чистого семестра.")
 
 
 # ── Доска ДЗ и прочие команды группы — отдельными модулями (v5.0.3) ────────
