@@ -93,7 +93,7 @@ async def get_last_feed_post_time(user_id: int) -> str | None:
         return row[0] if row else None
 
 
-async def add_feed_post(text: str, photo_file_id: str, user_id: int) -> int:
+async def add_feed_post(text: str, photo_file_id: str | None, user_id: int) -> int:
     await anonymize_feed_authors()
     async with connect() as db:
         cursor = await db.execute("""

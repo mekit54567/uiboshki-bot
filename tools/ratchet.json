@@ -4,6 +4,6 @@
   "cycle_modules": 0,
   "root_py_files": 1,
   "ruff_debt": 0,
-  "mypy_errors": 494,
+  "mypy_errors": 464,
   "mypy_core": 0
 }
