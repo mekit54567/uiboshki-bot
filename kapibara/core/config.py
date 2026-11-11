@@ -51,7 +51,7 @@ LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
 RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app"
 # iPhone-приложение в App Store (вышло 05.11.2026): по умолчанию — его страница,
 # переменная APPSTORE_URL — поменять без выпуска. Пусто — бот про App Store молчит.
-APPSTORE_URL = os.getenv("APPSTORE_URL", "https://apps.apple.com/ru/app/id6828117584").strip()
+APPSTORE_URL = os.getenv("APPSTORE_URL", "https://apps.apple.com/app/id6828117584").strip()
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.

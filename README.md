@@ -23,7 +23,7 @@
 **[Сайт с живым демо](https://www.uiboshki.ru)** ·
 **[Бот в Telegram](https://t.me/UiboshkiBot)** ·
 **[Без Telegram — uiboshki.ru/app](https://www.uiboshki.ru/app)** ·
-**[App Store](https://apps.apple.com/ru/app/id6828117584)** ·
+**[App Store](https://apps.apple.com/app/id6828117584)** ·
 **[RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app)** ·
 **[Новости — @kapibara_mirea](https://t.me/kapibara_mirea)** ·
 **[Канал о разработке](https://t.me/uiboshki_dev)**
@@ -65,7 +65,7 @@
 | **Telegram** | [@UiboshkiBot](https://t.me/UiboshkiBot) → «Открыть приложение» | бот сам пишет про пары и сроки, inline-режим в любом чате |
 | **Телефон без Telegram (PWA)** | [uiboshki.ru/app](https://www.uiboshki.ru/app) → iPhone: «Поделиться → На экран „Домой“», Android: «Установить приложение» | вход через Telegram, VK ID или Яндекс ID, уведомления пушем, расписание без сети |
 | **Компьютер** | тот же адрес в Chrome, Edge или Яндекс Браузере → «Установить» | отдельное окно, как обычная программа |
-| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`): iPhone — [в App Store](https://apps.apple.com/ru/app/id6828117584), Android — [в RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app) | вход в СДО обычной страницей МИРЭА, пуши, ачивки |
+| **Android и iPhone** | своё приложение «Капибара» на Flutter (`app/`): iPhone — [в App Store](https://apps.apple.com/app/id6828117584), Android — [в RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app) | вход в СДО обычной страницей МИРЭА, пуши, ачивки |
 
 Данные везде одни: что отметил в Telegram — видно в PWA и в приложении.
 
@@ -127,7 +127,7 @@
 **📱 Без Telegram** — [uiboshki.ru/app](https://www.uiboshki.ru/app): то же
 приложение ставится на экран телефона или компьютера (PWA), вход через бота,
 VK ID или Яндекс ID, уведомления — веб-пушем, последнее открытое — без сети. Своё
-приложение «Капибара» — в [App Store](https://apps.apple.com/ru/app/id6828117584)
+приложение «Капибара» — в [App Store](https://apps.apple.com/app/id6828117584)
 и [RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app), на том же API.
 
 **👑 Для старосты** — рассылки, статистика (`/stats`), состояние бота
