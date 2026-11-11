@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from kapibara.bot.tg import msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.errors import aside
 
@@ -79,7 +80,7 @@ async def _chat_or_explain(message: Message) -> int:
 @router.message(Command("say"), F.chat.type == "private")
 async def cmd_say(message: Message, state: FSMContext):
     from kapibara.core import config
-    if not config.is_starosta(message.from_user.id) or not await _chat_or_explain(message):
+    if not config.is_starosta(sender(message).id) or not await _chat_or_explain(message):
         return
     await state.set_state(SayState.waiting)
     await message.answer("🗣 Пришли, что написать в чат группы от моего имени: текст, фото, файл, "
@@ -100,14 +101,14 @@ async def say_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
         return
     msg_id = (await state.get_data()).get("say_msg")
     await state.clear()
-    await callback.message.edit_reply_markup(reply_markup=None)
+    await msg(callback).edit_reply_markup(reply_markup=None)
     if callback.data == "say:no" or not msg_id:
-        await callback.message.edit_text("Не отправил." if msg_id else "Уже отправлено или устарело.")
+        await msg(callback).edit_text("Не отправил." if msg_id else "Уже отправлено или устарело.")
         return
     from kapibara.features.groups import members
     chat = await members.chat_id()
     try:
-        sent = await bot.copy_message(chat, callback.message.chat.id, msg_id)
+        sent = await bot.copy_message(chat, msg(callback).chat.id, msg_id)
         note = "✅ Отправил в чат группы."
         if callback.data == "say:pin":
             try:
@@ -117,7 +118,7 @@ async def say_confirm(callback: CallbackQuery, state: FSMContext, bot: Bot):
                 note = f"✅ Отправил, но закрепить не вышло — дай мне в чате право закреплять сообщения.\n({e.message})"
     except TelegramAPIError as e:
         note = f"⚠️ Не отправилось: {e.message}"
-    await callback.message.edit_text(note)
+    await msg(callback).edit_text(note)
     await callback.answer()
 
 
@@ -131,10 +132,10 @@ async def cmd_group_morning(message: Message, bot: Bot):
     from kapibara.features.groups import members
     from kapibara.jobs import scheduler
     from database import get_setting, set_setting
-    if not config.is_starosta(message.from_user.id):
+    if not config.is_starosta(sender(message).id):
         return
-    arg = (message.text or "").split(maxsplit=1)[1:] or [""]
-    arg = arg[0].strip().lower()
+    parts = (message.text or "").split(maxsplit=1)[1:] or [""]
+    arg = parts[0].strip().lower()
     if arg in ("on", "off"):
         await set_setting("group_morning", arg)
         await message.answer("☀️ Утренняя карточка в чат группы — " + ("включена." if arg == "on" else "выключена."))

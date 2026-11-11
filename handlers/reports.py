@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
+from kapibara.bot.tg import bot_of, data_of, msg, sender
 from kapibara.core import config
 from kapibara.core.telegram import cosmetic
 
@@ -34,7 +35,7 @@ async def report_decision(callback: CallbackQuery):
     if not config.is_starosta(callback.from_user.id):
         await callback.answer("Это кнопка владельца бота", show_alert=True)
         return
-    _, verdict, rid = callback.data.split(":", 2)
+    _, verdict, rid = data_of(callback).split(":", 2)
     if verdict in ("back", "hold"):
         status = await ugc.settle(callback.bot, int(rid), restore=verdict == "back")
     else:
@@ -44,7 +45,8 @@ async def report_decision(callback: CallbackQuery):
     note = NOTES.get(status, "Уже решено.")
     await callback.answer(note)
     with cosmetic("reports.report_decision"):
-        await callback.message.edit_text(f"{callback.message.html_text}\n\n<b>{note}</b>", parse_mode="HTML")
+        m = msg(callback)
+        await m.edit_text(f"{m.html_text}\n\n<b>{note}</b>", parse_mode="HTML")
 
 
 @router.callback_query(F.data == "dis:cancel")
@@ -53,7 +55,7 @@ async def dispute_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.answer("Отменил")
     with cosmetic("reports.dispute_cancel"):
-        await callback.message.edit_text(f"Отменил. Передумаешь — «Оспорить» можно нажать снова "
+        await msg(callback).edit_text(f"Отменил. Передумаешь — «Оспорить» можно нажать снова "
                                          f"в течение {ugc.DISPUTE_DAYS} дней после удаления.")
 
 
@@ -61,7 +63,7 @@ async def dispute_cancel(callback: CallbackQuery, state: FSMContext):
 async def dispute(callback: CallbackQuery, state: FSMContext):
     """«Оспорить» под сообщением «Твою запись убрали» → просим объяснение одним сообщением."""
     from kapibara.features.social import ugc
-    rid = int(callback.data.split(":", 1)[1])
+    rid = int(data_of(callback).split(":", 1)[1])
     status = await ugc.can_dispute(rid, callback.from_user.id)
     if status != "removed":
         await callback.answer(NOT_NOW.get(status, "Уже пересмотрели — ответ выше."), show_alert=True)
@@ -69,7 +71,7 @@ async def dispute(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Dispute.why)
     await state.update_data(rid=rid, notice=callback.message.message_id if callback.message else None)
     await callback.answer()
-    await callback.bot.send_message(
+    await bot_of(callback).send_message(
         callback.from_user.id,
         "⚖️ Напиши одним сообщением, с чем ты не согласен и почему запись не нарушает правила — "
         f"от {ugc.APPEAL_MIN} до {ugc.APPEAL_MAX} знаков. Его прочитает только владелец бота, "
@@ -94,12 +96,12 @@ async def dispute_why(message: Message, state: FSMContext):
         return
     data = await state.get_data()
     await state.clear()
-    status = await ugc.dispute(message.bot, int(data.get("rid") or 0), message.from_user.id, text)
+    status = await ugc.dispute(message.bot, int(data.get("rid") or 0), sender(message).id, text)
     if status != "disputed":
         await message.answer(NOT_NOW.get(status, "Уже пересмотрели — ответ выше."))
         return
     await message.answer(SENT)
     if data.get("notice"):                          # у сообщения «убрали» — без кнопки, с отметкой
         with cosmetic("reports.dispute_why"):
-            await message.bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=data["notice"],
+            await bot_of(message).edit_message_reply_markup(chat_id=message.chat.id, message_id=data["notice"],
                                                         reply_markup=None)
