@@ -373,7 +373,7 @@ List<(IconData, String, String, String)> _facts(Map s) {
       Icons.auto_awesome_outlined,
       'Вопросы к ИИ',
       'Уходит только вопрос, история чата и нужные куски лекций. Имя и вход в СДО — нет.',
-      'ИИ не узнает, кто спрашивал. Но личное в вопросы лучше не писать.',
+      'Имя и вход с вопросом не уходят. Но сам вопрос и файл ИИ читает — личное в них лучше не писать.',
     ),
     (
       Icons.dns_outlined,
@@ -391,7 +391,7 @@ List<(IconData, String, String, String)> _facts(Map s) {
       Icons.speed_outlined,
       'Защита от перегруза',
       'Не больше $ai вопросов ИИ в минуту и ${sub['count'] ?? 6} сдач за ${sub['minutes'] ?? 10} минут.',
-      'Никто не завалит бота запросами — он не тормозит ни у кого.',
+      'Один человек не займёт бота целиком — остальным он отвечает как обычно.',
     ),
   ];
 }
@@ -429,7 +429,7 @@ class _Summary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Всё под защитой',
+                  'Как защищены твои данные',
                   style: s.body(16, weight: FontWeight.w700, color: p.ok),
                 ),
                 const SizedBox(height: 2),

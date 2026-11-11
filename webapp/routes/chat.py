@@ -130,6 +130,34 @@ def cited(answer: str) -> set[int]:
     return out
 
 
+def merge_same_sources(content: str, sources: list[dict]) -> tuple[str, list[dict]]:
+    """Один чип на одно место: куски с тем же файлом-названием и страницей
+    (две копии лекции, длинная страница двумя кусками) сливаются в первый
+    номер, и в тексте ответа «[5][8]» становится «[5]» — иначе пузырёк 8 вёл
+    бы в никуда (одногруппник Никиты 09.11: три пары одинаковых чипов)."""
+    canon: dict = {}
+    keep: dict[tuple, dict] = {}
+    for s in sources:
+        key = (str(s.get("title") or "").strip().lower(), s.get("page"), s.get("kind"))
+        first = keep.setdefault(key, s)
+        canon[s.get("n")] = first.get("n")
+    if len(keep) == len(sources):
+        return content, sources
+
+    def group(m):
+        nums = []
+        for x in re.split(r"\s*[,;]\s*", m.group(1)):
+            n = canon.get(int(x), int(x))
+            if n not in nums:
+                nums.append(n)
+        return "[" + ", ".join(str(n) for n in nums) + "]"
+    # код не трогаем: «a[8]» в примере — не ссылка
+    parts = re.split(r"(```.*?```|`[^`\n]*`)", content, flags=re.S)
+    for i in range(0, len(parts), 2):
+        parts[i] = re.sub(r"(\[(\d+)\])(?:\s*\[\2\])+", r"\1", _CITE.sub(group, parts[i]))  # «[5] [5]» → «[5]»
+    return "".join(parts), list(keep.values())
+
+
 async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
     """Какие лекции ушли ИИ вместе с вопросом — «📖 по: ЛК3 · ЛК5» под
     ответом, с переходом к файлу. Заголовки блоков — «[n] файл» (выбран
@@ -285,6 +313,8 @@ async def reply(history: list, subject: str, context: str, lectures: str, source
         log_failure(logger, f"webapp chat failed: {_short_reason(e)}", e,
                     expected=(gemini_solver.GeminiError, think.ThinkError))
         raise HTTPException(status_code=502, detail=BUSY_TEXT) from e
+    if lectures and sources:
+        result["content"], sources = merge_same_sources(result.get("content", ""), sources)
     # Тот же вид, что и в боте: жирный, код, x² вместо x^2 (всё экранировано).
     result["html"] = "\n".join(md_to_tg_html_chunks(result.get("content", "")))
     # Под ответом — только материалы, на которые ИИ сослался номером: на

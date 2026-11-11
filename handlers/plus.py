@@ -139,6 +139,30 @@ async def send_donate(message: Message, uid: int):
     await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
+async def claim_donation(message: Message, uid: int, claim: str):
+    """/start dn_<код> со страницы «спасибо» после доната без входа (/donate без
+    личной ссылки): донат становится твоим — спасибо и роадмап."""
+    from database import billing as store
+    from kapibara.features.billing import billing
+    from kapibara.features.content import roadmap
+    if message.chat.type != "private":          # uid = чат: только в личке с ботом
+        return
+    don = await store.donation_by_claim(claim)
+    if don and don["payer_id"] is None:
+        don = await store.claim_donation(claim, uid)
+    if not don or don["payer_id"] != uid:
+        await message.answer("Не нашёл этот платёж — возможно, его уже привязали к другому аккаунту. "
+                             "Если это ошибка — напиши @Partykq.")
+        return
+    if don["status"] != "succeeded":
+        await message.answer("💛 Платёж привязан к тебе. Как только касса подтвердит оплату, я напишу "
+                             "и открою роадмап.")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        text="🗺 Открыть роадмап", url=roadmap.page_link(uid))]])
+    await message.answer(billing.donate_thanks(don["amount"]), reply_markup=kb, disable_web_page_preview=True)
+
+
 @router.message(Command("donate"))
 async def cmd_donate(message: Message):
     await send_donate(message, message.from_user.id)

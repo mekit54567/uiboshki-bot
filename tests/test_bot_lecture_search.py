@@ -66,3 +66,10 @@ def test_sources_line_title_up_to_40_by_word():
     assert out.endswith("📚 [1] Лекция 5. Оценка стоимости бизнеса… · слайд 12")
     assert semantic_search.short_title("Лекция 5. Оценка бизнеса") == "Лекция 5. Оценка бизнеса"
     assert semantic_search.short_title("Аааааааааааааааааааааааааааааааааа", 10) == "Ааааааааа…"   # без пробела — как было
+
+
+def test_sources_line_one_place_once():
+    # одна страница двумя кусками — в строке источников один раз
+    ctx, _ = semantic_search.build_context([HIT, {**HIT, "text": HIT["text"] + " ещё"}])
+    out = solver.with_sources("Ответ [1] и [2].", ctx)
+    assert out.count("слайд 12") == 1

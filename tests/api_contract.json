@@ -111,6 +111,7 @@
  "POST /api/sdo/connect",
  "POST /api/sdo/disconnect",
  "POST /api/sdo/goal/{course_id}",
+ "POST /api/sdo/recheck",
  "POST /api/sdo/share",
  "POST /api/sdo/submission/remove",
  "POST /api/sdo/submit",

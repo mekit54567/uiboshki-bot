@@ -165,6 +165,10 @@ function errorText(e) { return e && e.message ? e.message : "Что-то пош�
 // ── Тема и шрифт («Оформление», theme/look.dart) ──
 const Theme = {
   design2: Prefs.get("uib_design2", true) !== false,
+  // дизайн по брендбуку v1 (11.11): off — сервер выключил, opt — по выбору, on — новое всем
+  design3: Prefs.get("uib_design3", "opt"),
+  // «Новое» включено: «Тетрадь», «Ночная тетрадь», «Книжный» (ставит apply)
+  fresh: false,
   dark: false,
   get darkInk() { return this.design2 && !this.dark; },
   pick() {
@@ -180,16 +184,21 @@ const Theme = {
     const { dark, dusk } = this.pick();
     this.dark = dark;
     const look = this.design2 ? Look.load() : Look.classic;
-    const name = dark ? (look.dark === "library" ? "library" : "depth") : (look.light === "campus" ? "campus" : "notebook");
+    const fresh = this.design2 && this.design3 !== "off" && look.fresh;
+    this.fresh = fresh;
+    const name = fresh ? (dark ? (look.freshDepth ? "depth" : "night") : "paper")
+      : dark ? (look.dark === "library" ? "library" : "depth") : (look.light === "campus" ? "campus" : "notebook");
     const root = document.documentElement;
     root.dataset.appTheme = name;
     root.dataset.dark = dark ? "1" : "0";
-    root.dataset.paper = !dark && name === "notebook" ? look.paper : "smooth";
+    root.dataset.fresh = fresh ? "1" : "0";
+    root.dataset.paper = !dark && (fresh || name === "notebook") ? look.paper : "smooth";
     root.dataset.card = look.card;
     root.style.filter = "";
     root.style.setProperty("--dusk", String(dusk));
     let font = Prefs.get("uib_font") || "book";
     if (!this.design2 && (font === "hand" || font === "wide")) font = "book";
+    if (fresh) font = "book";   // «Новое» — всегда «Книжный» (брендбук)
     root.dataset.font = font;
     const f = { book: ["SourceSerif", 500, 1, -0.03, "SourceSerif", 500, 1, -0.05],
                 strict: ["Onest", 700, 1, -0.03, "Onest", 800, 1, -0.05],
@@ -206,15 +215,19 @@ const Theme = {
   },
 };
 const Look = {
-  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic" },
+  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic", fresh: false, freshDepth: false },
   load() {
     const c = this.classic;
     return { light: Prefs.get("uib_look_light", c.light), dark: Prefs.get("uib_look_dark", c.dark),
              paper: Prefs.get("uib_look_paper", c.paper), card: Prefs.get("uib_look_card", c.card),
              day: Prefs.get("uib_look_day", c.day), cheer: Prefs.get("uib_look_cheer", c.cheer),
-             icon: Prefs.get("uib_look_icon", c.icon) };
+             icon: Prefs.get("uib_look_icon", c.icon),
+             // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
+             fresh: Prefs.get("uib_look_fresh", Theme.design3 === "on") === true,
+             freshDepth: Prefs.get("uib_look_fresh_depth", false) === true };
   },
-  save(l) { for (const k of ["light", "dark", "paper", "card", "day", "cheer", "icon"]) Prefs.set("uib_look_" + k, l[k]); },
+  save(l) { for (const k of ["light", "dark", "paper", "card", "day", "cheer", "icon"]) Prefs.set("uib_look_" + k, l[k]);
+    Prefs.set("uib_look_fresh", !!l.fresh); Prefs.set("uib_look_fresh_depth", !!l.freshDepth); },
 };
 /** Восход и закат в Москве (moscowSun) и фаза «по закату» (sunsetPhase). */
 function moscowSun(d) {

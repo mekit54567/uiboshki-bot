@@ -766,6 +766,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     // у чипа текст в одну строку и обрезается молча — переносим
                                     label: Text(q, softWrap: true, maxLines: 3, style: s.body(13)),
                                     onPressed: () {
+                                      // «3 лекцию» чего? Без предмета не шлём — даём дописать
+                                      // (UX-аудит 02.11, п. 27: вопрос уходил и тратил лимит)
+                                      if (q == 'Объясни 3 лекцию' && _subject.isEmpty) {
+                                        _input.text = '$q по ';
+                                        _input.selection = TextSelection.collapsed(offset: _input.text.length);
+                                        showToast(
+                                          context,
+                                          'Допиши предмет или выбери его сверху',
+                                          kind: ToastKind.info,
+                                        );
+                                        return;
+                                      }
                                       _input.text = q;
                                       _send();
                                     },

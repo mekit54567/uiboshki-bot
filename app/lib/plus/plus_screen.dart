@@ -203,7 +203,7 @@ class _PlusBody extends StatelessWidget {
                               const SizedBox(width: Space.s),
                               Expanded(
                                 child: Text(
-                                  'месяц для тебя — $founderPrice ₽, навсегда',
+                                  'твоя цена — $founderPrice ₽ в месяц, она не вырастет',
                                   style: s.body(13, color: p.muted),
                                 ),
                               ),

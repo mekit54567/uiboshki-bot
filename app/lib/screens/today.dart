@@ -545,14 +545,10 @@ class _MainView extends StatelessWidget {
       }
     }
 
-    // сегодня пар нет или они кончились — ниже пары на завтра; первая из них
-    // уже крупно в фокусе, если пары сегодня были
+    // сегодня пар нет или они кончились — ниже все пары на завтра, и первая
+    // тоже: без неё «ещё 4 пары» сбивали — в «Неделе» их 5 (Никита 11.11)
     final free = lessons.isEmpty || (current == null && next == null);
-    final rest = lessons.isEmpty
-        ? data.tomorrow
-        : current == null && next == null && data.tomorrow.length > 1
-        ? data.tomorrow.sublist(1)
-        : const <Lesson>[];
+    final rest = free ? data.tomorrow : const <Lesson>[];
     final n = rest.length;
     return ListView(
       padding: const EdgeInsets.only(bottom: 120),
@@ -590,7 +586,7 @@ class _MainView extends StatelessWidget {
               ),
         ],
         if (rest.isNotEmpty) ...[
-          Section('завтра · ${lessons.isEmpty ? '' : 'ещё '}$n ${plural(n, 'пара', 'пары', 'пар')}'),
+          Section('завтра · $n ${plural(n, 'пара', 'пары', 'пар')}'),
           for (final l in rest)
             Padding(
               padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),

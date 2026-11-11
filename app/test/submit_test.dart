@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:uiboshki/api/api.dart';
 import 'package:uiboshki/screens/submit.dart';
 import 'package:uiboshki/theme/app_theme.dart';
+import 'package:uiboshki/widgets/capy.dart';
 
 import 'fake_api.dart';
 import 'util.dart';
@@ -100,13 +101,21 @@ void main() {
       t,
       fakeApi(
         overrides: {
-          'POST /api/sdo/submit': {'status': 'Черновик (не отправлено)', 'state': 'draft'},
+          'POST /api/sdo/submit': {
+            'status': 'Черновик (не отправлено)',
+            'state': 'draft',
+            'url': 'https://online-edu.mirea.ru/mod/assign/view.php?id=7',
+          },
         },
       ),
     );
     expect(find.text('Сдано'), findsNothing);
     expect(find.text('Сохранено черновиком'), findsOneWidget);
-    expect(find.textContaining('нажми «Отправить»'), findsOneWidget);
+    expect(find.textContaining('нажми там «Отправить на проверку»'), findsOneWidget);
+    // UX-аудит, п. 6: дело не доделано — без прыжка, главная кнопка ведёт в задание
+    expect(find.byType(CapyHop), findsNothing);
+    expect(find.text('Открыть задание в СДО'), findsOneWidget);
+    expect(find.text('Закрыть'), findsOneWidget);
   });
 
   testWidgets('непонятный ответ СДО — не «Сдано»', (t) async {

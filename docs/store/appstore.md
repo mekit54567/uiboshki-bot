@@ -81,10 +81,14 @@ App Store Connect → приложение → вкладка **App Store** → 
 
 ## Скриншоты
 
-**iPhone 6.9" Display** — загрузи из `docs/store/screens/appstore/` по порядку:
-`1-today.jpg`, `2-week.jpg`, `3-deadlines.jpg`, `4-goal.jpg`, `5-assistant.jpg`,
-`6-more.jpg`, по желанию `1-today-dark.jpg`, `2-week-dark.jpg` (до 10 штук).
-Размер 1320×2868 — меньшие экраны Apple сделает сам. iPad не нужен: сборка для
+**С 11.11 — оформленные** (вариант А «Тетрадь», выбрал Никита): сверху фраза
+про экран, ниже телефон в рамке на бумажном фоне. **iPhone 6.9" Display** —
+`docs/store/screens/framed/appstore-6.9/` (1320×2868), **6.3"** (если Apple
+просит) — `framed/appstore-6.3/` (1206×2622), по порядку: `1-today.jpg`,
+`2-week.jpg`, `3-deadlines.jpg`, `4-goal.jpg`, `5-assistant.jpg`, `6-more.jpg`.
+Скриншоты меняются только вместе с новой версией, отправленной на проверку.
+Голые снимки экранов, из которых собраны картинки, — `docs/store/screens/appstore/`
+(`app/robot/store_shots.js`). Меньшие экраны Apple сделает сам. iPad не нужен: сборка для
 App Store — только iPhone.
 
 Иконка берётся из сборки (1024×1024 уже в проекте).

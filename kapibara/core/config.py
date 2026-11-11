@@ -49,9 +49,9 @@ CHANNEL_ID = channel_id_from(os.getenv("CHANNEL_ID", ""), CHANNEL_URL)
 LOGIN_CHANNEL = os.getenv("LOGIN_CHANNEL", "").strip()
 # Android-приложение в RuStore (вышло 27.10.2026): ссылка — в боте, на сайте и в «Установить»
 RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app"
-# iPhone-приложение в App Store: ссылку задать, когда Apple его одобрит и оно
-# появится в сторе (kap env, без выпуска). Пусто — бот про App Store молчит.
-APPSTORE_URL = os.getenv("APPSTORE_URL", "").strip()
+# iPhone-приложение в App Store (вышло 05.11.2026): по умолчанию — его страница,
+# переменная APPSTORE_URL — поменять без выпуска. Пусто — бот про App Store молчит.
+APPSTORE_URL = os.getenv("APPSTORE_URL", "https://apps.apple.com/app/id6828117584").strip()
 # Предметы по выбору: ходят не все (военная кафедра — двое из группы).
 # Пары скрыты, пока человек не ответит «хожу» (WebApp спросит на главной,
 # бот — при /start). Через запятую.
@@ -64,6 +64,15 @@ def design2_on() -> bool:
     /api/meta features.design2, вечерняя сводка). Читается при вызове — тесты
     меняют переменную на лету."""
     return os.getenv("DESIGN2", "1").strip() != "0"
+
+
+def design3() -> str:
+    """Новый дизайн по брендбуку v1 (11.11): «Тетрадь», «Ночная тетрадь», новые
+    экраны. DESIGN3=0 — «off»: у всех прежний вид, переключателя в «Оформлении»
+    нет (откат одной переменной); DESIGN3=1 — «on»: новый вид у всех, кто сам
+    не выбрал «Классику»; не задана — «opt»: только у выбравших «Новое».
+    /api/meta features.design3; читается при вызове."""
+    return {"0": "off", "1": "on"}.get(os.getenv("DESIGN3", "").strip(), "opt")
 
 # ─── ID старосты (твой Telegram ID) ───────────────────────────────────────────
 # Узнать свой ID: написать @userinfobot в Telegram

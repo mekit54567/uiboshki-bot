@@ -20,7 +20,11 @@ extension LegalLink on Palette {
 
 void openLegal(BuildContext context, Api api, String name) {
   tick();
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => LegalScreen(api: api, name: name)));
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => LegalScreen(api: api, name: name),
+    ),
+  );
 }
 
 /// Текст согласия или политики.
@@ -355,7 +359,8 @@ Future<bool> deleteMyData(BuildContext context, Api api, {bool confirmed = false
     final typed = await inputSheet(
       context,
       title: 'Удалить все твои данные?',
-      text: 'Профиль, группу, вход в СДО, историю баллов и посещений, личные дедлайны, устройства, '
+      text:
+          'Профиль, группу, вход в СДО, историю баллов и посещений, личные дедлайны, устройства, '
           'входы через VK, Яндекс и Apple. Сразу — выход со всех устройств и из СДО, рассылки и ИИ '
           'остановятся. Полностью всё сотрём через 7 дней: если удалил по ошибке, до этого можно '
           'написать Никите (@Partykq) — вернём вручную, если получится, без гарантии.\n\n'
@@ -384,7 +389,7 @@ Future<bool> deleteMyData(BuildContext context, Api api, {bool confirmed = false
   final text = '${r?['text'] ?? ''}';
   if (!context.mounted) return true;
   if (text.isEmpty) {
-    showToast(context, 'Готово: всё о тебе удалено', kind: ToastKind.done);
+    showToast(context, 'Аккаунт отключён, данные удаляются', kind: ToastKind.done);
   } else {
     await confirmSheet(context, title: 'Данные удаляются', text: text, action: 'Понятно', cancel: 'Закрыть');
   }

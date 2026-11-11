@@ -398,7 +398,7 @@ window.deleteMyData = async function deleteMyData({ confirmed = false } = {}) {
   Api.token = null;
   Api.clearCache();
   const text = String((r && r.text) || "");
-  if (!text) toast("Готово: всё о тебе удалено", "done");
+  if (!text) toast("Аккаунт отключён, данные удаляются", "done");
   else await confirmSheet({ title: "Данные удаляются", text, action: "Понятно", cancel: "Закрыть" });
   return true;
 };

@@ -36,7 +36,10 @@ class LookScreen extends StatelessWidget {
 
     final sun = moscowSun(now());
     String hm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    final changed = look != Look.classic || s.font.index > 1 || s.theme == ThemeChoice.sunset;
+    final fresh = s.fresh;
+    // «как было» внутри выбранного вида: «Новое / Классика» сброс не трогает
+    final plain = Look.classic.copyWith(fresh: look.fresh);
+    final changed = look != plain || (!fresh && s.font.index > 1) || s.theme == ThemeChoice.sunset;
 
     return Scaffold(
       body: Backdrop(
@@ -47,6 +50,25 @@ class LookScreen extends StatelessWidget {
               const BackRow(),
               const ScreenTitle(title: 'Оформление'),
               const Padding(padding: EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0), child: _Preview()),
+
+              // дизайн по брендбуку v1 (11.11): «Новое» — «Тетрадь», «Ночная
+              // тетрадь» и «Книжный»; сервер выключил (DESIGN3=0) — строки нет
+              if (s.design3 != 'off') ...[
+                const Section('вид приложения'),
+                _Pad(
+                  _Seg<_Mode>(
+                    id: 'mode',
+                    value: fresh ? _Mode.fresh : _Mode.classic,
+                    items: const [(_Mode.fresh, 'Новое'), (_Mode.classic, 'Классика')],
+                    onPick: (v) => set(look.copyWith(fresh: v == _Mode.fresh)),
+                  ),
+                ),
+                _Hint(
+                  fresh
+                      ? 'Новый вид приложения: бумага «Тетради» и шрифт с засечками. Экраны обновляются по одному.'
+                      : 'Прежний вид: четыре темы и четыре шрифта на выбор.',
+                ),
+              ],
 
               const Section('когда тёмная'),
               _Pad(
@@ -65,29 +87,30 @@ class LookScreen extends StatelessWidget {
               if (s.theme == ThemeChoice.sunset)
                 _Hint('Сегодня тёмная с ${hm(sun.set)} до ${hm(sun.rise)} завтра, за час до заката фон мягко темнеет.'),
 
-              const Section('светлая тема'),
-              _Pad(
-                Row(
-                  children: [
-                    for (final t in LightTheme.values) ...[
-                      if (t != LightTheme.values.first) const SizedBox(width: Space.s),
-                      Expanded(
-                        child: _Swatch(
-                          key: Key('look:light:${t.name}'),
-                          palette: Palette.ofLight(t),
-                          paper: t == LightTheme.notebook ? look.paper : Paper.smooth,
-                          title: t == LightTheme.notebook ? 'Тетрадь' : 'Кампус',
-                          sub: t == LightTheme.notebook ? 'тёплая бумага' : 'белая, синий акцент',
-                          selected: look.light == t,
-                          onTap: () => set(look.copyWith(light: t)),
+              Section(fresh ? 'бумага' : 'светлая тема'),
+              if (!fresh)
+                _Pad(
+                  Row(
+                    children: [
+                      for (final t in LightTheme.values) ...[
+                        if (t != LightTheme.values.first) const SizedBox(width: Space.s),
+                        Expanded(
+                          child: _Swatch(
+                            key: Key('look:light:${t.name}'),
+                            palette: Palette.ofLight(t),
+                            paper: t == LightTheme.notebook ? look.paper : Paper.smooth,
+                            title: t == LightTheme.notebook ? 'Тетрадь' : 'Кампус',
+                            sub: t == LightTheme.notebook ? 'тёплая бумага' : 'белая, синий акцент',
+                            selected: look.light == t,
+                            onTap: () => set(look.copyWith(light: t)),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (look.light == LightTheme.notebook) ...[
-                const SizedBox(height: Space.s),
+              if (fresh || look.light == LightTheme.notebook) ...[
+                if (!fresh) const SizedBox(height: Space.s),
                 _Pad(
                   _Seg<Paper>(
                     id: 'paper',
@@ -106,49 +129,60 @@ class LookScreen extends StatelessWidget {
               ],
 
               const Section('тёмная тема'),
-              _Pad(
-                Row(
-                  children: [
-                    for (final t in DarkTheme.values) ...[
-                      if (t != DarkTheme.values.first) const SizedBox(width: Space.s),
-                      Expanded(
-                        child: _Swatch(
-                          key: Key('look:dark:${t.name}'),
-                          palette: Palette.ofDark(t),
-                          paper: Paper.smooth,
-                          title: t == DarkTheme.depth ? 'Глубина' : 'Библиотека',
-                          sub: t == DarkTheme.depth ? 'синее свечение' : 'тёмно-зелёная',
-                          selected: look.dark == t,
-                          onTap: () => set(look.copyWith(dark: t)),
+              if (fresh)
+                _Pad(
+                  _Seg<_Night>(
+                    id: 'night',
+                    value: look.freshDepth ? _Night.depth : _Night.night,
+                    items: const [(_Night.night, 'Ночная тетрадь'), (_Night.depth, 'Глубина')],
+                    onPick: (v) => set(look.copyWith(freshDepth: v == _Night.depth)),
+                  ),
+                )
+              else
+                _Pad(
+                  Row(
+                    children: [
+                      for (final t in DarkTheme.values) ...[
+                        if (t != DarkTheme.values.first) const SizedBox(width: Space.s),
+                        Expanded(
+                          child: _Swatch(
+                            key: Key('look:dark:${t.name}'),
+                            palette: Palette.ofDark(t),
+                            paper: Paper.smooth,
+                            title: t == DarkTheme.depth ? 'Глубина' : 'Библиотека',
+                            sub: t == DarkTheme.depth ? 'синее свечение' : 'тёмно-зелёная',
+                            selected: look.dark == t,
+                            onTap: () => set(look.copyWith(dark: t)),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
 
-              const Section('шрифт заголовков'),
-              _Pad(
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: Space.s,
-                  crossAxisSpacing: Space.s,
-                  childAspectRatio: 1.9,
-                  children: [
-                    for (final f in FontChoice.values)
-                      _FontCard(
-                        choice: f,
-                        selected: s.font == f,
-                        onTap: () {
-                          tick();
-                          onFont(f);
-                        },
-                      ),
-                  ],
+              if (!fresh) const Section('шрифт заголовков'),
+              if (!fresh)
+                _Pad(
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: Space.s,
+                    crossAxisSpacing: Space.s,
+                    childAspectRatio: 1.9,
+                    children: [
+                      for (final f in FontChoice.values)
+                        _FontCard(
+                          choice: f,
+                          selected: s.font == f,
+                          onTap: () {
+                            tick();
+                            onFont(f);
+                          },
+                        ),
+                    ],
+                  ),
                 ),
-              ),
 
               const Section('пары на «сегодня»'),
               _Pad(
@@ -220,12 +254,12 @@ class LookScreen extends StatelessWidget {
                     key: const Key('look:reset'),
                     onPressed: () {
                       tick();
-                      onLook?.call(Look.classic);
-                      if (s.font.index > 1) onFont(FontChoice.book);
+                      onLook?.call(plain);
+                      if (!fresh && s.font.index > 1) onFont(FontChoice.book);
                       if (s.theme == ThemeChoice.sunset) onTheme?.call(ThemeChoice.system);
                     },
                     icon: Icon(Icons.undo_rounded, color: p.muted),
-                    label: Text('Вернуть как было', style: s.body(15, color: p.muted)),
+                    label: Text('Сбросить оформление', style: s.body(15, color: p.muted)),
                   ),
                 ),
               ],
@@ -245,6 +279,12 @@ class LookScreen extends StatelessWidget {
     );
   }
 }
+
+/// «Новое» — дизайн по брендбуку v1, «Классика» — прежний вид.
+enum _Mode { fresh, classic }
+
+/// Тёмная тема «Нового»: «Ночная тетрадь» или запасная «Глубина».
+enum _Night { night, depth }
 
 class _Pad extends StatelessWidget {
   final Widget child;

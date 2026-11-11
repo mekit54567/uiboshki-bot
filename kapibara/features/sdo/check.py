@@ -66,3 +66,45 @@ async def state(group_id: int | None) -> dict | None:
     if not s or not s.get("at"):
         return None
     return {"ok": bool(s.get("ok")), "checked_at": s["at"], "last_ok": s.get("last_ok")}
+
+
+# ── «Проверить СДО сейчас» во вкладке «Сдать» (UX-аудит 02.11, п. 7) ────────
+# Раньше кнопка «Попробовать ещё раз» только перечитывала экран: синк шёл
+# раз в 6 часов, и кнопка выглядела сломанной. Теперь она зовёт синк группы,
+# но не чаще раза в COOLDOWN секунд на группу — СДО не долбим. Сам синк живёт
+# слоем выше (jobs), поэтому приходит колбэком: scheduler.start_scheduler.
+
+COOLDOWN = 300
+_runner = None                  # async (group_id) -> None
+_running: set[int] = set()
+
+
+def set_runner(fn):
+    global _runner
+    _runner = fn
+
+
+async def recheck(group_id: int | None) -> dict:
+    """→ {"ran": звали ли синк, "wait": через сколько секунд можно снова,
+    "sdo": state()}. Свежая проверка (моложе COOLDOWN) или синк уже идёт —
+    не зовём, отдаём, что есть."""
+    wait = 0
+    ran = False
+    s = await state(group_id)
+    if s:
+        try:
+            age = (datetime.now(TZ) - datetime.fromisoformat(s["checked_at"])).total_seconds()
+        except (TypeError, ValueError):
+            age = COOLDOWN
+        wait = max(0, int(COOLDOWN - age))
+    if group_id and _runner and not wait and group_id not in _running:
+        _running.add(group_id)
+        try:
+            with aside(logger, f"sdo_check.recheck {group_id}"):
+                await _runner(group_id)
+                ran = True
+        finally:
+            _running.discard(group_id)
+        s = await state(group_id)
+        wait = COOLDOWN
+    return {"ran": ran, "wait": wait, "sdo": s}

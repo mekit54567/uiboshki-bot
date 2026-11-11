@@ -49,10 +49,44 @@ Iterable<FileItem> _uniqueLectures(Iterable<FileItem> files) {
   return files.where((f) => seen.add('${f.head}|${f.topic}'.toLowerCase()));
 }
 
+/// Номер лекции из «Лекция 5» (null — номера нет).
+int? lectureNumber(String head) {
+  final m = RegExp(r'(\d+)').firstMatch(head);
+  return m == null ? null : int.parse(m.group(1)!);
+}
+
+/// Какая лекция «текущая» по предмету (Никита 11.11): последняя, чья дата уже
+/// наступила (сегодняшняя — тоже); до начала курса — первая. [lectures] —
+/// `attendance.lectures` с сервера: `n` и `date` («2026-11-11»). Не зависит от
+/// того, откуда открыли предмет — из «Сегодня» или любой недели.
+int currentLecture(List<Map<String, dynamic>> lectures, DateTime today) {
+  final day =
+      '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-'
+      '${today.day.toString().padLeft(2, '0')}';
+  var cur = 0;
+  for (final l in lectures) {
+    final n = (l['n'] as num?)?.toInt() ?? 0;
+    if ('${l['date']}'.compareTo(day) <= 0 && n > cur) cur = n;
+  }
+  if (cur > 0) return cur;
+  return lectures.isEmpty ? 1 : lectures.map((l) => (l['n'] as num?)?.toInt() ?? 1).reduce((a, b) => a < b ? a : b);
+}
+
+/// Три лекции вокруг текущей: прошлая · текущая · следующая. У границ курса
+/// окно сдвигается, а не пустеет: в начале 1·2·3, в конце — три последние.
+List<int> lectureWindow(int current, int total) {
+  if (total <= 3) return [for (var n = 1; n <= total; n++) n];
+  final start = (current - 1).clamp(1, total - 2);
+  return [start, start + 1, start + 2];
+}
+
 class LessonExtras {
   final Course? course;
   final List<FileItem> lectures;
-  LessonExtras(this.course, this.lectures);
+
+  /// Лекции семестра с датами (`attendance.lectures`) — по ним ищется текущая.
+  final List<Map<String, dynamic>> schedule;
+  LessonExtras(this.course, this.lectures, [this.schedule = const []]);
 }
 
 class LessonScreen extends StatefulWidget {
@@ -107,7 +141,86 @@ class _LessonScreenState extends State<LessonScreen> {
           if (sameSubject('${x['subject']}', lesson.title) && x['category'] == 'lecture') FileItem.fromJson(x),
       ];
     } catch (_) {}
-    return LessonExtras(course, lectures);
+    var schedule = <Map<String, dynamic>>[];
+    if (course != null) {
+      try {
+        final d = await api.get('/sdo/grades/${course.id}');
+        schedule = [
+          for (final l in ((d['attendance'] as Map?)?['lectures'] as List? ?? const [])) Map<String, dynamic>.from(l),
+        ];
+      } catch (_) {}
+    }
+    return LessonExtras(course, lectures, schedule);
+  }
+
+  /// Лекции вокруг текущей (центр — текущая, слева прошлая, справа следующая).
+  /// Нет дат семестра (нет СДО) — как раньше, три последних файла.
+  List<Widget> _lectureRows(BuildContext context, AppStyle s, LessonExtras x) {
+    final p = s.p;
+    final uniq = _uniqueLectures(x.lectures.reversed).toList();
+    final byN = <int, FileItem>{};
+    for (final f in uniq) {
+      final n = lectureNumber(f.head);
+      if (n != null) byN.putIfAbsent(n, () => f);
+    }
+    List<(int?, FileItem?)> rows;
+    int? centre;
+    if (x.schedule.isNotEmpty && byN.isNotEmpty) {
+      centre = currentLecture(x.schedule, now());
+      final total = [
+        for (final l in x.schedule) (l['n'] as num?)?.toInt() ?? 0,
+        ...byN.keys,
+      ].reduce((a, b) => a > b ? a : b);
+      rows = [for (final n in lectureWindow(centre, total)) (n, byN[n])];
+    } else {
+      rows = [for (final f in uniq.take(3)) (null, f)];
+    }
+    return [
+      for (final (n, f) in rows)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0),
+          child: Tile(
+            onTap: f == null ? null : () => showFileSheet(context, api, f),
+            padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
+            child: Row(
+              children: [
+                Icon(Icons.menu_book_outlined, size: 20, color: n != null && n == centre ? p.accent : p.muted),
+                const SizedBox(width: Space.m),
+                Expanded(
+                  child: f == null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Лекция $n',
+                              style: s.body(15, weight: FontWeight.w600, color: p.muted),
+                            ),
+                            Text('файла пока нет', style: s.body(13, color: p.muted)),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(f.head, style: s.body(15, weight: FontWeight.w600)),
+                            if (f.topic.isNotEmpty) Text(f.topic, style: s.body(13, color: p.muted)),
+                          ],
+                        ),
+                ),
+                if (n != null && n == centre)
+                  Text(
+                    'сейчас',
+                    style: s.body(13, weight: FontWeight.w700, color: p.accent),
+                  )
+                else if (f != null && f.hasText)
+                  Text(
+                    f.hasSummary ? 'Конспект' : 'Открыть',
+                    style: s.body(13, weight: FontWeight.w700, color: p.accent),
+                  ),
+              ],
+            ),
+          ),
+        ),
+    ];
   }
 
   @override
@@ -276,34 +389,7 @@ class _LessonScreenState extends State<LessonScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: Space.l),
                           child: _CourseStrip(api: api, course: x.course!, color: c),
                         ),
-                      for (final f in _uniqueLectures(x.lectures.reversed).take(3))
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0),
-                          child: Tile(
-                            onTap: () => showFileSheet(context, api, f),
-                            padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
-                            child: Row(
-                              children: [
-                                Icon(Icons.menu_book_outlined, size: 20, color: p.muted),
-                                const SizedBox(width: Space.m),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(f.head, style: s.body(15, weight: FontWeight.w600)),
-                                      if (f.topic.isNotEmpty) Text(f.topic, style: s.body(13, color: p.muted)),
-                                    ],
-                                  ),
-                                ),
-                                if (f.hasText)
-                                  Text(
-                                    f.hasSummary ? 'Конспект' : 'Открыть',
-                                    style: s.body(13, weight: FontWeight.w700, color: p.accent),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
+                      ..._lectureRows(context, s, x),
                     ],
                   );
                 },

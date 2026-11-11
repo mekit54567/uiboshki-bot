@@ -212,7 +212,10 @@ class _FilesScreenState extends State<FilesScreen> {
                   const BackRow(),
                   const ScreenTitle(title: 'Файлы'),
                   if (files.isEmpty)
-                    const Notice(title: 'Пока пусто', text: 'Файлы курсов появятся после выгрузки из СДО.')
+                    const Notice(
+                      title: 'Пока пусто',
+                      text: 'Файлов группы пока нет. Их добавляет староста — из СДО или вручную. Ждёшь материалы — напомни ему.',
+                    )
                   else
                     _SearchField(key: const ValueKey('files-search'), controller: _search, onChanged: _onQuery),
                   if (_query.isNotEmpty)

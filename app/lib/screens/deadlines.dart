@@ -8,7 +8,8 @@
 // Новый дизайн (5.80, «Пусто и ошибка»): пусто и сбой выглядят по-разному —
 // «Ближайших сроков нет · СДО проверено в 12:40» с радостной капибарой и
 // «СДО не ответил · показываю сроки от 09:41» с грустной (над списком —
-// строкой); «Попробовать ещё раз» только перечитывает экран, синк не зовёт.
+// строкой); «Проверить СДО» зовёт синк группы (не чаще раза в 5 минут,
+// /sdo/recheck) и перечитывает экран — UX-аудит 02.11, п. 7.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -90,13 +91,32 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 
   SdoCheck? _sdo;
 
-  /// «Попробовать ещё раз»: только перечитать экран — синк СДО идёт по
-  /// расписанию на сервере; всё ещё молчит — так и скажем.
+  /// «Проверить СДО»: сервер заново спрашивает СДО (не чаще раза в 5 минут
+  /// на группу), потом перечитываем экран и честно говорим, чем кончилось.
   Future<void> _retry(Future<void> Function() reload) async {
     tick();
+    var ran = false, wait = 0;
+    try {
+      final r = await widget.api.post('/sdo/recheck', const {});
+      if (r is Map) {
+        ran = r['ran'] == true;
+        wait = (r['wait'] as num?)?.toInt() ?? 0;
+      }
+    } catch (_) {
+      // старый сервер или нет сети — просто перечитаем экран
+    }
     await reload();
-    if (mounted && _sdo?.ok == false) {
-      snack(context, 'СДО пока молчит — бот проверит его сам', kind: ToastKind.info);
+    if (!mounted) return;
+    if (_sdo?.ok != false) {
+      if (ran) snack(context, 'СДО ответил — сроки обновлены', kind: ToastKind.done);
+    } else if (!ran && wait > 0) {
+      snack(
+        context,
+        'Проверял только что — СДО молчит. Ещё раз можно через ${(wait / 60).ceil()} мин',
+        kind: ToastKind.info,
+      );
+    } else {
+      snack(context, 'СДО всё ещё молчит — проверю его сам чуть позже', kind: ToastKind.info);
     }
   }
 
@@ -115,7 +135,11 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
 
   Future<void> _toggle(Deadline d, bool done) async {
     final ok = await _run(() => widget.api.post('/deadlines/${d.id}/toggle', {'done': done}));
-    if (ok && done && mounted) cheer(context);
+    if (ok && done && mounted) {
+      cheer(context);
+      // личная галочка — не отправка в СДО (UX-аудит, п. 5)
+      if (d.canSubmit) snack(context, 'Отметил у тебя. В СДО работа не отправлялась', kind: ToastKind.info);
+    }
   }
 
   Future<void> _submit(Deadline d, Future<void> Function() reload) async {
@@ -380,7 +404,14 @@ class _DeadlinesViewState extends State<DeadlinesView> {
               text: sdoShownText(sdo.lastOk, t),
               pose: CapyPose.sad,
               onRetry: widget.onRetry,
-              retryLabel: 'Попробовать ещё раз',
+              retryLabel: 'Проверить СДО',
+            )
+          else if (open.isEmpty && style.design2 && late.isNotEmpty)
+            // есть просроченное — не радуемся «сроков нет» (UX-аудит, п. 9)
+            Notice(
+              title: 'Впереди сроков нет',
+              text: 'Но ниже — работы с прошедшим сроком: ${late.length}. Сдал — отметь, не нужна — убери.',
+              pose: CapyPose.day,
             )
           else if (open.isEmpty && style.design2)
             Notice(
@@ -439,7 +470,7 @@ class _SdoDown extends StatelessWidget {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     onPressed: onRetry,
-                    child: Text('Попробовать ещё раз', style: s.body(14, color: p.accent)),
+                    child: Text('Проверить СДО', style: s.body(14, color: p.accent)),
                   ),
               ],
             ),
@@ -542,7 +573,10 @@ class _Entry extends StatelessWidget {
 bool _hasChips(BuildContext context, Deadline d, DlExtra? x) =>
     x != null && x.hasChips(time: AppStyle.of(context).design2 && !d.done);
 
-String _time(Deadline d) => d.dueTime.isEmpty ? '23:59' : d.dueTime;
+/// Время срока; не указано — «до конца дня», а не выдуманное «23:59»
+/// (UX-аудит, п. 10). [pre] — «до 18:00» / «до конца дня».
+String _time(Deadline d, {bool pre = false}) =>
+    d.dueTime.isEmpty ? 'до конца дня' : (pre ? 'до ${d.dueTime}' : d.dueTime);
 
 String _dueLabel(Deadline d) {
   final due = d.due;
@@ -603,7 +637,7 @@ class _Hot extends StatelessWidget {
     final c = p.danger;
     final left = d.due.difference(at);
     final h = left.inHours, m = left.inMinutes % 60;
-    final when = _daysBetween(at, d.due) == 0 ? 'до ${_time(d)}' : 'завтра до ${_time(d)}';
+    final when = _daysBetween(at, d.due) == 0 ? _time(d, pre: true) : 'завтра ${_time(d, pre: true)}';
     final name = splitTitle(d.subject);
     Widget unit(String u) => Padding(
       padding: const EdgeInsets.only(bottom: 5, left: 3, right: 8),
@@ -795,7 +829,7 @@ class _Row extends StatelessWidget {
         padding: const EdgeInsets.only(left: Space.xl),
         color: d.done ? p.muted : p.ok,
         child: Text(
-          d.done ? 'Вернуть' : 'Сдано',
+          d.done ? 'Вернуть' : 'Отметить',
           style: s.body(15, weight: FontWeight.w700, color: Colors.white),
         ),
       ),
