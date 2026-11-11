@@ -109,7 +109,7 @@ Screens.today = {
         else note = notice("Пары закончились", "Завтра свободно.", { pose: "joy" });
       }
       const free = !L.length || (!current && !next);
-      const rest = !L.length ? data.tomorrow : !current && !next && data.tomorrow.length > 1 ? data.tomorrow.slice(1) : [];
+      const rest = free ? data.tomorrow : []; // все завтрашние, и первая тоже (Никита 11.11)
       const look = Theme.design2 ? Look.load() : Look.classic;
       let list = "";
       if (L.length) {
@@ -121,7 +121,7 @@ Screens.today = {
         } else list += shown.map((l) => `<div class="hx" style="margin-bottom:var(--s)">${lessonCard(l, t, l.cancelled ? undefined : key(l))}</div>`).join("");
       }
       if (rest.length) {
-        list += section(`завтра · ${L.length ? "ещё " : ""}${rest.length} ${plural(rest.length, "пара", "пары", "пар")}`);
+        list += section(`завтра · ${rest.length} ${plural(rest.length, "пара", "пары", "пар")}`);
         list += rest.map((l) => `<div class="hx" style="margin-bottom:var(--s)">${lessonCard(l, t, key(l))}</div>`).join("");
       }
       if (data.soon.length) {

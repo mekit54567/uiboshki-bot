@@ -409,15 +409,15 @@ void main() {
     expect(find.text('горит'), findsNothing);
     expect(find.text('Курсовая · Анализ данных'), findsOneWidget);
 
-    // пары кончились — первая завтрашняя крупно, остальные ниже
+    // пары кончились — первая завтрашняя крупно, ниже все завтрашние, и она тоже
     final ago = now().subtract(const Duration(hours: 4));
     await t.pumpWidget(
       _wrap(TodayScreen(key: UniqueKey(), api: fakeApi(overrides: answers([_lesson(ago, 1, 'Философия', 'А-1')])))),
     );
     await settle(t);
     expect(find.text('завтра первая пара в'), findsOneWidget);
-    expect(find.text('завтра · ещё 2 пары'), findsOneWidget);
-    expect(find.byType(LessonCard), findsNWidgets(3)); // сегодняшняя и две завтрашние
+    expect(find.text('завтра · 3 пары'), findsOneWidget);
+    expect(find.byType(LessonCard), findsNWidgets(4)); // сегодняшняя и все три завтрашние
 
     // завтрашний день не пришёл — как раньше, одна строка
     await t.pumpWidget(_wrap(TodayScreen(key: UniqueKey(), api: fakeApi(overrides: answers([], withDay: false)))));
