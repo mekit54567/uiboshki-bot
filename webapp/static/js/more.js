@@ -490,7 +490,7 @@ async function sendSubmission() {
 // добавляла ярлык Telegram, и про PWA никто не знал (владелец, 09.10).
 const APP_URL = "https://www.uiboshki.ru/app";
 const RUSTORE_URL = "https://www.rustore.ru/catalog/app/ru.uiboshki.app";   // config.RUSTORE_URL
-const APPSTORE_URL = "https://apps.apple.com/ru/app/id6828117584";   // config.APPSTORE_URL
+const APPSTORE_URL = "https://apps.apple.com/app/id6828117584";   // config.APPSTORE_URL
 
 function openPlatforms() {
   haptic();

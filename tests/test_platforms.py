@@ -58,7 +58,7 @@ def test_appstore_only_when_live(monkeypatch):
     monkeypatch.setattr(config, "LOGIN_CHANNEL", "")
     monkeypatch.setattr(config, "APPSTORE_URL", "")
     assert "App Store" not in start_text("Аня") + help_text() + stores_line() + bot.bot_description("УИБО-03-24")
-    url = "https://apps.apple.com/ru/app/id123"
+    url = "https://apps.apple.com/app/id123"
     monkeypatch.setattr(config, "APPSTORE_URL", url)
     for text in (start_text("Аня"), help_text(), stores_line()):
         assert url in text and config.RUSTORE_URL in text
