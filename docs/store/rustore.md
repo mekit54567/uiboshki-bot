@@ -102,11 +102,13 @@
 
 ## Скриншоты
 
-Из `docs/store/screens/rustore/` (1080×1920, JPEG до 220 КБ), по порядку:
+С 11.11 — оформленные (вариант А «Тетрадь», как в App Store): из
+`docs/store/screens/framed/rustore/` (1080×1920, JPEG до 220 КБ), по порядку:
 `1-today.jpg`, `2-week.jpg`, `3-deadlines.jpg`, `4-goal.jpg`, `5-assistant.jpg`,
-`6-more.jpg`; по желанию тёмные `1-today-dark.jpg`, `2-week-dark.jpg`.
+`6-more.jpg`. Старые снимки экранов — `docs/store/screens/rustore/`. В RuStore
+скриншоты меняются в карточке приложения и уходят на модерацию.
 
-Пересъёмка (например, после нового дизайна) — ассистент: `app/robot/store_shots.js`.
+Пересъёмка (например, после нового дизайна) — ассистент: снимки — `app/robot/store_shots.js`, рамка и подписи — генератор в файлах проекта (`store/screens-v2/gen.py`).
 
 ## Возраст — почему 16+
 
