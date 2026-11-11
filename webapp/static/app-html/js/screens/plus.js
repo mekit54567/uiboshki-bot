@@ -103,7 +103,7 @@ function acPlusBody(d) {
     <div class="grow"><div class="bd b6" style="--sz:17px">${esc(head)}</div>
       <div class="bd mut" style="--sz:13px;margin-top:2px">${esc(sub)}</div>
       ${founder && !unlimited ? `<div class="row" style="gap:var(--s);margin-top:var(--s)">${acTag("Early Supporter")}${founderPrice != null
-        ? `<div class="bd mut grow" style="--sz:13px">месяц для тебя — ${esc(founderPrice)} ₽, навсегда</div>` : ""}</div>` : ""}
+        ? `<div class="bd mut grow" style="--sz:13px">твоя цена — ${esc(founderPrice)} ₽ в месяц, она не вырастет</div>` : ""}</div>` : ""}
     </div></div></div></div>`;
   h += section("Что даёт") + `<div class="hx"><div class="tile p0">${perks.map((p, i) => (i ? '<div class="divider"></div>' : "") + acPerkRow(...p)).join("")}</div></div>`;
   if (!unlimited && prices.length) {

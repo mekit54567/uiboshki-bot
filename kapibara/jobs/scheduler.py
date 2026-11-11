@@ -486,8 +486,25 @@ async def sync_sdo_deadlines(bot: Bot):
         await new_tasks.announce(bot, result.get("new_ids") or [], result.get("moved") or {})
 
 
+async def recheck_group(bot: Bot, group_id: int):
+    """Синк одной группы по просьбе человека («Проверить СДО», sdo_check.recheck):
+    своя — общим входом, как по расписанию; другая — по входу, которым поделились."""
+    from database.groups import home
+    if group_id == home():
+        await sync_sdo_deadlines(bot)
+        return
+    from kapibara.features.groups import sync as group_sync
+    from kapibara.features.notifications import new_tasks
+    res = await group_sync.sync_group(group_id)
+    if res.get("new_ids") or res.get("moved"):
+        with aside(logger, f"новые задания группы {group_id}"):
+            await new_tasks.announce(bot, res["new_ids"], res["moved"])
+
+
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     from kapibara.features.schedule.diff import check_schedule_changes
+    from kapibara.features.sdo import check as sdo_check
+    sdo_check.set_runner(lambda gid: recheck_group(bot, gid))
 
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
     scheduler.add_job(send_morning_schedule,       "cron", hour=SCHEDULE_HOUR,          minute=SCHEDULE_MINUTE,          args=[bot])

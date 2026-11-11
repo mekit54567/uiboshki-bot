@@ -166,6 +166,6 @@ async def send_all(bot, now: datetime | None = None):
         with aside(logger, f"обзор недели {uid}", level=logging.INFO):
             from kapibara.features.notifications import delivery
             title, body = head
-            await delivery.deliver(bot, uid, text, kind="weekly", tab="today", title=title, body=body,
-                                   reply_markup=app_button("📅 Открыть неделю", "today"))
+            await delivery.deliver(bot, uid, text, kind="weekly", tab="week", title=title, body=body,
+                                   reply_markup=app_button("📅 Открыть неделю", "week"))
             await pace()

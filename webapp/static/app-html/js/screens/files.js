@@ -181,7 +181,7 @@ function openFiles() {
     };
     const drawSubjects = () => {
       rowFiles = [];
-      if (!files.length) { list.innerHTML = notice("Пока пусто", "Файлы курсов появятся после выгрузки из СДО."); return; }
+      if (!files.length) { list.innerHTML = notice("Пока пусто", "Файлов группы пока нет. Их добавляет староста — из СДО или вручную. Ждёшь материалы — напомни ему."); return; }
       const subjects = Object.keys(bySubject).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       list.innerHTML = subjects.map((s, i) => `<div class="hx" style="padding-bottom:var(--s)">
         <button class="tile row fl-subj" data-act="subject" data-k="${i}">

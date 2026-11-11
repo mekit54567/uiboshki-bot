@@ -107,6 +107,8 @@ String? mustLine(Map<String, dynamic> g) {
   return 'без «${must.join('», «')}» не дойдёшь';
 }
 
+const goalNote = 'Это расчёт по баллам из СДО на сейчас. Оценку ставит преподаватель.';
+
 class GoalCard extends StatefulWidget {
   final Api api;
   final int courseId;
@@ -298,11 +300,14 @@ class _GoalCardState extends State<GoalCard> {
             const SizedBox(height: Space.m),
             Text(
               tk['reachable'] == false
-                  ? 'Открытых работ меньше, чем нужно зачесть: без пересдачи экзамена по БРС не будет.'
+                  ? 'Открытых работ меньше, чем нужно зачесть. По правилам БРС так к экзамену не выйти — спроси преподавателя про пересдачу.'
                   : 'Даже если сдать всё и ходить на все лекции, будет ${fmtNum(g['best'] ?? 0)} — меньше ${fmtNum(g['at'] ?? 0)}. Можно выбрать цель ниже.',
               style: s.body(13, color: p.danger),
             ),
           ],
+          // прогноз — не решение преподавателя (UX-аудит 02.11, п. 11)
+          const SizedBox(height: Space.m),
+          Text(goalNote, style: s.body(12, color: p.muted)),
           if (_error != null) ...[const SizedBox(height: Space.s), Text(_error!, style: s.body(13, color: p.danger))],
         ],
       ),

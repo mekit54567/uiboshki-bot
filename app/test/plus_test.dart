@@ -156,7 +156,7 @@ void main() {
     expect(find.text('Действует до 14 ноября'), findsOneWidget);
     expect(find.text('Early Supporter'), findsWidgets);
     expect(find.textContaining('Основател'), findsNothing);
-    expect(find.text('месяц для тебя — 149 ₽, навсегда'), findsOneWidget);
+    expect(find.text('твоя цена — 149 ₽ в месяц, она не вырастет'), findsOneWidget);
     expect(find.text('ИИ сверх пробы'), findsOneWidget);
     await _see(t, 'plus:price:half');
     expect(find.byKey(const Key('plus:price:month')), findsOneWidget);

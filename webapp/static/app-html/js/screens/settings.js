@@ -118,7 +118,7 @@ window.openNotify = function openNotify() {
           <span class="mr-chev${quizOpen ? " open" : ""}">${icon("chevron_right", "", "color:var(--muted)")}</span></button>
         ${quizOpen ? `<div class="bd b6 mut" style="--sz:13px;margin-top:var(--m)">Напомнить до закрытия · можно несколько</div>
           <div class="mr-wrap">${choices.map((m) => mrPill(mrQuizLabel(m), list.includes(m), "qz", ` data-v="${m}"`, { wide: true })).join("")}</div>
-          <div style="margin-top:var(--s)">${row("Тест открылся", "напишу, когда преподаватель откроет тест", "quiz_open", open, "qopen")}</div>` : ""}
+          <div style="margin-top:var(--s)">${row("Тест открылся", "напишу, когда замечу, что тест открыли. Смотрю СДО примерно раз в час", "quiz_open", open, "qopen")}</div>` : ""}
       </div></div>`;
     };
     const evening = () => {
@@ -133,7 +133,7 @@ window.openNotify = function openNotify() {
         install: "Добавь Капибару на экран «Домой» (Поделиться → На экран «Домой») и открой оттуда" }[push]
         || "Включи — и уведомления придут сюда, как у приложения";
       return card({ ic: "notifications_active", title: "На этом устройстве", sub, key: "push", on: push === "on",
-        children: row("Дублировать в Telegram", tg ? "пуш сюда и копия в Telegram" : "только пуш (есть приложение на телефоне — только в него); не дошёл — в Telegram", "tg_copy", tg) });
+        children: row("Дублировать в Telegram", tg ? "пуш сюда и копия в Telegram" : "только пуш (есть приложение на телефоне — только в него); не получилось отправить — уйдёт в Telegram", "tg_copy", tg) });
     };
 
     const draw = () => {
@@ -159,12 +159,12 @@ window.openNotify = function openNotify() {
           on: p.deadlines === true, children: days(p.deadline_days || [], "deadline_days") });
         // «Срок скоро» (deadline_soon.py, Никита 25.10): за сколько часов до срока, если не сдано
         const soonH = p.deadline_soon_hours || 3, soonLabel = (h) => h >= 24 ? "1 день" : `${h} ч`;
-        html += card({ ic: "hourglass_bottom", title: "Срок скоро", sub: `за ${soonLabel(soonH)} до срока, если работа не сдана`, key: "deadline_soon",
+        html += card({ ic: "hourglass_bottom", title: "Срок скоро", sub: `за ${soonLabel(soonH)} до срока, если у работы нет отметки о сдаче`, key: "deadline_soon",
           on: p.deadline_soon === true, children: `<div class="mr-wrap" style="margin-top:0">${(s.deadline_soon_choices || [1, 3, 6, 12, 24]).map((h) =>
             mrPill(soonLabel(h), soonH === h, "soon", ` data-v="${h}"`, { wide: true })).join("")}</div>` });
         html += card({ ic: "view_week", title: "Обзор недели", sub: "в воскресенье в 19:00 — сколько пар и что сдать", key: "weekly", on: p.weekly === true });
-        html += card({ ic: "military_tech", title: "Новые баллы", sub: "когда проверят работу или изменятся баллы (если подключён вход в СДО)", key: "grades", on: p.grades === true });
-        html += card({ ic: "assignment", title: "Новые задания", sub: "когда в СДО появится задание или перенесут срок", key: "new_tasks", on: p.new_tasks === true });
+        html += card({ ic: "military_tech", title: "Новые баллы", sub: "когда проверят работу или изменятся баллы. Смотрю СДО примерно раз в час с 8 до 23, нужен вход в СДО", key: "grades", on: p.grades === true });
+        html += card({ ic: "assignment", title: "Новые задания", sub: "когда в СДО появится задание или перенесут срок. Сверяюсь с СДО несколько раз в день", key: "new_tasks", on: p.new_tasks === true });
         html += quiz();
         if (Theme.design2 && "evening" in p) {
           const t = p.evening_time || "20:00";
@@ -324,7 +324,7 @@ window.openLook = function openLook() {
         + (look.day === "cards" ? `<div class="hx" style="margin-top:var(--s)">${seg("card", look.card, [["tint", "С цветом"], ["stripe", "С полоской"]])}</div>` : "")
         + section("когда отметил «сдано»") + `<div class="hx">${seg("cheer", look.cheer, [["quiet", "Тихо"], ["capy", "Капибара"], ["confetti", "Конфетти"]])}</div>`
         + (changed ? `<div style="height:var(--xl)"></div><div style="text-align:center"><button class="mr-reset" data-act="reset">${icon("undo", "", "color:var(--muted)")}
-            <span class="bd mut" style="--sz:15px">Вернуть как было</span></button></div>` : "")
+            <span class="bd mut" style="--sz:15px">Сбросить оформление</span></button></div>` : "")
         + '<div style="height:var(--xxl)"></div>';
     };
     on(body, {
@@ -419,13 +419,13 @@ function mrFacts(s) {
       "Потерял телефон — выйди на нём кнопкой выше, и ключ перестанет работать."],
     ["download", "Файлы — по коротким ссылкам", `Ссылка на скачивание подписана и живёт ${minutes} минут.`, `Переслал ссылку — через ${minutes} минут по ней уже ничего не скачать.`],
     ["auto_awesome", "Вопросы к ИИ", "Уходит только вопрос, история чата и нужные куски лекций. Имя и вход в СДО — нет.",
-      "ИИ не узнает, кто спрашивал. Но личное в вопросы лучше не писать."],
+      "Имя и вход с вопросом не уходят. Но сам вопрос и файл ИИ читает — личное в них лучше не писать."],
     ["dns", "Сервер — в России", "Бот, приложение и база — на своём сервере в Москве.",
       "За границу уходят только сообщения Telegram, уведомления и вопросы к ИИ — в зашифрованном виде."],
     ["insights", "Статистика — без содержимого", `Только «кто, что открыл и когда». Через ${s.events_days ?? 180} дней удаляется сама.`,
       "Что ты спрашивал и какие файлы смотрел, никто не видит."],
     ["speed", "Защита от перегруза", `Не больше ${ai} вопросов ИИ в минуту и ${sub.count ?? 6} сдач за ${sub.minutes ?? 10} минут.`,
-      "Никто не завалит бота запросами — он не тормозит ни у кого."],
+      "Один человек не займёт бота целиком — остальным он отвечает как обычно."],
   ];
 }
 
@@ -461,7 +461,7 @@ window.openSecurity = function openSecurity() {
         `ссылки на файлы живут ${sec.link_minutes ?? 10} минут`, n > 0 ? `устройств вне Telegram: ${n}` : ""].filter(Boolean).join(", ");
       let html = backRow() + screenTitle("Безопасность")
         + `<div class="hx"><div class="tile row mr-safe"><span class="mr-safe-ic">${icon("verified_user", "o")}</span>
-          <div class="grow"><div class="bd b7" style="--sz:16px;color:var(--ok)">Всё под защитой</div>
+          <div class="grow"><div class="bd b7" style="--sz:16px;color:var(--ok)">Как защищены твои данные</div>
           <div class="bd mut" style="--sz:13px;margin-top:2px">${esc(summary)}.</div></div></div></div>`
         + section("Устройства")
         + `<div class="hx"><div class="tile p0">${d.sessions.map((x, i) => (i ? '<div class="divider"></div>' : "")
@@ -569,6 +569,10 @@ window.openGroupPick = function openGroupPick({ required = false } = {}) {
             ${icon("groups", "o", "color:var(--accent)")}<span class="bd b6 grow" style="--sz:16px">${esc(g.name)}</span>
             ${icon("chevron_right", "", "color:var(--muted)")}</button></div>`).join("")
           + (note ? `<div class="bd mut" style="--sz:14px;padding:var(--s) var(--xl)">${esc(note)}</div>` : "")
+          // «Посмотреть демо» на первом шаге (Никита 11.11): приложение на примере, без выбора группы
+          + (required ? `<div class="hx" style="padding-top:var(--l);text-align:center">
+              <div class="bd mut" style="--sz:13px">Пока просто смотришь? Открой пример — приложение с демо-данными.</div>
+              <a class="dl-retry bd b6" data-demo href="/about/demo" target="_blank" rel="noopener" style="--sz:15px;color:var(--accent);display:inline-flex;align-items:center;gap:6px;min-height:44px;text-decoration:none">${icon("play_circle", "o", "font-size:20px")}Посмотреть демо</a></div>` : "")
           + (current && current.own !== true ? `<div class="hx" style="padding-top:var(--m)"><${adminNote ? "div" : "button"} class="tile row mr-grow"${adminNote ? "" : ' data-act="admin"'}>
               ${icon("verified_user", "o", "color:var(--accent)")}<div class="grow"><div class="bd b6" style="--sz:16px">Я староста этой группы</div>
               <div class="bd mut" style="--sz:13px">${esc(adminNote || "спрошу владельца бота — сможешь вести общие сроки и ДЗ")}</div></div></${adminNote ? "div" : "button"}></div>` : "");
@@ -589,6 +593,9 @@ window.openGroupPick = function openGroupPick({ required = false } = {}) {
         async pick(b) {
           tick();
           const g = items[+b.dataset.i];
+          // из «Ещё» нажатие сразу меняло основную группу (UX-аудит 02.11, п. 30) — сначала спросим
+          if (current && current.id !== g.id && !(await confirmSheet({ title: `Сменить группу на ${g.name}?`,
+            text: "Расписание, сроки и файлы станут как у этой группы. Просто посмотреть чужое расписание можно поиском во вкладке «Неделя».", action: "Сменить" }))) return;
           try {
             const r = await Api.post("/me/group", { id: g.id });
             done = true;
@@ -606,6 +613,7 @@ window.openGroupPick = function openGroupPick({ required = false } = {}) {
       if (!required) {
         Api.get("/me").then((me) => { if (me && me.group && typeof me.group === "object") { current = me.group; draw(); } }, () => {});
       }
+      draw();   // «Посмотреть демо» видно сразу, до первого поиска
       setTimeout(() => input.focus(), 350);
       return () => { clearTimeout(timer); if (!done) resolve(null); };
     });

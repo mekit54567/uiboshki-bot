@@ -225,7 +225,7 @@ class LookScreen extends StatelessWidget {
                       if (s.theme == ThemeChoice.sunset) onTheme?.call(ThemeChoice.system);
                     },
                     icon: Icon(Icons.undo_rounded, color: p.muted),
-                    label: Text('Вернуть как было', style: s.body(15, color: p.muted)),
+                    label: Text('Сбросить оформление', style: s.body(15, color: p.muted)),
                   ),
                 ),
               ],

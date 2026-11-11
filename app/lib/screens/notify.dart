@@ -240,7 +240,7 @@ class _NotifyBodyState extends State<_NotifyBody> {
           _Card(
             icon: Icons.hourglass_bottom_outlined,
             title: 'Срок скоро',
-            sub: 'за ${soonLabel(_soonHours())} до срока, если работа не сдана',
+            sub: 'за ${soonLabel(_soonHours())} до срока, если у работы нет отметки о сдаче',
             switchKey: 'deadline_soon',
             on: _prefs['deadline_soon'] == true,
             onChanged: () => _toggle('deadline_soon'),
@@ -265,7 +265,7 @@ class _NotifyBodyState extends State<_NotifyBody> {
           _Card(
             icon: Icons.military_tech_outlined,
             title: 'Новые баллы',
-            sub: 'когда проверят работу или изменятся баллы (если подключён вход в СДО)',
+            sub: 'когда проверят работу или изменятся баллы. Смотрю СДО примерно раз в час с 8 до 23, нужен вход в СДО',
             switchKey: 'grades',
             on: _prefs['grades'] == true,
             onChanged: () => _toggle('grades'),
@@ -273,7 +273,7 @@ class _NotifyBodyState extends State<_NotifyBody> {
           _Card(
             icon: Icons.assignment_outlined,
             title: 'Новые задания',
-            sub: 'когда в СДО появится задание или перенесут срок',
+            sub: 'когда в СДО появится задание или перенесут срок. Сверяюсь с СДО несколько раз в день',
             switchKey: 'new_tasks',
             on: _prefs['new_tasks'] == true,
             onChanged: () => _toggle('new_tasks'),
@@ -454,7 +454,10 @@ class _QuizCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Тест открылся', style: s.body(15, weight: FontWeight.w500)),
-                          Text('напишу, когда преподаватель откроет тест', style: s.body(12, color: p.muted)),
+                          Text(
+                            'напишу, когда замечу, что тест открыли. Смотрю СДО примерно раз в час',
+                            style: s.body(12, color: p.muted),
+                          ),
                         ],
                       ),
                     ),
@@ -498,7 +501,14 @@ class _SoonHours extends StatelessWidget {
       runSpacing: Space.xs,
       children: [
         for (final h in choices)
-          _Pill(key: Key('soon:$h'), text: soonLabel(h), on: value == h, onTap: () => onPick(h), color: p.accent, wide: true),
+          _Pill(
+            key: Key('soon:$h'),
+            text: soonLabel(h),
+            on: value == h,
+            onTap: () => onPick(h),
+            color: p.accent,
+            wide: true,
+          ),
       ],
     );
   }
@@ -682,7 +692,9 @@ class _WebPushCardState extends State<_WebPushCard> {
       children: [
         _Row(
           title: 'Дублировать в Telegram',
-          sub: widget.tgCopy ? 'пуш сюда и копия в Telegram' : 'только пуш (есть приложение на телефоне — только в него); не дошёл — в Telegram',
+          sub: widget.tgCopy
+              ? 'пуш сюда и копия в Telegram'
+              : 'только пуш (есть приложение на телефоне — только в него); не получилось отправить — уйдёт в Telegram',
           k: 'tg_copy',
           prefs: {'tg_copy': widget.tgCopy},
           onTap: (_) => widget.onTgCopy(),
@@ -749,7 +761,9 @@ class _AppPushCardState extends State<_AppPushCard> {
         if (on)
           _Row(
             title: 'Дублировать в Telegram и PWA',
-            sub: widget.tgCopy ? 'пуш на телефон и копия в Telegram и PWA' : 'только на телефон; не дошёл — в Telegram. Об оплате — везде',
+            sub: widget.tgCopy
+                ? 'пуш на телефон и копия в Telegram и PWA'
+                : 'только на телефон; не получилось отправить — уйдёт в Telegram. Об оплате — везде',
             k: 'tg_copy',
             prefs: {'tg_copy': widget.tgCopy},
             onTap: (_) => widget.onTgCopy(),

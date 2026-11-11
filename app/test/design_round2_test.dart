@@ -62,7 +62,7 @@ void main() {
 
     await t.pumpWidget(_wrap(SecurityScreen(api: fakeApi(), onLogout: () {})));
     await settle(t);
-    expect(find.text('Всё под защитой'), findsOneWidget);
+    expect(find.text('Как защищены твои данные'), findsOneWidget);
     expect(find.textContaining('что бот знает'), findsNothing);
   });
 

@@ -161,3 +161,27 @@ async def test_send_grades_only_for_real_week_and_without_optional(db, week, mon
     week({0: [("09:00", "А-1 (В-78)")]})
     await weekly_digest.send_all(Bot(), datetime(2026, 10, 4, 19, 0, tzinfo=TZ))
     assert calls == [1] and "Анализ данных +5" in sent[0] and "Военная кафедра" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_weekly_opens_week_tab(db, week, monkeypatch):
+    """UX-аудит, п. 16: «Открыть неделю» открывала «Сегодня»."""
+    from kapibara.features.notifications import delivery
+    from kapibara.features.schedule import parser as schedule_parser
+    week({0: [("09:00", "А-1 (В-78)")]})
+
+    async def raw():
+        return b""
+
+    got = []
+
+    async def deliver(bot, uid, text, **kw):
+        got.append(kw)
+
+    monkeypatch.setattr(schedule_parser, "fetch_schedule_raw", raw)
+    monkeypatch.setattr(delivery, "deliver", deliver)
+    monkeypatch.setattr("kapibara.core.config.WEBAPP_URL", "https://x.app")
+    await db.upsert_user(1, "", "X")
+    await weekly_digest.send_all(object(), datetime(2026, 10, 4, 19, 0, tzinfo=TZ))
+    assert got[0]["tab"] == "week"
+    assert got[0]["reply_markup"].inline_keyboard[0][0].web_app.url.endswith("tab=week")

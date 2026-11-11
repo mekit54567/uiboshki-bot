@@ -448,7 +448,16 @@ function openChat() {
       history: openChats,
       newchat: newChat,
       subject: pickSubject,
-      suggest: (b) => { input.value = CH_SUGGEST[+b.dataset.k]; send(); },
+      suggest: (b) => {
+        const q = CH_SUGGEST[+b.dataset.k];
+        // «3 лекцию» чего? Без предмета не шлём — даём дописать (UX-аудит, п. 27)
+        if (q === "Объясни 3 лекцию" && !subject) {
+          input.value = q + " по "; input.focus();
+          toast("Допиши предмет или выбери его сверху", "info");
+          return;
+        }
+        input.value = q; send();
+      },
       retry: () => {
         if (waiting || !log.length || !log[log.length - 1].error) return;
         tick();

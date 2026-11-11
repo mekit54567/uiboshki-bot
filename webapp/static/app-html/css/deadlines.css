@@ -98,6 +98,8 @@ textarea.dl-field { min-height: 0; line-height: 1.35; }
 .dl-donebox { display: flex; flex-direction: column; align-items: center; padding-top: var(--s); }
 .dl-hop { position: relative; width: 112px; height: 112px; color: var(--ok); animation: dl-pop .7s cubic-bezier(.34,1.56,.64,1) both; }
 .dl-hop .capy { animation: dl-hopj 1.1s both; }
+.dl-hop.dl-calm, .dl-hop.dl-calm .capy { animation: none; }
+a.dl-okbtn { display: flex; align-items: center; justify-content: center; }
 .dl-hopcheck { position: absolute; right: 0; bottom: 0; width: 38px; height: 38px; border-radius: 50%; background: var(--ok); color: #fff;
   border: 3px solid var(--card-solid); display: flex; align-items: center; justify-content: center; }
 .dl-okbtn { background: var(--ok); color: #fff; margin-top: var(--xl); min-height: 44px; font-size: 15px; }
