@@ -7,7 +7,8 @@ from tools import tokens
 def test_tokens_complete_and_css_fresh():
     t = tokens.load()
     # «Кампус» и «Библиотека» — темы приложения из «Оформления» (5.79)
-    assert set(t["themes"]) == {"depth", "notebook", "campus", "library"} and t["fonts"]["default"] in t["fonts"]
+    # «Тетрадь» и «Ночная тетрадь» по брендбуку v1 — paper и night (11.11)
+    assert set(t["themes"]) == {"depth", "notebook", "campus", "library", "paper", "night"} and t["fonts"]["default"] in t["fonts"]
     keys = set(t["themes"]["depth"])
     for name, theme in t["themes"].items():
         assert set(theme) == keys, f"у тем один набор цветов: {name}"

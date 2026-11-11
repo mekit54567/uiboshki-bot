@@ -41,3 +41,18 @@ def test_meta_design2_switch(monkeypatch):
     assert c.get("/api/v1/meta").json()["features"]["design2"] is True
     monkeypatch.setenv("DESIGN2", "0")
     assert c.get("/api/v1/meta").json()["features"]["design2"] is False
+
+
+def test_meta_design3_switch(monkeypatch):
+    """Дизайн по брендбуку: без переменной — по выбору человека, DESIGN3=0 —
+    откат у всех, DESIGN3=1 — новый вид по умолчанию."""
+    from fastapi.testclient import TestClient
+
+    from webapp.server import app
+    c = TestClient(app)
+    monkeypatch.delenv("DESIGN3", raising=False)
+    assert c.get("/api/v1/meta").json()["features"]["design3"] == "opt"
+    monkeypatch.setenv("DESIGN3", "0")
+    assert c.get("/api/v1/meta").json()["features"]["design3"] == "off"
+    monkeypatch.setenv("DESIGN3", "1")
+    assert c.get("/api/v1/meta").json()["features"]["design3"] == "on"

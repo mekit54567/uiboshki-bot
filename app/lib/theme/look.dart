@@ -47,6 +47,13 @@ class Look {
   /// Тёмная версия иконки-картинки — только Android (iOS 18 меняет сам).
   final bool iconDark;
 
+  /// «Новое» — дизайн по брендбуку v1 (11.11): «Тетрадь» и «Ночная тетрадь»,
+  /// шрифт «Книжный», новые экраны. false — «Классика», всё как было.
+  final bool fresh;
+
+  /// В «Новом» тёмная — «Глубина» вместо «Ночной тетради» (запасной выход).
+  final bool freshDepth;
+
   const Look({
     this.light = LightTheme.notebook,
     this.dark = DarkTheme.depth,
@@ -56,6 +63,8 @@ class Look {
     this.cheer = Cheer.quiet,
     this.icon = AppIcon.base,
     this.iconDark = false,
+    this.fresh = false,
+    this.freshDepth = false,
   });
 
   /// Как до 5.79 — и по умолчанию, и при выключенном новом дизайне.
@@ -70,6 +79,8 @@ class Look {
     Cheer? cheer,
     AppIcon? icon,
     bool? iconDark,
+    bool? fresh,
+    bool? freshDepth,
   }) => Look(
     light: light ?? this.light,
     dark: dark ?? this.dark,
@@ -79,6 +90,8 @@ class Look {
     cheer: cheer ?? this.cheer,
     icon: icon ?? this.icon,
     iconDark: iconDark ?? this.iconDark,
+    fresh: fresh ?? this.fresh,
+    freshDepth: freshDepth ?? this.freshDepth,
   );
 
   static T _pick<T extends Enum>(List<T> values, String? name, T fallback) =>
@@ -93,6 +106,9 @@ class Look {
     cheer: _pick(Cheer.values, p.getString('uib_look_cheer'), Cheer.quiet),
     icon: AppIcon.byName(p.getString('uib_look_icon')),
     iconDark: p.getBool('uib_look_icon_dark') ?? false,
+    // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
+    fresh: p.getBool('uib_look_fresh') ?? design3FromPrefs(p) == 'on',
+    freshDepth: p.getBool('uib_look_fresh_depth') ?? false,
   );
 
   Future<void> save(SharedPreferences p) => Future.wait([
@@ -104,6 +120,8 @@ class Look {
     p.setString('uib_look_cheer', cheer.name),
     p.setString('uib_look_icon', icon.name),
     p.setBool('uib_look_icon_dark', iconDark),
+    p.setBool('uib_look_fresh', fresh),
+    p.setBool('uib_look_fresh_depth', freshDepth),
   ]);
 
   @override
@@ -116,14 +134,21 @@ class Look {
       other.day == day &&
       other.cheer == cheer &&
       other.icon == icon &&
-      other.iconDark == iconDark;
+      other.iconDark == iconDark &&
+      other.fresh == fresh &&
+      other.freshDepth == freshDepth;
 
   @override
-  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark);
+  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark, fresh, freshDepth);
 }
 
 /// Включён ли новый дизайн: последнее слово сервера, без ответа — включён.
 bool design2FromPrefs(SharedPreferences p) => p.getBool('uib_design2') ?? true;
+
+/// Дизайн по брендбуку v1: 'off' — сервер выключил (все в «Классике»,
+/// переключателя нет), 'opt' — по выбору человека, 'on' — новое по умолчанию.
+/// Последнее слово сервера; без ответа — 'opt'.
+String design3FromPrefs(SharedPreferences p) => p.getString('uib_design3') ?? 'opt';
 
 /// Спросить сервер (/api/meta → features.design2) и запомнить ответ.
 /// [get] — запрос к API; ошибка сети — остаётся то, что помнили. Выключает
@@ -136,6 +161,8 @@ Future<bool?> refreshDesign2(Future<dynamic> Function(String) get) async {
     final on = !(f is Map && f['design2'] == false);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('uib_design2', on);
+    final d3 = f is Map ? f['design3'] : null;
+    await prefs.setString('uib_design3', d3 == 'off' || d3 == 'on' ? d3 as String : 'opt');
     return on;
   } catch (_) {
     return null;

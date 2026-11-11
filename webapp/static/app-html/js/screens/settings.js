@@ -303,8 +303,9 @@ window.openLook = function openLook() {
     };
     const draw = () => {
       const look = Look.load(), theme = mrLook.theme(), font = mrLook.font();
-      const classic = Look.classic;
-      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || font === "hand" || font === "wide" || theme === "sunset";
+      const classic = Look.classic, fresh = Theme.fresh;
+      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || look.freshDepth
+        || (!fresh && (font === "hand" || font === "wide")) || theme === "sunset";
       const sun = moscowSun(now());
       const hint = (t) => `<div class="bd mut mr-hint">${esc(t)}</div>`;
       const fonts = MR_FONTS.map(([id, fam, w, size, title, sub]) => `<button class="tile mr-font${font === id ? " on" : ""}" data-act="font" data-v="${id}" aria-pressed="${font === id}">
@@ -312,14 +313,18 @@ window.openLook = function openLook() {
         <div class="grow" style="min-width:0"><div class="bd b6 ell" style="--sz:14px">${title}</div><div class="bd mut ell" style="--sz:12px">${sub}</div></div></button>`).join("");
       body.innerHTML = backRow() + screenTitle("Оформление")
         + `<div class="hx" style="padding-top:var(--s)">${preview()}</div>`
+        // дизайн по брендбуку v1: «Новое / Классика»; сервер выключил (DESIGN3=0) — строки нет
+        + (Theme.design3 !== "off" ? section("вид приложения") + `<div class="hx">${seg("mode", fresh ? "fresh" : "classic", [["fresh", "Новое"], ["classic", "Классика"]])}</div>`
+            + hint(fresh ? "Новый вид приложения: бумага «Тетради» и шрифт с засечками. Экраны обновляются по одному." : "Прежний вид: четыре темы и четыре шрифта на выбор.") : "")
         + section("когда тёмная") + `<div class="hx">${seg("theme", theme, [["system", "Как в телефоне"], ["sunset", "По закату"], ["light", "Светлая"], ["dark", "Тёмная"]])}</div>`
         + (theme === "sunset" ? hint(`Сегодня тёмная с ${hm(sun.set)} до ${hm(sun.rise)} завтра, за час до заката фон мягко темнеет.`) : "")
-        + section("светлая тема") + `<div class="hx mr-two">${swatch("light", "notebook", "Тетрадь", "тёплая бумага", look.light === "notebook", look.paper)}
-            ${swatch("light", "campus", "Кампус", "белая, синий акцент", look.light === "campus", "smooth")}</div>`
-        + (look.light === "notebook" ? `<div class="hx" style="margin-top:var(--s)">${seg("paper", look.paper, [["smooth", "Гладкая"], ["cell", "Клетка"], ["line", "Линейка"], ["dots", "Точки"], ["grid", "Милли­метровка"]], true)}</div>` : "")
-        + section("тёмная тема") + `<div class="hx mr-two">${swatch("dark", "depth", "Глубина", "синее свечение", look.dark === "depth", "smooth")}
-            ${swatch("dark", "library", "Библиотека", "тёмно-зелёная", look.dark === "library", "smooth")}</div>`
-        + section("шрифт заголовков") + `<div class="hx mr-fonts">${fonts}</div>`
+        + (fresh ? section("бумага") : section("светлая тема") + `<div class="hx mr-two">${swatch("light", "notebook", "Тетрадь", "тёплая бумага", look.light === "notebook", look.paper)}
+            ${swatch("light", "campus", "Кампус", "белая, синий акцент", look.light === "campus", "smooth")}</div>`)
+        + (fresh || look.light === "notebook" ? `<div class="hx" style="margin-top:${fresh ? 0 : "var(--s)"}">${seg("paper", look.paper, [["smooth", "Гладкая"], ["cell", "Клетка"], ["line", "Линейка"], ["dots", "Точки"], ["grid", "Милли­метровка"]], true)}</div>` : "")
+        + section("тёмная тема") + (fresh ? `<div class="hx">${seg("night", look.freshDepth ? "depth" : "night", [["night", "Ночная тетрадь"], ["depth", "Глубина"]])}</div>`
+          : `<div class="hx mr-two">${swatch("dark", "depth", "Глубина", "синее свечение", look.dark === "depth", "smooth")}
+            ${swatch("dark", "library", "Библиотека", "тёмно-зелёная", look.dark === "library", "smooth")}</div>`)
+        + (fresh ? "" : section("шрифт заголовков") + `<div class="hx mr-fonts">${fonts}</div>`)
         + section("пары на «сегодня»") + `<div class="hx">${seg("day", look.day, [["cards", "Карточками"], ["rows", "Строками"]])}</div>`
         + (look.day === "cards" ? `<div class="hx" style="margin-top:var(--s)">${seg("card", look.card, [["tint", "С цветом"], ["stripe", "С полоской"]])}</div>` : "")
         + section("когда отметил «сдано»") + `<div class="hx">${seg("cheer", look.cheer, [["quiet", "Тихо"], ["capy", "Капибара"], ["confetti", "Конфетти"]])}</div>`
@@ -335,7 +340,9 @@ window.openLook = function openLook() {
         if (id === "theme") mrLook.setTheme(v);
         else {
           const look = Look.load();
-          look[id] = v;
+          if (id === "mode") look.fresh = v === "fresh";
+          else if (id === "night") look.freshDepth = v === "depth";
+          else look[id] = v;
           mrLook.setLook(look);
         }
         draw();
@@ -353,9 +360,10 @@ window.openLook = function openLook() {
       font(b) { if (b.classList.contains("on")) return; tick(); mrLook.setFont(b.dataset.v); draw(); },
       reset() {
         tick();
-        mrLook.setLook({ ...Look.classic });
+        // «как было» внутри выбранного вида: «Новое / Классика» сброс не трогает
+        mrLook.setLook({ ...Look.classic, fresh: Look.load().fresh });
         const f = mrLook.font();
-        if (f === "hand" || f === "wide") mrLook.setFont("book");
+        if (!Theme.fresh && (f === "hand" || f === "wide")) mrLook.setFont("book");
         if (mrLook.theme() === "sunset") mrLook.setTheme("system");
         draw();
       },

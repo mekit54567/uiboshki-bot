@@ -16,7 +16,7 @@ enum ThemeChoice { system, sunset, light, dark }
 
 class Palette {
   final bool dark;
-  final Color bg, glow1, glow2, card, cardSolid, line, text, muted, accent, onAccent, ok, warn, danger, tabbar;
+  final Color bg, glow1, glow2, card, cardSolid, line, edge, text, muted, accent, onAccent, ok, warn, danger, tabbar;
 
   const Palette({
     required this.dark,
@@ -26,6 +26,7 @@ class Palette {
     required this.card,
     required this.cardSolid,
     required this.line,
+    required this.edge,
     required this.text,
     required this.muted,
     required this.accent,
@@ -44,6 +45,7 @@ class Palette {
     card: ThemeDepth.card,
     cardSolid: ThemeDepth.cardSolid,
     line: ThemeDepth.line,
+    edge: ThemeDepth.edge,
     text: ThemeDepth.text,
     muted: ThemeDepth.muted,
     accent: ThemeDepth.accent,
@@ -62,6 +64,7 @@ class Palette {
     card: ThemeNotebook.card,
     cardSolid: ThemeNotebook.cardSolid,
     line: ThemeNotebook.line,
+    edge: ThemeNotebook.edge,
     text: ThemeNotebook.text,
     muted: ThemeNotebook.muted,
     accent: ThemeNotebook.accent,
@@ -80,6 +83,7 @@ class Palette {
     card: ThemeCampus.card,
     cardSolid: ThemeCampus.cardSolid,
     line: ThemeCampus.line,
+    edge: ThemeCampus.edge,
     text: ThemeCampus.text,
     muted: ThemeCampus.muted,
     accent: ThemeCampus.accent,
@@ -98,6 +102,7 @@ class Palette {
     card: ThemeLibrary.card,
     cardSolid: ThemeLibrary.cardSolid,
     line: ThemeLibrary.line,
+    edge: ThemeLibrary.edge,
     text: ThemeLibrary.text,
     muted: ThemeLibrary.muted,
     accent: ThemeLibrary.accent,
@@ -108,8 +113,55 @@ class Palette {
     tabbar: ThemeLibrary.tabbar,
   );
 
+  /// «Тетрадь» по брендбуку v1 (11.11) — светлая тема нового дизайна.
+  static const paper = Palette(
+    dark: false,
+    bg: ThemePaper.bg,
+    glow1: ThemePaper.bgGlow1,
+    glow2: ThemePaper.bgGlow2,
+    card: ThemePaper.card,
+    cardSolid: ThemePaper.cardSolid,
+    line: ThemePaper.line,
+    edge: ThemePaper.edge,
+    text: ThemePaper.text,
+    muted: ThemePaper.muted,
+    accent: ThemePaper.accent,
+    onAccent: ThemePaper.onAccent,
+    ok: ThemePaper.ok,
+    warn: ThemePaper.warn,
+    danger: ThemePaper.danger,
+    tabbar: ThemePaper.tabbar,
+  );
+
+  /// «Ночная тетрадь» по брендбуку v1 — та же бумага при лампе, без свечений.
+  static const night = Palette(
+    dark: true,
+    bg: ThemeNight.bg,
+    glow1: ThemeNight.bgGlow1,
+    glow2: ThemeNight.bgGlow2,
+    card: ThemeNight.card,
+    cardSolid: ThemeNight.cardSolid,
+    line: ThemeNight.line,
+    edge: ThemeNight.edge,
+    text: ThemeNight.text,
+    muted: ThemeNight.muted,
+    accent: ThemeNight.accent,
+    onAccent: ThemeNight.onAccent,
+    ok: ThemeNight.ok,
+    warn: ThemeNight.warn,
+    danger: ThemeNight.danger,
+    tabbar: ThemeNight.tabbar,
+  );
+
   static Palette ofLight(LightTheme t) => t == LightTheme.campus ? campus : notebook;
   static Palette ofDark(DarkTheme t) => t == DarkTheme.library ? library : depth;
+
+  /// Палитра по «Оформлению»: «Новое» — «Тетрадь» и «Ночная тетрадь» (или
+  /// «Глубина», запасной выход), «Классика» — прежние четыре темы.
+  static Palette of(Look look, {required bool dark}) {
+    if (look.fresh) return dark ? (look.freshDepth ? depth : night) : paper;
+    return dark ? ofDark(look.dark) : ofLight(look.light);
+  }
 
   /// Перед закатом (режим «по закату»): фон и карточки светлой темы чуть
   /// темнеют, текст тот же — читается при любом [k] (0…1).
@@ -125,6 +177,7 @@ class Palette {
       card: d(card),
       cardSolid: d(cardSolid),
       line: line,
+      edge: edge,
       text: text,
       muted: muted,
       accent: accent,
@@ -151,6 +204,10 @@ class AppStyle extends InheritedWidget {
   /// Новый дизайн включён сервером (/api/meta → features.design2).
   final bool design2;
 
+  /// Дизайн по брендбуку v1: 'off' — сервер выключил, в «Оформлении» нет
+  /// переключателя «Новое / Классика».
+  final String design3;
+
   const AppStyle({
     super.key,
     required this.p,
@@ -158,6 +215,7 @@ class AppStyle extends InheritedWidget {
     this.theme = ThemeChoice.system,
     this.look = Look.classic,
     this.design2 = false,
+    this.design3 = 'opt',
     required super.child,
   });
 
@@ -217,7 +275,7 @@ class AppStyle extends InheritedWidget {
   TextStyle body(double size, {FontWeight weight = FontWeight.w400, Color? color}) =>
       TextStyle(fontFamily: 'Onest', fontSize: size, fontWeight: weight, height: 1.3, color: color ?? p.text);
 
-  TextStyle eyebrow({Color? color}) => font == FontChoice.book
+  TextStyle eyebrow({Color? color}) => font == FontChoice.book && !fresh
       ? TextStyle(fontFamily: 'SourceSerif', fontStyle: FontStyle.italic, fontSize: 15, color: color ?? p.muted)
       : TextStyle(
           fontFamily: 'Onest',
@@ -231,6 +289,9 @@ class AppStyle extends InheritedWidget {
   /// дизайна, где яркие цвета предметов на бумаге читаются плохо.
   bool get darkInk => design2 && !p.dark;
 
+  /// Новый дизайн по брендбуку v1 («Новое» в «Оформлении», сервер не выключил).
+  bool get fresh => look.fresh;
+
   /// Цвет предмета для текста, цифр, колец, полос и заливки под белым
   /// текстом: в светлых темах нового дизайна — тот же оттенок темнее, иначе
   /// [subjectColor]. Подсветка фона и светлые заливки — [subjectColor].
@@ -238,7 +299,12 @@ class AppStyle extends InheritedWidget {
 
   @override
   bool updateShouldNotify(AppStyle old) =>
-      old.p != p || old.font != font || old.theme != theme || old.look != look || old.design2 != design2;
+      old.p != p ||
+      old.font != font ||
+      old.theme != theme ||
+      old.look != look ||
+      old.design2 != design2 ||
+      old.design3 != design3;
 }
 
 /// Цвет предмета: у каждого свой во всём приложении (по названию).
