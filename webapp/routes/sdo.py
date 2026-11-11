@@ -89,6 +89,15 @@ async def api_sdo_status(user: dict = CurrentUser):
     return dict(await status_for(user["id"]), starosta=is_starosta(user["id"]))
 
 
+@router.post("/api/sdo/recheck")
+async def api_sdo_recheck(user: dict = CurrentUser):
+    """«Проверить СДО» во вкладке «Сдать»: синк сроков группы сейчас, но не
+    чаще раза в 5 минут на группу (sdo_check.recheck)."""
+    from database.groups import g_or_home
+    from kapibara.features.sdo import check as sdo_check
+    return await sdo_check.recheck(g_or_home(None))
+
+
 @router.post("/api/sdo/connect")
 async def api_sdo_connect(body: SdoConnect, user: dict = CurrentUser,
                           x_telegram_init_data: str = Header(default=""), x_app: str = Header(default="")):
@@ -237,7 +246,10 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     from kapibara.features.sdo import done as sdo_done
     # приложение рисует «Сдано» только для submitted; черновик и непонятный
     # ответ СДО — другим экраном (аудит 21.10, R5)
-    result = dict(result, state=sdo_done.submit_state(result.get("status")))
+    from kapibara.core.config import SDO_BASE_URL
+    # url — кнопка «Открыть задание в СДО», когда вышел черновик (UX-аудит, п. 6)
+    result = dict(result, state=sdo_done.submit_state(result.get("status")),
+                  url=f"{SDO_BASE_URL}/mod/assign/view.php?id={cmid}")
     if result["state"] == "submitted":   # ушло на проверку — дедлайн у себя сданным (черновик — нет)
         await _aside("отметка «сдал» после сдачи", lambda: sdo_done.mark(user["id"], [cmid]))
     return result

@@ -96,3 +96,27 @@ async def test_broken_setting_is_unknown(db):
     await db.set_setting(f"sdo_check:{OTHER}", json.dumps([1]))
     assert await sdo_check.state(OTHER) is None
     assert await sdo_check.state(0) is None                             # не в чате своей группы
+
+
+@pytest.mark.asyncio
+async def test_recheck_runs_sync_with_cooldown(client, monkeypatch):
+    """UX-аудит, п. 7: «Проверить СДО» зовёт синк группы, но не чаще раза в 5 минут."""
+    import webapp.server as server
+    calls = []
+
+    async def runner(gid):
+        calls.append(gid)
+        await sdo_check.note(gid, True)
+
+    monkeypatch.setattr(sdo_check, "_runner", runner)
+    h = {"X-Telegram-Init-Data": _make_init_data(user={"id": MINE, "first_name": "A"})}
+    r = TestClient(server.app).post("/api/sdo/recheck", headers=h).json()
+    assert calls == [HOME] and r["ran"] is True and r["sdo"]["ok"] is True and r["wait"] == sdo_check.COOLDOWN
+    r = TestClient(server.app).post("/api/sdo/recheck", headers=h).json()       # сразу второй раз — не зовём
+    assert calls == [HOME] and r["ran"] is False and 0 < r["wait"] <= sdo_check.COOLDOWN
+
+
+@pytest.mark.asyncio
+async def test_recheck_without_runner_just_reports(db, monkeypatch):
+    monkeypatch.setattr(sdo_check, "_runner", None)
+    assert await sdo_check.recheck(HOME) == {"ran": False, "wait": 0, "sdo": None}

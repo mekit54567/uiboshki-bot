@@ -377,8 +377,9 @@ function stGoalCard(el, courseId, goal, color) {
       ${lines.map(([ic, v, t]) => `<div class="row" style="align-items:flex-start;gap:var(--s);padding-top:6px">${icon(ic, v, "font-size:16px;color:var(--muted);margin-top:1px")}
         <div class="grow bd" style="--sz:14px">${esc(t)}</div></div>`).join("")}
       ${status === "no" ? `<div class="bd" style="--sz:13px;color:var(--danger);margin-top:var(--m)">${esc(tk.reachable === false
-        ? "Открытых работ меньше, чем нужно зачесть: без пересдачи экзамена по БРС не будет."
+        ? "Открытых работ меньше, чем нужно зачесть. По правилам БРС так к экзамену не выйти — спроси преподавателя про пересдачу."
         : `Даже если сдать всё и ходить на все лекции, будет ${stNum(g.best || 0)} — меньше ${stNum(g.at || 0)}. Можно выбрать цель ниже.`)}</div>` : ""}
+      <div class="bd mut" style="--sz:12px;margin-top:var(--m)">Это расчёт по баллам из СДО на сейчас. Оценку ставит преподаватель.</div>
       ${error ? `<div class="bd" style="--sz:13px;color:var(--danger);margin-top:var(--s)">${esc(error)}</div>` : ""}
     </div>`;
     stAngle(el.firstElementChild);

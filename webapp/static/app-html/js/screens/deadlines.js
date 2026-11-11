@@ -47,7 +47,8 @@ function dlSplit(subject) {
 /** Номер дня по Москве — для «сколько дней между» по календарю. */
 function dlDayNo(date) { const t = msk(date); return Date.UTC(t.y, t.m - 1, t.d) / 864e5; }
 function dlDays(at, d) { return dlDayNo(d) - dlDayNo(at); }
-function dlTime(d) { return d.dueTime || "23:59"; }
+// время не указано — «до конца дня», а не выдуманное «23:59» (UX-аудит, п. 10)
+function dlTime(d, pre) { return d.dueTime ? (pre ? `до ${d.dueTime}` : d.dueTime) : "до конца дня"; }
 function dlDueLabel(d) {
   const t = msk(d.due);
   return `${WD_SHORT[t.wd].toLowerCase()}, ${t.d} ${MONTHS[t.m - 1]} · ${dlTime(d)}`;
@@ -362,7 +363,7 @@ function dlReadFile(file) {
  *  replace — «Редактировать ответ». → true — сдано. */
 function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
   return Sheet.show(`<div class="dl-sub"></div>`, (body, close) => {
-    let rules = null, error = null, done = null, doneState = "submitted", sending = false;
+    let rules = null, error = null, done = null, doneState = "submitted", doneUrl = "", sending = false;
     const files = [];   // {f, why}
     const d2 = Theme.design2;
     const good = () => files.filter((e) => !e.why).map((e) => e.f);
@@ -387,13 +388,16 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
         const col = ok ? "var(--ok)" : draft ? "var(--warn)" : "var(--accent)";
         const ttl = ok ? "Сдано" : draft ? "Сохранено черновиком" : "Файл в СДО";
         const hint = ok ? done : draft
-          ? `На проверку ещё не отправлено — открой задание в СДО и нажми «Отправить». Статус: ${done}`
+          ? `Файл лежит в СДО, но на проверку ещё не отправлен. Открой задание и нажми там «Отправить на проверку». Статус: ${done}`
           : `СДО не подтвердил сдачу — загляни в задание, чтобы убедиться.${done ? ` Статус: ${done}` : ""}`;
-        box.innerHTML = `<div class="dl-donebox"><div class="dl-hop">${capy("joy", 104, col)}
+        // не сдано — без прыжка и радости: дело ещё не доделано (UX-аудит, п. 6)
+        box.innerHTML = `<div class="dl-donebox"><div class="${ok ? "dl-hop" : "dl-hop dl-calm"}">${capy(ok ? "joy" : "day", 104, col)}
           <span class="dl-hopcheck" style="background:${col}">${icon(ok ? "check" : "priority_high", "", "font-size:22px")}</span></div>
           <div class="ttl" style="--sz:28px;margin-top:var(--l);text-align:center">${ttl}</div>
           <div class="bd mut" style="--sz:14px;margin-top:var(--s);text-align:center">${esc(hint)}</div>
-          <button class="btn dl-okbtn" data-act="close" style="background:${col}">${ok ? "Отлично" : "Понятно"}</button></div>`;
+          ${!ok && doneUrl ? `<a class="btn dl-okbtn" href="${esc(doneUrl)}" target="_blank" rel="noopener" style="background:${col};text-decoration:none">Открыть задание в СДО</a>
+          <button class="dl-retry" data-act="close" style="margin-top:var(--s)">Закрыть</button>`
+          : `<button class="btn dl-okbtn" data-act="close" style="background:${col}">${ok ? "Отлично" : "Понятно"}</button>`}</div>`;
         return;
       }
       const n = good().length;
@@ -449,6 +453,7 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
           try { navigator.vibrate && navigator.vibrate(18); } catch (er) {}
           done = r && typeof r.status === "string" ? r.status : "Отправлено в СДО";
           doneState = r && typeof r.state === "string" ? r.state : "submitted";
+          doneUrl = r && typeof r.url === "string" && /^https:\/\//.test(r.url) ? r.url : "";
         } catch (e) { error = e.status ? e.message : "Связь оборвалась — не знаем, дошёл ли файл. Проверь задание в СДО, прежде чем сдавать снова."; }
         sending = false; draw();
       },
@@ -518,7 +523,7 @@ Screens.deadlines = {
       const name = dlSplit(d.subject), t = msk(d.due), past = d.done || late, n = dlDays(at, d.due);
       const color = past ? "var(--muted)" : n === 0 ? "var(--danger)" : n === 1 ? "var(--warn)" : "var(--text)";
       return `<div class="dl-sw" data-id="${d.id}"><div class="dl-swbg" style="background:${d.done ? "var(--muted)" : "var(--ok)"}">
-          <span class="bd b7" style="--sz:15px;color:#fff">${d.done ? "Вернуть" : "Сдано"}</span></div>
+          <span class="bd b7" style="--sz:15px;color:#fff">${d.done ? "Вернуть" : "Отметить"}</span></div>
         <button class="dl-row${d.done ? " done" : ""}" data-act="open" data-id="${d.id}">
           <div class="dl-date"><div class="bd mut" style="--sz:12px">${past ? MONTHS_SHORT[t.m - 1] : WD_SHORT[t.wd].toLowerCase()}</div>
             <div class="num" style="--sz:22px;color:${color}">${t.d}</div></div>
@@ -534,7 +539,7 @@ Screens.deadlines = {
     const hot = (d, at) => {
       rows[d.id] = d;
       const left = d.due - at, h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
-      const when = dlDays(at, d.due) === 0 ? `до ${dlTime(d)}` : `завтра до ${dlTime(d)}`;
+      const when = dlDays(at, d.due) === 0 ? dlTime(d, true) : `завтра ${dlTime(d, true)}`;
       const name = dlSplit(d.subject);
       const unit = (u) => `<span class="bd mut dl-unit">${u}</span>`;
       const big = (v) => `<span class="num" style="--sz:44px;color:var(--danger)">${v}</span>`;
@@ -583,10 +588,12 @@ Screens.deadlines = {
           html += `<div class="dl-sdowrap"><div class="tile dl-sdo">${capy("sad", 44, "var(--muted)")}
             <div class="grow"><div class="bd b6" style="--sz:15px">СДО не ответил</div>
             <div class="bd mut" style="--sz:13px;margin-top:2px">${esc(dlSdoShown(sdo.lastOk, t))}</div>
-            <button class="dl-retry" data-act="retrySdo">Попробовать ещё раз</button></div></div></div>`;
+            <button class="dl-retry" data-act="retrySdo">Проверить СДО</button></div></div></div>`;
         }
         if (burning) html += hot(burning, t);
-        if (!open.length && sdoDown) html += notice("СДО не ответил", dlSdoShown(sdo.lastOk, t), { pose: "sad", retry: "retrySdo", retryLabel: "Попробовать ещё раз" });
+        if (!open.length && sdoDown) html += notice("СДО не ответил", dlSdoShown(sdo.lastOk, t), { pose: "sad", retry: "retrySdo", retryLabel: "Проверить СДО" });
+        else if (!open.length && Theme.design2 && late.length) html += notice("Впереди сроков нет",
+          `Но ниже — работы с прошедшим сроком: ${late.length}. Сдал — отметь, не нужна — убери.`, { pose: "day" });
         else if (!open.length && Theme.design2) html += notice("Ближайших сроков нет",
           sdo && sdo.checkedAt ? dlSdoChecked(sdo.checkedAt, t) : "Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.", { pose: "joy" });
         else if (!open.length) html += notice(late.length ? "Новых сроков нет" : "Всё сдано", "Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.", { pose: "joy" });
@@ -602,7 +609,10 @@ Screens.deadlines = {
     };
     const toggle = async (d, isDone) => {
       const ok = await run(() => Api.post(`/deadlines/${d.id}/toggle`, { done: isDone }));
-      if (ok && isDone) dlCheer();
+      if (ok && isDone) {
+        dlCheer();
+        if (d.canSubmit) toast("Отметил у тебя. В СДО работа не отправлялась", "info");   // UX-аудит, п. 5
+      }
     };
     const submit = async (d) => { if (await dlSubmitSheet({ title: d.subject, deadlineId: d.id })) await reload(); };
     const actions = async (d) => {
@@ -634,8 +644,14 @@ Screens.deadlines = {
       retry() { error = null; body.innerHTML = spinner(); reload(); },
       async retrySdo() {
         tick();
+        // сервер заново спрашивает СДО (не чаще раза в 5 минут на группу) — UX-аудит, п. 7
+        let ran = false, wait = 0;
+        try { const r = await Api.post("/sdo/recheck", {}); ran = !!(r && r.ran); wait = (r && r.wait) || 0; } catch (e) { /* старый сервер, нет сети — просто перечитаем */ }
         await reload();
-        if (data && data.sdo && data.sdo.ok === false && Theme.design2) toast("СДО пока молчит — бот проверит его сам", "info");
+        const down = data && data.sdo && data.sdo.ok === false;
+        if (!down) { if (ran) toast("СДО ответил — сроки обновлены", "done"); }
+        else if (!ran && wait > 0) toast(`Проверял только что — СДО молчит. Ещё раз можно через ${Math.ceil(wait / 60)} мин`, "info");
+        else toast("СДО всё ещё молчит — проверю его сам чуть позже", "info");
       },
       async add() {
         tick();

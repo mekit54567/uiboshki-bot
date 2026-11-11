@@ -8,7 +8,7 @@ evening_time; по умолчанию выключено, 20:00). Одним к�
     Первая — Анализ данных, лекция · А-1 (В-78)
 
 Пар нет, но есть сроки в ближайшие дни — «Завтра пар нет», «Сдать до пн:
-Практика 2. Отдыхай.»; нет ни пар, ни сроков — не шлём. Погода и корпус — по
+Практика 2.»; нет ни пар, ни сроков — не шлём. Погода и корпус — по
 тем же тумблерам, что у утренней рассылки. При DESIGN2=0 — ничего не шлём.
 """
 
@@ -92,7 +92,7 @@ def build(raw: bytes, tomorrow: date, deadlines: list[dict], home: str | None, w
         return None
     if not lessons:
         title = "Завтра пар нет"
-        return title, f"🌙 <b>{title}</b>\n{dl} Отдыхай."
+        return title, f"🌙 <b>{title}</b>\n{dl}"      # сроки есть — «отдыхай» тут не к месту (UX-аудит, п. 21)
     lessons.sort(key=lambda l: l["start"])
     title = day_title(lessons, "Завтра", home, campus)
     line = " ".join(x for x in ((weather + ".") if weather else "", dl) if x)

@@ -62,7 +62,24 @@ class Backdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final paper = !p.dark && s.look.light == LightTheme.notebook ? s.look.paper : Paper.smooth;
+    final paper = !p.dark && (s.fresh || s.look.light == LightTheme.notebook) ? s.look.paper : Paper.smooth;
+    // «Тетрадь» и «Ночная тетрадь» нового дизайна — ровная бумага без свечений
+    // (брендбук v1); «Глубина» как запасная тёмная остаётся со своими
+    if (s.fresh && !(p.dark && s.look.freshDepth)) {
+      return ColoredBox(
+        color: p.bg,
+        child: paper == Paper.smooth
+            ? child
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(child: CustomPaint(painter: PaperPainter(paper, p.text))),
+                  ),
+                  child,
+                ],
+              ),
+      );
+    }
     final g = glows(p, tint);
     return DecoratedBox(
       decoration: BoxDecoration(color: cheap ? null : p.bg),

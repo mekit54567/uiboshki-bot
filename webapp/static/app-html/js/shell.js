@@ -127,7 +127,11 @@ async function start() {
   // сервер мог выключить новый дизайн (DESIGN2=0) — узнаём при запуске
   Api.get("/meta").then((m) => {
     const on = !(m && m.features && m.features.design2 === false);
+    const f3 = m && m.features && m.features.design3, d3 = f3 === "off" || f3 === "on" ? f3 : "opt";
+    const was = Theme.fresh;
+    if (d3 !== Theme.design3) { Theme.design3 = d3; Prefs.set("uib_design3", d3); }
     if (on !== Theme.design2) { Theme.design2 = on; Prefs.set("uib_design2", on); Theme.apply(); if (Api.token) Tabs.rebuild(); }
+    else { Theme.apply(); if (Theme.fresh !== was && Api.token) Tabs.rebuild(); }
   }).catch(() => {});
   if (Api.token) { Tabs.build(); afterStart(); }
   else showLogin();

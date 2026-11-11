@@ -261,11 +261,20 @@ def short_title(title: str, limit: int = 28) -> str:
 
 
 def build_context(hits: list[dict], limit: int = CONTEXT_CHARS) -> tuple[str, list[dict]]:
-    """Куски для ИИ с номерами [n] — и источники для чипов под ответом."""
+    """Куски для ИИ с номерами [n] — и источники для чипов под ответом.
+    Одинаковый текст идёт один раз: одна лекция, загруженная дважды (PDF и
+    копия, файл от другой группы), давала два одинаковых куска — ИИ ставил
+    оба номера, под ответом чипы шли парами (одногруппник Никиты 09.11:
+    «Лекция 7 · стр. 35» дважды)."""
     blocks: list[str] = []
     sources: list[dict] = []
     used = 0
+    seen: set[str] = set()
     for h in hits:
+        key = re.sub(r"\s+", " ", h["text"]).strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
         if used + len(h["text"]) > limit and blocks:
             break
         n = len(blocks) + 1

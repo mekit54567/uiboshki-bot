@@ -32,7 +32,7 @@ def test_text():
     d = {"subject": "Практика 2 · Анализ данных", "due_date": "2099-03-10", "due_time": None}
     title, body, html = ds.text(d, 3, DUE - timedelta(hours=3))
     assert title == "Через 3 ч срок: Практика 2"
-    assert body == "Анализ данных · сегодня до 23:59 · ещё не сдано"
+    assert body == "Анализ данных · сегодня до 23:59 · отметки о сдаче нет"
     assert "не отмечена сданной" in html
 
 

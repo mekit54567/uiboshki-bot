@@ -159,3 +159,31 @@ async def test_chat_abbrev_picks_subject_and_lecture_of_day(db, monkeypatch):
     assert "ICOM" in seen["lectures"] and "BPMN" not in seen["lectures"] and "Введение" not in seen["lectures"]
     assert "лекцию №2" in seen["context"]
     assert [s["title"] for s in data["sources"]] == ["Лекция 2"]
+
+
+def test_same_place_sources_merge_into_one_chip():
+    # одногруппник Никиты 09.11: «Лекция 7 · стр. 35» дважды, «стр. 37» дважды…
+    from webapp.routes.chat import merge_same_sources
+    src = [{"n": n, "title": "Лекция 7. Массивы", "page": p, "kind": "стр."}
+           for n, p in [(1, 35), (3, 35), (5, 37), (8, 37), (4, 47)]]
+    text = "Через интерфейсы [1][3]. Ссылки полиморфны [5] [8], ещё [3, 4].\n```\nint x = a[8];\n```"
+    out, chips = merge_same_sources(text, src)
+    assert [c["n"] for c in chips] == [1, 5, 4]
+    assert "интерфейсы [1]." in out and "полиморфны [5]," in out and "[1, 4]" in out
+    assert "a[8]" in out                                                   # код не трогаем
+    same = [{"n": 1, "title": "Лекция 1", "page": 2, "kind": "стр."}]
+    assert merge_same_sources("x [1]", same) == ("x [1]", same)
+
+
+def test_same_text_goes_to_ai_once():
+    from kapibara.features.ai import semantic_search as ss
+    hit = {"file_id": 1, "title": "Лекция 7", "subject": "Java", "page_from": 35, "page_to": 35,
+           "kind": "стр.", "text": "Полиморфизм —  это…"}
+    ctx, sources = ss.build_context([hit, {**hit, "file_id": 2, "text": "полиморфизм — это…"}])
+    assert len(sources) == 1 and "[2]" not in ctx
+
+
+def test_prompt_no_trailing_clarify():
+    from kapibara.features.ai.solver import build_system_prompt
+    p = build_system_prompt()
+    assert "Уточни, что именно нужно" in p and "опечатк" in p
