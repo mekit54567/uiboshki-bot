@@ -248,3 +248,30 @@ def test_about_promo_film():
     assert tail.status_code == 206 and tail.headers["content-range"] == f"bytes {size - 10}-{size - 1}/{size}"
     assert c.get("/site/promo/promo-16x9.mp4", headers={"Range": f"bytes={size}-"}).status_code == 416
     assert c.get("/site/promo/site.css").status_code == 404 and c.get("/site/promo/none.mp4").status_code == 404
+
+
+def test_search_engines_see_kapibara(monkeypatch):
+    """Яндекс показывал uiboshki.ru с заголовком «УИБО-03-24» (Никита 09.11):
+    корень — приложение, переход гостя на /about делает JS, поисковик его не
+    видит. Теперь у корня заголовок Капибары и canonical на /about, есть
+    robots.txt и sitemap.xml с публичными страницами."""
+    import re
+    import webapp.deps as deps
+    monkeypatch.setattr(deps, "WEBAPP_URL", "https://www.uiboshki.ru")
+    c = _client()
+    root = c.get("/").text
+    title = re.search(r"<title>(.*?)</title>", root).group(1)
+    assert title.startswith("Капибара") and "УИБО" not in title
+    assert '<link rel="canonical" href="https://www.uiboshki.ru/about">' in root
+    about = c.get("/about").text
+    assert '<link rel="canonical" href="https://www.uiboshki.ru/about">' in about
+    assert '"name":"Капибара — учёба МИРЭА"' in about and "__BASE__" not in about
+    assert '<link rel="canonical" href="https://www.uiboshki.ru/history">' in c.get("/history").text
+
+    robots = c.get("/robots.txt")
+    assert robots.status_code == 200 and "Sitemap: https://www.uiboshki.ru/sitemap.xml" in robots.text
+    assert "Disallow: /api/" in robots.text and "Disallow: /about\n" not in robots.text
+    sm = c.get("/sitemap.xml")
+    assert sm.status_code == 200 and "<loc>https://www.uiboshki.ru/about</loc>" in sm.text
+    for loc in re.findall(r"<loc>https://www\.uiboshki\.ru(.*?)</loc>", sm.text):
+        assert c.get(loc).status_code == 200, loc

@@ -86,6 +86,37 @@ def promo_file(name: str, request: Request):
                     headers={**headers, "Content-Range": f"bytes {start}-{end}/{size}"})
 
 
+# Поисковикам (Никита 09.11: Яндекс показывал сайт как «УИБО-03-24»): что
+# индексировать — сайт, история, документы; приложение, API, файлы, оплата по
+# личной ссылке и демо — нет. Адреса — с домена WEBAPP_URL (www, без Cloudflare).
+_ROBOTS_CLOSED = ("/api/", "/about/api/", "/about/demo", "/app", "/index.html", "/aitest",
+                  "/roadmap", "/plus", "/donate/", "/dl/", "/sdl/", "/pg/", "/ics/")
+SITEMAP_PAGES = ("/about", "/history", "/privacy", "/offer", "/rules")
+
+
+def _base(request: Request) -> str:
+    from webapp import deps
+    return (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
+
+
+@router.get("/robots.txt", include_in_schema=False)
+async def robots_txt(request: Request):
+    lines = ["User-agent: *", *(f"Disallow: {p}" for p in _ROBOTS_CLOSED), "",
+             f"Sitemap: {_base(request)}/sitemap.xml", ""]
+    return Response("\n".join(lines), media_type="text/plain; charset=utf-8",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml(request: Request):
+    base = _base(request)
+    urls = "".join(f"<url><loc>{base}{p}</loc></url>" for p in SITEMAP_PAGES)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>\n')
+    return Response(xml, media_type="application/xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @router.get("/about", include_in_schema=False)
 @router.get("/about/", include_in_schema=False)
 async def about_page(request: Request):
