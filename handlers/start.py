@@ -12,6 +12,7 @@ from kapibara.core.config import BOT_USERNAME, GROUP_NAME, RUSTORE_URL, SCHEDULE
 from kapibara.bot.keyboards import MAIN_KB, ACTIONS_KB, app_button, webapp_keyboard
 from kapibara.core.utils import esc, split_by_lines
 from kapibara.core.telegram import cosmetic
+from kapibara.bot.tg import bot_of, data_of, msg, sender, text_of
 from kapibara.bot.optional import ask_optional
 from aiogram.exceptions import TelegramAPIError
 
@@ -73,7 +74,7 @@ async def cmd_start_deeplink(message: Message, command: CommandObject, state: FS
     «Открыть» в WebApp (основной — /api/files/{id}/send, без «/start» в
     чате). Само «/start file_…» стираем, чтобы чат не зарастал. Просто
     /start без параметра идёт в обычный cmd_start ниже."""
-    user = message.from_user
+    user = sender(message)
     payload = command.args or ""
     existed = (payload.startswith("ref_") or payload in ("plus", "donate")) and await get_user(user.id) is not None
     await upsert_user(user.id, user.username or "", user.full_name or "")
@@ -147,7 +148,7 @@ def login_prompt(code: str, login: dict) -> tuple[str, InlineKeyboardMarkup]:
 async def channel_decision(callback: CallbackQuery, state: FSMContext | None = None):
     """«Я в канале, дальше» / «Позже» (login_channel.py) → «это вы?» или приветствие."""
     from kapibara.features.identity import login_channel
-    _, verdict, step = callback.data.split(":", 2)
+    _, verdict, step = data_of(callback).split(":", 2)
     if verdict == "ok" and await login_channel.subscribed(callback.bot, callback.from_user.id) is False:
         await callback.answer("Пока не вижу подписки. Подпишись на канал и нажми ещё раз.", show_alert=True)
         return
@@ -157,15 +158,15 @@ async def channel_decision(callback: CallbackQuery, state: FSMContext | None = N
         code = step[6:]
         login = await get_login(code)
         if not login or login["status"] != "wait":
-            await callback.message.edit_text("Ссылка для входа устарела — нажми «Войти через Telegram» "
+            await msg(callback).edit_text("Ссылка для входа устарела — нажми «Войти через Telegram» "
                                              "в приложении ещё раз.")
             return
         text, kb = login_prompt(code, login)
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await msg(callback).edit_text(text, parse_mode="HTML", reply_markup=kb)
         return
     with cosmetic("start.channel_decision"):
-        await callback.message.delete()
-    await welcome(callback.message, callback.from_user, state, store=step == "start:ios", checked=True)
+        await msg(callback).delete()
+    await welcome(msg(callback), callback.from_user, state, store=step == "start:ios", checked=True)
 
 
 @router.callback_query(F.data.startswith("login:"))
@@ -174,24 +175,24 @@ async def login_decision(callback: CallbackQuery):
     устройства; другое число — вход отклонён. Иначе вход по чужой ссылке
     подтверждался одним нажатием (ревью безопасности 09.10)."""
     from database.sessions import decide_login, get_login, pick_options
-    _, verdict, rest = callback.data.split(":", 2)
+    _, verdict, rest = data_of(callback).split(":", 2)
     if verdict == "ok":                       # шаг 1 → выбрать число
         login = await get_login(rest)
         await callback.answer()
         if not login or login["status"] != "wait":
-            await callback.message.edit_text("Ссылка для входа устарела.")
+            await msg(callback).edit_text("Ссылка для входа устарела.")
             return
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=str(n), callback_data=f"login:n:{n}:{rest}")
              for n in pick_options(login["pick"] or 0)],
             [InlineKeyboardButton(text="Это не я", callback_data=f"login:no:{rest}")],
         ])
-        await callback.message.edit_text("🔢 Какое число на экране устройства? Нажми его.", reply_markup=kb)
+        await msg(callback).edit_text("🔢 Какое число на экране устройства? Нажми его.", reply_markup=kb)
         return
     if verdict == "n":                        # шаг 2 — выбранное число
         num, code = rest.split(":", 1)
         login = await get_login(code)
-        right = bool(login) and str(login.get("pick")) == num
+        right = bool(login and str(login.get("pick")) == num)
         ok = await decide_login(code, callback.from_user.id, right)
         await callback.answer()
         text = ("✅ Готово — возвращайся в приложение." if right else
@@ -202,9 +203,9 @@ async def login_decision(callback: CallbackQuery):
         await callback.answer()
         text = "Вход отклонён." if ok else "Ссылка для входа устарела."
     try:
-        await callback.message.edit_text(text)
+        await msg(callback).edit_text(text)
     except TelegramAPIError:             # сообщение старое или то же — шлём новым
-        await callback.message.answer(text)
+        await msg(callback).answer(text)
 
 
 @router.message(CommandStart())
@@ -230,7 +231,7 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
     from kapibara.features.groups import groups
     # новый человек (после этапа 1: любая группа) — тем же сообщением спросить группу
     ask = state is not None and groups.home_id() and not await groups.of_user(user.id)
-    if ask:
+    if ask and state is not None:
         from handlers.group_pick import ASK, GroupPick
         await state.set_state(GroupPick.query)
     g = None if ask else await groups.of_user(user.id)
@@ -254,14 +255,14 @@ async def welcome(message: Message, user, state: FSMContext | None = None, store
 
 @router.message(Command("optional"))
 async def cmd_optional(message: Message):
-    await ask_optional(message, message.from_user.id, all_subjects=True)
+    await ask_optional(message, sender(message).id, all_subjects=True)
 
 
 @router.callback_query(F.data.startswith("opt:"))
 async def optional_answer(callback: CallbackQuery):
     from kapibara.core.config import OPTIONAL_SUBJECTS
     from database import set_optional_answer
-    _, i, attend = callback.data.split(":")
+    _, i, attend = data_of(callback).split(":")
     if not i.isdigit() or int(i) >= len(OPTIONAL_SUBJECTS):
         await callback.answer("Устарело", show_alert=True)
         return
@@ -271,7 +272,7 @@ async def optional_answer(callback: CallbackQuery):
             else f"Ок, <b>{esc(subject)}</b> убрал из твоего расписания. Передумаешь — /optional")
     await callback.answer()
     with cosmetic("start.optional_answer"):
-        await callback.message.edit_text(text, parse_mode="HTML")
+        await msg(callback).edit_text(text, parse_mode="HTML")
 
 
 @router.message(Command("app"))
@@ -317,24 +318,24 @@ ACTION_HINTS = {
 
 @router.callback_query(F.data.startswith("act:"))
 async def handle_action(callback: CallbackQuery):
-    action = callback.data.split(":")[1]
+    action = data_of(callback).split(":")[1]
     uid = callback.from_user.id
     await callback.answer()
 
     if action in ACTION_HINTS:
-        await callback.bot.send_message(uid, ACTION_HINTS[action])
+        await bot_of(callback).send_message(uid, ACTION_HINTS[action])
 
     elif action == "nextweek":
         from kapibara.features.schedule.parser import get_next_week_schedule
-        wait = await callback.bot.send_message(uid, "⏳ Загружаю следующую неделю...")
+        wait = await bot_of(callback).send_message(uid, "⏳ Загружаю следующую неделю...")
         from database import get_user_group
         text = await get_next_week_schedule(await get_user_group(uid))
-        await callback.bot.delete_message(uid, wait.message_id)
+        await bot_of(callback).delete_message(uid, wait.message_id)
         for chunk in split_by_lines(text):
-            await callback.bot.send_message(uid, chunk, parse_mode="HTML")
+            await bot_of(callback).send_message(uid, chunk, parse_mode="HTML")
 
     elif action == "vote":
-        await callback.bot.send_message(
+        await bot_of(callback).send_message(
             uid,
             "🗳 <b>Голосование</b>\n\n"
             "Создать: /vote Твой вопрос\n"
@@ -346,14 +347,14 @@ async def handle_action(callback: CallbackQuery):
     elif action == "settings":
         await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
         text, kb = _settings_view(await get_user(uid))
-        await callback.bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
+        await bot_of(callback).send_message(uid, text, parse_mode="HTML", reply_markup=kb)
 
     elif action == "subscribe":  # старая кнопка в уже отправленных сообщениях
         await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
         user = await get_user(uid)
         is_sub = user and user.get("subscribed")
         await set_subscription(uid, 0 if is_sub else 1)
-        await callback.bot.send_message(uid, "🔕 Отписался от уведомлений." if is_sub else "✅ Подписан на уведомления!")
+        await bot_of(callback).send_message(uid, "🔕 Отписался от уведомлений." if is_sub else "✅ Подписан на уведомления!")
 
 
 PAY_WORDS = ("/plus", "оплат", "₽", "подписк", "Капибара+")
@@ -480,7 +481,7 @@ async def cmd_help(message: Message):
     # мешали — и всё равно отвечали бы «только для старосты».
     from database import is_editor
     text = help_text()
-    if await is_editor(message.from_user.id):
+    if await is_editor(sender(message).id):
         text += STAROSTA_HELP
     await message.answer(text, parse_mode="HTML", reply_markup=app_button(), disable_web_page_preview=True)
 
@@ -488,20 +489,21 @@ async def cmd_help(message: Message):
 @router.message(Command("subscribe"))
 @router.message(F.text == "🔔 Подписка")
 async def cmd_subscribe(message: Message):
-    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    await set_subscription(message.from_user.id, 1)
+    u = sender(message)
+    await upsert_user(u.id, u.username or "", u.full_name or "")
+    await set_subscription(sender(message).id, 1)
     await message.answer(f"✅ Подписан! Расписание каждое утро в {SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d} 🌅")
 
 
 @router.message(Command("unsubscribe"))
 async def cmd_unsubscribe(message: Message):
-    await set_subscription(message.from_user.id, 0)
+    await set_subscription(sender(message).id, 0)
     await message.answer("🔕 Отписался. Вернуться — /subscribe")
 
 
 @router.message(Command("setreminder"))
 async def cmd_setreminder(message: Message):
-    parts = message.text.split()
+    parts = text_of(message).split()
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /setreminder 15")
         return
@@ -510,7 +512,7 @@ async def cmd_setreminder(message: Message):
         await message.answer("❌ Введи число от 1 до 60")
         return
     from kapibara.features.notifications import prefs as notify_prefs
-    await notify_prefs.set_all_reminders(message.from_user.id, mins)
+    await notify_prefs.set_all_reminders(sender(message).id, mins)
     await message.answer(f"✅ Буду напоминать за <b>{mins} минут</b> до пары!\n"
                          "Отдельно для первой пары и после перемены — в приложении: ☰ Ещё → Уведомления.",
                          parse_mode="HTML")
@@ -561,8 +563,9 @@ def _soon_text(prefs: dict) -> str:
 @router.message(Command("settings"))
 @router.message(F.text == "⚙️ Настройки")
 async def cmd_settings(message: Message):
-    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    text, kb = _settings_view(await get_user(message.from_user.id))
+    u = sender(message)
+    await upsert_user(u.id, u.username or "", u.full_name or "")
+    text, kb = _settings_view(await get_user(u.id))
     await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
@@ -570,7 +573,7 @@ async def cmd_settings(message: Message):
 async def settings_change(callback: CallbackQuery):
     uid = callback.from_user.id
     await upsert_user(uid, callback.from_user.username or "", callback.from_user.full_name or "")
-    parts = callback.data.split(":")
+    parts = data_of(callback).split(":")
     if parts[1] == "sub":
         user = await get_user(uid)
         await set_subscription(uid, 0 if (user and user.get("subscribed")) else 1)
@@ -589,7 +592,7 @@ async def settings_change(callback: CallbackQuery):
                 await set_notify(uid, prefs)
     text, kb = _settings_view(await get_user(uid))
     with cosmetic("start: настройки"):      # «message is not modified» — нажали уже выбранное
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await msg(callback).edit_text(text, parse_mode="HTML", reply_markup=kb)
     await callback.answer("Сохранено ✓")
 
 
