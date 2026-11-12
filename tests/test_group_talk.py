@@ -116,6 +116,7 @@ def test_helpers():
     p = group_talk.persona()
     assert "Капибара" in p and "Капибару+" in p and "ничего не выдумывай" in p
     assert config.APPSTORE_URL in p
+    assert "жёстко и смешно" in p and "мат" in p and "Запрещено" in p     # два режима: обычный и жёсткий ответ на подкол
 
 
 @pytest.mark.asyncio
