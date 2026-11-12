@@ -62,16 +62,24 @@ function openLesson(raw, { own = true } = {}) {
     if (room) rows += infoRow("place", room, [floor, campus ? `корпус ${campus}` : "", !campus && !floor ? "аудитория · её расписание" : "расписание аудитории"].filter(Boolean).join(" · "), "room");
     if (l.teacher) rows += (rows ? '<div class="divider"></div>' : "") + infoRow("person", l.teacher, "все пары преподавателя", "teacher", own ? '<div class="ls-rating"></div>' : "");
     if (groups.length > 1) rows += '<div class="divider"></div>' + infoRow("groups", `Поток · ${groups.length} ${plural(groups.length, "группа", "группы", "групп")}`, groups.length > 3 ? `${groups[0]} … ${groups[groups.length - 1]}` : groups.join(", "));
-    body.innerHTML = backRow() + `<div style="padding:0 var(--xl) var(--l)">
+    // новый дизайн (макет П1, Никита 11.11): статус пары — плашкой справа от «назад»,
+    // вид пары и день — строкой над названием, «По предмету» — выше обсуждения и реакций
+    const fresh = Theme.fresh, m = l.startAt ? msk(l.startAt) : null;
+    const caption = [l.kind ? l.kind.toLowerCase() : "", m ? `${["пн", "вт", "ср", "чт", "пт", "сб", "вс"][m.wd]} ${m.d} ${MONTHS[m.m - 1]}` : ""].filter(Boolean).join(" · ");
+    const order = fresh ? '<div class="ls-extras"></div><div class="ls-comments"></div><div class="ls-react"></div>'
+      : '<div class="ls-react"></div><div class="ls-comments"></div><div class="ls-extras"></div>';
+    body.innerHTML = backRow(fresh && live ? `<span class="ls-status">идёт · ещё ${esc(spanText(minutesTo(t, l.endAt)))}</span>` : "") + `<div style="padding:0 var(--xl) var(--l)">
+        ${fresh && caption ? `<div class="row" style="gap:6px;margin-bottom:6px"><i class="cm-dot" style="width:8px;height:8px;background:${c}"></i>
+          <span class="bd b6 mut" style="--sz:13px">${esc(caption)}</span></div>` : ""}
         <div class="ttl" style="--sz:${titleSize(l.title, 30)}px">${esc(glue(l.title))}</div>
-        ${kind || live ? `<div class="row" style="gap:6px;margin-top:var(--xs)"><i class="cm-dot" style="width:8px;height:8px;background:${c}"></i>
+        ${!fresh && (kind || live) ? `<div class="row" style="gap:6px;margin-top:var(--xs)"><i class="cm-dot" style="width:8px;height:8px;background:${c}"></i>
           <span class="bd mut" style="--sz:15px">${esc(kind)}${kind && live ? " · " : ""}${live ? `<b style="color:${c}">идёт</b>` : ""}</span></div>` : ""}
         <div class="row" style="margin-top:var(--l)"><span class="bd b7" style="--sz:14px">${esc(l.start)}</span>
           <div class="progress grow" style="--c:${c}"><i style="width:${value * 100}%"></i></div>
           <span class="bd b7" style="--sz:14px">${esc(l.end)}</span></div>
       </div>
       <div class="hx"><div class="tile p0 ls-info">${rows}<div class="ls-together"></div></div></div>
-      <div class="ls-react"></div><div class="ls-comments"></div><div class="ls-extras"></div><div class="pad-bottom"></div>`;
+      ${order}<div class="pad-bottom"></div>`;
     const $ = (s) => body.querySelector(s);
     const handlers = {
       room: () => window.openTarget ? openTarget(room, 3) : toast("Скоро"),
@@ -176,8 +184,11 @@ function openLesson(raw, { own = true } = {}) {
       const seen = new Set();
       const lectures = (f && f.items ? f.items : []).filter((x) => sameSubject(x.subject, l.title) && x.category === "lecture")
         .reverse().filter((x) => seen.add(`${x.head || x.title}|${x.topic || ""}`.toLowerCase())).slice(0, 3);
-      if (!course && !lectures.length) return;
-      let html = section("По предмету");
+      if (!course && !lectures.length && !(fresh && own)) return;
+      // новый дизайн: небольшая кнопка «Спросить Kapi» — чат сразу с этим предметом
+      let html = fresh && own ? `<div class="row" style="gap:0"><div class="grow">${section("По предмету")}</div>
+          <button class="ls-ask" data-act="ask">${icon("auto_awesome", "o", "font-size:15px;color:var(--accent)")}Спросить Kapi</button></div>` : section("По предмету");
+      handlers.ask = () => { tick(); if (window.openChat) openChat({ subject: l.title }); };
       if (course) {
         const cc = courseOf(course);
         html += `<div class="hx"><button class="tile row" data-act="course" style="gap:var(--l)">${ring(cc.score / cc.top, c, `<span class="num" style="--sz:18px">${cc.score}</span>`)}

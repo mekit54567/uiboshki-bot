@@ -19,6 +19,8 @@ import '../widgets/common.dart';
 import 'lesson.dart';
 import 'week.dart' show mondayOf;
 
+part 'today_fresh.dart';
+
 class TodayData {
   final List<Lesson> lessons;
   final Lesson? tomorrowFirst;
@@ -153,7 +155,10 @@ String campusOf(String room) => RegExp(r'\(([^)]+)\)').firstMatch(room)?.group(1
 class TodayScreen extends StatefulWidget {
   final Api api;
   final VoidCallback? onUnauthorized;
-  const TodayScreen({super.key, required this.api, this.onUnauthorized});
+
+  /// Открыть вкладку «Сдать» — кнопка у срока в «Важно сегодня» (новый дизайн).
+  final VoidCallback? onDeadlines;
+  const TodayScreen({super.key, required this.api, this.onUnauthorized, this.onDeadlines});
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -241,12 +246,20 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) => Loader<TodayData>(
     load: _load,
     onUnauthorized: widget.onUnauthorized,
-    builder: (context, d, _) => _MainView(
-      key: const ValueKey('today:main'),
-      data: d,
-      api: widget.api,
-      top: TodayTop(data: d),
-    ),
+    builder: (context, d, _) => AppStyle.of(context).fresh
+        ? _FreshView(
+            key: const ValueKey('today:fresh'),
+            data: d,
+            api: widget.api,
+            top: TodayTop(data: d),
+            onDeadlines: widget.onDeadlines,
+          )
+        : _MainView(
+            key: const ValueKey('today:main'),
+            data: d,
+            api: widget.api,
+            top: TodayTop(data: d),
+          ),
   );
 }
 
@@ -479,7 +492,9 @@ class _MainView extends StatelessWidget {
 
   /// Случай для подписи капибары: выходной, пары кончились (последняя пара
   /// недели — своя подпись), дождь. Ночью капибара спит — только выходной.
-  List<CapyMoment> _moments(DateTime t, Lesson? current, Lesson? next) {
+  List<CapyMoment> _moments(DateTime t, Lesson? current, Lesson? next) => momentsOf(data, t, current, next);
+
+  static List<CapyMoment> momentsOf(TodayData data, DateTime t, Lesson? current, Lesson? next) {
     final awake = poseAt(t.hour) != CapyPose.night;
     return [
       if (data.lessons.isEmpty)
@@ -610,7 +625,9 @@ class _MainView extends StatelessWidget {
                 children: [
                   Icon(Icons.task_alt_rounded, size: 17, color: s.p.ok),
                   const SizedBox(width: Space.s),
-                  Expanded(child: Text('Открытых сроков нет', style: s.body(14, color: s.p.muted))),
+                  Expanded(
+                    child: Text('Открытых сроков нет', style: s.body(14, color: s.p.muted)),
+                  ),
                 ],
               ),
             ),

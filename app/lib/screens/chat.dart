@@ -24,6 +24,7 @@ import '../widgets/common.dart';
 import '../widgets/msg_menu.dart';
 import '../widgets/tg_html.dart';
 import 'files.dart';
+import 'lesson.dart' show sameSubject;
 
 class ChatMsg {
   final String role, content, html;
@@ -183,7 +184,11 @@ String chatWhen(DateTime d, DateTime today) {
 class ChatScreen extends StatefulWidget {
   final Api api;
   final PickAttachment pick;
-  const ChatScreen({super.key, required this.api, this.pick = systemPickAttachment});
+
+  /// Открыть новый разговор сразу по этому предмету («Спросить Kapi» на
+  /// экране пары): прошлый чат не открывается, он остаётся в списке.
+  final String? subject;
+  const ChatScreen({super.key, required this.api, this.pick = systemPickAttachment, this.subject});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -243,6 +248,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 if (s['lectures'] == true) s['name'] as String,
             ];
             final q = j['quota'];
+            // предмет с экрана пары — тем именем, под которым лежат лекции
+            final want = widget.subject;
+            if (want != null && _log.isEmpty) {
+              _subject = _subjects.firstWhere((n) => sameSubject(n, want), orElse: () => _subject);
+            }
             _left = q is Map && q['left'] is num ? (q['left'] as num).toInt() : null;
             _thinkOffer = j['think'] is Map ? Map<String, dynamic>.from(j['think']) : null;
           });
@@ -306,7 +316,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         _chats = chats;
         // пока читали, человек уже начал писать — его разговор не трогаем
-        if (open != null && _log.isEmpty && _id == null) _open(open);
+        if (open != null && _log.isEmpty && _id == null && widget.subject == null) _open(open);
       });
       _toEnd();
     } catch (_) {}

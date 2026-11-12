@@ -12,9 +12,11 @@ import '../widgets/common.dart';
 import '../widgets/lesson_comments.dart';
 import '../widgets/lesson_reactions.dart';
 import '../widgets/teacher_rating.dart';
+import 'chat.dart';
 import 'files.dart';
 import 'search.dart';
 import 'study.dart';
+import 'today.dart' show minutesTo, spanText;
 
 /// [own] — пара своей группы: у неё реакции (5.100). В чужом расписании
 /// (поиск) — нет: счёт там был бы не той группы.
@@ -235,6 +237,53 @@ class _LessonScreenState extends State<LessonScreen> {
     final room = lesson.room.replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim();
     final floor = roomFloor(room);
     final groups = lesson.groups.split(RegExp(r',\s*')).where((g) => g.isNotEmpty).toList();
+    final fresh = s.fresh;
+    final at = lesson.startAt;
+    final caption = [
+      if (lesson.kind.isNotEmpty) lesson.kind.toLowerCase(),
+      if (at != null) '${weekdaysShort[at.weekday - 1].toLowerCase()} ${at.day} ${monthsGen[at.month - 1]}',
+    ].join(' · ');
+    final reactions = widget.own && !lesson.cancelled ? LessonReactions(api: api, lesson: lesson) : null;
+    final comments = widget.own ? LessonComments(api: api, lesson: lesson) : null;
+    // «По предмету»: баллы и лекции; в новом дизайне — сразу под «где и когда»,
+    // с небольшой кнопкой «Спросить Kapi» в заголовке (Никита 11.11)
+    final subject = FutureBuilder<LessonExtras>(
+      future: _extras,
+      builder: (context, snap) {
+        final x = snap.data;
+        final empty = x == null || (x.course == null && x.lectures.isEmpty);
+        if (empty && !(fresh && widget.own)) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (fresh && widget.own)
+              Row(
+                children: [
+                  const Expanded(child: Section('По предмету')),
+                  Padding(
+                    padding: const EdgeInsets.only(right: Space.l, top: Space.m),
+                    child: _AskKapi(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(api: api, subject: lesson.title),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              const Section('По предмету'),
+            if (x?.course != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                child: _CourseStrip(api: api, course: x!.course!, color: c),
+              ),
+            if (x != null) ..._lectureRows(context, s, x),
+          ],
+        );
+      },
+    );
     return Scaffold(
       body: Backdrop(
         tint: subjectColor(lesson.title),
@@ -242,16 +291,58 @@ class _LessonScreenState extends State<LessonScreen> {
           child: ListView(
             padding: const EdgeInsets.only(bottom: Space.xxl),
             children: [
-              const BackRow(),
+              // новый дизайн (П1): статус пары — плашкой справа от «назад»
+              if (fresh && live)
+                Row(
+                  children: [
+                    const BackRow(),
+                    const Spacer(),
+                    Container(
+                      key: const Key('lesson:status'),
+                      margin: const EdgeInsets.only(right: Space.l),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: p.ok.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'идёт · ещё ${spanText(minutesTo(t, lesson.endAt!))}',
+                        style: s.body(13, weight: FontWeight.w700, color: p.ok),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const BackRow(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.l),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // новый дизайн: вид пары и день — строкой над названием
+                    if (fresh && caption.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              caption,
+                              style: s.body(13, weight: FontWeight.w600, color: p.muted),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
                     // длинное название — мельче, до трёх строк (2.3); вид пары —
                     // строкой под ним обычным шрифтом, не курсивом сверху (2.4)
                     FitWords(lesson.title, style: s.title(titleSize(lesson.title, 30)), maxLines: 3),
-                    if (lesson.kind.isNotEmpty || live) ...[
+                    if (!fresh && (lesson.kind.isNotEmpty || live)) ...[
                       const SizedBox(height: Space.xs),
                       Row(
                         children: [
@@ -373,27 +464,47 @@ class _LessonScreenState extends State<LessonScreen> {
                   ),
                 ),
               ),
-              if (widget.own && !lesson.cancelled) LessonReactions(api: api, lesson: lesson),
-              if (widget.own) LessonComments(api: api, lesson: lesson),
-              FutureBuilder<LessonExtras>(
-                future: _extras,
-                builder: (context, snap) {
-                  final x = snap.data;
-                  if (x == null || (x.course == null && x.lectures.isEmpty)) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Section('По предмету'),
-                      if (x.course != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                          child: _CourseStrip(api: api, course: x.course!, color: c),
-                        ),
-                      ..._lectureRows(context, s, x),
-                    ],
-                  );
-                },
-              ),
+              // новый дизайн: материалы и баллы выше, обсуждение и реакции — после
+              if (fresh) ...[subject, ?comments, ?reactions] else ...[?reactions, ?comments, subject],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Небольшая кнопка «Спросить Kapi» — чат Kapi ИИ сразу с этим предметом.
+class _AskKapi extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AskKapi({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        key: const Key('lesson:ask'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          tick();
+          onTap();
+        },
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: p.edge),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_awesome_outlined, size: 15, color: p.accent),
+              const SizedBox(width: 6),
+              Text('Спросить Kapi', style: s.body(13, weight: FontWeight.w600)),
             ],
           ),
         ),
