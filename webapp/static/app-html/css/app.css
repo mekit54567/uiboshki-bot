@@ -413,3 +413,16 @@ textarea.field { resize: none; min-height: 96px; }
 .peek-z { position: absolute; left: 44px; top: 28px; color: var(--accent); font-weight: 800; font-family: Onest; opacity: 0;
   animation: peek-z 2.4s linear 3; }
 @keyframes peek-z { 0% { opacity: 0; transform: none; } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(18px, -26px); } }
+
+/* ── «Сегодня» нового дизайна (макет С1, today_fresh.dart) ── */
+.tf-now { border-radius: var(--r-card); border-color: var(--edge); padding: var(--m) var(--l); }
+.tf-now.live { border-color: var(--ok); }
+.tf-hot { gap: var(--s); padding: var(--m) var(--m) var(--m) var(--l); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.tf-btn { flex: none; height: 36px; padding: 0 14px; border-radius: 18px; display: inline-flex; align-items: center;
+  background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 700; }
+.tf-past { padding: var(--m) var(--l); }
+/* экран пары нового дизайна (макет П1): статус справа от «назад», кнопка «Спросить Kapi» */
+.ls-status { margin-left: auto; margin-right: 6px; padding: 6px 12px; border-radius: 14px; font-size: 13px; font-weight: 700;
+  color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.ls-ask { flex: none; align-self: flex-end; margin: 0 var(--l) 2px 0; height: 32px; padding: 0 12px; border-radius: 16px;
+  border: 1px solid var(--edge); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); }

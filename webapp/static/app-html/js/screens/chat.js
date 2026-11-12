@@ -65,7 +65,8 @@ function chReadStore(key) {
 /** Долгий POST: ответ ИИ идёт до минуты-двух. */
 function chPost(path, body, timeout = 180000) { return Api._req("POST", path, body, timeout); }
 
-function openChat() {
+/** want.subject — новый разговор сразу по этому предмету («Спросить Kapi» на экране пары). */
+function openChat(want = {}) {
   Nav.push((wrap, screen) => {
     wrap.classList.add("ch");
     let log = [], id = null, subject = "", subjects = [], waiting = false, att = null, attNote = null;
@@ -106,7 +107,7 @@ function openChat() {
           }
         }
         const open = current === null ? chats[0] : chats.find((c) => c.id === current);
-        if (open) openThread(open);
+        if (open && !want.subject) openThread(open);
       } catch (e) {}
     };
     /** Записать разговор в чат (null — новый) и поднять наверх; ошибки и «по какому предмету?» не храним. */
@@ -485,6 +486,8 @@ function openChat() {
     Api.get("/subjects").then((j) => {
       if (!alive) return;
       subjects = (j.subjects || []).filter((s) => s.lectures === true).map((s) => String(s.name));
+      // предмет с экрана пары — тем именем, под которым лежат лекции
+      if (want.subject && !log.length) subject = subjects.find((n) => sameSubject(n, want.subject)) || subject;
       const q = j.quota;
       left = q && typeof q.left === "number" ? Math.trunc(q.left) : null;
       thinkOffer = j.think && typeof j.think === "object" ? j.think : null;

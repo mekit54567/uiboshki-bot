@@ -1,5 +1,7 @@
 # Капибара — учёба МИРЭА
 
+Русский · [English](README.en.md)
+
 ![Капибара — студенческое приложение РТУ МИРЭА](docs/screens/social-preview.png)
 
 [![CI](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/mekit54567/uiboshki-bot/actions/workflows/ci.yml)
@@ -9,7 +11,7 @@
 ![SQLite](https://img.shields.io/badge/SQLite-FTS5_+_sqlite--vec-003B57?logo=sqlite&logoColor=white)
 ![Flutter](https://img.shields.io/badge/Flutter-Android_·_iOS-02569B?logo=flutter&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-uiboshki.ru%2Fapp-5A0FC8?logo=pwa&logoColor=white)
-![tests](https://img.shields.io/badge/tests-1200+-brightgreen)
+![tests](https://img.shields.io/badge/tests-1250+-brightgreen)
 
 **Вся учёба — в Telegram, в браузере и в своём приложении.** Расписание всего
 университета, баллы и сдача работ из СДО, дедлайны с напоминаниями, файлы
@@ -28,18 +30,15 @@
 **[Новости — @kapibara_mirea](https://t.me/kapibara_mirea)** ·
 **[Канал о разработке](https://t.me/uiboshki_dev)**
 
-> **In English.** «Kapibara» — an unofficial, student-made Telegram bot,
-> Mini App and mobile app for RTU MIREA (Moscow), not affiliated with the university: schedule search across the whole university, grades
-> and assignment submission scraped from Moodle, deadline reminders, course
-> files with full-text and semantic search, and an AI assistant grounded in the
-> group's own lecture slides (hybrid RAG: SQLite FTS5/BM25 + sqlite-vec,
-> RRF + MMR, answers cite the exact slide). Works in Telegram, as an installable PWA
-> with web push (uiboshki.ru/app, login via Telegram, VK ID or Yandex ID) and as
-> a native Flutter app for Android (RuStore) and iOS (App Store) on the same versioned API.
-> Python · aiogram 3 · FastAPI · SQLite · Flutter. Solo project: ~40k lines of
-> Python, ~17k of web frontend, ~28k of Dart, 1200+ backend tests, CI on every
-> PR, deploys only after green CI, with a readiness check and automatic rollback,
-> self-hosted on Timeweb Cloud (Moscow).
+## Попробовать за минуту
+
+- **[Живое демо на сайте](https://www.uiboshki.ru)** — настоящее приложение в
+  рамке телефона на выдуманных данных, без входа;
+- **[App Store](https://apps.apple.com/app/id6828117584)**, **[RuStore](https://www.rustore.ru/catalog/app/ru.uiboshki.app)**
+  или **[uiboshki.ru/app](https://www.uiboshki.ru/app)** в браузере;
+- **демо-аккаунт**: на экране входа — «Вход по коду доступа», код — по запросу
+  у автора. Внутри выдуманные баллы, сроки и лекции и настоящий ИИ, который
+  отвечает по ним.
 
 <table>
 <tr>
@@ -73,11 +72,12 @@
 
 | | |
 |---|---|
-| Срок | апрель 2026 → сейчас, один разработчик |
-| Код | ~40 тыс. строк Python, ~17 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~28 тыс. — приложение на Flutter |
+| Срок | апрель 2026 → сейчас; продукт веду один, код пишу вместе с ИИ-агентом |
+| Пользователи | около 30 студентов до публичного запуска |
+| Код | ~40 тыс. строк Python, ~17 тыс. — фронтенд Mini App и PWA (без фреймворков и сборки), ~29 тыс. — приложение на Flutter |
 | Платформы | Telegram (бот + Mini App), PWA с веб-пушами, Android и iOS (Flutter) — одно API `/api/v1` |
-| Тесты | 1200+ автотестов бэкенда и фронта, 350+ тестов приложения, CI (GitHub Actions) на каждый pull request |
-| История | 1100+ коммитов, 350+ pull request'ов, 500+ версий в [CHANGELOG](CHANGELOG.md) |
+| Тесты | 1250+ автотестов бэкенда и фронта, 380+ тестов приложения, CI (GitHub Actions) на каждый pull request |
+| История | 1400+ коммитов, 370+ pull request'ов, 500+ версий в [CHANGELOG](CHANGELOG.md) |
 
 ## Что умеет
 
@@ -209,7 +209,7 @@ flowchart LR
 | Картинки | Pillow — карточки расписания, статистика, обложки постов |
 | Вне Telegram | PWA (service worker, веб-пуши RFC 8291 + VAPID без внешних библиотек), OAuth VK ID и Яндекс ID |
 | Приложение | Flutter (Android и iOS), общие дизайн-токены с вебом, сборки APK/IPA в GitHub Actions |
-| Качество | pytest (1200+), ruff, flutter test, робот-проверка приложения в Chromium, GitHub Actions |
+| Качество | pytest (1250+), ruff, flutter test, робот-проверка приложения в Chromium, GitHub Actions |
 | Сервер | Timeweb Cloud, Docker Compose, Caddy; выкладка после зелёного CI, `/ready` и автооткат |
 
 Подробно для разработки — [CLAUDE.md](CLAUDE.md), история версий —
@@ -217,8 +217,24 @@ flowchart LR
 
 ## Как ведётся разработка
 
+Продукт веду я один: решаю, что и в каком порядке делать, выбираю архитектуру
+и дизайн, проверяю каждую версию руками, принимаю pull request'ы, настраиваю
+сервер, выпускаю приложение в сторы, подключаю оплату и веду документы по
+закону о персональных данных. Код правлю и пишу и сам, но большую часть по
+моим задачам пишет ИИ-агент (Claude Code) — это честно видно в истории
+коммитов. [CLAUDE.md](CLAUDE.md) — рабочая памятка для агента: правила,
+устройство проекта и договорённости. Решения об устройстве кода — в
+[docs/adr/](docs/adr/).
+
+Качество держат правила, которые проходит каждое изменение:
+
 - каждое изменение — отдельная ветка и pull request, CI зелёный до мержа;
 - на каждый найденный баг — тест, который его ловит;
+- храповик ([tools/ratchet.py](tools/ratchet.py)): число известных проблем в коде
+  (широкие `except`, клубки импортов, ошибки линтера и типов) может только
+  уменьшаться;
+- список адресов API зафиксирован в [tests/api_contract.json](tests/api_contract.json):
+  обновление сервера не сломает уже установленные приложения;
 - PR кладёт короткую заметку в `changelog.d/next/`, а раз в ~10 PR релиз
   собирает их в версию [CHANGELOG](CHANGELOG.md) (`эпоха.фича.фикс`) с кодовым
   именем;
@@ -254,7 +270,7 @@ python bot.py          # бот; с WEBAPP_URL — и Mini App в том же п
 
 ```bash
 pip install -r requirements-dev.txt
-pytest          # 1200+ тестов, без сети
+pytest          # 1250+ тестов, без сети
 ruff check .    # линтер
 ```
 
@@ -279,8 +295,12 @@ ruff check .    # линтер
 
 ## Автор
 
-Никита — староста УИБО-03-24, РТУ МИРЭА · Telegram [@Partykq](https://t.me/Partykq)
+Никита Курашкин — студент 3 курса РТУ МИРЭА, староста УИБО-03-24 ·
+Telegram [@Party_lo](https://t.me/Party_lo). Нашли уязвимость —
+[SECURITY.md](SECURITY.md).
 
----
+## Лицензия
 
-Разработка велась с использованием Claude.
+Код открыт для чтения и проверки, но это не открытая лицензия: все права у
+автора. Копировать и использовать код, название и дизайн — только с
+разрешения.
