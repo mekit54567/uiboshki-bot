@@ -11,6 +11,7 @@ from aiogram.types import (
 
 from database import add_file, get_files
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
+from kapibara.bot.tg import bot_of, data_of, msg, sender, text_of
 from kapibara.core.utils import esc
 from kapibara.features.lectures.names import title_from_filename
 from aiogram.exceptions import TelegramAPIError
@@ -83,10 +84,11 @@ async def _ask_category(target: Message, state: FSMContext, subject: str):
 @router.callback_query(UploadFile.waiting_category, F.data.startswith("upct:"))
 async def upload_pick_category(callback: CallbackQuery, state: FSMContext):
     from kapibara.core.categories import LABELS
-    key = callback.data.split(":", 1)[1]
+    key = data_of(callback).split(":", 1)[1]
     await callback.answer()
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await _start_collecting(callback.message, state, (await state.get_data()).get("subject", ""),
+    m = msg(callback)
+    await m.edit_reply_markup(reply_markup=None)
+    await _start_collecting(m, state, (await state.get_data()).get("subject", ""),
                             key if key in LABELS else None)
 
 
@@ -107,12 +109,13 @@ async def _start_collecting(target: Message, state: FSMContext, subject: str, ca
 
 @router.callback_query(UploadFile.waiting_subject, F.data.startswith("upsj:"))
 async def upload_pick_subject(callback: CallbackQuery, state: FSMContext):
-    key = callback.data.split(":", 1)[1]
+    key = data_of(callback).split(":", 1)[1]
     subjects = (await state.get_data()).get("upload_subjects", [])
     subject = "" if key == "none" or not key.isdigit() or int(key) >= len(subjects) else subjects[int(key)]
     await callback.answer()
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await _ask_category(callback.message, state, subject)
+    m = msg(callback)
+    await m.edit_reply_markup(reply_markup=None)
+    await _ask_category(m, state, subject)
 
 
 @router.message(UploadFile.waiting_subject, F.text)
@@ -121,7 +124,7 @@ async def upload_type_subject(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("Отменено.", reply_markup=MAIN_KB)
         return
-    await _ask_category(message, state, message.text.strip()[:80])
+    await _ask_category(message, state, text_of(message).strip()[:80])
 
 
 @router.message(UploadFile.waiting_category, F.text)
@@ -140,7 +143,7 @@ async def upload_category_text(message: Message, state: FSMContext):
 async def receive_file(message: Message, state: FSMContext):
     # Альбом из 10 файлов — это 10 апдейтов почти одновременно: без замка
     # счётчики в FSM и одно сообщение-прогресс перетирали бы друг друга.
-    lock = _upload_locks.setdefault(message.from_user.id, asyncio.Lock())
+    lock = _upload_locks.setdefault(sender(message).id, asyncio.Lock())
     async with lock:
         if await state.get_state() == UploadFile.waiting_category.state:
             await state.set_state(UploadFile.waiting_file)
@@ -152,8 +155,8 @@ async def receive_file(message: Message, state: FSMContext):
         if message.document:
             tg_file_id = message.document.file_id
             file_name = message.document.file_name or "файл"
-        else:
-            tg_file_id = message.photo[-1].file_id
+        else:                                   # фильтр F.document | F.photo: здесь всегда фото
+            tg_file_id = (message.photo or [])[-1].file_id
             # По этому имени фото и отдаётся как фото (handlers.start.send_stored_file)
             file_name = f"фото_{message.message_id}.jpg"
 
@@ -162,9 +165,9 @@ async def receive_file(message: Message, state: FSMContext):
             data["dupes"] = data.get("dupes", 0) + 1
         else:
             fid = await add_file(title_from_filename(file_name), subject, tg_file_id, file_name,
-                                 message.from_user.id, category=data.get("category"))
+                                 sender(message).id, category=data.get("category"))
             from kapibara.features.lectures.text import extract_and_save
-            if await extract_and_save(message.bot, fid, tg_file_id, file_name):
+            if await extract_and_save(bot_of(message), fid, tg_file_id, file_name):
                 data["with_text"] = data.get("with_text", 0) + 1
             data["added"] = data.get("added", 0) + 1
 
@@ -174,7 +177,7 @@ async def receive_file(message: Message, state: FSMContext):
         status_id = data.get("status_id")
         try:
             if status_id:
-                await message.bot.edit_message_text(text, chat_id=message.chat.id, message_id=status_id, parse_mode="HTML")
+                await bot_of(message).edit_message_text(text, chat_id=message.chat.id, message_id=status_id, parse_mode="HTML")
             else:
                 status_id = (await message.answer(text, parse_mode="HTML")).message_id
         except TelegramAPIError:         # статус удалён или не изменился — новый

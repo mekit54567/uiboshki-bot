@@ -9,6 +9,7 @@ from aiogram.types import (
 )
 
 from database import get_files, search_files
+from kapibara.bot.tg import data_of, msg, sender, text_of
 from kapibara.core.utils import esc
 from kapibara.core.errors import EXTERNAL
 
@@ -106,7 +107,7 @@ async def files_by_subject(callback: CallbackQuery):
     """Предмет → сначала типы (лекции/практики/КР/…) с количеством, если
     их больше одного, иначе сразу файлы."""
     from kapibara.core.categories import CATEGORIES, category_of
-    idx = callback.data.split(":", 1)[1]
+    idx = data_of(callback).split(":", 1)[1]
     picked = _subject_files(await get_files(), idx)
     if not picked:
         await callback.answer("Ошибка")
@@ -123,12 +124,12 @@ async def files_by_subject(callback: CallbackQuery):
                 for key, label in CATEGORIES if key in counts]
         rows.append([InlineKeyboardButton(text=f"📋 Все файлы · {len(files)}", callback_data=f"fct:{idx}:*")])
         rows.append([InlineKeyboardButton(text="◀️ Предметы", callback_data="fbk")])
-        await callback.message.edit_text(
+        await msg(callback).edit_text(
             f"📁 <b>{esc(title)}</b>\n\nЧто нужно?", parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         )
     else:
-        await callback.message.edit_text(
+        await msg(callback).edit_text(
             f"📁 <b>{esc(title)}</b> ({len(files)}){pages_label(len(files), 0)}:", parse_mode="HTML",
             reply_markup=files_keyboard(files, page_cb=f"fct:{idx}:*"),
         )
@@ -138,7 +139,7 @@ async def files_by_subject(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("fct:"))
 async def files_by_category(callback: CallbackQuery):
     from kapibara.core.categories import LABELS, category_of
-    parts = callback.data.split(":")
+    parts = data_of(callback).split(":")
     idx, cat = parts[1], parts[2]
     page = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
     picked = _subject_files(await get_files(), idx)
@@ -154,7 +155,7 @@ async def files_by_category(callback: CallbackQuery):
     label = LABELS.get(cat, "📋 Все файлы")
     page = min(page, (len(files) - 1) // FILES_PAGE)
     kb = files_keyboard(files, back=f"fsj:{idx}", page=page, page_cb=f"fct:{idx}:{cat}")
-    await callback.message.edit_text(
+    await msg(callback).edit_text(
         f"📁 <b>{esc(title)}</b> → {label} ({len(files)}){pages_label(len(files), page)}:",
         parse_mode="HTML", reply_markup=kb,
     )
@@ -165,7 +166,7 @@ async def files_by_category(callback: CallbackQuery):
 async def files_back(callback: CallbackQuery):
     files = await get_files()
     subjects = sorted({f["subject"] for f in files if f.get("subject")})
-    await callback.message.edit_text(
+    await msg(callback).edit_text(
         f"📁 <b>Файлы группы</b> ({len(files)} шт.)\n\nВыбери предмет:",
         parse_mode="HTML",
         reply_markup=subjects_keyboard(subjects)
@@ -175,7 +176,7 @@ async def files_back(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("fget:"))
 async def send_file(callback: CallbackQuery, bot: Bot):
-    fid = int(callback.data.split(":")[1])
+    fid = int(data_of(callback).split(":")[1])
     files = await get_files()
     f = next((x for x in files if x["id"] == fid), None)
     if not f:
@@ -184,7 +185,7 @@ async def send_file(callback: CallbackQuery, bot: Bot):
     from handlers.start import send_stored_file
     try:
         await send_stored_file(
-            bot, callback.message.chat.id, f,
+            bot, msg(callback).chat.id, f,
             f"📄 {f['title']}" + (f"\n📚 {f['subject']}" if f.get("subject") else "")
         )
         await callback.answer()
@@ -202,7 +203,7 @@ async def answer_file_request(message: Message) -> bool:
     from handlers.start import send_file_to
     if not file_request.is_request(message.text or ""):
         return False
-    subjects, items = file_request.find(message.text, await get_files())
+    subjects, items = file_request.find(text_of(message), await get_files())
     if not subjects:
         return False
     if len(subjects) > 1:
@@ -215,7 +216,7 @@ async def answer_file_request(message: Message) -> bool:
                              parse_mode="HTML")
         return True
     if len(items) == 1:
-        await send_file_to(message.bot, message.from_user.id, items[0]["id"])
+        await send_file_to(message.bot, sender(message).id, items[0]["id"])
         return True
     rows = [[InlineKeyboardButton(text=f["title"][:60], callback_data=f"frq:{f['id']}")] for f in items[:8]]
     if WEBAPP_URL.startswith("https://"):
@@ -230,7 +231,7 @@ async def answer_file_request(message: Message) -> bool:
 @router.callback_query(F.data.startswith("frq:"))
 async def file_request_pick(callback: CallbackQuery):
     from handlers.start import send_file_to
-    ok = await send_file_to(callback.bot, callback.from_user.id, callback.data.split(":", 1)[1])
+    ok = await send_file_to(callback.bot, callback.from_user.id, data_of(callback).split(":", 1)[1])
     await callback.answer("" if ok else "Файл не найден — возможно, его удалили", show_alert=not ok)
 
 

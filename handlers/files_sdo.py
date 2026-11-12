@@ -8,6 +8,7 @@ from aiogram.types import (
 )
 
 from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.bot.tg import bot_of, msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 
@@ -84,7 +85,7 @@ def _sdo_report(courses, known: set[str], current: dict | None = None) -> tuple[
 
 @router.message(Command("sdofiles"))
 async def cmd_sdo_files(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.features.sdo import files as sdo_files
@@ -114,12 +115,12 @@ async def cmd_sdo_files(message: Message):
     from kapibara.core.utils import plural
     rows = []
     if moves:
-        _sdo_moves[message.from_user.id] = moves
+        _sdo_moves[sender(message).id] = moves
         rows.append([InlineKeyboardButton(
             text=f"🔀 Переложить {len(moves)} {plural(len(moves), 'файл', 'файла', 'файлов')} по предметам",
             callback_data="sdof:mv")])
     if new:
-        _sdo_scans[message.from_user.id] = courses
+        _sdo_scans[sender(message).id] = courses
         rows.append([InlineKeyboardButton(
             text=f"📥 Загрузить {new} {plural(new, 'файл', 'файла', 'файлов')}", callback_data="sdof:go")])
     kb = InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
@@ -142,9 +143,9 @@ async def sdo_files_move(callback: CallbackQuery):
     from kapibara.core.utils import plural
     await callback.answer(f"Переложил {len(moves)} {plural(len(moves), 'файл', 'файла', 'файлов')}", show_alert=True)
     with cosmetic("files_sdo: убрать кнопку «переложить»"):
-        kb = callback.message.reply_markup
+        kb = msg(callback).reply_markup
         rows = [r for r in (kb.inline_keyboard if kb else []) if r[0].callback_data != "sdof:mv"]
-        await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
+        await msg(callback).edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None)
 
 
 @router.callback_query(F.data == "sdof:go")
@@ -162,10 +163,10 @@ async def sdo_files_go(callback: CallbackQuery):
         return
     await callback.answer()
     with cosmetic("files_sdo.sdo_files_go"):
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await msg(callback).edit_reply_markup(reply_markup=None)
     files = [f for c in courses for f in c.files]
-    status = await callback.message.answer("📥 Выгружаю файлы из СДО… Займёт несколько минут, я напишу.")
-    task = asyncio.create_task(_sdo_import(callback.bot, callback.message.chat.id, status, files))
+    status = await msg(callback).answer("📥 Выгружаю файлы из СДО… Займёт несколько минут, я напишу.")
+    task = asyncio.create_task(_sdo_import(bot_of(callback), msg(callback).chat.id, status, files))
     _sdo_tasks.add(task)
     task.add_done_callback(_sdo_tasks.discard)
 
