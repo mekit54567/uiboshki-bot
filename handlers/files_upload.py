@@ -155,8 +155,8 @@ async def receive_file(message: Message, state: FSMContext):
         if message.document:
             tg_file_id = message.document.file_id
             file_name = message.document.file_name or "файл"
-        else:
-            tg_file_id = message.photo[-1].file_id
+        else:                                   # фильтр F.document | F.photo: здесь всегда фото
+            tg_file_id = (message.photo or [])[-1].file_id
             # По этому имени фото и отдаётся как фото (handlers.start.send_stored_file)
             file_name = f"фото_{message.message_id}.jpg"
 
