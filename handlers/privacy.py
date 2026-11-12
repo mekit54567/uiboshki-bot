@@ -14,6 +14,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from kapibara.bot.tg import bot_of, data_of, msg, sender
 from kapibara.core.telegram import cosmetic
 
 router = Router()
@@ -71,21 +72,21 @@ async def consent_given(callback: CallbackQuery, state: FSMContext | None = None
         return
     consent, policy = links()
     with cosmetic("privacy.consent_given"):
-        await callback.message.edit_text(
+        await msg(callback).edit_text(
             f"✅ Спасибо! Ты дал {consent}.\nПодробнее — в {policy}. "
             "Удалить всё о себе — /deleteme.",
             parse_mode="HTML", disable_web_page_preview=True)
     await callback.answer("Готово")
     if first:
         from handlers.start import welcome
-        await welcome(callback.message, user, state, store=callback.data.endswith(":ios"))
+        await welcome(msg(callback), user, state, store=data_of(callback).endswith(":ios"))
 
 
 @router.message(Command("privacy"))
 async def cmd_privacy(message: Message):
     from kapibara.features.privacy import privacy
     consent, policy = links()
-    given = not await privacy.needs(message.from_user.id)
+    given = not await privacy.needs(sender(message).id)
     text = ("🔒 <b>Твои данные</b>\n\n"
             f"Как бот хранит и защищает данные — в {policy}.\n"
             + (f"Ты уже дал {consent}.\n\n" if given else
@@ -108,7 +109,7 @@ class EraseFlow(StatesGroup):
 async def cmd_deleteme(message: Message, state: FSMContext):
     from kapibara.features.privacy import privacy
     _, policy = links()
-    uid = message.from_user.id
+    uid = sender(message).id
     due = await privacy.erasing(uid)
     if due:
         await message.answer("🗑 " + privacy.erasing_text(due))
@@ -140,7 +141,7 @@ async def erase_phrase(message: Message, state: FSMContext):
     if not privacy.phrase_ok(message.text or ""):
         await message.answer("Фраза не совпала — ничего не удаляю. Начать заново — /deleteme.")
         return
-    due = await privacy.request_erase(message.from_user.id, message.bot)
+    due = await privacy.request_erase(sender(message).id, message.bot)
     await message.answer(
         f"✅ Готово: вход на всех устройствах и в СДО удалён, рассылки остановлены. Полностью "
         f"всё сотру {privacy.fmt_day(due)}, из ночных копий базы — "
@@ -154,7 +155,7 @@ async def cmd_undelete(message: Message):
     """Вернуть данные по заявке (староста): /undelete <id>, до полного стирания."""
     from kapibara.core.config import is_starosta
     from kapibara.features.privacy import privacy
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         return
     args = (message.text or "").split()[1:]
     if not args or not args[0].isdigit():
@@ -169,23 +170,23 @@ async def cmd_undelete(message: Message):
         f"✅ Вернул <code>{uid}</code>: профиль и данные на месте. Входы на устройствах и в СДО были "
         "удалены сразу — войдёт заново; согласие бот спросит снова.", parse_mode="HTML")
     with cosmetic("privacy.cmd_undelete"):
-        await message.bot.send_message(uid, "↩️ Твои данные вернули. Войди в приложение и СДО заново "
+        await bot_of(message).send_message(uid, "↩️ Твои данные вернули. Войди в приложение и СДО заново "
                                             "и дай согласие на обработку данных — бот спросит.")
 
 
 @router.callback_query(F.data.startswith("erase:"))
 async def erase_decision(callback: CallbackQuery):
     if callback.data != "erase:yes":
-        await callback.message.edit_text("Ничего не удалял.")
+        await msg(callback).edit_text("Ничего не удалял.")
         await callback.answer()
         return
     from kapibara.features.privacy import privacy
     if not await privacy.blocked(callback.from_user.id) or await privacy.erasing(callback.from_user.id):
-        await callback.message.edit_text("Удаление — через /deleteme, фразой.")   # старая кнопка
+        await msg(callback).edit_text("Удаление — через /deleteme, фразой.")   # старая кнопка
         await callback.answer()
         return
     await privacy.erase(callback.from_user.id)
-    await callback.message.edit_text(
+    await msg(callback).edit_text(
         "✅ Готово: всё о тебе удалено. Сообщения в этом чате можешь удалить сам. "
         "Если напишешь снова — начнём с нуля.")
     await callback.answer("Удалено")

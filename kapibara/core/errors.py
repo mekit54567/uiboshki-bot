@@ -44,3 +44,10 @@ def aside(logger: logging.Logger, what: str, expected: tuple = (), level: int = 
         yield
     except Exception as e:  # noqa: BLE001 — та самая граница, одна на весь код
         log_failure(logger, what, e, expected, level)
+
+
+class StaleMessage(Exception):
+    """Кнопка под сообщением, которое бот уже не может менять: Telegram прислал
+    вместо него `InaccessibleMessage` (сообщение удалено или старше 48 часов)
+    или ничего (кнопка из inline-режима). Это не баг: в лог — строкой, человеку —
+    «сообщение устарело» (`kapibara/bot/tg.py`, `stale_message`)."""

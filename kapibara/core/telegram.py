@@ -15,6 +15,8 @@ import logging
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from kapibara.core.errors import StaleMessage
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 def cosmetic(what: str):
     try:
         yield
-    except TelegramAPIError as e:      # не изменилось, уже удалено, бот заблокирован, сеть — ожидаемо
+    except (TelegramAPIError, StaleMessage) as e:   # не изменилось, уже удалено или устарело, бот заблокирован — ожидаемо
         logger.debug(f"{what}: {e}")
     except Exception:                  # граница вспомогательного действия: ответ не ломаем, но и не молчим
         logger.warning(f"{what}: неожиданная ошибка", exc_info=True)

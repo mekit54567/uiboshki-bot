@@ -12,6 +12,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from database import add_hw, delete_hw, get_hw_by_subject, get_hw_subjects, init_hw_table, is_editor
 from database.homework import get_hw
+from kapibara.bot.tg import data_of, msg, sender
 from kapibara.core.utils import esc, parse_day_month, today_msk, utc_to_msk_date
 from kapibara.core.errors import EXTERNAL, aside
 
@@ -49,9 +50,9 @@ async def _g(user_id: int) -> int:
 @router.message(Command("hw"))
 async def cmd_hw(message: Message):
     await init_hw_table()
-    subjects = await get_hw_subjects(await _g(message.from_user.id))
+    subjects = await get_hw_subjects(await _g(sender(message).id))
     if not subjects:
-        can_edit = await is_editor(message.from_user.id)
+        can_edit = await is_editor(sender(message).id)
         text = "📝 <b>Доска ДЗ</b>\n\nПока пусто."
         if can_edit:
             text += "\n\nДобавить: /addhw"
@@ -92,7 +93,7 @@ def _subject_view(subject: str, items: list[dict], can_edit: bool) -> tuple[str,
 
 @router.callback_query(F.data.startswith("hw:"))
 async def hw_subject(callback: CallbackQuery):
-    idx = int(callback.data.split(":")[1])
+    idx = int(data_of(callback).split(":")[1])
     subjects = await get_hw_subjects(await _g(callback.from_user.id))
     if idx >= len(subjects):
         await callback.answer("Ошибка")
@@ -101,7 +102,8 @@ async def hw_subject(callback: CallbackQuery):
     items = await get_hw_by_subject(subject, await _g(callback.from_user.id))
 
     text, kb = _subject_view(subject, items, await is_editor(callback.from_user.id))
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    m = msg(callback)
+    await m.edit_text(text, parse_mode="HTML", reply_markup=kb)
     await callback.answer()
 
     # Отправляем файлы если есть
@@ -109,24 +111,24 @@ async def hw_subject(callback: CallbackQuery):
         if item.get("file_id"):
             try:
                 if item["file_type"] == "photo":
-                    await callback.message.answer_photo(item["file_id"], caption=item["content"] or "")
+                    await m.answer_photo(item["file_id"], caption=item["content"] or "")
                 else:
-                    await callback.message.answer_document(item["file_id"], caption=item["content"] or "")
+                    await m.answer_document(item["file_id"], caption=item["content"] or "")
             except EXTERNAL as e:
                 logger.warning(f"ДЗ {item.get('id')}: файл не отправился: {e!r}")
-                await callback.message.answer("⚠️ Один файл ДЗ не отправился — попроси старосту залить его заново.")
+                await m.answer("⚠️ Один файл ДЗ не отправился — попроси старосту залить его заново.")
 
 
 @router.callback_query(F.data == "hw_back")
 async def hw_back(callback: CallbackQuery):
     text, kb = _board_view(await get_hw_subjects(await _g(callback.from_user.id)))
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    await msg(callback).edit_text(text, parse_mode="HTML", reply_markup=kb)
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("hwdel:"))
 async def hw_del_last(callback: CallbackQuery):
-    key = callback.data.split(":", 1)[1]
+    key = data_of(callback).split(":", 1)[1]
     item = await get_hw(int(key)) if key.isdigit() else None
     if not item:
         # Старая кнопка (уже удалено или сообщение до обновления) — ничего не трогаем
@@ -148,12 +150,12 @@ async def hw_del_last(callback: CallbackQuery):
     else:
         text, kb = _board_view(await get_hw_subjects(gid))
     with aside(logger, "ДЗ: доска после удаления не перерисовалась"):
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await msg(callback).edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.message(Command("addhw"))
 async def cmd_addhw(message: Message, state: FSMContext):
-    if not await is_editor(message.from_user.id):
+    if not await is_editor(sender(message).id):
         await message.answer("❌ Только для старосты и зама.")
         return
     await state.set_state(HWAdd.subject)
@@ -210,7 +212,7 @@ async def hw_lesson_date_input(message: Message, state: FSMContext):
     await state.clear()
 
     await add_hw(data["subject"], data["content"], data["file_id"], data["file_type"],
-                 message.from_user.id, lesson_date, group_id=await _g(message.from_user.id))
+                 sender(message).id, lesson_date, group_id=await _g(sender(message).id))
     date_note = ""
     if lesson_date:
         from datetime import date as date_cls
