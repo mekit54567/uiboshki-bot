@@ -17,7 +17,7 @@ from aiogram.types import (
 from database import add_file, get_files, delete_file
 from kapibara.core.config import STAROSTA_ID, is_starosta
 from kapibara.core.utils import esc, today_msk
-from kapibara.bot.tg import bot_of, msg, sender, text_of
+from kapibara.bot.tg import bot_of, document_of, download_bytes, msg, sender, text_of
 
 router = Router()
 
@@ -158,15 +158,15 @@ async def restore_file(message: Message, state: FSMContext):
     await state.clear()
     if not is_starosta(sender(message).id):
         return
-    doc = message.document
+    doc = document_of(message)
     if doc.file_size and doc.file_size > MAX_RESTORE_BYTES:
         await message.answer("❌ Файл больше 20 МБ — бот не может его скачать (ограничение Telegram). "
                              "Такую копию можно положить на диск /data хостинга вручную.")
         return
-    buf = await bot_of(message).download(doc)
+    raw = await download_bytes(bot_of(message), doc)
     try:
         # распаковка и integrity_check — секунды; не в event loop, иначе бот и WebApp стоят
-        tmp, info = await asyncio.to_thread(inspect_backup, buf.read())
+        tmp, info = await asyncio.to_thread(inspect_backup, raw)
     except RestoreError as e:
         await message.answer(f"❌ Копия не подходит: {esc(str(e))}", parse_mode="HTML")
         return
@@ -252,7 +252,7 @@ async def cmd_syncfiles(message: Message):
 async def handle_sync_json(message: Message):
     if STAROSTA_ID and not is_starosta(sender(message).id):
         return
-    fname = (message.document.file_name or "").lower()
+    fname = (document_of(message).file_name or "").lower()
     if not fname.endswith('.json'):
         return
 
@@ -267,10 +267,8 @@ async def handle_sync_json(message: Message):
         from database import add_deadline
         wait = await message.answer("⏳ Импортирую дедлайны...")
         try:
-            bot  = bot_of(message)
-            file = await bot.get_file(message.document.file_id)
-            data = await bot.download_file(file.file_path)
-            deadlines = json.loads(data.read().decode('utf-8'))
+            raw  = await download_bytes(bot_of(message), document_of(message).file_id)
+            deadlines = json.loads(raw.decode('utf-8'))
 
             # Поддержка формата {"assignments": [...]} и просто [...]
             assignments = deadlines.get('assignments', []) if isinstance(deadlines, dict) else deadlines
@@ -312,10 +310,9 @@ async def handle_sync_json(message: Message):
     # ── Импорт файлов ─────────────────────────────────────────────────────────
     wait = await message.answer("⏳ Синхронизирую файлы...")
     try:
-        bot  = bot_of(message)
-        file = await bot.get_file(message.document.file_id)
-        data = await bot.download_file(file.file_path)
-        files = json.loads(data.read().decode('utf-8'))
+        bot   = bot_of(message)
+        raw   = await download_bytes(bot, document_of(message).file_id)
+        files = json.loads(raw.decode('utf-8'))
 
         # Загружаем все существующие file_id одним запросом — правильная проверка дублей
         all_existing = await get_files()

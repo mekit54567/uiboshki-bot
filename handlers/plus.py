@@ -174,9 +174,9 @@ async def cmd_roadmap(message: Message):
     """Роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть."""
     from kapibara.features.content import roadmap
     if await roadmap.can_see(sender(message).id):
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+        link_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
             text="🗺 Открыть роадмап", url=roadmap.page_link(sender(message).id))]])
-        await message.answer(roadmap.text(), parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+        await message.answer(roadmap.text(), parse_mode="HTML", reply_markup=link_kb, disable_web_page_preview=True)
         return
     text, kb = donate_text(sender(message).id)
     await message.answer("🗺 Роадмап — что я делаю сейчас и что дальше — открывается тем, кто поддержал "
@@ -348,6 +348,6 @@ async def stars_pre_checkout(q: PreCheckoutQuery):
 async def stars_done(message: Message):
     from kapibara.features.billing import billing
     sp = message.successful_payment
-    if sp.currency != "XTR":
+    if sp is None or sp.currency != "XTR":          # None не бывает: фильтр F.successful_payment
         return
     await billing.stars_paid(sp.invoice_payload, sender(message).id, sp.telegram_payment_charge_id, message.bot)
