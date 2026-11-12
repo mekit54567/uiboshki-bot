@@ -13,6 +13,7 @@ from kapibara.core import config
 from kapibara.core.config import is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.errors import EXTERNAL
+from kapibara.bot.tg import bot_of, data_of, msg, sender
 from aiogram.exceptions import TelegramAPIError
 
 router = Router()
@@ -113,7 +114,7 @@ async def offer_next(bot) -> str | None:
 
 @router.message(Command("channel"))
 async def cmd_channel(message: Message):
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.features.content.channel_posts import load_posts, published
@@ -189,7 +190,7 @@ async def channel_button(callback: CallbackQuery):
         await callback.answer("Только для старосты", show_alert=True)
         return
     from kapibara.features.content.channel_posts import forget_published, load_posts, published, target
-    _, action, *rest = callback.data.split(":", 2)
+    _, action, *rest = data_of(callback).split(":", 2)
     slug = rest[0] if rest else ""
     posts, done = load_posts(), await published()
     if action == "auto":
@@ -202,15 +203,15 @@ async def channel_button(callback: CallbackQuery):
         try:
             for chat, ids in by_chat.items():
                 for k in range(0, len(ids), 100):
-                    await callback.bot.delete_messages(chat, ids[k:k + 100])
+                    await bot_of(callback).delete_messages(chat, ids[k:k + 100])
         except TelegramAPIError as e:
             await callback.answer("Не вышло удалить", show_alert=True)
-            await callback.message.answer(f"⚠️ Не удалил: {esc(str(e))[:300]}\n"
+            await msg(callback).answer(f"⚠️ Не удалил: {esc(str(e))[:300]}\n"
                                           "Удали посты в канале руками, потом снова /channel redo.", parse_mode="HTML")
             return
         await forget_published()
-        await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer(f"🗑 Убрал из канала {len(done)} пост(ов). Теперь /channel — выпускаем заново.")
+        await msg(callback).edit_reply_markup(reply_markup=None)
+        await msg(callback).answer(f"🗑 Убрал из канала {len(done)} пост(ов). Теперь /channel — выпускаем заново.")
         await callback.answer()
         return
     idx = next((i for i, p in enumerate(posts) if p["slug"] == slug), None)
@@ -221,9 +222,9 @@ async def channel_button(callback: CallbackQuery):
         await callback.answer()
         nxt = _next_in(posts, _chan(slug), idx)
         if nxt is None:
-            await callback.message.answer(f"Это был последний пост канала «{CHAN_NAMES[_chan(slug)]}».")
+            await msg(callback).answer(f"Это был последний пост канала «{CHAN_NAMES[_chan(slug)]}».")
             return
-        await _preview(callback.bot, callback.message.chat.id, posts, nxt, done)
+        await _preview(callback.bot, msg(callback).chat.id, posts, nxt, done)
         return
     if action == "other":                      # в другой канал: его следующий не выпущенный (или первый)
         await callback.answer()
@@ -231,7 +232,7 @@ async def channel_button(callback: CallbackQuery):
         nxt = _next_in(posts, other, done=done)
         nxt = _next_in(posts, other) if nxt is None else nxt
         if nxt is not None:
-            await _preview(callback.bot, callback.message.chat.id, posts, nxt, done)
+            await _preview(callback.bot, msg(callback).chat.id, posts, nxt, done)
         return
     # action == "pub"
     from kapibara.features.content.channel_posts import publish
@@ -242,16 +243,16 @@ async def channel_button(callback: CallbackQuery):
         return
     except (*EXTERNAL, OSError) as e:
         await callback.answer("Не вышло — бот админ канала?", show_alert=True)
-        await callback.message.answer(f"⚠️ Не опубликовал: {esc(str(e))[:300]}\n"
+        await msg(callback).answer(f"⚠️ Не опубликовал: {esc(str(e))[:300]}\n"
                                       "Проверь, что бот — админ канала с правом публиковать.", parse_mode="HTML")
         return
     if not ids:
         await callback.answer("Этот пост уже в канале", show_alert=True)
         return
     if pin_error:
-        await callback.message.answer(f"Не закрепил сам ({esc(pin_error)}) — закрепи руками.", parse_mode="HTML")
-    await callback.message.edit_reply_markup(reply_markup=_kb(slug, True))
-    await callback.message.answer(f"✅ В канале: «{esc(posts[idx]['title'])}»" + (f"\n{link}" if link else ""),
+        await msg(callback).answer(f"Не закрепил сам ({esc(pin_error)}) — закрепи руками.", parse_mode="HTML")
+    await msg(callback).edit_reply_markup(reply_markup=_kb(slug, True))
+    await msg(callback).answer(f"✅ В канале: «{esc(posts[idx]['title'])}»" + (f"\n{link}" if link else ""),
                                   parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
                                       InlineKeyboardButton(text="Следующий ▸", callback_data=f"chan:next:{slug}")]]))
     await callback.answer("Опубликовано")
