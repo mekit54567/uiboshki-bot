@@ -148,3 +148,19 @@ a.dl-okbtn { display: flex; align-items: center; justify-content: center; }
 .hw-rules { display: block; text-align: left; margin-top: var(--s); }
 .hw-tawrap { position: relative; }
 .hw-count { text-align: right; padding: 4px var(--m) 0; }
+
+/* «Сдать» нового дизайна (макет Д1): полки чипами, горящее с двумя кнопками, карточки предметов */
+.df-shelves { display: flex; gap: 6px; padding: 0 var(--l) var(--m); }
+.df-chip { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--edge); background: var(--card-solid, var(--card));
+  font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.df-chip.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+.df-hot { border-radius: var(--r-card); cursor: pointer; border-color: color-mix(in srgb, var(--accent) 55%, var(--card-solid, var(--card))); }
+.df-btn { height: 46px; padding: 0 20px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.df-btn.sec { background: none; color: var(--text); border: 1px solid var(--edge); }
+.df-btn.small { height: 40px; padding: 0 16px; flex: none; }
+.df-btn:active { filter: brightness(.94); }
+.df-link { display: flex; align-items: center; gap: var(--m); width: 100%; padding: var(--m); text-align: left; }
+.df-subj { padding-bottom: var(--s); }
+.df-head { gap: var(--s); padding: var(--m) var(--l) var(--xs); }
+.df-row { display: flex; align-items: center; gap: var(--s); padding: var(--s) var(--m) var(--s) var(--l); cursor: pointer; }
+.df-done { padding: var(--xs) var(--l); color: var(--ok); }
