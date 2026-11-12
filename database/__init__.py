@@ -12,6 +12,7 @@ files (и тексты лекций); sdo (входы и история балл
 
 import sys
 import types
+from typing import TYPE_CHECKING
 
 from database import _conn
 
@@ -310,6 +311,9 @@ __all__ = ["DATABASE_PATH",
     "is_group_admin",
     "set_subscription_until",
 ]
+
+if TYPE_CHECKING:
+    DATABASE_PATH: str      # для проверки типов; на деле — свойство _Package ниже
 
 
 class _Package(types.ModuleType):

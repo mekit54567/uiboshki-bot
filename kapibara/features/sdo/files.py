@@ -92,7 +92,8 @@ def parse_course_links(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     found: dict[int, str] = {}
     for a in soup.find_all("a", href=True):
-        m = _COURSE_LINK.search(a["href"]) or _PROFILE_COURSE_LINK.search(a["href"])
+        href = str(a["href"])
+        m = _COURSE_LINK.search(href) or _PROFILE_COURSE_LINK.search(href)
         name = a.get_text(" ", strip=True)
         if m and name and int(m.group(1)) > 1:   # id=1 — главная сайта
             found.setdefault(int(m.group(1)), name)
@@ -143,7 +144,7 @@ def parse_course_resources(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     out, seen, section = [], set(), ""
     for a in soup.find_all("a", href=True):
-        m = _MOD_LINK.search(a["href"])
+        m = _MOD_LINK.search(str(a["href"]))
         if not m:
             continue
         row = a.find_parent("tr")
@@ -154,7 +155,7 @@ def parse_course_resources(html: str) -> list[dict]:
         else:
             sec = a.find_parent("li", class_="section")
             if sec:
-                name = sec.get("data-sectionname") or (sec.select_one(".sectionname") or sec).get_text(" ", strip=True)
+                name = str(sec.get("data-sectionname") or "") or (sec.select_one(".sectionname") or sec).get_text(" ", strip=True)
                 section = name if len(name) < 120 else ""
         cmid = int(m.group(2))
         title = _link_text(a)
@@ -170,7 +171,7 @@ def parse_folder_files(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     out, seen = [], set()
     for a in soup.select('a[href*="/pluginfile.php/"]'):
-        url = a["href"].split("?")[0]
+        url = str(a["href"]).split("?")[0]
         if "/mod_folder/" not in url or url in seen:
             continue
         seen.add(url)

@@ -309,7 +309,7 @@ ai_usage: contextvars.ContextVar[dict | None] = contextvars.ContextVar("ai_usage
 
 def _to_messages(contents: list[dict], system_instruction: str | None) -> list[dict]:
     """contents Gemini -> messages OpenAI (OpenRouter): текст и картинки inlineData."""
-    messages = [{"role": "system", "content": system_instruction}] if system_instruction else []
+    messages: list[dict] = [{"role": "system", "content": system_instruction}] if system_instruction else []
     for c in contents:
         parts = []
         for p in c.get("parts", []):
@@ -513,8 +513,8 @@ async def embed(texts: list[str], task: str = "RETRIEVAL_DOCUMENT", titles: list
         raise GeminiError(f"эмбеддинги: HTTP {resp.status_code}", transient=resp.status_code == 429 or resp.status_code >= 500,
                           status=resp.status_code)
     out = []
-    for e in resp.json().get("embeddings") or []:
-        v = e.get("values") or []
+    for emb in resp.json().get("embeddings") or []:
+        v = emb.get("values") or []
         norm = sum(x * x for x in v) ** 0.5 or 1.0
         out.append([x / norm for x in v])
     if len(out) != len(texts):

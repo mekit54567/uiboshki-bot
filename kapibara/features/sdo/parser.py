@@ -141,13 +141,13 @@ def parse_deadlines(html: str) -> list[dict]:
             continue
 
         event_id = event_div.get("data-event-id", "")
-        title    = event_div.get("data-event-title", "Без названия").strip()
+        title    = str(event_div.get("data-event-title", "Без названия")).strip()
 
         # Таймстамп события — из ссылки "Когда" (calendar/view.php?...&time=UNIX)
         when_link = event_div.select_one('a[href*="time="]')
         due_date = due_time = None
         if when_link:
-            m = re.search(r"time=(\d+)", when_link["href"])
+            m = re.search(r"time=(\d+)", str(when_link["href"]))
             if m:
                 dt = datetime.fromtimestamp(int(m.group(1)), tz=TZ)
                 due_date = dt.date().isoformat()
@@ -260,7 +260,8 @@ def parse_calendar_events(events: list[dict]) -> list[dict]:
             "calendar":    True,               # из полного календаря — по нему видно, что пропало
         })
         if component == "mod_quiz":
-            results[-1]["opens"] = opens.get(quiz_cmid(e.get("url")))
+            cm = quiz_cmid(e.get("url"))
+            results[-1]["opens"] = opens.get(cm) if cm is not None else None
     results.sort(key=lambda d: (d["due_date"], d["due_time"]))
     return results
 

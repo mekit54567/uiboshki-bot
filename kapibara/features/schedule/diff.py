@@ -86,15 +86,15 @@ def diff_events(old: list[dict], new: list[dict]) -> list[str]:
     совпавшие пары, остаток сопоставляем по порядку (изменение), лишнее —
     добавлено/отменено."""
     changes = []
-    for kind, oe, ne in pair_events(old, new):
-        if kind == "change":
+    for _kind, oe, ne in pair_events(old, new):
+        if oe is not None and ne is not None:
             changes.append(_change_line(oe, ne))
-        elif kind == "add":
+        elif ne is not None:
             changes.append(
                 f"➕ Добавлена пара: <b>{esc(ne['summary'])}</b> в {ne['time']} "
                 f"({esc(ne['location']) or '—'})"
             )
-        else:
+        elif oe is not None:
             changes.append(f"❌ Отменена пара: <b>{esc(oe['summary'])}</b> (была в {oe.get('time') or '—'})")
     return changes
 
@@ -115,20 +115,25 @@ def _same(a: dict, b: dict) -> bool:
 def merge_marks(marks: list[dict], old: list[dict], new: list[dict], at: str) -> list[dict]:
     """Добавить к отметкам дня то, что поменялось между снимками old → new."""
     marks = [dict(m) for m in marks]
-    for kind, oe, ne in pair_events(old, new):
-        if kind == "change" and (oe.get("location") or "") != (ne.get("location") or ""):
-            prev = next((m for m in marks if m.get("room_was") is not None and _same(m, oe)), None)
+    for _kind, oe, ne in pair_events(old, new):
+        if oe is not None and ne is not None:           # пара изменилась
+            if (oe.get("location") or "") == (ne.get("location") or ""):
+                continue
+            was = oe
+            prev = next((m for m in marks if m.get("room_was") is not None and _same(m, was)), None)
             first = prev["room_was"] if prev else oe.get("location") or ""
             if prev:
                 marks.remove(prev)
             if first != (ne.get("location") or ""):     # вернули прежний кабинет — отметки нет
                 marks.append({"summary": ne["summary"], "time": ne.get("time"), "room_was": first, "at": at})
-        elif kind == "cancel":
-            marks = [m for m in marks if not _same(m, oe)]
+        elif oe is not None:                            # пару отменили
+            gone = oe
+            marks = [m for m in marks if not _same(m, gone)]
             marks.append({"summary": oe["summary"], "time": oe.get("time"), "location": oe.get("location") or "",
                           "cancelled": True, "at": at})
-        elif kind == "add":
-            marks = [m for m in marks if not (m.get("cancelled") and _same(m, ne))]
+        elif ne is not None:                            # пару добавили
+            added = ne
+            marks = [m for m in marks if not (m.get("cancelled") and _same(m, added))]
     return marks
 
 

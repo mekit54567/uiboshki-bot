@@ -94,7 +94,8 @@ def mmr(cands: list[dict], k: int = TOP, lam: float = MMR_LAMBDA, per_file: int 
         sa, sb = a["_stems"], b["_stems"]
         return len(sa & sb) / (len(sa | sb) or 1)
 
-    picked, per = [], {}
+    picked: list[dict] = []
+    per: dict[int, int] = {}
     pool = list(cands)
     while pool and len(picked) < k:
         best = max(pool, key=lambda c: lam * c["score"] / top
@@ -130,7 +131,8 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
     query = (query or "").strip()
     if not query:
         return []
-    subj_sql, subj_args = (" AND f.subject = ?", [subject]) if subject else ("", [])
+    subj_sql = " AND f.subject = ?" if subject else ""
+    subj_args: list[str | int] = [subject] if subject else []
     # только лекции группы того, кто спрашивает (этап 1 (б); current_group)
     from database.groups import file_scope_sql, g_or_home
     g = g_or_home(None)
@@ -174,7 +176,7 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
             fused = {c: s for c, s in fused.items() if c in lex or sims.get(c, 0) >= thr}
         if sims:
             logger.info(f"поиск по смыслу: лучший косинус {max(sims.values()):.3f} · «{query[:60]}»")
-        best = sorted(fused, key=fused.get, reverse=True)[:POOL]
+        best = sorted(fused, key=lambda c: fused[c], reverse=True)[:POOL]
         if not best:
             return []
         rows = await (await db.execute(
@@ -192,9 +194,10 @@ async def search(query: str, subject: str = "", k: int = TOP) -> list[dict]:
     # найденные по одному общему слову). Похожесть — у всех кандидатов, и у
     # найденных только по словам (векторы единичной длины — косинус = скалярное).
     rel = embedder.rel_min(p) if qv_all else None
-    if rel is not None:
+    if rel is not None and qv_all:
+        qvec: list[float] = qv_all
         for cid, v in vecs.items():
-            sims.setdefault(cid, sum(a * b for a, b in zip(qv_all, v, strict=False)))
+            sims.setdefault(cid, sum(a * b for a, b in zip(qvec, v, strict=False)))
         rows = [r for r in rows if sims.get(r[0], 0) >= rel]
         if not rows:
             return []
@@ -265,7 +268,8 @@ def build_context(hits: list[dict], limit: int = CONTEXT_CHARS) -> tuple[str, li
     «Лекция 7 · стр. 35» дважды)."""
     blocks: list[str] = []
     sources: list[dict] = []
-    used, seen = 0, set()
+    used = 0
+    seen: set[str] = set()
     for h in hits:
         key = re.sub(r"\s+", " ", h["text"]).strip().lower()
         if key in seen:

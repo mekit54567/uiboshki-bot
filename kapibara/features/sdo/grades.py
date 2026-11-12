@@ -24,6 +24,7 @@ import logging
 import math
 import re
 import time
+from typing import Any
 from datetime import datetime, timedelta
 
 import httpx
@@ -46,7 +47,7 @@ PAGES_BUDGET = 20
 EXAM_MARKS = ((40, "3"), (60, "4"), (80, "5"))
 CREDIT_MARKS = ((40, "зачёт"),)
 
-_cache: dict[tuple, tuple[float, object]] = {}
+_cache: dict[tuple, tuple[float, Any]] = {}
 # Страницы заданий (порог «зачтено», вердикт) — для подсчёта в списке
 # предметов тем же правилом, что на экране предмета (Б4). Порог меняется
 # редко: держим дольше баллов и не стираем после сдачи.
@@ -99,7 +100,8 @@ def parse_report(html: str) -> dict:
     level, category (имя ближайшей раскрытой категории или "")."""
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", class_=re.compile(r"user-grade|generaltable")) or soup
-    items, categories, stack = [], [], []   # stack: (level, name)
+    items, categories = [], []
+    stack: list[tuple[int, str]] = []       # (level, name)
     for tr in table.find_all("tr"):
         head = tr.find(["th", "td"], class_=re.compile(r"column-itemname"))
         if head is None:
@@ -137,7 +139,7 @@ def parse_report(html: str) -> dict:
             # оценка шкалой: «Зачтено» / «Не зачтено» — числа нет, но работа оценена
             low = text.lower()
             passed = not low.startswith(("не ", "неуд"))
-        m = _MOD.search(link["href"]) if link else None
+        m = _MOD.search(str(link["href"])) if link else None
         items.append({
             "name": name, "kind": kind.capitalize(),
             "module": m.group(1) if m else "", "cmid": int(m.group(2)) if m else None,
@@ -299,7 +301,7 @@ def order_works(works: list[dict]) -> list[dict]:
         if m:
             fams.setdefault(m.group(1).strip().lower(), []).append(i)
     for idx in fams.values():
-        ordered = sorted((out[i] for i in idx), key=lambda w: int(num.match(w["name"]).group(2)))
+        ordered = sorted((out[i] for i in idx), key=lambda w: int(hit.group(2)) if (hit := num.match(w["name"])) else 0)
         for i, w in zip(idx, ordered, strict=False):
             out[i] = w
 

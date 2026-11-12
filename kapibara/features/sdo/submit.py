@@ -72,10 +72,15 @@ def _notice(soup: BeautifulSoup) -> str:
         el.decompose()
     for sel in (".alert-danger", ".alert-warning", ".errormessage", ".box.errorbox", ".alert",
                 "#id_error_files_filemanager", ".invalid-feedback", ".form-control-feedback"):
-        el = soup.select_one(sel)
-        if el and el.get_text(strip=True):
-            return el.get_text(" ", strip=True)[:200]
+        hit = soup.select_one(sel)
+        if hit and hit.get_text(strip=True):
+            return hit.get_text(" ", strip=True)[:200]
     return ""
+
+
+def _action(form) -> str:
+    """Куда отправлять форму: её action, а нет его — страница задания."""
+    return str((form.get("action") if form else "") or f"{SDO_BASE_URL}/mod/assign/view.php")
 
 
 def form_fields(form) -> dict:
@@ -105,7 +110,7 @@ def parse_edit_page(html: str) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     area = soup.find("input", attrs={"name": "files_filemanager"})
     if not area:
-        if soup.find(attrs={"name": re.compile(r"^onlinetext")}):
+        if soup.find(None, {"name": re.compile(r"^onlinetext")}):
             raise SubmitError("в этом задании ответ пишется текстом на сайте, файл не прикрепить")
         raise NoForm(_notice(soup))
     form = area.find_parent("form")
@@ -116,7 +121,7 @@ def parse_edit_page(html: str) -> dict:
         if m:
             repo_id = m.group(1)
             break
-    itemid = area.get("value", "")
+    itemid = str(area.get("value", ""))
     opts = filemanager_options(html, itemid)
     ctx = (opts.get("context") or {}).get("id") if isinstance(opts.get("context"), dict) else None
     if not ctx:
@@ -130,7 +135,7 @@ def parse_edit_page(html: str) -> dict:
     if not (repo_id and ctx and fields.get("sesskey")):
         raise SubmitError("не разобрал форму сдачи в СДО — сдай на сайте")
     return {
-        "action": form.get("action") or f"{SDO_BASE_URL}/mod/assign/view.php",
+        "action": _action(form),
         "fields": fields,
         "itemid": itemid,
         "sesskey": fields["sesskey"],
@@ -362,8 +367,9 @@ async def submit_file(cookie: str, cmid: int, name: str = "", data: bytes = b"",
                 confirm = BeautifulSoup(resp.text, "html.parser").find(
                     "input", attrs={"name": "action", "value": "confirmsubmit"})
                 if confirm:
-                    form = form_fields(confirm.find_parent("form"))
-                    box = confirm.find_parent("form").find("input", attrs={"name": "submissionstatement"})
+                    confirm_form = confirm.find_parent("form")
+                    form = form_fields(confirm_form)
+                    box = confirm_form.find("input", attrs={"name": "submissionstatement"}) if confirm_form else None
                     if box is not None:
                         form["submissionstatement"] = box.get("value") or "1"
                     form["submitbutton"] = "Продолжить"
@@ -394,7 +400,7 @@ async def remove_submission(cookie: str, cmid: int) -> dict:
             fields = form_fields(form)
             if not fields.get("sesskey"):
                 raise SubmitError("не разобрал подтверждение в СДО — удали ответ на сайте")
-            resp = await client.post(form.get("action") or f"{SDO_BASE_URL}/mod/assign/view.php", data=fields)
+            resp = await client.post(_action(form), data=fields)
             if "/login/index.php" in str(resp.url):
                 raise SdoSessionExpired("вход устарел")
             view = await get_checked(client, url)

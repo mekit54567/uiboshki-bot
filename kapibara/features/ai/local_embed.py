@@ -22,6 +22,7 @@ import logging
 import os
 import struct
 import threading
+from typing import Any
 import time
 
 import anyio
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 # rel_min — порог «вопрос вообще про лекции» и при выбранном предмете: замер
 # 20.10 на rubert-mini-frida — болтовня, погода, «Буря мглою», Тайвань ≤ 0.17,
 # вопросы по лекциям ≥ 0.27 (живые косинусы — в логах «лучший косинус»)
-MODELS = {
+MODELS: dict[str, dict[str, Any]] = {
     "rubert-tiny-turbo": {"repo": "sergeyzh/rubert-tiny-turbo", "dims": 312, "query": "", "doc": "", "min_sim": 0.55},
     "rubert-mini-frida": {"repo": "sergeyzh/rubert-mini-frida", "dims": 312, "query": "search_query: ",
                           "doc": "search_document: ", "min_sim": 0.55, "rel_min": 0.2},
@@ -217,11 +218,13 @@ class Encoder:
             s /= s.sum(-1, keepdims=True)
             ctx = (s @ v).transpose(0, 2, 1, 3).reshape(B, T, H * d)
             W, b = L["o"]
-            x = _ln(x + ctx @ W + b, *L["ln1"], self.eps)
+            lw, lb = L["ln1"]
+            x = _ln(x + ctx @ W + b, lw, lb, self.eps)
             W, b = L["i"]
             inter = _gelu(x @ W + b)
             W, b = L["out"]
-            x = _ln(x + inter @ W + b, *L["ln2"], self.eps)
+            lw, lb = L["ln2"]
+            x = _ln(x + inter @ W + b, lw, lb, self.eps)
         if self.pooling == "cls":
             out = x[:, 0]
         else:
@@ -288,7 +291,7 @@ def _get(key: str) -> Encoder:
 
 def unload_idle(idle: float = IDLE_UNLOAD) -> list[str]:
     """Выгрузить модели без запросов дольше idle секунд (scheduler)."""
-    gone = []
+    gone: list[str] = []
     if not _lock.acquire(blocking=False):      # модель сейчас считает — не простой
         return gone
     try:

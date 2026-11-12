@@ -16,7 +16,7 @@ def _clean(text: str) -> str:
 def _activity_dates(soup) -> dict:
     """{подпись без двоеточия, строчными: дата} из [data-region="activity-dates"].
     «Закрыто c:» у МИРЭА пишут латинской «c» — подпись режем до «закрыт…»."""
-    out = {}
+    out: dict[str, str] = {}
     box = soup.find(attrs={"data-region": "activity-dates"})
     for div in (box.find_all("div") if box else []):
         strong = div.find("strong")
@@ -109,7 +109,7 @@ def parse_assign_page(html: str) -> dict:
         # время у такого теста ограничения нет (quiz_time.learned)
         "quiz_info": bool(soup.find(class_="quizinfo")),
         "graded_by": graded_by, "graded_at": graded_at,
-        "can_submit": bool(soup.find(attrs={"name": "action", "value": "editsubmission"})
+        "can_submit": bool(soup.find(None, {"name": "action", "value": "editsubmission"})
                            or "action=editsubmission" in html),
     }
 
@@ -129,14 +129,16 @@ def parse_task_page(html: str) -> dict:
     """Страница задания: название, описание (текстом), файлы преподавателя
     (introattachment и вложенные в описание) и свои уже сданные файлы."""
     soup = BeautifulSoup(html, "html.parser")
-    main = soup.find(attrs={"role": "main"}) or soup
+    main = soup.find(None, {"role": "main"}) or soup
     # В Moodle 4 описание и файлы задания — в шапке активности (activity-header),
     # она стоит в #region-main ПЕРЕД <div role="main">, а не внутри него.
     region = soup.find(id="region-main") or main
     title_el = main.find(["h2", "h1"]) or soup.find(["h1", "h2"])
-    teacher, mine, seen = [], [], set()
+    teacher: list[dict] = []
+    mine: list[dict] = []
+    seen: set[str] = set()
     for a in region.find_all("a", href=_PLUGINFILE):
-        href = a["href"].split("?")[0]
+        href = str(a["href"]).split("?")[0]
         if href in seen:
             continue
         seen.add(href)
@@ -157,13 +159,13 @@ def parse_task_page(html: str) -> dict:
     # «Редактировать ответ» / «Удалить ответ» (владелец 09.10, 3.3): ответ уже
     # есть, ещё не оценён, и СДО показывает эти кнопки (срок не прошёл)
     answered = out["submitted"] or out["draft"] or bool(mine)
-    grading = next((_clean(tr.find("td").get_text(" ")).lower() for tr in soup.find_all("tr")
-                    if tr.find("th") and tr.find("td")
-                    and _clean(tr.find("th").get_text(" ")).lower().startswith("состояние оценивания")), "")
+    grading = next((_clean(td.get_text(" ")).lower() for tr in soup.find_all("tr")
+                    if (th := tr.find("th")) and (td := tr.find("td"))
+                    and _clean(th.get_text(" ")).lower().startswith("состояние оценивания")), "")
     graded = bool(out["graded_at"]) or (grading.startswith("оценено") and "не оценено" not in grading)
     out["can_edit"] = out["can_submit"] and answered and not graded
     out["can_remove"] = answered and not graded and bool(
-        soup.find(attrs={"name": "action", "value": "removesubmissionconfirm"})
+        soup.find(None, {"name": "action", "value": "removesubmissionconfirm"})
         or "action=removesubmissionconfirm" in html)
     return out
 
@@ -178,8 +180,8 @@ def parse_quiz_page(html: str) -> dict:
     pass_text = next((t.split(":", 1)[1].strip() for t in info if t.startswith("Проходн")), "")
     attempts = []
     for table in main.find_all("table", class_=re.compile(r"quizreviewsummary")):
-        rows = {_clean(tr.find("th").get_text(" ")).lower(): _clean(tr.find("td").get_text(" "))
-                for tr in table.find_all("tr") if tr.find("th") and tr.find("td")}
+        rows = {_clean(th.get_text(" ")).lower(): _clean(td.get_text(" "))
+                for tr in table.find_all("tr") if (th := tr.find("th")) and (td := tr.find("td"))}
         attempts.append({"state": rows.get("состояние", ""), "grade": rows.get("оценка", ""),
                          "points": rows.get("баллы", ""), "finished": rows.get("завершен", "")})
     fb = main.find(id="feedback")

@@ -56,7 +56,8 @@ async def _sample() -> tuple[list[tuple], list[tuple]]:
             "WHERE length(c.text) >= 200")).fetchall()
     rng = random.Random(len(rows))
     rng.shuffle(rows)
-    targets, per_file = [], {}
+    targets: list = []
+    per_file: dict[int, int] = {}
     for r in rows:
         if len(r[1]) >= 450 and per_file.get(r[3], 0) < 2:
             targets.append(r[:3])

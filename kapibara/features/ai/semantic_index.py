@@ -217,7 +217,7 @@ async def _schema(db, dims: int):
                          f"embedding float[{int(dims)}] distance_metric=cosine)")
         await db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('dims', ?)", (str(dims),))
         from kapibara.features.ai import embedder
-        for p in {embedder.provider(), embedder.precompute()} - {embedder.GEMINI, None}:
+        for p in {x for x in (embedder.provider(), embedder.precompute()) if x and x != embedder.GEMINI}:
             # своя модель — свои таблицы: векторы Gemini не трогаем, переключение обратно мгновенное
             await db.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS {embedder.vec_table(p)} USING vec0("
                              f"embedding float[{int(embedder.dims(p))}] distance_metric=cosine)")
@@ -280,7 +280,8 @@ async def index_file(file_id: int, data: bytes | None = None, file_name: str = "
     """Нарезать файл в индекс (векторы — потом, фоном). data — байты файла:
     тогда с номерами страниц и слайдов; без них — части сохранённого текста.
     → сколько кусков."""
-    kind, pages = ("", [])
+    kind: str = ""
+    pages: list[str] = []
     if data:
         kind, pages = await asyncio.to_thread(pages_of, data, file_name)
     mode = "pages"

@@ -87,7 +87,7 @@ def client(cookie: str, timeout: float = 30) -> httpx.AsyncClient:
         _fails = 0
         return resp
 
-    c.send = guarded
+    c.send = guarded  # type: ignore[method-assign]  # предохранитель поверх отправки клиента
     return c
 
 

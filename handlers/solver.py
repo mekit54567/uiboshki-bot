@@ -131,7 +131,7 @@ def with_sources(answer: str, lectures: str) -> str:
     cited = [n for n in dict.fromkeys(re.findall(r"\[(\d+)\]", answer)) if n in heads]
     if not cited:
         return answer
-    first = {}                     # одно место — одна строка, даже под двумя номерами
+    first: dict[str, str] = {}                   # одно место — одна строка, даже под двумя номерами
     for n in cited:
         first.setdefault(heads[n], n)
     return answer + "\n\n📚 " + "; ".join(f"[{n}] {head}" for head, n in first.items())

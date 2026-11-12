@@ -18,6 +18,7 @@ import re
 import time
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from kapibara.core.errors import NETWORK
@@ -40,7 +41,7 @@ SUBJECTS_INK = ["#5B4BC4", "#8C5800", "#0F6E66", "#B83A3A", "#2F5FC0", "#A83C7A"
 
 def _rgb(h: str) -> tuple[int, int, int]:
     h = h.lstrip("#")
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
 def _mix(a, b, t: float) -> tuple[int, int, int]:
@@ -49,7 +50,7 @@ def _mix(a, b, t: float) -> tuple[int, int, int]:
 
 
 # Оформления. heading/body/num — (файл, вес); texture — фон: бумага, доска мелом, клетка.
-STYLES = {
+STYLES: dict[str, dict[str, Any]] = {
     "paper": {                                     # «Тетрадь» приложения
         "bg": "#E9E3D8", "card": "#F3EEE5", "line": "#DBD3C4", "text": "#2A2721", "muted": "#7D776B", "accent": "#B75438",
         "subjects": SUBJECTS_INK, "tint": 0.16, "heading": ("SourceSerif4.ttf", 640), "body": ("Onest.ttf", 400),
@@ -83,7 +84,7 @@ def _font(size: int, face: tuple[str, int] = ("Onest.ttf", 400)):
     if weight:
         try:
             axes = f.get_variation_axes()
-            f.set_variation_by_axes([weight if i == 0 else min(max(size / 2, a["minimum"]), a["maximum"])
+            f.set_variation_by_axes([weight if i == 0 else min(max(size / 2, a["minimum"] or 0), a["maximum"] or 0)
                                      for i, a in enumerate(axes)])
         except (OSError, AttributeError) as e:     # без веса — обычное начертание
             logger.info(f"card: вес шрифта {name}: {e}")
@@ -96,8 +97,8 @@ class _P:
     def __init__(self, style: str):
         s = STYLES.get(style) or STYLES[STYLE]
         self.name = style if style in STYLES else STYLE
-        for k in ("bg", "card", "line", "text", "muted", "accent"):
-            setattr(self, k, _rgb(s[k]))
+        self.bg, self.card, self.line = _rgb(s["bg"]), _rgb(s["card"]), _rgb(s["line"])
+        self.text, self.muted, self.accent = _rgb(s["text"]), _rgb(s["muted"]), _rgb(s["accent"])
         self.subjects = [_rgb(c) for c in s["subjects"]]
         self.tint, self.texture, self.outline = s["tint"], s["texture"], s["outline"]
         self._faces = {k: s[k] for k in ("heading", "body", "bold", "num")}
@@ -162,7 +163,7 @@ def thumbnail(data: bytes) -> bytes:
     качает превью с ограничением размера и, похоже, тем же файлом отдавал и
     фото в чат — картинка в сообщении обрезалась снизу серым. Превью — верх
     карточки не выше квадрата: в списке видно заголовок и первые пары."""
-    img = Image.open(io.BytesIO(data))
+    img: Image.Image = Image.open(io.BytesIO(data))
     if img.height > img.width:
         img = img.crop((0, 0, img.width, img.width))
     img.thumbnail((THUMB_W, THUMB_W))
@@ -179,7 +180,7 @@ def _noise_tile() -> Image.Image:
     rnd = random.Random(7)
     w, h = W // 2, 1200
     small = Image.frombytes("L", (w // 2, h // 2), bytes(rnd.randrange(80, 176) for _ in range(w * h // 4)))
-    return small.resize((w, h), Image.BILINEAR)
+    return small.resize((w, h), Image.Resampling.BILINEAR)
 
 
 def _noise(h: int) -> Image.Image:
@@ -218,7 +219,7 @@ def _capy(img, p: _P, pose: str, box: tuple[int, int, int]):
     """Силуэт капибары (маска из приложения) цветом темы."""
     x, y, size = box
     try:
-        m = Image.open(CAPY / f"{pose}.png").convert("LA").split()[-1].resize((size, size), Image.LANCZOS)
+        m = Image.open(CAPY / f"{pose}.png").convert("LA").split()[-1].resize((size, size), Image.Resampling.LANCZOS)
     except OSError:
         return
     col = _mix(p.bg, p.accent, 0.85 if p.texture == "chalk" else 0.75)
@@ -330,7 +331,7 @@ def render_day(title: str, subtitle: str, lessons: list[dict], footer: str, styl
         d.rounded_rectangle((bx, y + 32, bx + 7, y + bh - 32), 4, fill=col)
         cy = y + 30
         kind = (l.get("kind") or "").lower()
-        px = left
+        px: float = left
         if kind:
             pw = d.textlength(kind, font=f_pill) + 32
             d.rounded_rectangle((px, cy, px + pw, cy + 40), 20, fill=p.pill(col))
@@ -416,6 +417,8 @@ def render_week(title: str, subtitle: str, days: list[tuple[date, list[dict]]], 
 
 def sign(key: str) -> str:
     from kapibara.core.config import BOT_TOKEN
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN не задан — ссылку на картинку не подписать")
     return hmac.new(BOT_TOKEN.encode(), f"card:{key}".encode(), hashlib.sha256).hexdigest()[:24]
 
 
