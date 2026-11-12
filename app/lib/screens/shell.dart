@@ -284,9 +284,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   /// Сканер отметки в Пульсе; отметился — плашка «Есть, ты на паре».
   Future<void> _scan() async {
-    final ok = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const PulseScanScreen()),
-    );
+    final ok = await Navigator.of(context)
+        .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const PulseScanScreen()));
     if (ok == true && mounted) showToast(context, 'Есть, ты на паре', kind: ToastKind.done);
   }
 
@@ -311,7 +310,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final un = widget.onUnauthorized;
     final g = _gen;
     final pages = [
-      TodayScreen(key: ValueKey('today$_epoch.${g[0]}'), api: api, onUnauthorized: un),
+      TodayScreen(key: ValueKey('today$_epoch.${g[0]}'), api: api, onUnauthorized: un, onDeadlines: () => _open(2)),
       WeekScreen(key: ValueKey('week$_epoch.${g[1]}'), api: api, onUnauthorized: un),
       DeadlinesScreen(key: ValueKey('dl$_epoch.${g[2]}'), api: api, onUnauthorized: un),
       StudyScreen(key: ValueKey('study$_epoch.$_sdo.${g[3]}'), api: api, onUnauthorized: un),

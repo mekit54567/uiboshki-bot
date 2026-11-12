@@ -54,7 +54,7 @@ function rainy(raw) { const w = weatherBrief(raw); return !!w && ["дождь", 
 
 Screens.today = {
   mount(body, screen) {
-    let data = null, lessons = [], wxOpen = false, capyN = 0, taps = 0, tapTimer = 0;
+    let data = null, lessons = [], wxOpen = false, pastOpen = false, capyN = 0, taps = 0, tapTimer = 0;
     const load = async (fromCache = false) => {
       const get = fromCache ? (p) => Promise.resolve(Api.cached(p)) : (p) => Api.get(p);
       const extra = (p) => get(p).catch(() => null);
@@ -87,6 +87,7 @@ Screens.today = {
         if (t >= l.startAt && t < l.endAt) current = l;
         if (!next && t < l.startAt) next = l;
       }
+      if (Theme.fresh) { drawFresh(t, h, L, current, next); return; }
       const shown = Theme.design2 && data.cancelled.length ? [...L, ...data.cancelled].sort((a, b) => a.start.localeCompare(b.start)) : L;
       const hello = data.name ? `${greeting(h)},\n${data.name}` : greeting(h);
       lessons = [];
@@ -140,6 +141,105 @@ Screens.today = {
       body.innerHTML = top() + `<div class="td-head"><div class="ttl td-title${title.includes("\n") ? "" : " one"}" style="--sz:30px">${esc(title)}</div>
         <button class="td-capy" data-act="capy" aria-label="Капибара">${capy(poseAt(h), 62)}</button></div>
         ${focus ? `<div class="td-focus">${focus}</div>` : ""}${note ? `<div style="height:var(--m)"></div>${note}` : ""}
+        ${list}<div class="pad-bottom"></div>`;
+      fitTitle();
+    };
+
+    // Новый дизайн (брендбук v1, макет С1, Никита 11.11; today_fresh.dart):
+    // заголовок и одна большая цифра, карточка пары с «что дальше», «Важно
+    // сегодня» — сроки ближайших суток с кнопкой, остальные пары строками.
+    // Пары кончились — цифра до ближайшего срока, завтра раскрыто, прошедшее свёрнуто.
+    const drawFresh = (t, h, L, current, next) => {
+      lessons = [];
+      const key = (l) => { lessons.push(l); return lessons.length - 1; };
+      const free = !L.length || (!current && !next);
+      const hot = data.soon.filter((d) => dueOf(d) - t < 864e5), later = data.soon.filter((d) => !hot.includes(d));
+      const focusL = current || next;
+      const label = (x) => `<div class="bd mut" style="--sz:13px;margin-bottom:2px">${esc(x)}</div>`;
+      const unit = (x) => `<span class="bd b6 mut" style="--sz:18px;margin:0 6px">${x}</span>`;
+      const count = (m, color = "var(--text)") => {
+        const big = (x) => `<span class="num" style="--sz:52px;color:${color}">${x}</span>`;
+        return `<div style="display:flex;align-items:baseline" aria-label="${spanText(m)}">${
+          m >= 60 ? big(Math.floor(m / 60)) + unit("ч") + big(String(m % 60).padStart(2, "0")) + unit("мин") : big(m) + unit("мин")}</div>`;
+      };
+      let title, hero;
+      if (current) {
+        title = `Идёт ${ordinal(L.indexOf(current))} пара`;
+        const live = liveAt(current, t), from = live ? live.start : current.startAt, till = live ? live.end : current.endAt;
+        const total = till - from, passed = Math.max(0, Math.min(total, t - from));
+        hero = label(!live || live.of === 1 ? "до конца" : live.pause ? `перемена · до ${live.index}-й пары из ${live.of}` : `до конца пары · ${live.index} из ${live.of}`)
+          + count(minutesTo(t, till))
+          + `<div class="progress" style="height:6px;margin-top:var(--m);--c:var(--ok)"><i style="width:${total ? (passed / total) * 100 : 0}%"></i></div>`;
+      } else if (next) {
+        const i = L.indexOf(next);
+        title = i === 0 ? (data.name ? `${greeting(h)},\n${data.name}` : greeting(h)) : "Перемена";
+        hero = label(`${ordinal(i)} пара через`) + count(minutesTo(t, next.startAt));
+      } else {
+        title = L.length ? "Пары закончились" : "Сегодня пар нет";
+        if (hot.length) hero = label("до срока") + count(minutesTo(t, dueOf(hot[0])), "var(--accent)");
+        else if (data.tf) hero = label("завтра первая пара в") + `<div class="num" style="--sz:52px">${esc(data.tf.start)}</div>`;
+        else hero = `<div class="bd mut" style="--sz:15px">Завтра тоже свободно.</div>`;
+      }
+      // под идущей парой — что дальше; под следующей — переход в другой корпус
+      let after = "", warn = false;
+      if (current) {
+        const n = next;
+        if (!n) after = `Последняя на сегодня, конец в ${current.end}`;
+        else {
+          const fromC = campusOf(current.room), toC = campusOf(n.room), known = fromC && toC, room = splitRoom(n.room).code;
+          if (room && room === splitRoom(current.room).code) after = `Дальше в ${n.start} тот же кабинет, никуда не идти`;
+          else if (known && fromC !== toC) { after = `Дальше в ${n.start} другой корпус: ${toC}`; warn = true; }
+          else after = `Дальше в ${n.start}: ${room || n.title}${known ? ", тот же корпус" : ""}`;
+        }
+      } else if (next) {
+        const i = L.indexOf(next), prev = i > 0 ? L[i - 1] : null;
+        const fromC = prev ? campusOf(prev.room) : "", toC = campusOf(next.room);
+        if (fromC && toC && fromC !== toC) {
+          after = `Другой корпус: ${toC}, на переход ${prev.endAt && next.startAt ? Math.round((next.startAt - prev.endAt) / 60000) : 0} мин`; warn = true;
+        }
+      }
+      const nowCard = (l) => {
+        const sub = [l.kind ? l.kind.toLowerCase() : "", l.teacher].filter(Boolean).join(" · ");
+        const room = l.roomWas ? roomWas(l) : l.room ? roomPill(l.room, ink(l.title), 15, true) : "";
+        return `<button class="tile tf-now${current ? " live" : ""}" data-act="lesson" data-k="${key(l)}">
+          <div class="row" style="align-items:flex-start;gap:0">
+            <div style="width:52px;flex:none"><div class="bd b7" style="--sz:16px">${esc(l.start)}</div><div class="bd mut" style="--sz:12px">${esc(l.end)}</div></div>
+            <div class="grow"><div class="nm" style="--sz:16px">${esc(l.title)}</div>${sub ? `<div class="bd mut" style="--sz:13px;margin-top:3px">${esc(sub)}</div>` : ""}</div>
+            ${room ? `<div style="margin-left:var(--s);flex:none">${room}</div>` : ""}</div>
+          ${after ? `<div class="bd" style="--sz:13px;margin-top:var(--s);${warn ? "color:var(--warn);font-weight:700" : "color:var(--muted)"}">${esc(after)}</div>` : ""}</button>`;
+      };
+      const hotCard = (d) => {
+        const due = dueOf(d), today = d.due_date === isoDay(t), time = d.due_time || "23:59";
+        return `<button class="tile tf-hot row" data-act="dl" style="margin-bottom:var(--s)">
+          <div class="grow"><div class="nm clamp2" style="--sz:15px">${esc(d.subject)}</div>
+            <div class="bd b6" style="--sz:13px;color:var(--danger);margin-top:3px">${esc(`${today ? "сдать до " + time : "сдать завтра до " + time} · ${leftText(due - t)}`)}</div></div>
+          <span class="tf-btn">${d.can_submit ? "Сдать" : "Открыть"}</span></button>`;
+      };
+      const rows = (items) => { const base = lessons.length; items.forEach((l) => key(l)); return `<div class="hx">${lessonList(items, t, { keyBase: base })}</div>`; };
+      const ahead = [...L.filter((l) => l !== focusL && l.endAt && t < l.endAt), ...data.cancelled.filter((l) => !l.endAt || t < l.endAt)]
+        .sort((a, b) => a.start.localeCompare(b.start));
+      const past = L.filter((l) => l.endAt && t >= l.endAt), nAhead = ahead.filter((l) => !l.cancelled).length;
+      const rest = free ? data.tomorrow : [];
+      const pairs = (n) => `${n} ${plural(n, "пара", "пары", "пар")}`;
+      let list = "";
+      if (focusL) list += `<div class="hx" style="margin-top:var(--m)">${nowCard(focusL)}</div>`;
+      if (hot.length) list += section("важно сегодня") + `<div class="hx">${hot.map(hotCard).join("")}</div>`;
+      if (ahead.length) list += section(`${focusL ? "ещё сегодня" : "сегодня"} · ${pairs(nAhead)}`) + rows(ahead);
+      if (rest.length) list += section(`завтра · ${pairs(rest.length)}`) + rows(rest);
+      if (later.length) list += section("сдать") + `<div class="hx">${soonList(later, t)}</div>`;
+      else if (free && !hot.length) list += section("сдать") + `<div class="hx"><div class="tile row" style="gap:var(--s)">${icon("task_alt", "", "font-size:17px;color:var(--ok)")}
+          <span class="bd mut grow" style="--sz:14px">Открытых сроков нет</span></div></div>`;
+      if (past.length) list += `<div class="hx" style="margin-top:var(--xl)"><button class="tile row tf-past" data-act="past" aria-expanded="${pastOpen}">
+          <span class="bd b6 mut grow" style="--sz:14px">Сегодня было · ${pairs(past.length)}</span>${icon(pastOpen ? "expand_less" : "expand_more", "", "font-size:20px;color:var(--muted)")}</button></div>`
+        + (pastOpen ? `<div style="height:var(--s)"></div>${rows(past)}` : "");
+      const moments = [], awake = poseAt(h) !== "night";
+      if (!L.length) moments.push("dayOff");
+      else if (awake && !current && !next) moments.push(data.more === false ? "weekOver" : "dayOver");
+      if (awake && rainy(data.weather)) moments.push("rain");
+      screen.capyLines = [...moments.map((m) => MOMENT_LINES[m]), ...CAPY_LINES[poseAt(h)]];
+      body.innerHTML = top() + `<div class="td-head" style="align-items:flex-start"><div class="grow" style="min-width:0">
+          <div class="ttl td-title${title.includes("\n") ? "" : " one"}" style="--sz:30px">${esc(title)}</div><div style="height:var(--m)"></div>${hero}</div>
+        <button class="td-capy" data-act="capy" aria-label="Капибара">${capy(poseAt(h), 62)}</button></div>
         ${list}<div class="pad-bottom"></div>`;
       fitTitle();
     };
@@ -227,6 +327,8 @@ Screens.today = {
 
     on(body, {
       wx() { tick(); wxOpen = !wxOpen; draw(); },
+      dl() { tick(); Tabs.show(2); },                       // срок из «Важно сегодня» — на вкладку «Сдать»
+      past() { tick(); pastOpen = !pastOpen; draw(); },
       lesson(b) { const l = lessons[+b.dataset.k]; if (l && window.openLesson) openLesson(l.raw); },
       capy() {
         tick();
