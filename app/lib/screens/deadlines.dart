@@ -13,6 +13,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
@@ -27,6 +28,8 @@ import '../widgets/report.dart' show openReportMenu;
 import 'deadline_edit.dart';
 import 'homework.dart';
 import 'submit.dart';
+
+part 'deadlines_fresh.dart';
 
 typedef _Items = ({List<Deadline> list, Map<int, DlExtra> extra, SdoCheck? sdo});
 
@@ -278,11 +281,19 @@ class DeadlinesView extends StatefulWidget {
 
 class _DeadlinesViewState extends State<DeadlinesView> {
   bool _done = false;
+  // новый дизайн: вид «по предметам» (помним) и полка «активные / просрочено / готово»
+  bool _bySubject = false;
+  int _shelf = 0;
   Timer? _clock;
 
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance()
+        .then((p) {
+          if (mounted && p.getString(_viewKey) == 'subject') setState(() => _bySubject = true);
+        })
+        .catchError((_) {});
     if (widget.at == null) {
       _clock = Timer.periodic(const Duration(seconds: 30), (_) {
         if (mounted) setState(() {});
@@ -337,6 +348,23 @@ class _DeadlinesViewState extends State<DeadlinesView> {
     );
 
     void push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+
+    if (style.fresh) {
+      return _FreshDue(
+        w: widget,
+        at: t,
+        bySubject: _bySubject,
+        shelf: _shelf,
+        card: card,
+        onShelf: (i) => setState(() => _shelf = i),
+        onView: (v) {
+          setState(() => _bySubject = v);
+          SharedPreferences.getInstance()
+              .then((p) => p.setString(_viewKey, v ? 'subject' : 'time'))
+              .catchError((_) => false);
+        },
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 120),
