@@ -506,7 +506,7 @@ async def robokassa_hook(request: Request):
         enough = pay and float(out_sum) + 0.001 >= pay["amount"]
     except ValueError:
         enough = False
-    if not enough:
+    if not pay or not enough:
         logger.warning(f"Robokassa: платёж {inv} не наш или сумма {out_sum} не та")
         raise HTTPException(400, "bad payment")
     if (q.get("IsTest") == "1" or billing.test_mode()) and not config.is_starosta(pay["payer_id"] or 0):

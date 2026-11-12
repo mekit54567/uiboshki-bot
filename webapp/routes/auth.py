@@ -43,7 +43,7 @@ def _device(request: Request) -> str:
     return f"{browser} · {os_name}" if os_name else browser
 
 
-def _client_ip(request: Request) -> str:
+def _client_ip(request: Request) -> int:
     from webapp.routes.site import _client_key
     return _client_key(request)
 
@@ -62,7 +62,7 @@ async def auth_start(request: Request):
     # во встроенном браузере, и после возврата там оставалась белая страница
     return {"code": code, "link": f"https://t.me/{BOT_USERNAME}?start=login_{code}",
             "tg_link": f"tg://resolve?domain={BOT_USERNAME}&start=login_{code}", "expires_in": 600,
-            "pick": (await get_login(code))["pick"]}
+            "pick": ((await get_login(code)) or {}).get("pick")}
 
 
 class PollBody(BaseModel):

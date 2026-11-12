@@ -124,7 +124,7 @@ def cited(answer: str) -> set[int]:
     """Номера материалов, на которые сослался ИИ: [2], [1, 3]. Диапазон
     «[1–10]» — не ссылка: так ИИ говорит о материалах вообще («в [1–10] этого
     нет», живой тест 20.10), а не опирается на них."""
-    out = set()
+    out: set[int] = set()
     for group in _CITE.findall(answer or ""):
         out.update(int(x) for x in re.split(r"\s*[,;]\s*", group))
     return out
@@ -167,10 +167,10 @@ async def _lecture_sources(lectures: str, subject: str) -> list[dict]:
     heads = _HEAD.findall(lectures)
     if not heads:
         return []
-    by_key = {}
-    for f in await get_files():
-        by_key.setdefault(((f.get("subject") or "Без предмета"), f["title"]), f)
-        by_key.setdefault(("", f["title"]), f)
+    by_key: dict[tuple[str, str], dict] = {}
+    for row in await get_files():
+        by_key.setdefault(((row.get("subject") or "Без предмета"), row["title"]), row)
+        by_key.setdefault(("", row["title"]), row)
     out, seen = [], set()
     for n, t in heads:
         f = by_key.get((subject, t)) if subject else None

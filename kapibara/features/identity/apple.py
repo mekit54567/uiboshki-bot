@@ -201,7 +201,7 @@ async def retry_revokes() -> int:
     done = 0
     for enc, tries in rows:
         token = crypto.decrypt(enc)
-        ok = bool(token) and await _revoke(token)
+        ok = bool(token) and await _revoke(token or "")
         async with connect() as db:
             if ok or not token or tries + 1 >= RETRY_MAX:
                 if not ok:

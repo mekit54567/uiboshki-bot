@@ -22,7 +22,8 @@ tools/ratchet.json и пускает их только вниз, как храп
                    тогда CI красный от первого же нового случая.
   mypy_errors    — ошибки проверки типов (mypy.ini) по всему коду сервера;
   mypy_core      — они же в ядре (kapibara/core, bot, jobs, database, bot.py):
-                   03.11 там ноль — ядро проверяется без поблажек.
+                   03.11 там ноль — ядро проверяется без поблажек;
+                   12.11 ноль везде (mypy_errors = 0).
 """
 from __future__ import annotations
 
