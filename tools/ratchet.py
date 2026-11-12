@@ -59,7 +59,9 @@ MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "
              "kapibara/features/schedule/", "kapibara/features/sdo/", "kapibara/features/ai/",
              # обработчики бота — по файлу, как доходят до нуля (kapibara/bot/tg.py)
              "handlers/rating.py", "handlers/announce.py", "handlers/feed.py", "handlers/social.py",
-             "handlers/homework.py", "handlers/privacy.py", "handlers/reports.py", "handlers/members_chat.py")
+             "handlers/homework.py", "handlers/privacy.py", "handlers/reports.py", "handlers/members_chat.py",
+             "handlers/group_pick.py", "handlers/group_tools.py", "handlers/channel.py",
+             "handlers/files.py", "handlers/files_upload.py", "handlers/files_sdo.py")
 
 
 def mypy_errors(root: Path) -> tuple[int, int]:
