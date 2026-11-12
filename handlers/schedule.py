@@ -356,7 +356,7 @@ async def note_cancel(message: Message, state: FSMContext):
 @router.message(NoteAdd.waiting_text, F.text)
 async def note_save_text(message: Message, state: FSMContext):
     data = await state.get_data()
-    date_str = data.get("note_date")
+    date_str: str = data["note_date"]      # кладётся вместе с переходом в waiting_text
 
     subject = ""
     note_text = text_of(message).strip()

@@ -61,7 +61,8 @@ MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "
              "handlers/rating.py", "handlers/announce.py", "handlers/feed.py", "handlers/social.py",
              "handlers/homework.py", "handlers/privacy.py", "handlers/reports.py", "handlers/members_chat.py",
              "handlers/group_pick.py", "handlers/group_tools.py", "handlers/channel.py",
-             "handlers/files.py", "handlers/files_upload.py", "handlers/files_sdo.py")
+             "handlers/files.py", "handlers/files_upload.py", "handlers/files_sdo.py",
+             "handlers/deadlines.py", "handlers/schedule.py", "handlers/plus.py", "handlers/files_admin.py")
 
 
 def mypy_errors(root: Path) -> tuple[int, int]:

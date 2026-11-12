@@ -18,7 +18,7 @@ from kapibara.features.privacy.privacy import upsert_user  # до согласи
 from kapibara.core.config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
 from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
-from kapibara.bot.tg import bot_of, data_of, msg, sender, text_of
+from kapibara.bot.tg import bot_of, data_of, download_bytes, msg, sender, text_of
 from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
 from kapibara.features.deadlines.labels import WEEKDAY_SHORT, due_label  # noqa: F401 — старое место
 from kapibara.core.errors import aside
@@ -182,10 +182,8 @@ async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
     wait = await message.answer("🔎 Распознаю текст с фото...")
     text = ""
     with aside(logger, "Не смог распознать фото дедлайна"):
-        photo      = message.photo[-1]
-        file       = await bot.get_file(photo.file_id)
-        file_bytes = await bot.download_file(file.file_path)
-        text       = await extract_text_from_image(file_bytes.read())
+        photo      = (message.photo or [])[-1]           # фильтр F.photo: фото есть всегда
+        text       = await extract_text_from_image(await download_bytes(bot, photo.file_id))
 
     text = (text or "").strip()
     if not text:
