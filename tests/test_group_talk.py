@@ -109,6 +109,35 @@ async def test_fallback_chain_and_failure(monkeypatch):
     assert "позже" in m.replies[0]
 
 
+def test_tidy_cleans_doubles_json_and_leaks():
+    assert group_talk.tidy("Ты это в зеркале репетировал, да? Смешно.Ты это в зеркале репетировал, да? Смешно.") == \
+        "Ты это в зеркале репетировал, да? Смешно."
+    assert group_talk.tidy('{   "response": "Тебе показалось." }') == "Тебе показалось."
+    assert group_talk.leaked("Ты бот и приложение «Капибара — учёба МИРЭА»") and not group_talk.leaked("Привет!")
+
+
+@pytest.mark.asyncio
+async def test_leaked_answer_is_skipped(monkeypatch):
+    class R:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": "Два режима, выбирай по тому, как к тебе обратились."}}]}
+
+    class C:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            return R()
+    monkeypatch.setattr(group_talk.net, "client", lambda **kw: C())
+    with pytest.raises(group_talk.TalkError):
+        await group_talk._ask("m", "привет")
+
+
 def test_helpers():
     assert group_talk.clean_question("@uiboshkibot  как дела?") == "как дела?"
     assert group_talk.tidy("<think>думаю</think>Привет!") == "Привет!"
@@ -116,7 +145,7 @@ def test_helpers():
     p = group_talk.persona()
     assert "Капибара" in p and "Капибару+" in p and "ничего не выдумывай" in p
     assert config.APPSTORE_URL in p
-    assert "жёстко и смешно" in p and "мат" in p and "Запрещено" in p     # два режима: обычный и жёсткий ответ на подкол
+    assert "беспощадно" in p and "мат" in p and "Запрещено" in p     # два режима: обычный и жёсткий ответ на подкол
 
 
 @pytest.mark.asyncio
