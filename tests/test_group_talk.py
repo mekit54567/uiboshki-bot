@@ -132,3 +132,12 @@ async def test_intro_once_with_text_when_no_video(db, monkeypatch):
     assert await h.send_intro(B(), CHAT) is False          # второй раз — нет
     assert await h.send_intro(B(), CHAT, force=True) is True
     assert len(sent) == 2 and "Капибара" in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_talktest_report(monkeypatch):
+    async def ans(q):
+        return "ответ"
+    monkeypatch.setattr(group_talk, "answer", ans)
+    rep = await group_talk.run_test(pause=0)
+    assert rep.count("→ ответ") == len(group_talk.TEST_QUESTIONS) >= 25

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from aiogram import F, Bot, Router
 from aiogram.filters import Command
-from aiogram.types import FSInputFile, Message
+from aiogram.types import BufferedInputFile, FSInputFile, Message
 
 from kapibara.core import config
 from kapibara.core.errors import EXTERNAL, aside
@@ -80,3 +80,16 @@ async def groupintro(message: Message, bot: Bot):
     if message.chat.id != await members.chat_id():
         return
     await send_intro(bot, message.chat.id, force=True)
+
+
+@router.message(F.chat.type == "private", Command("talktest"))
+async def talktest(message: Message):
+    """Староста: прогнать 30 вопросов настоящей моделью и получить ответы файлом (смотрим характер)."""
+    if not message.from_user or not config.is_starosta(message.from_user.id):
+        return
+    if not group_talk.enabled():
+        await message.answer("Нет OPENROUTER_API_KEY — нечем отвечать.")
+        return
+    await message.answer(f"Гоняю {len(group_talk.TEST_QUESTIONS)} вопросов, минуты две…")
+    report = await group_talk.run_test()
+    await message.answer_document(BufferedInputFile(report.encode(), filename="talktest.txt"))
