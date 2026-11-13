@@ -66,12 +66,28 @@ Screens.week = {
         <button class="${days ? "on" : ""}" data-act="days" aria-label="По дням">${icon("calendar_view_week", "", "font-size:18px")}</button></div></div>`;
       if (Theme.fresh) {
         // новый дизайн (макет «Неделя»): неделя — чипом, поиск — подписанной кнопкой, а не лупой
-        const toggle = `<div class="wk-toggle"><button class="${days ? "" : "on"}" data-act="list" aria-label="Лентой">${icon("view_agenda", "o", "font-size:18px")}</button>
-          <button class="${days ? "on" : ""}" data-act="days" aria-label="По дням">${icon("calendar_view_week", "", "font-size:18px")}</button></div>`;
+        // вариант «В» (Никита 13.11): у выбранного вида — значок и слово, у второго — значок
+        const toggle = `<div class="wk-toggle wf-toggle"><button class="${days ? "" : "on"}" data-act="list" aria-label="Лентой">${icon("format_list_bulleted", "", "font-size:17px")}${days ? "" : "Лента"}</button>
+          <button class="${days ? "on" : ""}" data-act="days" aria-label="По дням">${icon("calendar_view_week", "", "font-size:18px")}${days ? "Дни" : ""}</button></div>`;
+        $(".wk-head").classList.remove("wf-tight");
         $(".wk-head").innerHTML = screenTitle("Неделя", {
           lead: `<div class="row wf-lead"><div class="grow" style="min-width:0">${lead}</div>${toggle}</div>`,
           trailing: `<button class="wf-find" data-act="search">${icon("search", "", "font-size:18px")}Найти расписание</button>`,
         });
+        // даты — всегда целиком: в тесноте сокращается «неделя», потом уходит номер
+        const lt = $(".wk-lt"), full = label(), cut = full.indexOf(" · ");
+        if (lt) {
+          // scrollWidth округляется вверх, clientWidth вниз — пиксель запаса
+          const fits = () => lt.scrollWidth <= lt.clientWidth + 1;
+          for (const f of cut > 0 ? [full, full.replace(" неделя · ", " нед · "), full.slice(cut + 3)] : [full]) {
+            lt.textContent = f;
+            if (fits()) break;
+          }
+          // узкий экран и даты через месяц: мельче, а если мало — переключатель без слова
+          const head = $(".wk-head");
+          if (!fits()) head.classList.add("wf-tight");
+          if (!fits()) head.querySelectorAll(".wf-toggle button").forEach((b) => { b.lastChild.nodeType === 3 && b.lastChild.remove(); });
+        }
         return;
       }
       $(".wk-head").innerHTML = screenTitle("Неделя", { lead, trailing });

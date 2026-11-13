@@ -291,21 +291,28 @@ class _WeekScreenState extends State<WeekScreen> {
                   ViewToggle(days: days, onChanged: _setView),
                 ],
               ),
-              trailing: OutlinedButton.icon(
-                key: const ValueKey('week:find'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: p.text,
-                  side: BorderSide(color: p.edge),
-                  shape: const StadiumBorder(),
-                  minimumSize: const Size(0, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+              // на узком экране и с крупным шрифтом кнопка сжимается, а не вылезает за край
+              trailing: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.56),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('week:find'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: p.text,
+                      side: BorderSide(color: p.edge),
+                      shape: const StadiumBorder(),
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    onPressed: () {
+                      tick();
+                      openSearch(context, widget.api);
+                    },
+                    icon: const Icon(Icons.search_rounded, size: 18),
+                    label: const Text('Найти расписание'),
+                  ),
                 ),
-                onPressed: () {
-                  tick();
-                  openSearch(context, widget.api);
-                },
-                icon: const Icon(Icons.search_rounded, size: 18),
-                label: const Text('Найти расписание'),
               ),
             )
           else
@@ -577,19 +584,45 @@ class WeekLabelText extends StatelessWidget {
   final String text;
   const WeekLabelText(this.text, {super.key});
 
+  /// Формы подписи от полной к короткой: «7 неделя · 12–18 окт» → «7 нед · 12–18 окт»
+  /// → «12–18 окт». Сокращается слово и номер, даты — всегда целиком (Никита 13.11).
+  static List<String> forms(String text) {
+    final i = text.indexOf(' · ');
+    return i < 0 ? [text] : [text, text.replaceFirst(' неделя · ', ' нед · '), text.substring(i + 3)];
+  }
+
   @override
-  Widget build(BuildContext context) => FittedBox(
-    fit: BoxFit.scaleDown,
-    alignment: Alignment.centerLeft,
-    child: Text(
-      text,
-      style: AppStyle.of(context).fresh
-          ? AppStyle.of(context).body(13, weight: FontWeight.w600)
-          : AppStyle.of(context).eyebrow(),
-      maxLines: 1,
-      softWrap: false,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    Widget line(String t, TextStyle style) => FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(t, style: style, maxLines: 1, softWrap: false),
+    );
+    if (!s.fresh) return line(text, s.eyebrow());
+    final style = s.body(13, weight: FontWeight.w600);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final scaler = MediaQuery.textScalerOf(context);
+        var pick = forms(text).last;
+        for (final f in forms(text)) {
+          final tp = TextPainter(
+            text: TextSpan(text: f, style: style),
+            textDirection: TextDirection.ltr,
+            textScaler: scaler,
+            maxLines: 1,
+          )..layout();
+          final fits = tp.width <= box.maxWidth;
+          tp.dispose();
+          if (fits) {
+            pick = f;
+            break;
+          }
+        }
+        return line(pick, style);
+      },
+    );
+  }
 }
 
 /// Переключатель двух видов недели — значками, без подписей (владелец, 09.10):
@@ -625,6 +658,60 @@ class ViewToggle extends StatelessWidget {
         ),
       ),
     );
+    final s = AppStyle.of(context);
+    if (s.fresh) {
+      // новый дизайн (вариант «В», Никита 13.11): у выбранного вида — значок и слово, у второго — значок
+      Widget part(IconData icon, String word, String tip, bool on, bool value) => Tooltip(
+        message: tip,
+        child: Semantics(
+          button: true,
+          selected: on,
+          label: tip,
+          excludeSemantics: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onChanged(value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: on ? p.text : p.text.withValues(alpha: 0),
+                borderRadius: BorderRadius.circular(Radii.pill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: on ? p.bg : p.muted),
+                  if (on) ...[
+                    const SizedBox(width: 5),
+                    Text(
+                      word,
+                      style: s.body(13, weight: FontWeight.w600, color: p.bg),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      return Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Radii.pill),
+          border: Border.all(color: p.edge),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            part(Icons.format_list_bulleted_rounded, 'Лента', 'Лентой', !days, false),
+            part(Icons.calendar_view_week_rounded, 'Дни', 'По дням', days, true),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(color: p.line, borderRadius: BorderRadius.circular(13)),

@@ -36,6 +36,35 @@ const _pins = {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('подпись недели: сокращается слово и номер, даты — целиком', () {
+    expect(WeekLabelText.forms('7 неделя · 12–18 окт'), ['7 неделя · 12–18 окт', '7 нед · 12–18 окт', '12–18 окт']);
+    expect(WeekLabelText.forms('28 сен – 4 окт'), ['28 сен – 4 окт']);
+  });
+
+  testWidgets('переключатель вида: слово у выбранного; на узком экране даты недели видны целиком', (t) async {
+    await loadFonts();
+    t.view.physicalSize = const Size(360, 740);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_wrap(WeekScreen(api: fakeApi(overrides: _pins))));
+    await settle(t);
+    expect(find.text('Лента'), findsOneWidget);
+    expect(find.text('Дни'), findsNothing);
+    await t.tap(find.byTooltip('Следующая неделя'));
+    await settle(t);
+    // появился значок «к сегодня» — места меньше: подпись короче, но даты целиком и не сжаты
+    final text = find.descendant(of: find.byType(WeekLabelText), matching: find.byType(Text)).last;
+    expect(t.widget<Text>(text).data, matches(RegExp(r'\d (окт|ноя)$')));
+    final fitted = find.ancestor(of: text, matching: find.byType(FittedBox)).first;
+    expect(t.getSize(text).width, lessThanOrEqualTo(t.getSize(fitted).width + 0.5));
+    expect(t.takeException(), isNull);
+    await t.tap(find.byTooltip('По дням'));
+    await settle(t);
+    expect(find.text('Дни'), findsOneWidget);
+    expect(find.text('Лента'), findsNothing);
+    expect(t.takeException(), isNull);
+  });
+
   testWidgets('неделя: кнопка «Найти расписание» открывает поиск, лупы нет', (t) async {
     phone(t);
     await t.pumpWidget(_wrap(WeekScreen(api: fakeApi(overrides: _pins))));

@@ -434,3 +434,10 @@ textarea.field { resize: none; min-height: 96px; }
   border: 1px solid var(--edge); font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .sf-cmp { flex: none; min-height: 40px; padding: 0 var(--s); font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 .wf-today { padding: 6px 8px; display: flex; color: var(--accent); }
+.wf-toggle { background: none; border: 1px solid var(--edge); border-radius: 999px; gap: 0; flex: none; }
+.wf-toggle button { width: auto; height: 30px; padding: 0 9px; gap: 5px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.wf-toggle button.on { background: var(--text); color: var(--bg); }
+:root[data-fresh="1"] .wk-lt { min-width: 0; }
+.wf-tight .wk-lt { font-size: 12px !important; padding: 7px 9px !important; }
+.wf-tight .wk-label > button:not(.wk-lt):not(.wk-today) { padding: 6px 1px; }
+.wf-tight .wf-lead { gap: 4px; }
