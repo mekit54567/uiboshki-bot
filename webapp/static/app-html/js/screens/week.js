@@ -58,11 +58,22 @@ Screens.week = {
       const lead = `<div class="wk-label"><button data-act="prev" aria-label="Прошлая неделя">${icon("chevron_left", "", "font-size:20px")}</button>
         <button class="eyebrow wk-lt" data-act="today">${esc(label())}</button>
         <button data-act="next" aria-label="Следующая неделя">${icon("chevron_right", "", "font-size:20px")}</button>
-        ${shift ? '<button class="wk-today" data-act="today">Сегодня</button>' : ""}</div>`;
+        ${shift ? (Theme.fresh ? `<button class="wk-today wf-today" data-act="today" aria-label="К сегодня">${icon("today", "o", "font-size:18px")}</button>`
+          : '<button class="wk-today" data-act="today">Сегодня</button>') : ""}</div>`;
       const trailing = `<div class="row" style="gap:2px">
         <button class="wk-ic" data-act="search" aria-label="Поиск расписания">${icon("search", "", "color:var(--muted)")}</button>
         <div class="wk-toggle"><button class="${days ? "" : "on"}" data-act="list" aria-label="Лентой">${icon("view_agenda", "o", "font-size:18px")}</button>
         <button class="${days ? "on" : ""}" data-act="days" aria-label="По дням">${icon("calendar_view_week", "", "font-size:18px")}</button></div></div>`;
+      if (Theme.fresh) {
+        // новый дизайн (макет «Неделя»): неделя — чипом, поиск — подписанной кнопкой, а не лупой
+        const toggle = `<div class="wk-toggle"><button class="${days ? "" : "on"}" data-act="list" aria-label="Лентой">${icon("view_agenda", "o", "font-size:18px")}</button>
+          <button class="${days ? "on" : ""}" data-act="days" aria-label="По дням">${icon("calendar_view_week", "", "font-size:18px")}</button></div>`;
+        $(".wk-head").innerHTML = screenTitle("Неделя", {
+          lead: `<div class="row wf-lead"><div class="grow" style="min-width:0">${lead}</div>${toggle}</div>`,
+          trailing: `<button class="wf-find" data-act="search">${icon("search", "", "font-size:18px")}Найти расписание</button>`,
+        });
+        return;
+      }
       $(".wk-head").innerHTML = screenTitle("Неделя", { lead, trailing });
     };
 

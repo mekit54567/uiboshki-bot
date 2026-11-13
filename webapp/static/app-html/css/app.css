@@ -426,3 +426,11 @@ textarea.field { resize: none; min-height: 96px; }
   color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
 .ls-ask { flex: none; align-self: flex-end; margin: 0 var(--l) 2px 0; height: 32px; padding: 0 12px; border-radius: 16px;
   border: 1px solid var(--edge); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
+/* «Неделя» и поиск нового дизайна: неделя чипом, «Найти расписание» кнопкой, «Сравнить с моей» */
+:root[data-fresh="1"] .wk-lt { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--edge); background: var(--card-solid, var(--card));
+  font-family: Onest; font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text); }
+.wf-lead { gap: var(--s); }
+.wf-find { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--edge); font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.sf-cmp { flex: none; min-height: 40px; padding: 0 var(--s); font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.wf-today { padding: 6px 8px; display: flex; color: var(--accent); }
