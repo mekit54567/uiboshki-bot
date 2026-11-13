@@ -88,8 +88,8 @@ async def _telegram(bot) -> dict:
 async def _exit_ip(proxy: str = "") -> str:
     """IP и страна, с которыми сервер выходит в интернет (напрямую или через прокси)."""
     try:
-        kw = {"transport": httpx.AsyncHTTPTransport(proxy=proxy)} if proxy else {}
-        async with httpx.AsyncClient(timeout=TIMEOUT, **kw) as c:
+        transport = httpx.AsyncHTTPTransport(proxy=proxy) if proxy else None
+        async with httpx.AsyncClient(timeout=TIMEOUT, transport=transport) as c:
             data = (await c.get(IP_URL)).json()
         return f"{data.get('ip', '?')} ({data.get('country', '?')})"
     except (*NETWORK, OSError, ValueError, AttributeError) as e:      # не ответил или не JSON-объект
@@ -182,7 +182,7 @@ def _nameservers() -> list[str]:
 
 async def check(bot) -> dict:
     proxy = net.out_proxy()
-    hosts = ["api.telegram.org"] + [urlsplit(u).hostname for _, u, _ in TARGETS]
+    hosts = ["api.telegram.org"] + [urlsplit(u).hostname or u for _, u, _ in TARGETS]
     embedding = _embedding()
     cpu0, proc0, t0 = _cpu_stat(), time.process_time(), time.monotonic()
     with _LagMeter() as lag:

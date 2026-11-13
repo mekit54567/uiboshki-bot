@@ -56,7 +56,7 @@ async def attach(items: list[dict]):
     cmids = [quiz_cmid(d.get("description")) for d in items]
     known = await get_quiz_limits([c for c in cmids if c])
     for d, c in zip(items, cmids, strict=False):
-        d["time_limit"] = known.get(c) or None
+        d["time_limit"] = known.get(c or 0) or None
 
 
 async def learn_missing(cookie: str | None = None, limit: int = MAX_PER_RUN) -> int:

@@ -72,4 +72,5 @@ async def make(file_id: int, title: str, subject: str, user_id: int) -> dict:
                     "created_at": None, "temporary": True}
         await save_file_summary(file_id, content, user_id)
         logger.info(f"конспект файла {file_id}: {len(content)} символов")
-        return await get_file_summary(file_id)
+        return await get_file_summary(file_id) or {"file_id": file_id, "content": content, "created_by": user_id,
+                                                   "created_at": None}

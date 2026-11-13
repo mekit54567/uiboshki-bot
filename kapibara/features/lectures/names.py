@@ -224,9 +224,8 @@ def text_titles(files: list[dict], names: dict[int, str], texts: dict[int, str])
             known.setdefault((subj, head.lower()), t)
     out = {}
     for fid, (subj, head) in need.items():
-        topic = known.get((subj, head.lower()))
-        if topic:
-            out[fid] = f"{head}. {topic}"
+        if topic_name := known.get((subj, head.lower())):
+            out[fid] = f"{head}. {topic_name}"
     return out
 
 
@@ -252,7 +251,8 @@ def full_list(files: list[dict], changes: dict[int, str], marked: set | None = N
     тема из текста лекции — с пометкой."""
     by_id = {f["id"]: f for f in files}
     rows = sorted(changes.items(), key=lambda kv: (by_id[kv[0]].get("subject") or "", natural_key(kv[1])))
-    out, last = [], None
+    out: list[str] = []
+    last = None
     for fid, new in rows:
         subj = by_id[fid].get("subject") or "Без предмета"
         if subj != last:

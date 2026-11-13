@@ -99,7 +99,7 @@ async def unlimited(uid: int, until: str | None, by: int, note: str | None = Non
     async with locks.lock("plus_grant", uid):
         prev = await get_unlimited(uid)
         await put_unlimited(uid, until, by)
-        await log_grant(uid, "unlimited", "manual", None, prev and (prev["until"] or "forever"),
+        await log_grant(uid, "unlimited", "manual", None, (prev["until"] or "forever") if prev else None,
                         until or "forever", by, note=note)
 
 
@@ -110,7 +110,7 @@ async def off(uid: int, what: str, by: int) -> dict:
     from kapibara.core import locks
     from database.billing import del_unlimited, get_sub, grant_log, log_grant, put_sub, revoke_grants
     from kapibara.core.utils import today_msk
-    out = {"unlimited": False, "sub": None}
+    out: dict[str, object] = {"unlimited": False, "sub": None}
     async with locks.lock("plus_grant", uid):
         if what in ("all", "unlimited") and await del_unlimited(uid):
             out["unlimited"] = True

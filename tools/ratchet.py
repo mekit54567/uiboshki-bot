@@ -22,7 +22,8 @@ tools/ratchet.json и пускает их только вниз, как храп
                    тогда CI красный от первого же нового случая.
   mypy_errors    — ошибки проверки типов (mypy.ini) по всему коду сервера;
   mypy_core      — они же в ядре (kapibara/core, bot, jobs, database, bot.py):
-                   03.11 там ноль — ядро проверяется без поблажек.
+                   03.11 там ноль — ядро проверяется без поблажек;
+                   12.11 ноль везде (mypy_errors = 0).
 """
 from __future__ import annotations
 
@@ -56,12 +57,7 @@ def ruff_debt(root: Path) -> int:
 
 # 11.11 сюда же — разделы, где ошибки убраны: назад они уже не вернутся.
 MYPY_CORE = ("kapibara/core/", "kapibara/bot/", "kapibara/jobs/", "database/", "bot.py",
-             "kapibara/features/schedule/", "kapibara/features/sdo/", "kapibara/features/ai/",
-             # обработчики бота — по файлу, как доходят до нуля (kapibara/bot/tg.py)
-             "handlers/rating.py", "handlers/announce.py", "handlers/feed.py", "handlers/social.py",
-             "handlers/homework.py", "handlers/privacy.py", "handlers/reports.py", "handlers/members_chat.py",
-             "handlers/group_pick.py", "handlers/group_tools.py", "handlers/channel.py",
-             "handlers/files.py", "handlers/files_upload.py", "handlers/files_sdo.py")
+             "kapibara/features/schedule/", "kapibara/features/sdo/", "kapibara/features/ai/", "handlers/")
 
 
 def mypy_errors(root: Path) -> tuple[int, int]:

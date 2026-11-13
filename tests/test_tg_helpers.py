@@ -98,3 +98,29 @@ async def test_stale_button_answers_without_alert(monkeypatch):
     assert alerts == []
     answers = [c for c in fake_bot.session.calls if type(c).__name__ == "AnswerCallbackQuery"]
     assert answers and answers[0].text == tg.STALE_TEXT
+
+
+def test_document_of():
+    from aiogram.types import Document
+    doc = Document(file_id="f1", file_unique_id="u1", file_name="files.json")
+    assert tg.document_of(_msg(from_user=USER, document=doc)) is doc
+    with pytest.raises(RuntimeError):
+        tg.document_of(_msg(from_user=USER, text="без файла"))
+
+
+@pytest.mark.asyncio
+async def test_download_bytes():
+    import io
+
+    class FakeBot:
+        def __init__(self, out):
+            self.out, self.asked = out, []
+
+        async def download(self, file):
+            self.asked.append(file)
+            return self.out
+
+    b = FakeBot(io.BytesIO(b'{"a": 1}'))
+    assert await tg.download_bytes(b, "f1") == b'{"a": 1}' and b.asked == ["f1"]
+    with pytest.raises(RuntimeError):
+        await tg.download_bytes(FakeBot(None), "f1")

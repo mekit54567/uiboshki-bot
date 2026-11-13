@@ -158,5 +158,5 @@ async def _opened(new_ids: list[int]) -> dict[int, str]:
         return {}
     cmids = [quiz_time.quiz_cmid(d["description"]) for d in quizzes]
     opens, limits = await get_quiz_opens(cmids), await get_quiz_limits(cmids)
-    return {d["id"]: quiz_alerts.open_line(d, limits.get(c)) for d, c in zip(quizzes, cmids, strict=False)
-            if quiz_alerts.is_open(opens.get(c), now) and quiz_alerts.close_at(d) > now}
+    return {d["id"]: quiz_alerts.open_line(d, limits.get(c or 0)) for d, c in zip(quizzes, cmids, strict=False)
+            if quiz_alerts.is_open(opens.get(c or 0), now) and quiz_alerts.close_at(d) > now}

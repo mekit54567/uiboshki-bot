@@ -18,6 +18,7 @@ from kapibara.features.privacy.privacy import upsert_user  # до согласи
 from kapibara.core.config import STAROSTA_ID, is_starosta, GROUP_CHAT_ID
 from kapibara.jobs.scheduler import DEADLINE_POST_QUESTION
 from kapibara.bot.keyboards import MAIN_KB, CANCEL_KB
+from kapibara.bot.tg import bot_of, data_of, download_bytes, msg, sender, text_of
 from kapibara.core.utils import esc, parse_day_month, today_msk, esc_attr
 from kapibara.features.deadlines.labels import WEEKDAY_SHORT, due_label  # noqa: F401 — старое место
 from kapibara.core.errors import aside
@@ -97,7 +98,7 @@ def format_deadlines(deadlines: list[dict], done: list[dict] | None = None) -> s
         return "📋 Дедлайнов нет — можно расслабиться! 🎉" + (f"\n\n{done_block}" if done_block else "")
 
     today = today_msk()
-    groups = {"💀 Просрочено": [], "🔥 Горит": [], "📅 На неделе": [], "🗓 Позже": []}
+    groups: dict[str, list[dict]] = {"💀 Просрочено": [], "🔥 Горит": [], "📅 На неделе": [], "🗓 Позже": []}
     for d in deadlines:
         delta = (date.fromisoformat(d["due_date"]) - today).days
         key = ("💀 Просрочено" if delta < 0 else "🔥 Горит" if delta <= 2
@@ -117,8 +118,8 @@ def format_deadlines(deadlines: list[dict], done: list[dict] | None = None) -> s
 @router.message(Command("deadlines"))
 @router.message(F.text == "📋 Дедлайны")
 async def cmd_deadlines(message: Message):
-    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
-    everything = await get_active_deadlines(message.from_user.id, include_done=True)
+    await upsert_user(sender(message).id, sender(message).username or "", sender(message).full_name or "")
+    everything = await get_active_deadlines(sender(message).id, include_done=True)
     active = [d for d in everything if not d.get("done")]
     done = [d for d in everything if d.get("done")]
     await message.answer(format_deadlines(active, done), parse_mode="HTML", disable_web_page_preview=True)
@@ -128,7 +129,7 @@ async def cmd_deadlines(message: Message):
 # раньше и без фильтра перехватывал команду.
 @router.message(Command("stats"), F.from_user.func(lambda u: not is_starosta(u.id)))
 async def cmd_stats(message: Message):
-    s      = await get_deadline_stats(message.from_user.id)
+    s      = await get_deadline_stats(sender(message).id)
     total  = s["total"]
     done   = s["done"]
     active = s["active"]
@@ -181,10 +182,8 @@ async def add_description_photo(message: Message, state: FSMContext, bot: Bot):
     wait = await message.answer("🔎 Распознаю текст с фото...")
     text = ""
     with aside(logger, "Не смог распознать фото дедлайна"):
-        photo      = message.photo[-1]
-        file       = await bot.get_file(photo.file_id)
-        file_bytes = await bot.download_file(file.file_path)
-        text       = await extract_text_from_image(file_bytes.read())
+        photo      = (message.photo or [])[-1]           # фильтр F.photo: фото есть всегда
+        text       = await extract_text_from_image(await download_bytes(bot, photo.file_id))
 
     text = (text or "").strip()
     if not text:
@@ -242,11 +241,11 @@ async def add_due_time(message: Message, state: FSMContext):
     # староста бота — общий своей (как раньше, по created_by); остальные — личный
     from database import is_editor
     from database.groups import home, viewer_group
-    gid = await viewer_group(message.from_user.id)
-    shared_gid = gid if gid != home() and not is_starosta(message.from_user.id) \
-        and await is_editor(message.from_user.id, gid) else None
+    gid = await viewer_group(sender(message).id)
+    shared_gid = gid if gid != home() and not is_starosta(sender(message).id) \
+        and await is_editor(sender(message).id, gid) else None
     did = await add_deadline(data["subject"], data.get("description", ""), data["due_date"], due_time,
-                             message.from_user.id, group_id=shared_gid)
+                             sender(message).id, group_id=shared_gid)
     tp  = f" в {due_time}" if due_time else ""
     await message.answer(
         f"✅ <b>Дедлайн добавлен!</b> (ID: {did})\n\n"
@@ -258,7 +257,7 @@ async def add_due_time(message: Message, state: FSMContext):
 
 @router.message(Command("done"))
 async def cmd_done(message: Message):
-    parts = message.text.split()
+    parts = text_of(message).split()
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /done 3")
         return
@@ -269,7 +268,7 @@ async def cmd_done(message: Message):
         return
     # Персональная отметка: у каждого свой статус "выполнено" — не влияет
     # на то, что видят остальные (в т.ч. по этому же общему дедлайну).
-    await mark_deadline_done(did, message.from_user.id)
+    await mark_deadline_done(did, sender(message).id)
     await message.answer(f"✅ У тебя дедлайн #{did} отмечен как выполненный!\nОшибся — /undone {did}")
 
 
@@ -285,13 +284,13 @@ async def cmd_undone(message: Message):
     if not await get_deadline(did):
         await message.answer("❌ Дедлайн с таким ID не найден.")
         return
-    await set_deadline_done(did, message.from_user.id, False)
+    await set_deadline_done(did, sender(message).id, False)
     await message.answer(f"↩️ Дедлайн #{did} снова в активных.")
 
 
 @router.message(Command("del"))
 async def cmd_del(message: Message):
-    parts = message.text.split()
+    parts = text_of(message).split()
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /del 3")
         return
@@ -302,10 +301,10 @@ async def cmd_del(message: Message):
         return
 
     is_shared = is_shared_deadline(existing)
-    is_owner  = existing["created_by"] == message.from_user.id
+    is_owner  = existing["created_by"] == sender(message).id
     if is_shared:
         from database import deadline_group, is_editor
-        if STAROSTA_ID and not await is_editor(message.from_user.id, await deadline_group(existing)):
+        if STAROSTA_ID and not await is_editor(sender(message).id, await deadline_group(existing)):
             await message.answer("❌ Это общий дедлайн — удалить может только староста.")
             return
     elif not is_owner:
@@ -331,7 +330,7 @@ def should_skip(name: str) -> bool:
 
 @router.message(Command("importdeadlines"))
 async def cmd_import_deadlines(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer("📤 Пришли файл <b>deadlines.json</b>", parse_mode="HTML")
@@ -339,7 +338,7 @@ async def cmd_import_deadlines(message: Message):
 
 @router.message(Command("syncsdo"))
 async def cmd_sync_sdo(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
 
@@ -398,7 +397,7 @@ async def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
 
 @router.message(Command("sdoclean"))
 async def cmd_sdo_clean(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from database import get_sdo_deadlines
@@ -426,15 +425,15 @@ async def sdo_clean_confirm(callback: CallbackQuery):
     if STAROSTA_ID and not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    if callback.data == "sdoclean:no":
-        await callback.message.edit_reply_markup(reply_markup=None)
+    if data_of(callback) == "sdoclean:no":
+        await msg(callback).edit_reply_markup(reply_markup=None)
         await callback.answer("Ок, ничего не трогаю")
         return
     from database import delete_deadline, get_sdo_deadlines
     old = await _old_sdo_deadlines(await get_sdo_deadlines())   # заново: список мог измениться
     for d in old:
         await delete_deadline(d["id"])
-    await callback.message.edit_text(f"🗑 Удалено дедлайнов не этого семестра: {len(old)}.")
+    await msg(callback).edit_text(f"🗑 Удалено дедлайнов не этого семестра: {len(old)}.")
     await callback.answer()
 
 # ── Публикация дедлайнов в группу (ручная модерация старостой) ─────────────
@@ -457,18 +456,18 @@ async def deadline_post_confirm(callback: CallbackQuery):
     if not chat:
         await callback.answer("Чат группы не задан — добавь бота в чат группы", show_alert=True)
         return
-    text = callback.message.html_text
+    text = msg(callback).html_text
     group_text = text.removesuffix(DEADLINE_POST_QUESTION.strip()).rstrip()
     # Двойное нажатие публиковало дважды: проверка и отправка разделены await.
     # Замок на сообщение + отметка «уже ушло» — второе нажатие ждёт первое и
     # видит, что всё готово.
-    key = (callback.message.chat.id, callback.message.message_id)
+    key = (msg(callback).chat.id, msg(callback).message_id)
     async with _dlpost_locks.setdefault(key, asyncio.Lock()):
         if key in _dlpost_done:
             await callback.answer("Уже опубликовано")
             return
         try:
-            await callback.bot.send_message(chat, group_text, parse_mode="HTML")
+            await bot_of(callback).send_message(chat, group_text, parse_mode="HTML")
         except TelegramAPIError as e:
             await callback.answer(f"Ошибка отправки: {e}", show_alert=True)
             return
@@ -476,7 +475,7 @@ async def deadline_post_confirm(callback: CallbackQuery):
     _dlpost_locks.pop(key, None)
     await callback.answer("Опубликовано!")
     with aside(logger, "dlpost: кнопки не снялись"):
-        await callback.message.edit_text(text + "\n\n✅ Опубликовано в группу.", parse_mode="HTML", reply_markup=None)
+        await msg(callback).edit_text(text + "\n\n✅ Опубликовано в группу.", parse_mode="HTML", reply_markup=None)
 
 
 @router.callback_query(F.data == "dlpost:no")
@@ -484,6 +483,6 @@ async def deadline_post_decline(callback: CallbackQuery):
     if STAROSTA_ID and not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
-    text = callback.message.html_text
-    await callback.message.edit_text(text + "\n\n🚫 Не опубликовано.", parse_mode="HTML", reply_markup=None)
+    text = msg(callback).html_text
+    await msg(callback).edit_text(text + "\n\n🚫 Не опубликовано.", parse_mode="HTML", reply_markup=None)
     await callback.answer()

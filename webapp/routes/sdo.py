@@ -179,7 +179,7 @@ async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict =
         d = await get_deadline(deadline_id)
         if not d or not sdo_submit.can_submit(d):
             raise HTTPException(status_code=404, detail="это не задание из СДО")
-        cmid = sdo_submit.cmid_of(d["description"])
+        cmid = sdo_submit.cmid_of(d["description"]) or 0
     cookie = await sdo_accounts.cookie_for(user["id"])
     if not cookie:
         raise HTTPException(status_code=403, detail="сначала подключи СДО: вкладка СДО → Вход")
@@ -208,7 +208,7 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
         d = await get_deadline(body.deadline_id)
         if not d or not sdo_submit.can_submit(d):
             raise HTTPException(status_code=404, detail="это не задание из СДО")
-        cmid = sdo_submit.cmid_of(d["description"])
+        cmid = sdo_submit.cmid_of(d["description"]) or 0
     cookie = await sdo_accounts.cookie_for(user["id"])
     if not cookie:
         raise HTTPException(status_code=403, detail="сначала подключи СДО: вкладка СДО → Вход")
@@ -395,7 +395,7 @@ def _sdl_token(user_id: int, path: str, exp: int) -> str:
     import hashlib
     import hmac
     payload = base64.urlsafe_b64encode(f"{user_id}|{exp}|{path}".encode()).decode().rstrip("=")
-    sig = hmac.new(deps.BOT_TOKEN.encode(), f"sdl:{payload}".encode(), hashlib.sha256).hexdigest()[:32]
+    sig = hmac.new(deps.bot_token().encode(), f"sdl:{payload}".encode(), hashlib.sha256).hexdigest()[:32]
     return f"{payload}.{sig}"
 
 
@@ -405,7 +405,7 @@ def _sdl_parse(token: str) -> tuple[int, str] | None:
     import hmac
     import time
     payload, _, sig = token.partition(".")
-    good = hmac.new(deps.BOT_TOKEN.encode(), f"sdl:{payload}".encode(), hashlib.sha256).hexdigest()[:32]
+    good = hmac.new(deps.bot_token().encode(), f"sdl:{payload}".encode(), hashlib.sha256).hexdigest()[:32]
     if not sig or not hmac.compare_digest(sig, good):
         return None
     try:

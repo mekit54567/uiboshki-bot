@@ -62,7 +62,8 @@ def _varint(buf: bytes, i: int) -> tuple[int, int]:
 def decode(buf: bytes, depth: int = 0) -> list[tuple[int, object]]:
     """Сообщение protobuf → [(номер поля, значение)]; вложенное — тоже список.
     Длинное поле, которое не разбирается как сообщение, — строка или hex."""
-    out, i = [], 0
+    out: list[tuple[int, object]] = []
+    i = 0
     while i < len(buf):
         key, i = _varint(buf, i)
         field, wire = key >> 3, key & 7

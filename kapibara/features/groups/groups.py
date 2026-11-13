@@ -103,9 +103,10 @@ async def choose(user_id: int, group_id: int, bot=None) -> dict | None:
         await ensure_home()
         name = await name_of(group_id)
     else:
-        name = await schedule_index.get_title(1, group_id)
-        if not name:
+        title = await schedule_index.get_title(1, group_id)
+        if not title:
             return None
+        name = title
         await upsert_group(group_id, name)
     await set_user_group(user_id, group_id)
     logger.info(f"группа: {user_id} → {name} ({group_id})")
