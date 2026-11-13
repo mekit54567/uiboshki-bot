@@ -22,8 +22,14 @@ function rememberTarget(t) {
 }
 
 /** Строка найденного (_TargetRow). */
-function targetRow(t, k, pinned = false) {
+function targetRow(t, k, pinned = false, compare = false) {
   const [kind, ic, v] = TARGET_KINDS[t.type] || ["", "calendar_today", "o"];
+  // новый дизайн: у закреплённой группы — «Сравнить с моей» вместо стрелки
+  if (compare) return `<div class="hx" style="margin-bottom:var(--s)"><div class="tile row" data-act="open" data-k="${k}" role="button" tabindex="0" style="padding:var(--m) var(--s) var(--m) var(--l);cursor:pointer">
+    ${icon(ic, v, "color:var(--accent)")}
+    <div class="grow"><div class="bd b6" style="--sz:16px">${esc(t.title)}</div>
+      <div class="bd mut" style="--sz:13px">${esc([kind, t.hint].filter(Boolean).join(" · "))}</div></div>
+    <button class="sf-cmp" data-act="cmp" data-k="${k}">Сравнить с моей</button></div></div>`;
   return `<div class="hx" style="margin-bottom:var(--s)"><button class="tile row" data-act="open" data-k="${k}" style="padding:var(--m) var(--l)">
     ${icon(ic, v, "color:var(--accent)")}
     <div class="grow"><div class="bd b6" style="--sz:16px">${esc(t.title)}</div>
@@ -36,9 +42,10 @@ window.openSearch = function openSearch() {
   Nav.push((body, screen) => {
     let type = 0, items = null, ready = true, busy = false, failed = "", seq = 0, timer = 0;
     let pins = [], recents = recentTargets(), shown = [];
-    body.innerHTML = `${backRow()}${screenTitle("Поиск")}
+    const fresh = Theme.fresh;
+    body.innerHTML = `${backRow()}${screenTitle(fresh ? "Найти расписание" : "Поиск")}
       <div class="hx"><label class="sr-field">${icon("search", "", "color:var(--muted)")}
-        <input type="search" enterkeyhint="search" autocomplete="off" placeholder="Фамилия, группа или аудитория">
+        <input type="search" enterkeyhint="search" autocomplete="off" placeholder="${fresh ? "Группа, преподаватель или аудитория" : "Фамилия, группа или аудитория"}">
         <button data-act="clear" aria-label="Очистить" hidden>${icon("close", "", "color:var(--muted)")}</button></label></div>
       <div class="sr-chips"></div><div style="height:var(--s)"></div><div class="sr-out"></div><div class="pad-bottom"></div>`;
     const q = body.querySelector("input"), out = body.querySelector(".sr-out"), chips = body.querySelector(".sr-chips");
@@ -64,13 +71,18 @@ window.openSearch = function openSearch() {
         return;
       }
       const rec = recents.filter((t) => !pins.some((p) => sameTarget(p, t)));
+      // новый дизайн: сравнение названо прямо — «Когда мы оба свободны»
+      const both = fresh ? `<div class="hx" style="padding-top:var(--m)"><button class="tile row" data-act="both" style="padding:var(--m) var(--l)">
+        <div class="grow"><div class="bd b6" style="--sz:16px">Когда мы оба свободны</div>
+          <div class="bd mut" style="--sz:13px">Выбери группу друга, покажу общие окна на неделе</div></div>
+        ${icon("chevron_right", "", "color:var(--muted)")}</button></div>` : "";
       if (!pins.length && !rec.length) {
-        out.innerHTML = notice("Чьё расписание ищем?", "Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03». Нужное можно закрепить.");
+        out.innerHTML = notice("Чьё расписание ищем?", "Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03». Нужное можно закрепить.") + both;
         return;
       }
       shown = [...pins, ...rec];
-      out.innerHTML = (pins.length ? section("Закреплённые") + pins.map((t, i) => targetRow(t, i, true)).join("") : "")
-        + (rec.length ? section("Недавние") + rec.map((t, i) => targetRow(t, pins.length + i)).join("") : "");
+      out.innerHTML = (pins.length ? section("Закреплённые") + pins.map((t, i) => targetRow(t, i, true, fresh && t.type === 1)).join("") : "")
+        + (rec.length ? section("Недавние") + rec.map((t, i) => targetRow(t, pins.length + i)).join("") : "") + both;
     };
     const search = async () => {
       clearTimeout(timer);
@@ -100,6 +112,17 @@ window.openSearch = function openSearch() {
       type: (b) => { tick(); type = +b.dataset.t; drawChips(); search(); },
       retry: search,
       open: (b) => { const t = shown[+b.dataset.k]; if (t) openTargetScreen(t); },
+      both: () => { tick(); type = 1; drawChips(); q.focus(); search(); },
+      async cmp(b, e) {
+        e.stopPropagation(); tick();
+        const t = shown[+b.dataset.k];
+        if (!t) return;
+        try {
+          const d = await Api.get(`/target/${t.type}/${t.id}`), weeks = (d && d.weeks) || [];
+          if (!weeks.length) { toast("У этой группы пока нет расписания", "info"); return; }
+          openCompare(t.title, weeks, 0);
+        } catch (err) { toast(errorText(err), "error"); }
+      },
     });
     screen.onShow = loadSaved; // там могли закрепить или открепить
     drawChips();
