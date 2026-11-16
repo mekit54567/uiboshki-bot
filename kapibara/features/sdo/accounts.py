@@ -19,6 +19,7 @@
 дальше ровно через 55.
 """
 
+import hashlib
 import logging
 import random
 import re
@@ -85,8 +86,43 @@ async def status_for(user_id: int) -> dict:
                 "share": bool(row.get("share")), "can_share": bool(g and not g["own"]),
                 "group": g["name"] if g else ""}
     if is_starosta(user_id) and SDO_SESSION_COOKIE:
-        return {"state": "ok", "checked_at": None, "shared": True}
+        # общая кука тоже протухает (ночной сбой СДО 16.11): раньше тут всегда
+        # было «работает», а баллы говорили «устарел» — и подключить свой вход
+        # было неоткуда. Теперь — как есть; свой вход приложения предлагают всегда.
+        return {"state": "ok" if await shared_alive() else "expired", "checked_at": None, "shared": True}
     return {"state": "off"}
+
+
+# Общая кука старосты (SDO_SESSION_COOKIE) протухла — в настройках запоминаем
+# её отпечаток, а не «да/нет»: поменяли куку на сервере — новая сразу считается
+# живой, не дожидаясь часовой проверки.
+SHARED_DEAD = "sdo:shared_dead"
+
+
+def _fingerprint(cookie: str) -> str:
+    return hashlib.sha256(cookie.encode()).hexdigest()[:16]
+
+
+async def note_shared(alive: bool):
+    """Чем кончилась проверка общей куки (keepalive, синк, запрос старосты)."""
+    from database import set_setting
+    if SDO_SESSION_COOKIE:
+        await set_setting(SHARED_DEAD, "" if alive else _fingerprint(SDO_SESSION_COOKIE))
+
+
+async def shared_alive() -> bool:
+    from database import get_setting
+    return bool(SDO_SESSION_COOKIE) and (await get_setting(SHARED_DEAD) or "") != _fingerprint(SDO_SESSION_COOKIE)
+
+
+async def mark_expired(user_id: int):
+    """СДО не пустил с кукой человека: свой вход — expired; своего нет, а это
+    староста — значит, протухла общая кука (её и брали, cookie_for)."""
+    from database import set_sdo_status
+    if await set_sdo_status(user_id, "expired"):
+        return
+    if is_starosta(user_id) and SDO_SESSION_COOKIE:
+        await note_shared(False)
 
 
 JITTER_CHECKS = 3           # столько первых проверок — через случайные 50–59 мин

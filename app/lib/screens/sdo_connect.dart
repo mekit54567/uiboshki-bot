@@ -221,6 +221,11 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
             title: 'Подключено, работает',
             text: shared ? 'Вход старосты из настроек бота' : checkedAgo(st['checked_at'] as String?),
           ),
+          'expired' when shared => _StatusCard(
+            color: p.danger,
+            title: 'Вход старосты устарел',
+            text: 'Общая кука из настроек бота протухла. Подключи свой вход — он от неё не зависит',
+          ),
           'expired' when _silent => _StatusCard(
             color: p.muted,
             title: 'Обновляю вход…',
@@ -284,7 +289,9 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
               ),
             ),
           ),
-      ] else ...[
+      ],
+      // общий вход старосты — всё равно можно подключить свой (16.11: протух общий, а кнопки не было)
+      if (state != 'ok' || shared) ...[
         if (state == 'off') ...[
           const Section('Что даст вход'),
           Padding(
@@ -308,7 +315,15 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
             ),
           ),
         ],
-        const Section('Как подключить'),
+        Section(shared ? 'Свой вход' : 'Как подключить'),
+        if (shared)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.m),
+            child: Text(
+              'Свой вход не зависит от общей куки, и приложение само обновляет его, если МИРЭА тебя помнит.',
+              style: s.body(14, color: p.muted),
+            ),
+          ),
         if (_web && !_manual)
           Padding(
             padding: pad,
@@ -413,7 +428,7 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
             ],
           ),
         ),
-        if (state == 'expired')
+        if (state == 'expired' && !shared)
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, 0),
             child: TextButton(

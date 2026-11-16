@@ -390,3 +390,37 @@ async def test_submit_state_for_app(db, monkeypatch, status, state, done):
     res = c.post("/api/v1/sdo/submit", json=body, headers=h)
     assert res.status_code == 200 and res.json()["state"] == state
     assert await db.is_deadline_done(did, 222) is done
+
+
+@pytest.mark.asyncio
+async def test_starosta_shared_cookie_honest_status(db, moodle, monkeypatch):
+    """16.11: общая кука старосты протухла — баллы говорили «устарел», а
+    /sdo/status всё равно «работает», и подключить свой вход было неоткуда."""
+    from fastapi.testclient import TestClient
+    import webapp.server as server
+    from tests.test_webapp_home import BOT_TOKEN, _make_init_data
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setattr(sdo_accounts, "SDO_SESSION_COOKIE", "shared-cookie-1")
+    monkeypatch.setattr(sdo_accounts, "is_starosta", lambda uid: uid == 222)
+    c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
+
+    st = c.get("/api/sdo/status", headers=h).json()
+    assert (st["state"], st["shared"]) == ("ok", True)
+
+    moodle.logged_in = False                     # СДО разлогинил общую куку
+    assert c.get("/api/sdo/grades", headers=h).status_code == 403
+    st = c.get("/api/sdo/status", headers=h).json()
+    assert (st["state"], st["shared"]) == ("expired", True)
+
+    # Никита обновил куку на сервере — сразу живая, без часовой проверки
+    monkeypatch.setattr(sdo_accounts, "SDO_SESSION_COOKIE", "shared-cookie-2")
+    assert c.get("/api/sdo/status", headers=h).json()["state"] == "ok"
+    monkeypatch.setattr(sdo_accounts, "SDO_SESSION_COOKIE", "shared-cookie-1")
+    assert c.get("/api/sdo/status", headers=h).json()["state"] == "expired"
+    await sdo_accounts.note_shared(True)         # keepalive снова пустили
+    assert c.get("/api/sdo/status", headers=h).json()["state"] == "ok"
+
+    # свой вход старосты важнее общего, и его можно подключить
+    moodle.logged_in = True
+    res = c.post("/api/sdo/connect", json={"cookie": "MoodleSession=" + COOKIE, "agree": True}, headers=h).json()
+    assert res["state"] == "ok" and "shared" not in res

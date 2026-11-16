@@ -33,8 +33,8 @@ async def _from_sdo(user_id: int, what: str, call):
     except LookupError:
         raise HTTPException(status_code=404, detail="курс не найден") from None
     except SdoSessionExpired:
-        from database import set_sdo_status
-        await set_sdo_status(user_id, "expired")
+        from kapibara.features.sdo.accounts import mark_expired
+        await mark_expired(user_id)
         raise HTTPException(status_code=403, detail=EXPIRED) from None
     except Exception as e:      # граница: человеку «не отвечает», в лог — сеть строкой, баг с traceback
         log_failure(logger, what, e)
@@ -173,7 +173,7 @@ async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict =
     типы («только .zip»), сколько файлов и какой размер."""
     from kapibara.features.sdo import accounts as sdo_accounts
     from kapibara.features.sdo import submit as sdo_submit
-    from database import get_deadline, set_sdo_status
+    from database import get_deadline
     from kapibara.features.sdo.parser import SdoSessionExpired
     if not cmid:
         d = await get_deadline(deadline_id)
@@ -186,7 +186,7 @@ async def api_sdo_submit_rules(cmid: int = 0, deadline_id: int = 0, user: dict =
     try:
         return await sdo_submit.submission_rules(cookie, cmid)
     except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
+        await sdo_accounts.mark_expired(user["id"])
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SubmitError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
@@ -197,7 +197,7 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     import base64
     from kapibara.features.sdo import accounts as sdo_accounts
     from kapibara.features.sdo import submit as sdo_submit
-    from database import get_deadline, set_sdo_status
+    from database import get_deadline
     from kapibara.features.sdo.parser import SdoSessionExpired
     from kapibara.core import ratelimit
     if not ratelimit.allow("submit", user["id"]):
@@ -229,7 +229,7 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
     try:
         result = await sdo_submit.submit_file(cookie, cmid, files=files, replace=body.replace)
     except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
+        await sdo_accounts.mark_expired(user["id"])
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SdoUnavailable as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
@@ -263,7 +263,6 @@ async def api_sdo_remove_submission(body: SdoRemove, user: dict = CurrentUser):
     from kapibara.features.sdo import accounts as sdo_accounts
     from kapibara.features.sdo import grades as sdo_grades
     from kapibara.features.sdo import submit as sdo_submit
-    from database import set_sdo_status
     from kapibara.features.sdo.parser import SdoSessionExpired
     if not ratelimit.allow("submit", user["id"]):
         raise HTTPException(status_code=429, detail="слишком много действий подряд — попробуй через 10 минут")
@@ -273,7 +272,7 @@ async def api_sdo_remove_submission(body: SdoRemove, user: dict = CurrentUser):
     try:
         result = await sdo_submit.remove_submission(cookie, body.cmid)
     except SdoSessionExpired:
-        await set_sdo_status(user["id"], "expired")
+        await sdo_accounts.mark_expired(user["id"])
         raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
     except sdo_submit.SubmitError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
