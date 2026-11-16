@@ -184,7 +184,7 @@ def topic_from_text(text: str, subject: str = "", number: int | None = None) -> 
     """Тема лекции по началу её текста или «». number — номер лекции из
     названия файла: на слайде «План курса» перечислены все лекции, берём свою."""
     lines = head_lines(text)
-    own, tema, other = "", "", {}                              # other: номер → тема
+    own, tema, other = "", "", dict[int, str]()                              # other: номер → тема
     for i, line in enumerate(lines):
         m = _LECTURE.match(line)
         if m:

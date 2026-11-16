@@ -390,7 +390,7 @@ def _own_group(target_type: int, target_id: int) -> bool:
     """Это календарь самой группы бота (ICAL_URL …/ical/1/4928)?"""
     from kapibara.core.config import ICAL_URL
     m = re.search(r"/ical/(\d+)/(\d+)", ICAL_URL or "")
-    return bool(m) and (int(m.group(1)), int(m.group(2))) == (target_type, target_id)
+    return m is not None and (int(m.group(1)), int(m.group(2))) == (target_type, target_id)
 
 
 # ── Закреплённые группы / преподаватели / аудитории ─────────────────────────

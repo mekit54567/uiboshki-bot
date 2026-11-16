@@ -13,6 +13,14 @@ from kapibara.core.config import BOT_TOKEN, WEBAPP_URL  # noqa: F401 — чит�
 from webapp.auth import InitDataError, validate_init_data
 
 
+def bot_token() -> str:
+    """BOT_TOKEN — ключ подписи initData и ссылок (/dl, /pg, /sdl, /aitest).
+    Не задан — падаем: пустой ключ HMAC подделывается, это опаснее ошибки."""
+    if not BOT_TOKEN:
+        raise RuntimeError("BOT_TOKEN не задан — подписи ссылок и вход из Telegram не работают")
+    return BOT_TOKEN
+
+
 async def _session_user(request: Request) -> dict | None:
     """Вход без Telegram (этап 2): «Authorization: Bearer <токен>» — сессия
     устройства (database/sessions.py). → пользователь как из initData."""
@@ -46,7 +54,7 @@ async def get_current_user(request: Request, x_telegram_init_data: str = Header(
     user = None if x_telegram_init_data else await _session_user(request)
     if user is None:
         try:
-            data = validate_init_data(x_telegram_init_data, BOT_TOKEN)
+            data = validate_init_data(x_telegram_init_data, BOT_TOKEN or "")   # пустой — InitDataError (401)
         except InitDataError as e:
             raise HTTPException(status_code=401, detail=str(e)) from e
         user = data.get("user")

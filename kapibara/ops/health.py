@@ -396,12 +396,12 @@ async def report() -> str:
         lines.append(await billing.donate_status_line())
         if config.OPENROUTER_API_KEY and gemini_solver.AI_SPARE_MODEL:
             mode = await gemini_solver.ai_main()
-            n = gemini_solver.answered
+            answered = gemini_solver.answered
             lines.append(f"Ling ({esc(gemini_solver.AI_SPARE_MODEL)}) основная: {gemini_solver.MAIN_MODES[mode]}"
                          " · сменить — /aimain")
-            if sum(n.values()):
-                lines.append(f"С запуска ответили: Ling {n['ling']}, Gemini {n['gemini']}"
-                             + (f" · Ling не смогла {n['ling_failed']}" if n["ling_failed"] else ""))
+            if sum(answered.values()):
+                lines.append(f"С запуска ответили: Ling {answered['ling']}, Gemini {answered['gemini']}"
+                             + (f" · Ling не смогла {answered['ling_failed']}" if answered["ling_failed"] else ""))
         rest, spare = gemini_solver.rest_status()
         if rest > 0:
             lines.append(f"⚠️ {esc(config.GEMINI_MODEL)} упёрлась в лимит — ещё {math.ceil(rest / 60)} мин отвечают "

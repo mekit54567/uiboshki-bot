@@ -69,9 +69,9 @@ def test_moved_module_is_not_a_new_cycle(tmp_path):
 def test_counts_type_errors_and_core_ones(tmp_path):
     """mypy_errors — ошибки типов (mypy.ini), mypy_core — те, что в ядре."""
     m = _tree(tmp_path, {
-        "mypy.ini": "[mypy]\nfiles = bot.py, handlers\nexplicit_package_bases = True\n",
+        "mypy.ini": "[mypy]\nfiles = bot.py, tools\nexplicit_package_bases = True\n",
         "bot.py": "x: int = 'не число'\n",                  # ядро
-        "handlers/__init__.py": "",
-        "handlers/h.py": "def f() -> str:\n    return 1\n",
+        "tools/__init__.py": "",
+        "tools/h.py": "def f() -> str:\n    return 1\n",
     })
     assert (m["mypy_errors"], m["mypy_core"]) == (2, 1)

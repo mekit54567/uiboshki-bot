@@ -34,6 +34,7 @@ import os
 import secrets
 import time
 import uuid
+from typing import TypedDict
 from datetime import date, timedelta
 
 from kapibara.core import config
@@ -41,7 +42,14 @@ from kapibara.core.errors import NETWORK, aside
 
 logger = logging.getLogger(__name__)
 
-PLANS = {                             # price — полная, early — цена первых (метка Early Supporter)
+class Plan(TypedDict):
+    days: int
+    price: int
+    early: int
+    title: str
+
+
+PLANS: dict[str, Plan] = {           # price — полная, early — цена первых (метка Early Supporter)
     "month": {"days": 30, "price": 249, "early": 149, "title": "Месяц"},
     "semester": {"days": 150, "price": 790, "early": 649, "title": "Семестр"},
 }
@@ -113,6 +121,8 @@ def site() -> str:
 # ── Личная ссылка на страницу оплаты ─────────────────────────────────────────
 
 def _sig(uid: int, exp: int) -> str:
+    if not config.BOT_TOKEN:          # пустой ключ подписи подделывается — лучше упасть
+        raise RuntimeError("BOT_TOKEN не задан — личную ссылку на оплату не подписать")
     return hmac.new(config.BOT_TOKEN.encode(), f"plus:{uid}:{exp}".encode(), hashlib.sha256).hexdigest()[:24]
 
 

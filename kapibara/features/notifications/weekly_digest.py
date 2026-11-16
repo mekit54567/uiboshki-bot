@@ -161,7 +161,7 @@ async def send_all(bot, now: datetime | None = None):
             head = headline(raw, monday, deadlines, home, grades) if text else None
         finally:
             HIDE.reset(token)
-        if not text:
+        if not text or head is None:
             continue
         with aside(logger, f"обзор недели {uid}", level=logging.INFO):
             from kapibara.features.notifications import delivery

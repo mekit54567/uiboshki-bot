@@ -516,21 +516,21 @@ def main(argv: list[str]) -> int:
     elif cmd == "pr-check" and len(argv) == 3:
         out = subprocess.run(["git", "diff", "--name-status", "--no-renames", f"{argv[2]}...HEAD"],
                              capture_output=True, text=True, cwd=CHANGELOG.parent, check=True).stdout
-        changed = [tuple(line.split("\t", 1)) for line in out.splitlines() if "\t" in line]
+        changed = [(a, b) for a, _, b in (line.partition("\t") for line in out.splitlines() if "\t" in line)]
         base = subprocess.run(["git", "ls-tree", "-r", "--name-only", argv[2], "--", "changelog.d/next/"],
                               capture_output=True, text=True, cwd=CHANGELOG.parent, check=True).stdout
         errors = pr_check(changed, [p for p in base.splitlines() if p.endswith(".md")])
         errors += [f"номер в заголовке не как в имени файла — {b}" for b in header_mismatches()]
-        for e in errors:
-            print("::error::" + e)
+        for err in errors:
+            print("::error::" + err)
         if not errors and not any(p.startswith("changelog.d/") for _, p in changed):
             print("::warning::нет заметки в changelog.d/next/ — если PR что-то меняет для людей, "
                   "добавь: python tools/changelog.py note")
         return 1 if errors else 0
     elif cmd == "add" and len(argv) == 4:
         ver, name = argv[2], argv[3]
-        if why := check(text, name, temp):
-            sys.exit(f"{name}: {why}")
+        if problem := check(text, name, temp):
+            sys.exit(f"{name}: {problem}")
         if ver in {v for v, _ in versions(text)}:
             sys.exit(f"версия {ver} уже есть")
         body = sys.stdin.read().strip()

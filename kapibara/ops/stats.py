@@ -122,7 +122,7 @@ async def collect(days: int = 30) -> dict:
     since = today - timedelta(days=days - 1)
     users_by_day: dict = defaultdict(set)
     screens: dict = defaultdict(set)
-    actions = Counter()
+    actions: Counter[str] = Counter()
     heat = [[0] * 24 for _ in range(7)]
     active_day, active_week, active_month, active_period = set(), set(), set(), set()
     for uid, kind, at in rows:

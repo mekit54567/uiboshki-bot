@@ -188,7 +188,8 @@ def pick(context: str, query: str, budget: int = SUBJECT_BUDGET, min_score: int 
         order = [i for i in order if blocks[i][0].split(": ", 1)[0] == top]
     if not order and min_score == 0:
         order = list(range(len(blocks)))      # ничего не совпало — первые лекции, как раньше
-    chosen, used = [], 0
+    chosen: list[int] = []
+    used = 0
     for i in order:
         size = len(blocks[i][1]) + 2
         if used + size > budget:

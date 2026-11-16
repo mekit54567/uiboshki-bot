@@ -113,7 +113,7 @@ def due_now(quizzes: list[dict], opens: dict[int, str], now: datetime) -> list[t
             at = close - timedelta(minutes=m)
             if at <= now < at + timedelta(minutes=min(LATE, max(1, m // 2))):
                 out.append((d, f"r{m}", at.strftime(FMT), m))
-        o = _parse(opens.get(quiz_time.quiz_cmid(d.get("description"))))
+        o = _parse(opens.get(quiz_time.quiz_cmid(d.get("description")) or 0))
         if o and o <= now < o + timedelta(minutes=OPEN_LATE):
             out.append((d, "open", "", 0))
     return out
@@ -158,7 +158,7 @@ async def send_due(bot, now: datetime | None = None) -> int:
         for d, kind, at, m in wanted:
             if d["id"] not in mine or not await mark_quiz_alert(uid, d["id"], kind, at):
                 continue
-            limit = limits.get(quiz_time.quiz_cmid(d["description"]))
+            limit = limits.get(quiz_time.quiz_cmid(d["description"]) or 0)
             text = open_text(d, limit) if kind == "open" else remind_text(d, m, limit, now)
             title, short = push_head(d, kind, m, limit, now)
             with aside(logger, f"тест СДО {uid}", level=logging.INFO):  # обычно — бот заблокирован

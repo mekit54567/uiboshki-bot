@@ -199,7 +199,7 @@ async def _snapshot(kind: str, item_id: int) -> dict:
     async with connect() as db:
         db.row_factory = aiosqlite.Row
         row = await (await db.execute(f"SELECT * FROM {table} WHERE id=?", (item_id,))).fetchone()
-        snap = {"row": dict(row) if row else None}
+        snap: dict[str, object] = {"row": dict(row) if row else None}
         for t in _EXTRA.get(kind, ()):
             snap[t] = [dict(r) for r in await (await db.execute(
                 f"SELECT * FROM {t} WHERE file_id=?", (item_id,))).fetchall()]
@@ -282,7 +282,7 @@ async def dispute(bot, rid: int, user_id: int, appeal: str = "") -> str:
     if not cur.rowcount:                                  # два нажатия разом — заявка уже ушла
         return "disputed_already"
     rep = await get_report(rid)
-    if config.STAROSTA_ID and bot is not None:
+    if rep and config.STAROSTA_ID and bot is not None:
         kb = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="↩️ Вернуть", callback_data=f"rep:back:{rid}"),
             InlineKeyboardButton(text="Оставить скрытым", callback_data=f"rep:hold:{rid}"),

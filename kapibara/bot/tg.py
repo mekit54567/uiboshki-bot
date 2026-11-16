@@ -20,7 +20,7 @@ aiogram честно говорит, что у события многое мо�
 import logging
 
 from aiogram import Bot
-from aiogram.types import CallbackQuery, ChatMemberUpdated, ErrorEvent, InaccessibleMessage, Message, User
+from aiogram.types import CallbackQuery, ChatMemberUpdated, Document, ErrorEvent, InaccessibleMessage, Message, User
 
 from kapibara.core.errors import StaleMessage
 from kapibara.core.telegram import cosmetic
@@ -62,6 +62,22 @@ def bot_of(event: Message | CallbackQuery | ChatMemberUpdated) -> Bot:
     if bot is None:
         raise RuntimeError(f"{type(event).__name__} без бота: событие не из диспетчера")
     return bot
+
+
+def document_of(message: Message) -> Document:
+    """Файл из сообщения — в обработчиках с фильтром F.document он есть всегда."""
+    doc = message.document
+    if doc is None:
+        raise RuntimeError("сообщение без файла: обработчик без фильтра F.document")
+    return doc
+
+
+async def download_bytes(bot: Bot, file: str | Document) -> bytes:
+    """Скачать файл Telegram целиком (file_id или Document) — в память, до 20 МБ."""
+    buf = await bot.download(file)
+    if buf is None:                      # без destination aiogram всегда отдаёт BytesIO
+        raise RuntimeError("Telegram не отдал файл")
+    return buf.read()
 
 
 async def stale_message(event: ErrorEvent) -> None:

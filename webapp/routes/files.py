@@ -91,7 +91,7 @@ DL_TTL = 600
 def _dl_sig(file_id: int, exp: int) -> str:
     import hashlib
     import hmac
-    return hmac.new(deps.BOT_TOKEN.encode(), f"dl:{file_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.new(deps.bot_token().encode(), f"dl:{file_id}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
 
 
 def _download_name(f: dict, file_path: str = "") -> str:
@@ -318,7 +318,7 @@ _page_cache: dict[tuple[int, int], bytes] = {}
 def _pg_sig(file_id: int, page: int, exp: int) -> str:
     import hashlib
     import hmac
-    return hmac.new(deps.BOT_TOKEN.encode(), f"pg:{file_id}:{page}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.new(deps.bot_token().encode(), f"pg:{file_id}:{page}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
 
 
 @router.get("/api/files/{file_id}/page/{page}")

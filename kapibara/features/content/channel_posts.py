@@ -61,7 +61,7 @@ def title_of(html: str, slug: str) -> str:
 def load_posts(root: Path | None = None) -> list[dict]:
     """Все посты по порядку папок: [{"slug", "title", "html", "images"}]."""
     root = root or POSTS_DIR
-    posts = []
+    posts: list[dict] = []
     if not root.exists():
         return posts
     for d in sorted(p for p in root.iterdir() if p.is_dir()):
@@ -113,12 +113,12 @@ def cover_jpeg(post: dict) -> bytes:
     H, PAD, GAP, R = 1320, 80, 56, 34
     shots = [Image.open(p).convert("RGB") for p in post["images"]]
     scale = (H - 2 * PAD) / max(im.height for im in shots)
-    shots = [im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS) for im in shots]
+    shots = [im.resize((round(im.width * scale), round(im.height * scale)), Image.Resampling.LANCZOS) for im in shots]
     W = max(H, sum(im.width for im in shots) + GAP * (len(shots) - 1) + 2 * PAD)
     # градиент по диагонали: светлый фиолетовый → глубокий
     a, b = (142, 140, 242), (79, 70, 200)
     v = Image.linear_gradient("L")                       # 0 сверху → 255 снизу
-    grad = ImageChops.add(v.resize((W, H)), v.rotate(90).transpose(Image.FLIP_LEFT_RIGHT).resize((W, H)), scale=2)
+    grad = ImageChops.add(v.resize((W, H)), v.rotate(90).transpose(Image.Transpose.FLIP_LEFT_RIGHT).resize((W, H)), scale=2)
     bg = Image.composite(Image.new("RGB", (W, H), b), Image.new("RGB", (W, H), a), grad)
     x = (W - (sum(im.width for im in shots) + GAP * (len(shots) - 1))) // 2
     for im in shots:

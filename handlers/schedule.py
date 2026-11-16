@@ -16,6 +16,7 @@ from kapibara.features.schedule.mirea_api import (
 from database import add_lesson_note, delete_lesson_note, get_lesson_notes, get_or_create_calendar_token
 from kapibara.features.privacy.privacy import upsert_user  # до согласия — без имени (152-ФЗ)
 from kapibara.bot.keyboards import CANCEL_KB, MAIN_KB
+from kapibara.bot.tg import bot_of, data_of, msg, sender, text_of
 from kapibara.core.config import GROUP_NAME, WEBAPP_URL, is_starosta
 from kapibara.core.utils import esc, split_by_lines, today_msk
 
@@ -69,22 +70,22 @@ async def _edit_long(wait: Message, message: Message, text: str):
 async def _gid(message: Message) -> int | None:
     """Группа человека (этап 1): её расписание, а не своей группы бота."""
     from database import get_user_group
-    return await get_user_group(message.from_user.id)
+    return await get_user_group(sender(message).id)
 
 
 async def _note_spam(message: Message, date_str: str, text: str) -> str | None:
     """Заметку видит вся группа — антиспам как в приложении (ugc.note_spam)."""
     from kapibara.core import ratelimit
     from kapibara.features.social import ugc
-    if not ratelimit.allow("note", message.from_user.id):
+    if not ratelimit.allow("note", sender(message).id):
         return "Много заметок подряд — подожди пару минут"
-    return await ugc.note_spam(message.from_user.id, date_str, text, await _gid(message))
+    return await ugc.note_spam(sender(message).id, date_str, text, await _gid(message))
 
 
 @router.message(Command("schedule"))
 @router.message(F.text == "📅 Сегодня")
 async def cmd_today(message: Message):
-    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    await upsert_user(sender(message).id, sender(message).username or "", sender(message).full_name or "")
     wait = await message.answer("⏳ Загружаю...")
     text = await get_today_schedule(await _gid(message))
     text += await _notes_block(today_msk().isoformat(), await _gid(message))
@@ -142,7 +143,7 @@ async def cmd_calendar(message: Message):
             "(нужен WebApp бота). Как заработает, /calendar сразу выдаст ссылку."
         )
         return
-    token = await get_or_create_calendar_token(message.from_user.id)
+    token = await get_or_create_calendar_token(sender(message).id)
     https_url  = f"{WEBAPP_URL.rstrip('/')}/ics/{token}"
     webcal_url = https_url.replace("https://", "webcal://", 1).replace("http://", "webcal://", 1)
     await message.answer(
@@ -248,7 +249,7 @@ async def cmd_room(message: Message):
 
 @router.callback_query(F.data.regexp(r"^ss[gtr]:\d+$"))
 async def target_pick(callback: CallbackQuery):
-    prefix, raw_id = callback.data.split(":", 1)
+    prefix, raw_id = data_of(callback).split(":", 1)
     target_type, target_id = _CB_PREFIX_TARGET[prefix], int(raw_id)
     await callback.answer()
     info = await get_baseinfo(target_id, target_type)
@@ -256,9 +257,9 @@ async def target_pick(callback: CallbackQuery):
     text = await render_target_schedule(target_id, target_type, title)
     for i, chunk in enumerate(split_by_lines(text)):
         if i == 0:
-            await callback.message.edit_text(chunk, parse_mode="HTML")
+            await msg(callback).edit_text(chunk, parse_mode="HTML")
         else:
-            await callback.message.answer(chunk, parse_mode="HTML")
+            await msg(callback).answer(chunk, parse_mode="HTML")
 
 
 # ── Заметки на пару ─────────────────────────────────────────────────────────
@@ -295,7 +296,7 @@ def _parse_quick_note(text: str) -> tuple[str, str, str] | None:
 
 @router.message(Command("note"))
 async def cmd_note(message: Message, state: FSMContext):
-    await upsert_user(message.from_user.id, message.from_user.username or "", message.from_user.full_name or "")
+    await upsert_user(sender(message).id, sender(message).username or "", sender(message).full_name or "")
 
     quick = _parse_quick_note(message.text or "")
     if quick:
@@ -306,7 +307,7 @@ async def cmd_note(message: Message, state: FSMContext):
         if why := await _note_spam(message, date_str, note_text):
             await message.answer(f"✋ {why}.")
             return
-        await add_lesson_note(date_str, subject, note_text, message.from_user.id, await _gid(message))
+        await add_lesson_note(date_str, subject, note_text, sender(message).id, await _gid(message))
         await message.answer("✅ Заметка добавлена!", reply_markup=MAIN_KB)
         return
 
@@ -321,19 +322,19 @@ async def cmd_note(message: Message, state: FSMContext):
 
 @router.callback_query(NoteAdd.choose_day, F.data.startswith("note_day:"))
 async def note_choose_day(callback: CallbackQuery, state: FSMContext):
-    choice = callback.data.split(":", 1)[1]
-    await callback.message.delete()
+    choice = data_of(callback).split(":", 1)[1]
+    await msg(callback).delete()
 
     if choice == "cancel":
         await state.clear()
-        await callback.bot.send_message(callback.from_user.id, "Отменено.", reply_markup=MAIN_KB)
+        await bot_of(callback).send_message(callback.from_user.id, "Отменено.", reply_markup=MAIN_KB)
         await callback.answer()
         return
 
     day = today_msk() if choice == "today" else today_msk() + timedelta(days=1)
     await state.update_data(note_date=day.isoformat())
     await state.set_state(NoteAdd.waiting_text)
-    await callback.bot.send_message(
+    await bot_of(callback).send_message(
         callback.from_user.id,
         "✏️ Пришли текст заметки — её увидит <b>вся группа</b> под расписанием этого дня, "
         "это не личная запись. Можно с предметом через двоеточие:\n"
@@ -355,10 +356,10 @@ async def note_cancel(message: Message, state: FSMContext):
 @router.message(NoteAdd.waiting_text, F.text)
 async def note_save_text(message: Message, state: FSMContext):
     data = await state.get_data()
-    date_str = data.get("note_date")
+    date_str: str = data["note_date"]      # кладётся вместе с переходом в waiting_text
 
     subject = ""
-    note_text = message.text.strip()
+    note_text = text_of(message).strip()
     if ":" in note_text:
         maybe_subject, maybe_text = note_text.split(":", 1)
         if len(maybe_subject) <= 40 and maybe_text.strip():
@@ -371,7 +372,7 @@ async def note_save_text(message: Message, state: FSMContext):
         await state.clear()
         await message.answer(f"✋ {why}.", reply_markup=MAIN_KB)
         return
-    await add_lesson_note(date_str, subject, note_text, message.from_user.id, await _gid(message))
+    await add_lesson_note(date_str, subject, note_text, sender(message).id, await _gid(message))
     await state.clear()
     await message.answer("✅ Заметка добавлена!", reply_markup=MAIN_KB)
 
@@ -395,7 +396,7 @@ async def _upcoming_notes() -> list[dict]:
 
 @router.message(Command("delnote"))
 async def cmd_delnote(message: Message):
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         await message.answer("Удалять заметки может только староста.")
         return
     kb = _delnote_kb(await _upcoming_notes())
@@ -410,10 +411,10 @@ async def delnote_pick(callback: CallbackQuery):
     if not is_starosta(callback.from_user.id):
         await callback.answer("Только староста", show_alert=True)
         return
-    await delete_lesson_note(int(callback.data.split(":", 1)[1]))
+    await delete_lesson_note(int(data_of(callback).split(":", 1)[1]))
     await callback.answer("Удалено")
     kb = _delnote_kb(await _upcoming_notes())
     if kb:
-        await callback.message.edit_reply_markup(reply_markup=kb)
+        await msg(callback).edit_reply_markup(reply_markup=kb)
     else:
-        await callback.message.edit_text("✅ Заметок на сегодня и завтра больше нет.")
+        await msg(callback).edit_text("✅ Заметок на сегодня и завтра больше нет.")

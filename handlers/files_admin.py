@@ -17,6 +17,7 @@ from aiogram.types import (
 from database import add_file, get_files, delete_file
 from kapibara.core.config import STAROSTA_ID, is_starosta
 from kapibara.core.utils import esc, today_msk
+from kapibara.bot.tg import bot_of, document_of, download_bytes, msg, sender, text_of
 
 router = Router()
 
@@ -27,7 +28,7 @@ class RestoreDb(StatesGroup):
 
 @router.message(Command("delfile"))
 async def cmd_delfile(message: Message):
-    parts = message.text.split()
+    parts = text_of(message).split()
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Использование: /delfile ID")
         return
@@ -40,7 +41,7 @@ async def cmd_delfile(message: Message):
     # удалять может только староста — так решил владелец. Раньше мог и тот,
     # кто загрузил, и зам. STAROSTA_ID не задан — как у остальных
     # админ-команд, без ограничений.
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Удалять файлы может только староста — файл пропадёт у всей группы.")
         return
     await delete_file(fid)
@@ -50,7 +51,7 @@ async def cmd_delfile(message: Message):
 @router.message(Command("backup"))
 async def cmd_backup(message: Message):
     """Копия базы прямо сейчас (обычно приходит сама каждую ночь)."""
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.ops.backup import send_backup
@@ -76,7 +77,7 @@ async def cmd_tidyfiles(message: Message):
     """«ЛК3_бизнес.pdf» → «Лекция 3. Бизнес» по всем предметам, «Лекция 8» →
     «Лекция 8. Тема» из текста файла: сначала показать, что поменяется;
     «/tidyfiles undo» — вернуть как было."""
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from database import undo_file_renames
@@ -119,7 +120,7 @@ async def tidy_confirm(callback: CallbackQuery):
         await callback.answer("Только для старосты", show_alert=True)
         return
     if callback.data not in ("tidy:yes", "tidy:names"):
-        await callback.message.edit_reply_markup(reply_markup=None)
+        await msg(callback).edit_reply_markup(reply_markup=None)
         await callback.answer("Отменено")
         return
     from database import rename_files
@@ -127,8 +128,8 @@ async def tidy_confirm(callback: CallbackQuery):
     if callback.data == "tidy:names":
         changes = {fid: t for fid, t in changes.items() if fid not in from_text}
     n = await rename_files(changes)
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer(f"✅ Переименовал {n} файлов. Вернуть — <code>/tidyfiles undo</code>.",
+    await msg(callback).edit_reply_markup(reply_markup=None)
+    await msg(callback).answer(f"✅ Переименовал {n} файлов. Вернуть — <code>/tidyfiles undo</code>.",
                                   parse_mode="HTML")
     await callback.answer()
 
@@ -140,7 +141,7 @@ _restore_pending: dict[int, str] = {}
 
 @router.message(Command("restore"))
 async def cmd_restore(message: Message, state: FSMContext):
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await state.set_state(RestoreDb.waiting_file)
@@ -155,25 +156,25 @@ async def restore_file(message: Message, state: FSMContext):
     import os
     from kapibara.ops.backup import MAX_RESTORE_BYTES, RestoreError, inspect_backup
     await state.clear()
-    if not is_starosta(message.from_user.id):
+    if not is_starosta(sender(message).id):
         return
-    doc = message.document
+    doc = document_of(message)
     if doc.file_size and doc.file_size > MAX_RESTORE_BYTES:
         await message.answer("❌ Файл больше 20 МБ — бот не может его скачать (ограничение Telegram). "
                              "Такую копию можно положить на диск /data хостинга вручную.")
         return
-    buf = await message.bot.download(doc)
+    raw = await download_bytes(bot_of(message), doc)
     try:
         # распаковка и integrity_check — секунды; не в event loop, иначе бот и WebApp стоят
-        tmp, info = await asyncio.to_thread(inspect_backup, buf.read())
+        tmp, info = await asyncio.to_thread(inspect_backup, raw)
     except RestoreError as e:
         await message.answer(f"❌ Копия не подходит: {esc(str(e))}", parse_mode="HTML")
         return
-    old = _restore_pending.pop(message.from_user.id, None)
+    old = _restore_pending.pop(sender(message).id, None)
     if old:
         with contextlib.suppress(FileNotFoundError):
             os.remove(old)
-    _restore_pending[message.from_user.id] = tmp
+    _restore_pending[sender(message).id] = tmp
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="♻️ Да, восстановить", callback_data="restore:yes"),
         InlineKeyboardButton(text="Отмена", callback_data="restore:no"),
@@ -187,7 +188,7 @@ async def restore_file(message: Message, state: FSMContext):
 
 @router.message(RestoreDb.waiting_file, F.text)
 async def restore_wait_text(message: Message, state: FSMContext):
-    if message.text.strip().lower() in ("/cancel", "отмена"):
+    if text_of(message).strip().lower() in ("/cancel", "отмена"):
         await state.clear()
         await message.answer("Отменено — база не тронута.")
         return
@@ -204,7 +205,7 @@ async def restore_confirm(callback: CallbackQuery):
         return
     if callback.data != "restore:yes":
         os.remove(tmp)
-        await callback.message.edit_text("Отменено — база не тронута.")
+        await msg(callback).edit_text("Отменено — база не тронута.")
         await callback.answer()
         return
     await callback.answer("Восстанавливаю…")
@@ -216,23 +217,23 @@ async def restore_confirm(callback: CallbackQuery):
         local = await keep_local_copy()
         if not local:
             os.remove(tmp)
-            await callback.message.edit_text("⚠️ Не смог сохранить копию текущей базы ни в чат, ни на том — "
+            await msg(callback).edit_text("⚠️ Не смог сохранить копию текущей базы ни в чат, ни на том — "
                                              "восстанавливать не стал.")
             return
         note = f"Прежняя база сохранена на томе: <code>{esc(os.path.basename(local))}</code>."
     try:
         await apply_backup(tmp)
     except Exception as e:
-        await callback.message.edit_text(f"❌ Не получилось: {esc(str(e))}. {note}", parse_mode="HTML")
+        await msg(callback).edit_text(f"❌ Не получилось: {esc(str(e))}. {note}", parse_mode="HTML")
         return
-    await callback.message.edit_text(f"✅ База восстановлена из копии. {note}", parse_mode="HTML")
+    await msg(callback).edit_text(f"✅ База восстановлена из копии. {note}", parse_mode="HTML")
 
 
 # ── Синхронизация файлов из локальной базы ────────────────────────────────────
 
 @router.message(Command("syncfiles"))
 async def cmd_syncfiles(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer(
@@ -249,9 +250,9 @@ async def cmd_syncfiles(message: Message):
 # вызывался. Теперь этот хендлер реагирует только вне активных диалогов.
 @router.message(F.document, StateFilter(None))
 async def handle_sync_json(message: Message):
-    if STAROSTA_ID and not is_starosta(message.from_user.id):
+    if STAROSTA_ID and not is_starosta(sender(message).id):
         return
-    fname = (message.document.file_name or "").lower()
+    fname = (document_of(message).file_name or "").lower()
     if not fname.endswith('.json'):
         return
 
@@ -266,10 +267,8 @@ async def handle_sync_json(message: Message):
         from database import add_deadline
         wait = await message.answer("⏳ Импортирую дедлайны...")
         try:
-            bot  = message.bot
-            file = await bot.get_file(message.document.file_id)
-            data = await bot.download_file(file.file_path)
-            deadlines = json.loads(data.read().decode('utf-8'))
+            raw  = await download_bytes(bot_of(message), document_of(message).file_id)
+            deadlines = json.loads(raw.decode('utf-8'))
 
             # Поддержка формата {"assignments": [...]} и просто [...]
             assignments = deadlines.get('assignments', []) if isinstance(deadlines, dict) else deadlines
@@ -311,10 +310,9 @@ async def handle_sync_json(message: Message):
     # ── Импорт файлов ─────────────────────────────────────────────────────────
     wait = await message.answer("⏳ Синхронизирую файлы...")
     try:
-        bot  = message.bot
-        file = await bot.get_file(message.document.file_id)
-        data = await bot.download_file(file.file_path)
-        files = json.loads(data.read().decode('utf-8'))
+        bot   = bot_of(message)
+        raw   = await download_bytes(bot, document_of(message).file_id)
+        files = json.loads(raw.decode('utf-8'))
 
         # Загружаем все существующие file_id одним запросом — правильная проверка дублей
         all_existing = await get_files()

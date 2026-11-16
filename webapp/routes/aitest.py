@@ -20,7 +20,7 @@ DAYS = 7
 
 
 def _sig(exp: int, kind: str) -> str:
-    return hmac.new(deps.BOT_TOKEN.encode(), f"aitest:{kind}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.new(deps.bot_token().encode(), f"aitest:{kind}:{exp}".encode(), hashlib.sha256).hexdigest()[:32]
 
 
 def link(kind: str = "vote") -> str:

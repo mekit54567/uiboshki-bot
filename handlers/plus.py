@@ -12,6 +12,7 @@ from aiogram.types import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMa
                            PreCheckoutQuery)
 from aiogram.exceptions import TelegramAPIError
 from kapibara.core.errors import NETWORK
+from kapibara.bot.tg import data_of, msg, sender
 
 router = Router()
 
@@ -105,11 +106,11 @@ async def admin_cmd(uid: int, args: list[str]) -> str | None:
 @router.message(Command("plus"))
 async def cmd_plus(message: Message):
     args = (message.text or "").split()[1:]
-    done = await admin_cmd(message.from_user.id, args)
+    done = await admin_cmd(sender(message).id, args)
     if done is not None:
         await message.answer(done, parse_mode="HTML")
         return
-    text, kb = await plus_text(message.from_user.id)
+    text, kb = await plus_text(sender(message).id)
     await message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
@@ -165,19 +166,19 @@ async def claim_donation(message: Message, uid: int, claim: str):
 
 @router.message(Command("donate"))
 async def cmd_donate(message: Message):
-    await send_donate(message, message.from_user.id)
+    await send_donate(message, sender(message).id)
 
 
 @router.message(Command("roadmap"))
 async def cmd_roadmap(message: Message):
     """Роадмап — тем, кто поддержал проект (roadmap.py), остальным — как его открыть."""
     from kapibara.features.content import roadmap
-    if await roadmap.can_see(message.from_user.id):
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
-            text="🗺 Открыть роадмап", url=roadmap.page_link(message.from_user.id))]])
-        await message.answer(roadmap.text(), parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+    if await roadmap.can_see(sender(message).id):
+        link_kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
+            text="🗺 Открыть роадмап", url=roadmap.page_link(sender(message).id))]])
+        await message.answer(roadmap.text(), parse_mode="HTML", reply_markup=link_kb, disable_web_page_preview=True)
         return
-    text, kb = donate_text(message.from_user.id)
+    text, kb = donate_text(sender(message).id)
     await message.answer("🗺 Роадмап — что я делаю сейчас и что дальше — открывается тем, кто поддержал "
                          "проект любой суммой. Это спасибо, а не покупка.\n\n" + text,
                          parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
@@ -186,7 +187,7 @@ async def cmd_roadmap(message: Message):
 @router.callback_query(F.data == "plus:donate")
 async def donate_button(callback: CallbackQuery):
     await callback.answer()
-    await send_donate(callback.message, callback.from_user.id)
+    await send_donate(msg(callback), callback.from_user.id)
 
 
 @router.message(Command("grant"))
@@ -195,12 +196,12 @@ async def cmd_grant(message: Message):
     Никита (config.is_starosta), старостам групп и замам — нет."""
     from kapibara.core import config
     from kapibara.features.billing import grants as plus_grant
-    if not config.is_starosta(message.from_user.id):
+    if not config.is_starosta(sender(message).id):
         await message.answer("Эта команда только для владельца бота.")
         return
     parts = (message.text or "").split(None, 1)          # приписка — с переносами строк, как написана
     raw = parts[1] if len(parts) > 1 else ""
-    await message.answer(await plus_grant.command(message.bot, message.from_user.id, raw), parse_mode="HTML")
+    await message.answer(await plus_grant.command(message.bot, sender(message).id, raw), parse_mode="HTML")
 
 
 # ── Рассылка о запуске «Капибары+» (только по кнопке старосты) ─────────────
@@ -243,10 +244,10 @@ async def cmd_plusnews(message: Message):
     """Староста: показать рассылку о запуске (как её увидит он сам) и кнопку «Разослать»."""
     from kapibara.core import config
     from database import get_setting
-    if not config.is_starosta(message.from_user.id):
+    if not config.is_starosta(sender(message).id):
         return
     done = await get_setting("plus:announced")
-    await message.answer(await launch_text(message.from_user.id), parse_mode="HTML", reply_markup=_launch_kb())
+    await message.answer(await launch_text(sender(message).id), parse_mode="HTML", reply_markup=_launch_kb())
     await message.answer(
         "👆 Так увидят все: своей группе — с подарком, остальным — без. "
         + (f"Уже рассылал {done}. " if done else "") + "Разослать?",
@@ -267,7 +268,7 @@ async def plusnews_go(callback: CallbackQuery):
         await callback.answer()
         return
     await callback.answer("Рассылаю…")
-    await callback.message.edit_reply_markup(reply_markup=None)
+    await msg(callback).edit_reply_markup(reply_markup=None)
     await set_setting("plus:announced", datetime.now(TZ).strftime("%d.%m %H:%M"))
     sent = failed = 0
     for uid in await get_all_subscribed_users():
@@ -278,14 +279,14 @@ async def plusnews_go(callback: CallbackQuery):
         except (TelegramAPIError, *NETWORK):   # бот заблокирован, пуш не ушёл — считаем и дальше
             failed += 1
         await scheduler.pace()
-    await callback.message.answer(f"✅ Разослал: {sent}, не дошло: {failed}.")
+    await msg(callback).answer(f"✅ Разослал: {sent}, не дошло: {failed}.")
 
 
 @router.callback_query(F.data == "plus:show")
 async def plus_show(callback: CallbackQuery):
     await callback.answer()
     text, kb = await plus_text(callback.from_user.id)
-    await callback.message.answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
+    await msg(callback).answer(text, parse_mode="HTML", reply_markup=kb, disable_web_page_preview=True)
 
 
 async def share_kb(uid: int) -> InlineKeyboardMarkup:
@@ -312,13 +313,13 @@ async def send_invite(message: Message, uid: int):
 
 @router.message(Command("invite"))
 async def cmd_invite(message: Message):
-    await send_invite(message, message.from_user.id)
+    await send_invite(message, sender(message).id)
 
 
 @router.callback_query(F.data == "plus:invite")
 async def invite_button(callback: CallbackQuery):
     await callback.answer()
-    await send_invite(callback.message, callback.from_user.id)
+    await send_invite(msg(callback), callback.from_user.id)
 
 
 # ── Оплата звёздами (Stars) ──────────────────────────────────────────────────
@@ -327,11 +328,11 @@ async def invite_button(callback: CallbackQuery):
 async def cb_stars(cb: CallbackQuery):
     from kapibara.features.billing import billing
     try:
-        inv = await billing.stars_invoice(cb.from_user.id, cb.data.split(":", 2)[2])
+        inv = await billing.stars_invoice(cb.from_user.id, data_of(cb).split(":", 2)[2])
     except billing.PayError as e:
         await cb.answer(str(e), show_alert=True)
         return
-    await cb.message.answer_invoice(title=inv["title"], description=inv["description"], payload=inv["payload"],
+    await msg(cb).answer_invoice(title=inv["title"], description=inv["description"], payload=inv["payload"],
                                     currency="XTR", prices=[LabeledPrice(label=inv["title"], amount=inv["stars"])])
     await cb.answer()
 
@@ -347,6 +348,6 @@ async def stars_pre_checkout(q: PreCheckoutQuery):
 async def stars_done(message: Message):
     from kapibara.features.billing import billing
     sp = message.successful_payment
-    if sp.currency != "XTR":
+    if sp is None or sp.currency != "XTR":          # None не бывает: фильтр F.successful_payment
         return
-    await billing.stars_paid(sp.invoice_payload, message.from_user.id, sp.telegram_payment_charge_id, message.bot)
+    await billing.stars_paid(sp.invoice_payload, sender(message).id, sp.telegram_payment_charge_id, message.bot)

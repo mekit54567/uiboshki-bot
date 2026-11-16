@@ -112,7 +112,7 @@ async def send_backup(bot, chat_id: int, silent: bool = True) -> bool:
         # своё российское хранилище: база не уходит за границу, старосте — только отметка
         now = datetime.now(TZ)
         try:
-            codes = [await s3_store.put(key, data) for key in s3_store.backup_keys(now)]
+            codes: list[int | str] = [await s3_store.put(key, data) for key in s3_store.backup_keys(now)]
         except (*NETWORK, OSError) as e:      # хранилище не ответило — ниже уйдёт в Telegram
             codes = [f"{type(e).__name__}"]
         if all(c == 200 for c in codes):
