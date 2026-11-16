@@ -85,6 +85,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _q = TextEditingController();
+  final _focus = FocusNode();
   Timer? _debounce;
   int _seq = 0;
   int _type = 0; // 0 — все типы
@@ -104,6 +105,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _debounce?.cancel();
     _q.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -165,6 +167,37 @@ class _SearchScreenState extends State<SearchScreen> {
     _loadSaved(); // там могли закрепить или открепить
   }
 
+  /// «Сравнить с моей» у закреплённой группы: её недели рядом со своими.
+  Future<void> _compare(Target t) async {
+    tick();
+    try {
+      final d = Map<String, dynamic>.from(await widget.api.get('/target/${t.type}/${t.id}'));
+      if (!mounted) return;
+      final weeks = d['weeks'] as List? ?? const [];
+      if (weeks.isEmpty) {
+        toastOn(Overlay.of(context, rootOverlay: true), 'У этой группы пока нет расписания', kind: ToastKind.info);
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CompareScreen(api: widget.api, title: t.title, weeks: weeks),
+        ),
+      );
+    } on ApiError catch (e) {
+      if (mounted) toastOn(Overlay.of(context, rootOverlay: true), e.message, kind: ToastKind.error);
+    } catch (e) {
+      if (mounted) toastOn(Overlay.of(context, rootOverlay: true), errorText(e), kind: ToastKind.error);
+    }
+  }
+
+  /// «Когда мы оба свободны»: ищем группу друга — дальше «Сравнить» на её экране.
+  void _pickFriend() {
+    tick();
+    setState(() => _type = 1);
+    _focus.requestFocus();
+    _search();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
@@ -178,18 +211,19 @@ class _SearchScreenState extends State<SearchScreen> {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             children: [
               const BackRow(),
-              const ScreenTitle(title: 'Поиск'),
+              ScreenTitle(title: s.fresh ? 'Найти расписание' : 'Поиск'),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Space.l),
                 child: TextField(
                   controller: _q,
+                  focusNode: _focus,
                   autofocus: true, // сразу с курсором в поле (2.6)
                   onChanged: _changed,
                   onSubmitted: (_) => _search(),
                   textInputAction: TextInputAction.search,
                   style: s.body(17, weight: FontWeight.w600),
                   decoration: InputDecoration(
-                    hintText: 'Фамилия, группа или аудитория',
+                    hintText: s.fresh ? 'Группа, преподаватель или аудитория' : 'Фамилия, группа или аудитория',
                     hintStyle: s.body(17, color: p.muted),
                     prefixIcon: Icon(Icons.search_rounded, color: p.muted),
                     suffixIcon: _q.text.isEmpty
@@ -280,25 +314,62 @@ class _SearchScreenState extends State<SearchScreen> {
 
   List<Widget> _saved(BuildContext context) {
     final recents = _recents.where((t) => !_pins.any(t.same)).toList();
+    final fresh = AppStyle.of(context).fresh;
+    final canCompare = fresh && widget.api is! GuestApi; // без входа своей недели нет
+    final both = canCompare
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
+            child: Tile(
+              key: const ValueKey('search:both'),
+              onTap: _pickFriend,
+              padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Когда мы оба свободны', style: AppStyle.of(context).body(16, weight: FontWeight.w600)),
+                        Text(
+                          'Выбери группу друга, покажу общие окна на неделе',
+                          style: AppStyle.of(context).body(13, color: AppStyle.of(context).p.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: AppStyle.of(context).p.muted),
+                ],
+              ),
+            ),
+          )
+        : null;
     if (_pins.isEmpty && recents.isEmpty) {
-      return const [
-        Notice(
+      return [
+        const Notice(
           title: 'Чьё расписание ищем?',
           text:
               'Начни вводить фамилию преподавателя, номер группы или аудитории — например «Морозов» или «УИБО-03». '
               'Нужное можно закрепить.',
         ),
+        ?both,
       ];
     }
     return [
       if (_pins.isNotEmpty) ...[
         const Section('Закреплённые'),
-        for (final t in _pins) _TargetRow(target: t, pinned: true, onTap: () => _open(t)),
+        for (final t in _pins)
+          _TargetRow(
+            target: t,
+            pinned: true,
+            onTap: () => _open(t),
+            onCompare: canCompare && t.type == 1 ? () => _compare(t) : null,
+          ),
       ],
       if (recents.isNotEmpty) ...[
         const Section('Недавние'),
         for (final t in recents) _TargetRow(target: t, onTap: () => _open(t)),
       ],
+      ?both,
     ];
   }
 }
@@ -344,7 +415,10 @@ class _TargetRow extends StatelessWidget {
   final Target target;
   final bool pinned;
   final VoidCallback onTap;
-  const _TargetRow({required this.target, required this.onTap, this.pinned = false});
+
+  /// Новый дизайн: «Сравнить с моей» у закреплённой группы вместо стрелки.
+  final VoidCallback? onCompare;
+  const _TargetRow({required this.target, required this.onTap, this.pinned = false, this.onCompare});
 
   @override
   Widget build(BuildContext context) {
@@ -369,8 +443,25 @@ class _TargetRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (pinned) Icon(Icons.push_pin_rounded, size: 16, color: p.muted),
-            Icon(Icons.chevron_right_rounded, color: p.muted),
+            if (onCompare != null)
+              TextButton(
+                key: ValueKey('search:cmp:${target.id}'),
+                style: TextButton.styleFrom(
+                  foregroundColor: p.accent,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.s),
+                  minimumSize: const Size(0, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: onCompare,
+                child: Text(
+                  'Сравнить с моей',
+                  style: s.body(13, weight: FontWeight.w700, color: p.accent),
+                ),
+              )
+            else ...[
+              if (pinned) Icon(Icons.push_pin_rounded, size: 16, color: p.muted),
+              Icon(Icons.chevron_right_rounded, color: p.muted),
+            ],
           ],
         ),
       ),
@@ -480,7 +571,10 @@ class _TargetScreenState extends State<TargetScreen> {
                 children: [
                   const Expanded(child: BackRow()),
                   // своя неделя рядом с этой группой (5.100.2)
-                  if (_data != null && widget.type == 1 && _weeks.isNotEmpty && widget.api is! GuestApi) // без входа своей недели нет
+                  if (_data != null &&
+                      widget.type == 1 &&
+                      _weeks.isNotEmpty &&
+                      widget.api is! GuestApi) // без входа своей недели нет
                     TextButton.icon(
                       key: const Key('search:compare'),
                       onPressed: () {
