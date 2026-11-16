@@ -506,6 +506,8 @@ window.openReportMenu = openReportMenu;
 Screens.deadlines = {
   mount(body, screen) {
     let data = null, error = null, showDone = false, rows = {};
+    // новый дизайн (макет Д1): вид «по предметам» (помним) и полка «активные / просрочено / готово»
+    let bySubject = Prefs.get("uib_due_view") === "subject", shelf = 0;
 
     const load = async (fromCache = false) => {
       const j = fromCache ? Api.cached("/deadlines?include_done=true") : await Api.get("/deadlines?include_done=true");
@@ -556,6 +558,51 @@ Screens.deadlines = {
         </div></div></div>`;
     };
 
+    // новый дизайн: горящее — срок словами, отсчёт акцентом, «Сдать в СДО» и «Отметить»
+    const freshHot = (d, at) => {
+      rows[d.id] = d;
+      const left = d.due - at, h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
+      const when = `${dlDays(at, d.due) === 0 ? "сегодня" : "завтра"} ${dlTime(d, true)}`;
+      const name = dlSplit(d.subject);
+      const unit = (u) => `<span class="bd b6 mut dl-unit" style="--sz:15px">${u}</span>`;
+      const big = (v) => `<span class="num" style="--sz:44px;color:var(--accent)">${v}</span>`;
+      return `<div class="hx"><div class="tile df-hot" data-act="open" data-id="${d.id}" role="button" tabindex="0">
+        <div class="bd b7" style="--sz:13px;color:var(--accent)">${esc(when)}</div>
+        <div class="nm" style="--sz:19px;margin-top:4px">${esc(name.task)}</div>
+        ${name.course ? `<div style="margin-top:4px">${dlSubjectLine(name.course, d.canSubmit ? "задание из СДО" : "", 14)}</div>` : ""}
+        ${dlHasChips(d.x, !d.done) ? `<div style="margin-top:var(--s)">${dlChips(d.x)}</div>` : ""}
+        <div class="dl-count" style="margin-top:var(--s)">${h > 0 ? big(h) + unit("ч") : ""}${big(h > 0 ? String(m).padStart(2, "0") : m)}${unit("мин")}</div>
+        <div class="row" style="gap:var(--s);margin-top:var(--m)">
+          <button class="df-btn grow" data-act="${d.canSubmit ? "submit" : "doneHot"}" data-id="${d.id}">${d.canSubmit ? "Сдать в СДО" : "Отметить сданным"}</button>
+          ${d.canSubmit ? `<button class="df-btn sec" data-act="doneHot" data-id="${d.id}">Отметить</button>` : ""}
+        </div></div></div>`;
+    };
+    // новый дизайн: карточка предмета — итог справа, статус у каждой работы
+    const subjectCard = (course, list, at) => {
+      const burn = (d) => d.due - at < 864e5;
+      const open = list.filter((d) => !d.done && d.due > at).sort((a, b) => a.due - b.due);
+      const late = list.filter((d) => !d.done && !(d.due > at)).sort((a, b) => b.due - a.due);
+      const done = list.filter((d) => d.done).length, today = open.filter(burn).length;
+      const sum = today ? [`${today} сегодня`, "var(--accent)", 1]
+        : late.length ? [`${late.length} ${plural(late.length, "просрочена", "просрочены", "просрочено")}`, "var(--danger)", 1]
+        : open.length ? [`${open.length} впереди`, "var(--muted)", 0] : ["всё сдано", "var(--ok)", 1];
+      const day = (d) => { const m = msk(d.due); return `${WD_SHORT[m.wd].toLowerCase()} ${m.d} ${MONTHS[m.m - 1]}`; };
+      const line = (d, sub, button = false) => {
+        rows[d.id] = d;
+        return `<div class="df-row" data-act="open" data-id="${d.id}" role="button" tabindex="0">
+          <span class="grow"><span class="bd" style="--sz:15px;display:block">${esc(dlSplit(d.subject).task)}</span><span class="bd mut" style="--sz:13px">${esc(sub)}</span></span>
+          ${button ? `<button class="df-btn small" data-act="submit" data-id="${d.id}">Сдать</button>` : icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</div>`;
+      };
+      return `<div class="hx" style="padding-bottom:var(--m)"><div class="tile p0 df-subj">
+        <div class="row df-head"><i class="cm-dot" style="width:9px;height:9px;background:${course ? ink(course) : "var(--muted)"}"></i>
+          <span class="bd b7 grow" style="--sz:16px">${esc(course || "Без предмета")}</span>
+          <span class="bd${sum[2] ? " b7" : ""}" style="--sz:13px;color:${sum[1]};flex:none">${sum[0]}</span></div>
+        ${open.map((d) => burn(d) ? line(d, `${dlDays(at, d.due) === 0 ? "" : "завтра "}${dlTime(d, true)} · ещё не сдано`, d.canSubmit)
+          : line(d, `${day(d)} · ${d.dueTime ? `до ${d.dueTime}` : "время не указано"}`)).join("")}
+        ${late.map((d) => { const m = msk(d.due); return line(d, `срок был ${m.d} ${MONTHS[m.m - 1]}`); }).join("")}
+        ${done ? `<div class="bd b6 df-done" style="--sz:13px">сдано · ${done}</div>` : ""}</div></div>`;
+    };
+
     const draw = () => {
       if (!data) {
         body.innerHTML = error ? '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(error), { pose: "sad", retry: "retry" }) : spinner();
@@ -576,6 +623,54 @@ Screens.deadlines = {
         weeks.get(k).push(d);
       }
       let html = screenTitle("Сдать", { trailing: `<button class="dl-fab" data-act="add" aria-label="Свой срок">${icon("add")}</button>` });
+      if (Theme.fresh) {
+        html += `<div class="dl-segwrap"><div class="dl-seg">
+          <button class="${bySubject ? "" : "on"}" data-act="view" data-k="0" aria-pressed="${!bySubject}">По срокам</button>
+          <button class="${bySubject ? "on" : ""}" data-act="view" data-k="1" aria-pressed="${bySubject}">По предметам</button></div></div>`;
+        const empty = notice("Ближайших сроков нет",
+          data.sdo && data.sdo.checkedAt ? dlSdoChecked(data.sdo.checkedAt, t) : "Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.", { pose: "joy" });
+        if (!bySubject) {
+          html += `<div class="df-shelves">${[`Активные · ${open.length}`, `Просрочено · ${late.length}`, `Готово · ${done.length}`].map((l, i) =>
+            `<button class="df-chip${shelf === i ? " on" : ""}" data-act="shelf" data-k="${i}" aria-pressed="${shelf === i}">${l}</button>`).join("")}</div>`;
+          if (shelf === 0) {
+            if (sdoDown && open.length) {
+              html += `<div class="dl-sdowrap"><div class="tile dl-sdo">${capy("sad", 44, "var(--muted)")}
+                <div class="grow"><div class="bd b6" style="--sz:15px">СДО не ответил</div>
+                <div class="bd mut" style="--sz:13px;margin-top:2px">${esc(dlSdoShown(sdo.lastOk, t))}</div>
+                <button class="dl-retry" data-act="retrySdo">Проверить СДО</button></div></div></div>`;
+            }
+            if (burning) html += freshHot(burning, t);
+            if (!open.length && sdoDown) html += notice("СДО не ответил", dlSdoShown(sdo.lastOk, t), { pose: "sad", retry: "retrySdo", retryLabel: "Проверить СДО" });
+            else if (!open.length && late.length) html += notice("Впереди сроков нет",
+              `Но на полке «Просрочено» работ: ${late.length}. Сдал — отметь, не нужна — убери.`, { pose: "day" });
+            else if (!open.length) html += empty;
+            let i = 0;
+            for (const [k, list] of weeks) html += section(i++ === 0 && burning ? "Дальше" : dlWeekLabel(k, t)) + card(list, t);
+          } else if (shelf === 1) {
+            html += late.length ? card(late, t, true) : notice("Просроченного нет", "Работы с прошедшим сроком появятся здесь.", { pose: "joy" });
+          } else {
+            html += done.length ? card(done, t) : notice("Пока ничего", "Сданное появится здесь — свайп вправо по сроку или «Отметить».");
+          }
+        } else {
+          const groups = new Map();
+          for (const d of items) { const k = dlSplit(d.subject).course; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(d); }
+          const isOpen = (d) => !d.done && d.due > t;
+          const rank = (g) => g.some(isOpen) ? 0 : g.some((d) => !d.done) ? 1 : 2;
+          const first = (g) => Math.min(Infinity, ...g.filter(isOpen).map((d) => +d.due));
+          const keys = [...groups.keys()].sort((a, b) => rank(groups.get(a)) - rank(groups.get(b))
+            || (first(groups.get(a)) - first(groups.get(b)) || 0) || a.localeCompare(b));
+          html += keys.length ? keys.map((k) => subjectCard(k, groups.get(k), t)).join("") : empty;
+        }
+        html += `<div class="hx" style="padding-top:var(--l)"><div class="tile p0">
+          <button class="df-link" data-act="hw">${icon("assignment", "o", "font-size:22px;color:var(--muted)")}
+            <span class="grow"><span class="bd b6" style="--sz:15px;display:block">ДЗ группы</span><span class="bd mut" style="--sz:13px">что задали на парах</span></span>
+            ${icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button><div class="divider"></div>
+          <button class="df-link" data-act="notes">${icon("push_pin", "o", "font-size:22px;color:var(--muted)")}
+            <span class="grow"><span class="bd b6" style="--sz:15px;display:block">Заметки</span><span class="bd mut" style="--sz:13px">видит вся группа</span></span>
+            ${icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button></div></div>`;
+        body.innerHTML = html + '<div style="height:120px"></div>';
+        return;
+      }
       html += `<div class="dl-entries"><button class="tile dl-entry" data-act="hw">${icon("assignment", "o", "font-size:20px;color:var(--accent)")}
           <span class="bd b6 grow ell" style="--sz:15px">ДЗ группы</span>${icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button>
         <button class="tile dl-entry" data-act="notes">${icon("push_pin", "o", "font-size:20px;color:var(--accent)")}
@@ -659,6 +754,12 @@ Screens.deadlines = {
       },
       hw: () => { tick(); window.openHomework ? openHomework() : toast("Скоро"); },
       notes: () => { tick(); window.openNotes ? openNotes() : toast("Скоро"); },
+      view(b) {
+        const v = b.dataset.k === "1";
+        if (v === bySubject) return;
+        tick(); bySubject = v; Prefs.set("uib_due_view", v ? "subject" : "time"); draw();
+      },
+      shelf(b) { const v = +b.dataset.k; if (v === shelf) return; tick(); shelf = v; draw(); },
       seg(b) {
         const v = b.dataset.k === "1";
         if (v === showDone) return;
