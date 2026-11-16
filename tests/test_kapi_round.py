@@ -146,7 +146,11 @@ async def test_chat_abbrev_picks_subject_and_lecture_of_day(db, monkeypatch):
     async def no_context(user_id):
         return ""
 
+    async def no_network(user_id):     # календарь группы — без сети: 16.11 зеркало МИРЭА лежало, тест падал
+        return ""
+
     today = datetime.now(TZ).date()
+    monkeypatch.setattr("kapibara.features.schedule.parser.raw_for_user", no_network)
     monkeypatch.setattr("kapibara.features.ai.solver.chat_with_reasoning", fake_chat)
     monkeypatch.setattr("kapibara.features.groups.context.build_group_context", no_context)
     monkeypatch.setattr(attendance, "lecture_dates", lambda raw, s, d=None: [date(2026, 9, 1), today] if s == subj else [])
