@@ -382,6 +382,8 @@ async def _note_sync(result: dict):
     elif result.get("expired"):
         await health.note("sdo_sync", False, "кука протухла")
         await health.note("sdo_cookie", False, "протухла — обнови SDO_SESSION_COOKIE")
+        from kapibara.features.sdo import accounts as sdo_accounts
+        await sdo_accounts.note_shared(False)
     else:
         await health.note("sdo_sync", True, f"новых {result.get('added', 0)}, изменено {result.get('updated', 0)}")
 
@@ -403,6 +405,9 @@ async def sdo_keepalive(bot: Bot | None = None):
     ok = await keepalive(peek=peek if bot else None)
     await health.note("sdo_cookie", bool(ok), "" if ok else
                       "СДО не ответил — про куку не знаю" if ok is None else "СДО не пустил — кука протухла")
+    if ok is not None:                                  # экран «Вход в СДО» старосты — честный статус
+        from kapibara.features.sdo import accounts as sdo_accounts
+        await sdo_accounts.note_shared(bool(ok))
     from kapibara.features.sdo import parser as sdo_parser
     if ok and sdo_parser.IDLE_TIMEOUT:
         from database import set_setting

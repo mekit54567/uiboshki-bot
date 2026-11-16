@@ -103,6 +103,7 @@ function openSdoConnect() {
         else {
           const state = st.state || "off", shared = st.shared === true;
           html += state === "ok" ? statusCard("var(--ok)", "Подключено, работает", shared ? "Вход старосты из настроек бота" : stCheckedAgo(st.checked_at))
+            : state === "expired" && shared ? statusCard("var(--danger)", "Вход старосты устарел", "Общая кука из настроек бота протухла. Подключи свой вход — он от неё не зависит")
             : state === "expired" ? statusCard("var(--danger)", "Вход устарел", "СДО разлогинил сессию — подключи заново")
             : statusCard("var(--muted)", "Не подключено", "Сроки группы видны и без этого");
           if (state === "ok") {
@@ -116,12 +117,15 @@ function openSdoConnect() {
             html += errLine();
             if (!shared) html += `<div style="padding:var(--xl) var(--l) 0"><button class="st-tbtn" data-act="disconnect"${busy ? " disabled" : ""} style="color:var(--danger)">
               ${icon("link_off", "", "font-size:24px")}<span class="bd b6" style="--sz:15px">Отключить СДО</span></button></div>`;
-          } else {
+          }
+          // общий вход старосты — свой всё равно можно подключить (16.11: протух общий, а кнопки не было)
+          if (state !== "ok" || shared) {
             if (state === "off") {
               html += section("Что даст вход") + `<div class="hx"><div class="tile">${ST_PERKS.map(([ic, v, t]) =>
                 `<div class="row" style="padding:6px 0">${icon(ic, v, "font-size:20px;color:var(--accent)")}<div class="grow bd" style="--sz:14px">${esc(t)}</div></div>`).join("")}</div></div>`;
             }
-            html += section("Как подключить") + `<div class="hx"><div class="tile">${ST_STEPS.map((s, i) =>
+            html += section(shared ? "Свой вход" : "Как подключить") +
+              (shared ? `<div class="bd mut" style="--sz:14px;padding:0 var(--xl) var(--m)">Свой вход не зависит от общей куки.</div>` : "") + `<div class="hx"><div class="tile">${ST_STEPS.map((s, i) =>
               `<div class="row" style="align-items:flex-start;${i ? "margin-top:var(--m)" : ""}"><i class="st-step">${i + 1}</i>
                 <div class="grow bd" style="--sz:14px">${esc(s[0])}<b>${esc(s[1])}</b>${esc(s[2])}</div></div>`).join("")}</div></div>`;
             if (guide) html += `<div class="hx"><button class="st-tbtn acc" data-act="guide">${icon("photo_library", "o", "font-size:24px")}<span class="bd b6" style="--sz:15px">Гайд со скринами — в канале</span></button></div>`;
@@ -133,7 +137,7 @@ function openSdoConnect() {
               <div style="padding:var(--l) var(--l) 0"><button class="btn primary st-btn50" data-act="connect"${busy || !agree ? " disabled" : ""}>${busy ? "Проверяю…" : "Проверить и сохранить"}</button></div>
               <div class="row" style="align-items:flex-start;gap:var(--s);padding:var(--m) var(--xl) 0">${icon("shield", "o", "font-size:16px;color:var(--muted);margin-top:1px")}
                 <div class="grow bd mut" style="--sz:13px">Это как «оставаться в системе». Значение сразу шифруется, в переписке и логах не остаётся. Отключить — одной кнопкой в любой момент.</div></div>`;
-            if (state === "expired") html += `<div style="padding:var(--l) var(--l) 0"><button class="st-tbtn" style="width:100%;justify-content:center;color:var(--danger)" data-act="disconnect"${busy ? " disabled" : ""}>
+            if (state === "expired" && !shared) html += `<div style="padding:var(--l) var(--l) 0"><button class="st-tbtn" style="width:100%;justify-content:center;color:var(--danger)" data-act="disconnect"${busy ? " disabled" : ""}>
               <span class="bd b6" style="--sz:15px">Убрать вход</span></button></div>`;
           }
         }
