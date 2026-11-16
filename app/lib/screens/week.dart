@@ -675,7 +675,7 @@ class ViewToggle extends StatelessWidget {
               duration: const Duration(milliseconds: 240),
               curve: Curves.easeOutCubic,
               height: 30,
-              padding: const EdgeInsets.symmetric(horizontal: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 7),
               decoration: BoxDecoration(
                 color: on ? p.text : p.text.withValues(alpha: 0),
                 borderRadius: BorderRadius.circular(Radii.pill),
