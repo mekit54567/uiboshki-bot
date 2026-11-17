@@ -92,8 +92,12 @@ void main() {
     await settle(t);
     expect(find.byKey(const ValueKey('study:fresh')), findsOneWidget);
     expect(find.textContaining('баллы из СДО · обновлено '), findsOneWidget);
-    expect(find.byKey(const Key('study:points')), findsOneWidget);
-    expect(find.text('39'), findsOneWidget); // средний балл — одной цифрой
+    // среднего балла БРС нет (Никита 17.11) — вместо него карточка автоматов
+    expect(find.text('в среднем по БРС'), findsNothing);
+    expect(find.byKey(const Key('study:autos')), findsOneWidget);
+    // в записи стенда на «3» или зачёт хватает в трёх предметах, но работ зачтено 1 из 6 — автомата нет
+    expect(find.text('Автоматов пока нет'), findsOneWidget);
+    expect(find.text('Баллов хватает в 3\u00A0предметах, осталось зачесть работы'), findsOneWidget);
     expect(find.text('Kapi ИИ'), findsOneWidget);
     expect(find.text('Предметы · 6'), findsOneWidget);
     expect(find.textContaining('до «4» ещё 12'), findsOneWidget);
@@ -105,12 +109,75 @@ void main() {
     expect(find.byKey(const ValueKey('course:fresh')), findsOneWidget);
   });
 
+  testWidgets('карточка автоматов: сколько есть и где баллов хватает, а работ мало; без баллов — нет её', (t) async {
+    phone(t);
+    final grades = Map<String, dynamic>.from(demoFixtures()['GET /api/sdo/grades'] as Map);
+    List<Map<String, dynamic>> courses(Map<String, dynamic> Function(Map<String, dynamic>) f) => [
+      for (final c in grades['courses'] as List) f(Map<String, dynamic>.from(c as Map)),
+    ];
+    // сервер посчитал автомат (баллы и 75 % работ) в двух предметах из трёх с баллами
+    final two = courses((c) => {...c, 'auto': c['id'] == 18675 || c['id'] == 18677});
+    await t.pumpWidget(
+      _wrap(
+        StudyScreen(
+          api: fakeApi(
+            overrides: {
+              'GET /api/sdo/grades': {...grades, 'courses': two},
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('автомата'), findsOneWidget);
+    expect(find.text('Ещё в 1\u00A0предмете баллов хватает, осталось зачесть работы'), findsOneWidget);
+
+    // начало семестра: нигде не хватает даже на «3» или зачёт — карточки нет
+    final low = courses((c) => {...c, 'score': 10, 'auto': false});
+    await t.pumpWidget(
+      _wrap(
+        StudyScreen(
+          key: const ValueKey('low'),
+          api: fakeApi(
+            overrides: {
+              'GET /api/sdo/grades': {...grades, 'courses': low},
+            },
+          ),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.byKey(const Key('study:autos')), findsNothing);
+    expect(find.text('Kapi ИИ'), findsOneWidget);
+  });
+
+  test('автомат: баллы на «3» или зачёт и 75 % работ; сервер знает лучше', () {
+    Course c(num score, int passed, {Object? auto}) => Course.fromJson({
+      'id': 1,
+      'score': score,
+      'works_total': 6,
+      'works_passed': passed,
+      'marks': [
+        {'at': 40, 'label': '3'},
+        {'at': 60, 'label': '4'},
+      ],
+      'auto': ?auto,
+    });
+    expect(c(39, 6).firstReached, isFalse);
+    expect(c(39, 6).isAuto, isFalse);
+    expect(c(44, 4).firstReached, isTrue);
+    expect(c(44, 4).isAuto, isFalse); // 4 из 6 — меньше 75 %
+    expect(c(44, 5).isAuto, isTrue);
+    expect(c(44, 6, auto: false).isAuto, isFalse); // по странице работы одна не зачтена — сервер знает
+  });
+
   testWidgets('«Учёба» в «Классике» — прежняя', (t) async {
     phone(t);
     await t.pumpWidget(_wrap(StudyScreen(api: fakeApi()), fresh: false));
     await settle(t);
     expect(find.byKey(const ValueKey('study:fresh')), findsNothing);
-    expect(find.byKey(const Key('study:points')), findsNothing);
+    expect(find.byKey(const Key('study:autos')), findsNothing);
     expect(find.text('Kapi ИИ'), findsOneWidget);
   });
 

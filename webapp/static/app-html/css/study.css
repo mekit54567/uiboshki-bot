@@ -111,19 +111,11 @@
 .sf-head { align-items: flex-start; gap: var(--s); padding: var(--l) var(--m) var(--m) var(--l); }
 .sf-sdo { display: block; padding: 4px 0; margin-top: 2px; text-align: left; color: var(--muted); }
 .sf-capy { width: 62px; height: 62px; flex: none; color: var(--text); }
-/* сводка БРС: цифра слева, фраза справа; узко — фраза под цифрой */
-.sf-points { container-type: inline-size; }
-.sf-pin { display: flex; align-items: center; gap: var(--l); }
-.sf-pw { flex: 1; min-width: 0; }
-.sf-pwords { line-height: 1.4; margin-top: 4px; }
-.sf-pwords b { font-weight: 700; }
-@container (max-width: 259px) {
-  .sf-pin { flex-direction: column; align-items: flex-start; gap: 0; }
-  .sf-pw { display: contents; }
-  .sf-pin .eyebrow { order: -1; margin-bottom: var(--s); }
-  .sf-pwords { margin-top: 0; }
-}
+/* сколько автоматов: цифра и слово по одной линии */
+.sf-autos { padding: var(--m) var(--l); }
+.sf-autos-n { display: flex; align-items: baseline; gap: var(--s); }
 .sf-doors { padding: var(--m) var(--l) 0; gap: var(--s); align-items: stretch; }
+.sf-head + .sf-doors { padding-top: 0; }   /* сразу под шапкой — её отступа хватает */
 .sf-door { flex: 1; min-width: 0; padding: var(--m) var(--m) var(--m) var(--l); display: flex; flex-direction: column; justify-content: flex-start; }
 .sf-door .mi { display: block; }
 .sf-row { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: var(--m); }

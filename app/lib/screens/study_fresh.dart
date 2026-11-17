@@ -2,8 +2,9 @@
 // макетов, Никита 11.11) — только при «Новом» в «Оформлении»
 // ([AppStyle.fresh]); прежние экраны не меняются.
 // «Учёба»: заголовок и строка «баллы из СДО · обновлено в 09:40» вместо
-// метки «СДО» (нажал — «Вход в СДО»), сводка БРС одной цифрой (переехала из
-// «Ещё»), входы «Kapi ИИ» и «Файлы», предметы одной карточкой.
+// метки «СДО» (нажал — «Вход в СДО»), маленькая карточка «2 автомата» (Никита
+// 17.11: средний балл БРС никому не нужен), входы «Kapi ИИ» и «Файлы»,
+// предметы одной карточкой.
 // Предмет: кольцо и отметки, цель (как сейчас: автомат и «с экзаменом»),
 // посещения квадратиками с короткой легендой, работы со статусом словами,
 // файлы предмета, из чего баллы и как они росли.
@@ -123,8 +124,10 @@ class _FreshStudy extends StatelessWidget {
           const SizedBox(height: Space.m),
           doors,
         ] else ...[
-          pad(_FreshPoints(sum: PointsSummary.of(d.courses))),
-          const SizedBox(height: Space.m),
+          if (d.courses.any((c) => c.firstReached)) ...[
+            pad(_FreshAutos(courses: d.courses)),
+            const SizedBox(height: Space.m),
+          ],
           doors,
           Section('Предметы · ${d.courses.length}'),
           pad(
@@ -149,54 +152,46 @@ class _FreshStudy extends StatelessWidget {
   }
 }
 
-/// Сводка БРС: одна большая цифра — средний балл, рядом одна фраза.
-class _FreshPoints extends StatelessWidget {
-  final PointsSummary sum;
-  const _FreshPoints({required this.sum});
+/// Сколько автоматов (Никита 17.11 — вместо среднего балла БРС): маленькая
+/// карточка, только когда хоть где-то баллов уже хватает на «3» или зачёт.
+/// Где баллов хватает, но работ зачтено меньше 75 %, — строкой ниже: автомат
+/// там ещё не выходит (правило БРС, как в «Цели»).
+class _FreshAutos extends StatelessWidget {
+  final List<Course> courses;
+  const _FreshAutos({required this.courses});
 
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
-    final words = Text.rich(
-      TextSpan(
-        children: [
-          for (final (text, bold) in sum.parts)
-            TextSpan(
-              text: text,
-              style: bold ? const TextStyle(fontWeight: FontWeight.w700) : null,
-            ),
-        ],
-      ),
-      style: s.body(14).copyWith(height: 1.4),
-    );
-    final label = Text('в среднем по БРС', style: s.eyebrow());
+    final p = s.p;
+    final autos = courses.where((c) => c.isAuto).length;
+    final rest = courses.where((c) => c.firstReached && !c.isAuto).length;
+    String where(int n) => '$n\u00A0${plural(n, 'предмете', 'предметах', 'предметах')}';
+    final note = rest == 0
+        ? null
+        : autos == 0
+        ? 'Баллов хватает в ${where(rest)}, осталось зачесть работы'
+        : 'Ещё в ${where(rest)} баллов хватает, осталось зачесть работы';
     return Tile(
-      key: const Key('study:points'),
-      radius: Radii.card,
-      child: LayoutBuilder(
-        // узко или крупный шрифт — фраза под цифрой
-        builder: (context, box) => box.maxWidth / MediaQuery.textScalerOf(context).scale(1) >= 260
-            ? Row(
-                children: [
-                  Text('${sum.average}', style: s.number(52)),
-                  const SizedBox(width: Space.l),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [label, const SizedBox(height: 4), words],
-                    ),
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  label,
-                  const SizedBox(height: Space.s),
-                  Text('${sum.average}', style: s.number(52)),
-                  words,
-                ],
-              ),
+      key: const Key('study:autos'),
+      padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, Space.m),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (autos > 0)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text('$autos', style: s.number(34)),
+                const SizedBox(width: Space.s),
+                Text(plural(autos, 'автомат', 'автомата', 'автоматов'), style: s.title(21)),
+              ],
+            )
+          else
+            Text('Автоматов пока нет', style: s.title(21)),
+          if (note != null) ...[const SizedBox(height: 4), Text(note, style: s.body(13, color: p.muted))],
+        ],
       ),
     );
   }

@@ -38,6 +38,11 @@ function stCourse(j) {
   c.history = j.history && typeof j.history === "object" ? j.history : null;
   // когда сервер брал баллы из СДО (unix-секунды) — «обновлено в 09:40» в новом дизайне
   c.updated = typeof j.updated === "number" ? Math.trunc(j.updated) : null;
+  // баллов на «3» или зачёт уже хватает; автомат — ещё и 75 % работ ТК зачтено
+  // (сервер считает сам — auto; в старом ответе нет — по «зачтено X из Y»)
+  c.firstReached = c.marks.length > 0 && c.score >= Math.min(...c.marks.map((m) => m.at));
+  c.isAuto = typeof j.auto === "boolean" ? j.auto
+    : c.firstReached && (c.worksTotal === 0 || c.worksPassed >= Math.ceil(c.worksTotal * 0.75));
   return c;
 }
 
@@ -94,8 +99,8 @@ function stCourseRow(c, k) {
 // ── «Учёба» нового дизайна (брендбук v1, вторая пачка макетов, Никита 11.11;
 // study_fresh.dart) — только при «Новом» в «Оформлении», прежняя не меняется.
 // Строка «баллы из СДО · обновлено сегодня в 09:40» вместо метки «СДО» (нажал —
-// «Вход в СДО»), сводка БРС одной цифрой (переехала из «Ещё»), входы «Kapi ИИ»
-// и «Файлы», предметы одной карточкой.
+// «Вход в СДО»), маленькая карточка «2 автомата» (Никита 17.11: средний балл
+// БРС никому не нужен), входы «Kapi ИИ» и «Файлы», предметы одной карточкой.
 
 /** Когда сервер брал баллы из СДО (unix-секунды): «сегодня в 09:40», «вчера
  *  в 21:10», «8 октября в 09:40» — по Москве, как пары (updatedText). */
@@ -121,14 +126,21 @@ function stNeedText(c) {
   return `до ${c.needLabel === "зачёт" ? "зачёта" : `«${c.needLabel}»`} ещё ${stNum(c.need)}`;
 }
 
-/** Сводка БРС: одна большая цифра — средний балл, рядом одна фраза (_FreshPoints; mrPointsSummary — в more.js). */
-function stFreshPoints(courses) {
-  const sum = mrPointsSummary(courses);
-  const words = sum.parts.map(([t, bold]) => (bold ? `<b>${esc(t)}</b>` : esc(t))).join("");
-  return `<div class="hx"><div class="tile st-card sf-points" data-k="points"><div class="sf-pin">
-    <span class="num" style="--sz:52px">${esc(sum.average)}</span>
-    <div class="sf-pw"><div class="eyebrow">в среднем по БРС</div><div class="bd sf-pwords" style="--sz:14px">${words}</div></div>
-  </div></div></div>`;
+/** Сколько автоматов (Никита 17.11 — вместо среднего балла БРС; _FreshAutos):
+ *  маленькая карточка, только когда хоть где-то баллов хватает на «3» или зачёт.
+ *  Где баллов хватает, а работ зачтено меньше 75 %, — строкой ниже. */
+function stFreshAutos(courses) {
+  if (!courses.some((c) => c.firstReached)) return "";
+  const autos = courses.filter((c) => c.isAuto).length;
+  const rest = courses.filter((c) => c.firstReached && !c.isAuto).length;
+  const where = (n) => `${n}\u00a0${plural(n, "предмете", "предметах", "предметах")}`;
+  const note = !rest ? "" : !autos ? `Баллов хватает в ${where(rest)}, осталось зачесть работы`
+    : `Ещё в ${where(rest)} баллов хватает, осталось зачесть работы`;
+  return `<div class="hx"><div class="tile sf-autos" data-k="autos">
+    ${autos ? `<div class="sf-autos-n"><span class="num" style="--sz:34px">${autos}</span><span class="ttl" style="--sz:21px">${plural(autos, "автомат", "автомата", "автоматов")}</span></div>`
+      : '<div class="ttl" style="--sz:21px">Автоматов пока нет</div>'}
+    ${note ? `<div class="bd mut" style="--sz:13px;margin-top:4px">${esc(note)}</div>` : ""}
+  </div></div>`;
 }
 /** Вход «Kapi ИИ» или «Файлы»: значок, название и строка (_FreshDoor). */
 function stFreshDoor(act, ic, title, text) {
@@ -166,7 +178,8 @@ function stFreshTab(d) {
   else if (d.problem) rest = notice("Баллы не видны", d.problem, { retry: "retry" }) + doors;
   else if (!d.courses.length) rest = notice("Пока пусто", "Преподаватели ещё не завели журналы.") + doors;
   else {
-    rest = stFreshPoints(d.courses) + doors + section(`Предметы · ${d.courses.length}`)
+    const autos = stFreshAutos(d.courses);
+    rest = autos + doors + section(`Предметы · ${d.courses.length}`)
       + `<div class="hx"><div class="tile p0">${d.courses.map((c, k) => (k ? '<div class="divider"></div>' : "") + stFreshCourseRow(c, k)).join("")}</div></div>`;
   }
   return `<div class="row sf-head"><div class="grow"><div class="ttl" style="--sz:30px">Учёба</div>

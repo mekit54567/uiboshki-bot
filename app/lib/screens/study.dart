@@ -32,6 +32,9 @@ class Course {
   /// Когда сервер брал баллы из СДО (unix-секунды, поле `updated`), если знает.
   final int? updated;
 
+  /// Автомат по правилам БРС — сервер считает сам (`auto`), в старом ответе нет.
+  final bool? _auto;
+
   Course.fromJson(Map<String, dynamic> j)
     : id = j['id'] as int,
       title = j['title'] ?? '',
@@ -48,9 +51,17 @@ class Course {
       goal = _map(j['goal']),
       attendance = _map(j['attendance']),
       history = _map(j['history']),
-      updated = (j['updated'] as num?)?.toInt();
+      updated = (j['updated'] as num?)?.toInt(),
+      _auto = j['auto'] is bool ? j['auto'] as bool : null;
 
   static Map<String, dynamic>? _map(Object? v) => v is Map ? Map<String, dynamic>.from(v) : null;
+
+  /// Баллов на первую отметку («3» у экзамена, зачёт у зачёта) уже хватает.
+  bool get firstReached => marks.isNotEmpty && score >= marks.map((m) => m.at).reduce((a, b) => a < b ? a : b);
+
+  /// Автомат по правилам БРС: баллов на «3» или зачёт и зачтено не меньше
+  /// 75 % работ текущего контроля (goal.py); без поля `auto` — по «зачтено X из Y».
+  bool get isAuto => _auto ?? (firstReached && (worksTotal == 0 || worksPassed >= (worksTotal * 0.75).ceil()));
 
   /// Порог высшей отметки — «полное» кольцо (у экзамена это 5 при 80).
   num get top => marks.isEmpty ? max : marks.last.at;
