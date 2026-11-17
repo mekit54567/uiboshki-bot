@@ -312,7 +312,7 @@ async def test_sdo_sync_updates_moved_deadline(db, monkeypatch):
 
     html = {"value": _sdo_html(4102444800)}  # 2100-01-01 03:00 МСК
 
-    async def fake_fetch():
+    async def fake_fetch(*_):
         return html["value"]
 
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
@@ -504,7 +504,7 @@ async def test_sdo_sync_tells_missing_cookie_from_expired(db, monkeypatch):
     res = await sdo_parser.sync_deadlines()
     assert res["expired"] and res["missing"]
 
-    async def login_page():
+    async def login_page(*_):
         raise sdo_parser.SdoSessionExpired("редирект на /login/index.php")
 
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "abc")

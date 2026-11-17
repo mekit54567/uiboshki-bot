@@ -94,11 +94,11 @@ async def test_sync_uses_calendar_and_keeps_ids(db, monkeypatch):
     calls = []
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
 
-    async def calendar():
+    async def calendar(*_):
         async with _sdo(calls) as client:
             return sdo_parser.parse_calendar_events(await sdo_parser.fetch_calendar_events(client))
 
-    async def upcoming_must_not_be_used():
+    async def upcoming_must_not_be_used(*_):
         raise AssertionError("календарь ответил — «Предстоящие» не нужны")
 
     monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", calendar)
@@ -157,7 +157,7 @@ async def test_sync_skips_old_semester_and_sdoclean_removes_them(db, monkeypatch
     cur, old = sdo_parser.current_semester_tag(), "II.10-11"
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
 
-    async def calendar():
+    async def calendar(*_):
         return [
             {"external_id": "sdo:1", "subject": f"ПР 1 (Анализ [{cur}])", "description": "", "due_date": "2099-10-01", "due_time": "23:59"},
             {"external_id": "sdo:2", "subject": f"ПР 9 (Старое [{old}])", "description": "", "due_date": "2099-10-02", "due_time": "23:59"},
@@ -205,7 +205,7 @@ async def test_sync_keeps_only_courses_from_schedule(db, monkeypatch):
     async def subjects(**_):
         return ["Анализ данных", "Архитектура предприятия"]
 
-    async def calendar():
+    async def calendar(*_):
         mk = lambda n, course: {"external_id": f"sdo:{n}", "course": course, "subject": f"ПР {n} ({course})",
                                 "description": "", "due_date": "2099-10-01", "due_time": "23:59"}
         return [mk(1, "Анализ данных (УИБО-03-24)"), mk(2, "Архитектура_Экзамен [I.26-27]"),
@@ -249,7 +249,7 @@ async def test_redirect_loop_means_expired_cookie_not_network():
 async def test_sync_reports_redirect_loop_as_expired(db, monkeypatch):
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")
 
-    async def looping():
+    async def looping(*_):
         async with _loop_client() as client:
             return sdo_parser.parse_calendar_events(await sdo_parser.fetch_calendar_events(client))
 

@@ -110,11 +110,27 @@ async def keepalive(peek=None) -> bool | None:
         return None
 
 
-async def fetch_upcoming_html() -> str:
-    if not SDO_SESSION_COOKIE:
+async def home_cookie() -> tuple[str, int | None]:
+    """Кука, которой бот ходит в СДО за свою группу: общая с сервера
+    (SDO_SESSION_COOKIE), пока она жива; протухла — живой вход приложения
+    старосты или того, кто делится дедлайнами (accounts.backup_login).
+    → (кука или "", user_id входа; None — это общая кука)."""
+    from kapibara.features.sdo import accounts
+    from database import get_setting
+    env = SDO_SESSION_COOKIE
+    if env and (await get_setting(accounts.SHARED_DEAD) or "") != accounts._fingerprint(env):
+        return env, None
+    if backup := await accounts.backup_login():
+        return backup[1], backup[0]
+    return env, None
+
+
+async def fetch_upcoming_html(cookie: str | None = None) -> str:
+    cookie = cookie or SDO_SESSION_COOKIE
+    if not cookie:
         raise SdoSessionExpired("SDO_SESSION_COOKIE не задана")
 
-    async with sdo_net.client(SDO_SESSION_COOKIE) as client:
+    async with sdo_net.client(cookie) as client:
         resp = await get_checked(client, UPCOMING_URL)
         resp.raise_for_status()
         html = resp.text
@@ -266,20 +282,21 @@ def parse_calendar_events(events: list[dict]) -> list[dict]:
     return results
 
 
-async def fetch_calendar_deadlines() -> list[dict] | None:
-    async with sdo_net.client(SDO_SESSION_COOKIE) as client:
+async def fetch_calendar_deadlines(cookie: str | None = None) -> list[dict] | None:
+    async with sdo_net.client(cookie or SDO_SESSION_COOKIE) as client:
         events = await fetch_calendar_events(client)
     return None if events is None else parse_calendar_events(events)
 
 
-async def fetch_deadline_items() -> list[dict]:
+async def fetch_deadline_items(cookie: str | None = None) -> list[dict]:
     """Дедлайны из календаря по месяцам, а если AJAX недоступен — со
     страницы «Предстоящие события» (ближайшие 21 день, до 10 событий)."""
-    if not SDO_SESSION_COOKIE:
+    cookie = cookie or SDO_SESSION_COOKIE
+    if not cookie:
         raise SdoSessionExpired("SDO_SESSION_COOKIE не задана")
-    items = await fetch_calendar_deadlines()
+    items = await fetch_calendar_deadlines(cookie)
     if items is None:
-        items = parse_deadlines(await fetch_upcoming_html())
+        items = parse_deadlines(await fetch_upcoming_html(cookie))
     return items
 
 
@@ -301,18 +318,20 @@ async def sync_deadlines() -> dict:
 
 
 async def _sync_deadlines() -> dict:
+    cookie, via = await home_cookie()
     try:
-        items = await fetch_deadline_items()
+        items = await fetch_deadline_items(cookie)
     except SdoSessionExpired as e:
         logger.warning(f"СДО sync: {e}")
         return {"added": 0, "updated": 0, "skipped": 0, "expired": True,
-                "missing": not SDO_SESSION_COOKIE}
+                "missing": not cookie, "via": via}
     except (*NETWORK, ValueError, KeyError) as e:
         logger.error(f"СДО sync: не удалось получить страницу: {type(e).__name__}: {e}")
         return {"added": 0, "updated": 0, "skipped": 0, "expired": False, "error": str(e)}
 
     res = await apply_items(items)
-    logger.info(f"СДО sync: добавлено {res['added']}, обновлено {res['updated']}, пропущено {res['skipped']}, "
+    res["via"] = via                    # None — общей кукой; число — входом этого человека
+    logger.info(f"СДО sync{f' (вход {via})' if via else ''}: добавлено {res['added']}, обновлено {res['updated']}, пропущено {res['skipped']}, "
                 f"прошлый семестр {res['old_semester']}, пропало из СДО {len(res['gone'])}")
     return res
 

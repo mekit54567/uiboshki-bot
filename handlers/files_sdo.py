@@ -92,13 +92,14 @@ async def cmd_sdo_files(message: Message):
     from kapibara.features.sdo import parser as sdo_parser
     from database import get_file_sources, get_sdo_file_subjects
     from kapibara.features.schedule.parser import get_group_subjects
-    if not sdo_parser.SDO_SESSION_COOKIE:
+    cookie, _ = await sdo_parser.home_cookie()
+    if not cookie:
         await message.answer("⚠️ Кука СДО не задана (SDO_SESSION_COOKIE в переменных хостинга) — см. /syncsdo.")
         return
     wait = await message.answer("⏳ Смотрю, что лежит в СДО: курсы, файлы, папки… Это может занять минуту.")
     subjects = await get_group_subjects(**sdo_parser.SEMESTER_WINDOW)
     try:
-        async with sdo_files.make_client(sdo_parser.SDO_SESSION_COOKIE) as client:
+        async with sdo_files.make_client(cookie) as client:
             courses = await sdo_files.scan(client, subjects)
     except sdo_parser.SdoSessionExpired:
         await wait.edit_text("⚠️ Кука СДО протухла — обнови SDO_SESSION_COOKIE в переменных хостинга (подробно — /syncsdo).")
@@ -184,7 +185,7 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
                 await status.edit_text(f"📥 Выгружаю файлы из СДО… {done} из {total}")
 
     try:
-        async with sdo_files.make_client(sdo_parser.SDO_SESSION_COOKIE) as client:
+        async with sdo_files.make_client((await sdo_parser.home_cookie())[0]) as client:
             st = await sdo_files.import_files(bot, chat_id, client, files, progress)
     except Exception as e:
         await bot.send_message(chat_id, f"❌ Выгрузка прервалась: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")

@@ -96,7 +96,7 @@ async def test_deleted_sdo_deadline_stays_deleted(db, monkeypatch):
     item = {"external_id": "sdo:6", "title": "Практика 2", "course": "Анализ данных [I.26-27]",
             "subject": "Практика 2 (Анализ данных)", "description": "", "due_date": "2026-10-20", "due_time": "23:59"}
 
-    async def items():
+    async def items(*_):
         return [dict(item)]
     monkeypatch.setattr(sdo_parser, "fetch_deadline_items", items)
     monkeypatch.setattr(sdo_parser, "not_this_semester", lambda i, s: False)

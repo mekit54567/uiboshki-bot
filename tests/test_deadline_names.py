@@ -41,7 +41,7 @@ async def test_sync_renames_existing_and_skips_manual(db, monkeypatch):
     hand = await db.add_deadline("Моё название", "", "2026-11-11", "00:00", 0, "sdo:6")
     await db.edit_deadline(hand, "Моё название", "", "2026-11-11", "00:00")
 
-    async def items():
+    async def items(*_):
         return [{"title": "Практическая работа №2 - срок сдачи", "course": AD, "external_id": "sdo:5",
                  "subject": "Практическая работа №2 - срок сдачи (" + AD + ")", "description": "",
                  "due_date": "2026-11-10", "due_time": "00:00"},

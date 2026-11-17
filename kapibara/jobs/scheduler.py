@@ -380,12 +380,16 @@ async def _note_sync(result: dict):
     if "error" in result:
         await health.note("sdo_sync", False, "СДО не ответил")
     elif result.get("expired"):
+        if result.get("via"):           # погас запасной вход из приложения — keepalive скажет его хозяину
+            await health.note("sdo_sync", False, f"вход {result['via']} из приложения погас")
+            return
         await health.note("sdo_sync", False, "кука протухла")
-        await health.note("sdo_cookie", False, "протухла — обнови SDO_SESSION_COOKIE")
+        await health.note("sdo_cookie", False, "протухла — войди в СДО в приложении старосты")
         from kapibara.features.sdo import accounts as sdo_accounts
         await sdo_accounts.note_shared(False)
     else:
-        await health.note("sdo_sync", True, f"новых {result.get('added', 0)}, изменено {result.get('updated', 0)}")
+        via = f" (входом из приложения {result['via']})" if result.get("via") else ""
+        await health.note("sdo_sync", True, f"новых {result.get('added', 0)}, изменено {result.get('updated', 0)}{via}")
 
 
 async def sdo_keepalive(bot: Bot | None = None):
@@ -425,6 +429,14 @@ async def sdo_keepalive(bot: Bot | None = None):
                     grade_alerts.check_soon(bot, uid, SDO_SESSION_COOKIE)
 
 
+# Общая кука протухла, а живого входа старосты в приложении нет. Проще всего
+# войти в СДО в приложении (с любого аккаунта старосты): синк сам возьмёт этот
+# вход (accounts.backup_login), куку на сервере менять не нужно.
+EXPIRED_TEXT = ("⚠️ Вход в СДО протух — автосинк дедлайнов стоит.\n\n"
+                "Войди в СДО в приложении с любого своего аккаунта старосты (Ещё → СДО) — "
+                "бот сам подхватит этот вход, куку на сервере менять не нужно.")
+
+
 async def sync_sdo_deadlines(bot: Bot):
     global _sdo_expired_notified
     from kapibara.features.sdo.parser import sync_deadlines
@@ -458,10 +470,7 @@ async def sync_sdo_deadlines(bot: Bot):
             with aside(logger, "Не смог уведомить старосту о протухшей куке СДО"):
                 await bot.send_message(
                     STAROSTA_ID,
-                    "⚠️ Сессия СДО протухла — автосинк дедлайнов не работает.\n\n"
-                    "Зайди в online-edu.mirea.ru в браузере (с опцией «запомнить меня»), "
-                    "возьми свежее значение куки MoodleSession (DevTools → Application → "
-                    "Cookies) и обнови переменную окружения SDO_SESSION_COOKIE.",
+                    EXPIRED_TEXT,
                 )
                 _sdo_expired_notified = True
         return

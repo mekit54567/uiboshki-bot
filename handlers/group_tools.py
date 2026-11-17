@@ -1,6 +1,8 @@
 """Группа: зам старосты (/setzam), рейтинг активности (/rating), здоровье
 бота (/status), проверка Пульса (/pulsecheck, разведка — /pulseprobe), сети (/netcheck), пробный пуш на свои телефоны (/pushtest), векторов (/embedtest) и статистика (/stats) — у старосты."""
 
+import logging
+
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
@@ -11,6 +13,7 @@ from kapibara.core.utils import esc, plural
 from kapibara.bot.tg import data_of, msg, sender, text_of
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 @router.message(Command("setzam"))
@@ -252,12 +255,35 @@ def _stats_kb(days: int) -> InlineKeyboardMarkup:
     ])
 
 
+# Чаты, куда статистика сейчас уходит. 17.11 Telegram минутами не принимал
+# фото (500 и таймауты), а текст — сразу: /stats молчал, Никита жал ещё и
+# ещё, и через пару часов картинки приходили пачкой, по одной на каждый раз.
+_STATS_SENDING: set[int] = set()
+STATS_PHOTO_TIMEOUT = 25        # сек: дольше — Telegram с фото тормозит, шлём текстом
+
+
 async def _send_stats(bot, chat_id: int, days: int):
-    from kapibara.ops import stats
+    from aiogram.exceptions import TelegramNetworkError, TelegramServerError
     from aiogram.types import BufferedInputFile
-    png, text = await stats.report(days)
-    await bot.send_photo(chat_id, BufferedInputFile(png, filename=f"stats_{days}.png"),
-                         caption=text, parse_mode="HTML", reply_markup=_stats_kb(days))
+    from kapibara.ops import stats
+    if chat_id in _STATS_SENDING:
+        await bot.send_message(chat_id, "⏳ Статистика уже в пути — Telegram медленно принимает картинку.")
+        return
+    _STATS_SENDING.add(chat_id)
+    try:
+        png, text = await stats.report(days)
+        try:
+            await bot.send_photo(chat_id, BufferedInputFile(png, filename=f"stats_{days}.png"),
+                                 caption=text, parse_mode="HTML", reply_markup=_stats_kb(days),
+                                 request_timeout=STATS_PHOTO_TIMEOUT)
+        except (TelegramNetworkError, TelegramServerError) as e:
+            # фото мог и принять — тогда придёт позже; цифры нужны сейчас
+            logger.warning(f"/stats: картинка не ушла ({type(e).__name__}: {e}) — шлю текстом")
+            await bot.send_message(chat_id, text + "\n\n<i>Картинка не загрузилась: Telegram сейчас тормозит "
+                                   "с фото. Может прийти позже сама.</i>",
+                                   parse_mode="HTML", reply_markup=_stats_kb(days))
+    finally:
+        _STATS_SENDING.discard(chat_id)
 
 
 @router.message(Command("stats"))

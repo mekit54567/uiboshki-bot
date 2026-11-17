@@ -79,7 +79,7 @@ def _no_sdo_calendar_network(monkeypatch):
     tests/test_sdo_calendar.py."""
     from kapibara.features.sdo import parser as sdo_parser
 
-    async def unavailable():
+    async def unavailable(*_):
         return None
 
     monkeypatch.setattr(sdo_parser, "fetch_calendar_deadlines", unavailable)
