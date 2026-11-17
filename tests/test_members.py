@@ -91,7 +91,9 @@ async def test_bot_added_to_chat_by_starosta_remembers_it(db, monkeypatch):
     await bot_added_to_group(event(999))                    # не староста — не запоминаем
     assert await members.chat_id() == 0
     await bot_added_to_group(event(STAROSTA_ID))
-    assert await members.chat_id() == CHAT and sent and "уибошки" in sent[0][1]
+    assert await members.chat_id() == CHAT
+    assert any("уибошки" in a[1] for a in sent)             # старосте — «запомнил чат»; в чат — приветствие (group_talk)
+    assert any(a[0] == CHAT for a in sent)
 
 
 @pytest.mark.asyncio
