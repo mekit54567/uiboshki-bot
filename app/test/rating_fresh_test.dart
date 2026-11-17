@@ -186,7 +186,7 @@ void main() {
     expect(find.text('Ты в группе'), findsOneWidget);
     expect(find.text('место из 14'), findsOneWidget);
     expect(find.text('+38 за\u00A0неделю'), findsOneWidget);
-    expect(find.text('До 3\u00A0места 26 опыта: это 2 работы, сданные заранее'), findsOneWidget);
+    expect(find.text('До 3\u00A0места 26 опыта: это 2 работы, сданные\u00A0заранее'), findsOneWidget);
     // своя строка — акцентом и «это ты», скрытые — одним местом
     expect(find.descendant(of: find.byKey(const Key('rating:row:me')), matching: find.text('это ты')), findsOneWidget);
     expect(find.text('3\u00A0место не показывает себя'), findsOneWidget);
@@ -322,8 +322,8 @@ void main() {
     expect(hint(1, null, of: 1), 'Пока опыт здесь только у тебя.');
     expect(hint(5, 1), 'До 4\u00A0места 1 опыта: это 1 балл БРС');
     expect(hint(5, 12), 'До 4\u00A0места 12 опыта: это одна сданная работа');
-    expect(hint(5, 22), 'До 4\u00A0места 22 опыта: это одна работа, сданная заранее');
-    expect(hint(5, 120), 'До 4\u00A0места 120 опыта: это 5 работ, сданных заранее');
+    expect(hint(5, 22), 'До 4\u00A0места 22 опыта: это одна работа, сданная\u00A0заранее');
+    expect(hint(5, 120), 'До 4\u00A0места 120 опыта: это 5 работ, сданных\u00A0заранее');
     expect(hint(5, 1200), 'До 4\u00A0места 1\u00A0200 опыта');
   });
 }

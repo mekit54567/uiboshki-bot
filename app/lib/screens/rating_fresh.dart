@@ -34,10 +34,10 @@ String ratingUpHint(Map scope, Map rules) {
   final points = (up / (brs < 1 ? 1 : brs)).ceil();
   if (points <= 5) return '$head: это $points ${plural(points, 'балл', 'балла', 'баллов')} БРС';
   if (up <= submit) return '$head: это одна сданная работа';
-  if (up <= submit + early) return '$head: это одна работа, сданная заранее';
+  if (up <= submit + early) return '$head: это одна работа, сданная\u00A0заранее';
   final k = (up / (submit + early)).ceil();
   if (k > 9) return head;
-  return '$head: это $k ${plural(k, 'работа, сданная', 'работы, сданные', 'работ, сданных')} заранее';
+  return '$head: это $k ${plural(k, 'работа, сданная', 'работы, сданные', 'работ, сданных')}\u00A0заранее';
 }
 
 class _FreshRating extends StatelessWidget {
