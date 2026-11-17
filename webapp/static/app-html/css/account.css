@@ -105,3 +105,32 @@ button.ac-link { display: block; }
 .sheet.ac-sa > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
 .ac-sa-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--xl) var(--m); }
 .ac-sa-foot { flex: none; padding: var(--s) var(--xl) 0; }
+/* «Рейтинг» нового дизайна (rating_fresh.dart): «Я / Группы», места кружками, лист «Мой опыт» */
+.rf-tabs { display: flex; padding: 3px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); }
+.rf-tabs button { flex: 1; min-width: 0; padding: 8px var(--s); border-radius: 999px; text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 600; color: var(--muted);
+  transition: background-color .2s cubic-bezier(.2,.8,.2,1), color .2s; }
+.rf-tabs button.on { background: var(--text); color: var(--bg); }
+.rf-eyes { gap: var(--m); }
+.rf-big { align-items: flex-end; margin-top: var(--s); }
+.rf-place { display: flex; align-items: baseline; gap: var(--s); white-space: nowrap; overflow: hidden; }
+.rf-side { flex: none; text-align: right; }
+.rf-line { width: 100%; min-height: 58px; padding: 11px var(--l); text-align: left; }
+.rf-line.me { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+:root[data-dark="1"] .rf-line.me { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+button.rf-line:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.rf-line > .num { flex: none; }
+.rf-dot { flex: none; box-sizing: border-box; min-width: 32px; height: 32px; border-radius: 16px; display: inline-flex; align-items: center;
+  justify-content: center; border: 1.2px solid color-mix(in srgb, var(--muted) 55%, transparent); color: var(--text);
+  font-family: var(--f-num); font-weight: var(--num-w); font-size: 15.5px; font-variant-numeric: tabular-nums; line-height: 1; }
+.rf-dot.d3 { font-size: 13.5px; }
+.rf-dot.d4 { font-size: 12px; padding: 0 4px; }
+.rf-dot.me { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.rf-dot.dots { border: 0; width: 32px; }
+.rf-bar { gap: 0; padding: 7px 0; }
+.rf-bar > .bd { flex: none; width: 138px; }
+.rf-bar > .num { flex: none; width: 56px; text-align: right; }
+.rf-rules .mi { transition: transform .2s; }
+.rf-rules.open .mi { transform: rotate(90deg); }
+.sheet.rf-sheet { background: var(--bg); }
+.sheet.rf-sheet .body { padding: 0 var(--l); }

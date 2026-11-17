@@ -413,7 +413,7 @@ class _Place extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minWidth: 32),
       height: 32,
-      padding: EdgeInsets.symmetric(horizontal: t.length > 2 ? 5 : 0),
+      padding: EdgeInsets.symmetric(horizontal: t.length > 3 ? 4 : 0),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: me ? p.accent : null,
@@ -422,7 +422,7 @@ class _Place extends StatelessWidget {
       ),
       child: Text(
         t,
-        style: s.number(t.length > 3 ? 12.5 : (t.length > 2 ? 14 : 15.5), color: me ? p.onAccent : p.text),
+        style: s.number(t.length > 3 ? 12 : (t.length > 2 ? 13.5 : 15.5), color: me ? p.onAccent : p.text),
       ),
     );
   }
