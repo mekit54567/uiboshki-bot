@@ -179,7 +179,7 @@ async def test_edit_permissions_and_sdo_does_not_overwrite(db, client, monkeypat
            ("ПР-1 Архитектура", "2099-10-02", "18:00", 1)
 
     # СДО снова отдаёт старое название/срок — ручная правка старосты главнее
-    async def sdo_page():
+    async def sdo_page(*_):
         return "<html>usermenu</html>"
 
     monkeypatch.setattr(sdo_parser, "SDO_SESSION_COOKIE", "x")

@@ -44,8 +44,20 @@ _LAST_ERROR_ALERT_AT = float("-inf")
 _ERROR_ALERT_COOLDOWN_SECONDS = 5 * 60
 
 
+def _network_blip(e: BaseException) -> bool:
+    """Telegram не ответил (таймаут, 5xx, обрыв через прокси) — не баг бота.
+    17.11 такие сыпались старосте алертами «Бот словил ошибку» и копились в
+    «За час 5 ошибок», хотя чинить в коде нечего."""
+    from aiogram.exceptions import TelegramNetworkError, TelegramServerError
+    from kapibara.core.errors import NETWORK
+    return isinstance(e, (TelegramNetworkError, TelegramServerError, *NETWORK))
+
+
 async def notify_starosta_on_error(event: ErrorEvent, bot: Bot):
     global _LAST_ERROR_ALERT_AT
+    if _network_blip(event.exception):
+        logger.warning(f"Сеть Telegram в хендлере: {type(event.exception).__name__}: {event.exception}")
+        return
     logger.exception(f"Необработанная ошибка в хендлере: {event.exception}")
 
     if not STAROSTA_ID:

@@ -66,13 +66,36 @@ async def check(cookie: str) -> bool:
 
 async def cookie_for(user_id: int) -> str | None:
     """Рабочая кука человека. У старосты, если он свою не подключал, —
-    общая из переменных хостинга (SDO_SESSION_COOKIE): это и есть его вход."""
+    общая из переменных хостинга (SDO_SESSION_COOKIE): это и есть его вход.
+    Общая протухла — живой вход другого его аккаунта (backup_login)."""
     from database import get_sdo_session
     row = await get_sdo_session(user_id)
     if row and row["status"] == "ok":
         return decrypt(row["cookie_enc"])
-    if not row and is_starosta(user_id) and SDO_SESSION_COOKIE:
-        return SDO_SESSION_COOKIE
+    if not row and is_starosta(user_id):
+        if SDO_SESSION_COOKIE and await shared_alive():
+            return SDO_SESSION_COOKIE
+        if backup := await backup_login():
+            return backup[1]
+        return SDO_SESSION_COOKIE or None
+    return None
+
+
+async def backup_login() -> tuple[int, str] | None:
+    """Живой вход приложения, которым бот ходит в СДО за свою группу, когда
+    общая кука с сервера протухла: сначала входы аккаунтов старосты (у Никиты
+    их несколько — вошёл с одного, работают все), потом люди своей группы,
+    согласные делиться дедлайнами. СДО лежал 10 часов (15–16.11), общая кука
+    умерла, а вход, который Никита тут же сделал в приложении, синк не брал.
+    → (user_id, кука) или None."""
+    from database import get_group_donors, get_sdo_session
+    from database.groups import home
+    from kapibara.core.config import STAROSTA_IDS
+    rows = [r for uid in STAROSTA_IDS if uid and (r := await get_sdo_session(uid)) and r["status"] == "ok"]
+    rows += await get_group_donors(home())
+    for r in rows:
+        if cookie := decrypt(r["cookie_enc"]):
+            return r["user_id"], cookie
     return None
 
 
@@ -89,7 +112,8 @@ async def status_for(user_id: int) -> dict:
         # общая кука тоже протухает (ночной сбой СДО 16.11): раньше тут всегда
         # было «работает», а баллы говорили «устарел» — и подключить свой вход
         # было неоткуда. Теперь — как есть; свой вход приложения предлагают всегда.
-        return {"state": "ok" if await shared_alive() else "expired", "checked_at": None, "shared": True}
+        alive = await shared_alive() or bool(await backup_login())
+        return {"state": "ok" if alive else "expired", "checked_at": None, "shared": True}
     return {"state": "off"}
 
 

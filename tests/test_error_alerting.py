@@ -8,6 +8,7 @@ import time
 import pytest
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.session.base import BaseSession
+from aiogram.exceptions import TelegramNetworkError, TelegramServerError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.methods import TelegramMethod
 from aiogram.types import Message, Chat, User, Update
@@ -85,3 +86,30 @@ async def test_error_alert_is_throttled(monkeypatch):
     await dp.feed_update(fake_bot, Update(update_id=1, message=msg))
 
     assert fake_bot.session.sent_texts == [], "троттлинг не сработал — алерт ушёл повторно раньше кулдауна"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("make_exc", [
+    lambda m: TelegramNetworkError(m, "HTTP Client says - Request timeout error"),
+    lambda m: TelegramServerError(m, "Internal Server Error"),
+])
+async def test_telegram_network_blip_is_not_alerted(monkeypatch, make_exc):
+    """17.11: таймауты и 500 от Telegram сыпались старосте «Бот словил ошибку» —
+    это сеть, а не баг: только предупреждение в логе."""
+    from aiogram.methods import SendPhoto
+    monkeypatch.setattr(bot_module, "_LAST_ERROR_ALERT_AT", float("-inf"))
+    fake_bot = Bot(token="123456:TEST-TOKEN-NOT-REAL-AAAAAAAAAAAAAAAAAAA", session=FakeSession())
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.error.register(bot_module.notify_starosta_on_error)
+    router = Router()
+
+    @router.message()
+    async def slow(message):
+        raise make_exc(SendPhoto(chat_id=1, photo="x"))
+
+    dp.include_router(router)
+    msg = Message(message_id=1, date=0, chat=Chat(id=222, type="private"),
+                  from_user=User(id=222, is_bot=False, first_name="Alice"), text="/stats")
+    await dp.feed_update(fake_bot, Update(update_id=1, message=msg))
+    assert fake_bot.session.sent_texts == []
+    assert float("-inf") == bot_module._LAST_ERROR_ALERT_AT     # и настоящий алерт не съеден троттлингом
