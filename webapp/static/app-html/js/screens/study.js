@@ -36,6 +36,13 @@ function stCourse(j) {
   c.goal = j.goal && typeof j.goal === "object" ? j.goal : null;
   c.attendance = j.attendance && typeof j.attendance === "object" ? j.attendance : null;
   c.history = j.history && typeof j.history === "object" ? j.history : null;
+  // когда сервер брал баллы из СДО (unix-секунды) — «обновлено в 09:40» в новом дизайне
+  c.updated = typeof j.updated === "number" ? Math.trunc(j.updated) : null;
+  // баллов на «3» или зачёт уже хватает; автомат — ещё и 75 % работ ТК зачтено
+  // (сервер считает сам — auto; в старом ответе нет — по «зачтено X из Y»)
+  c.firstReached = c.marks.length > 0 && c.score >= Math.min(...c.marks.map((m) => m.at));
+  c.isAuto = typeof j.auto === "boolean" ? j.auto
+    : c.firstReached && (c.worksTotal === 0 || c.worksPassed >= Math.ceil(c.worksTotal * 0.75));
   return c;
 }
 
@@ -89,6 +96,98 @@ function stCourseRow(c, k) {
     <span class="mi mut">chevron_right</span></button></div>`;
 }
 
+// ── «Учёба» нового дизайна (брендбук v1, вторая пачка макетов, Никита 11.11;
+// study_fresh.dart) — только при «Новом» в «Оформлении», прежняя не меняется.
+// Строка «баллы из СДО · обновлено сегодня в 09:40» вместо метки «СДО» (нажал —
+// «Вход в СДО»), маленькая карточка «2 автомата» (Никита 17.11: средний балл
+// БРС никому не нужен), входы «Kapi ИИ» и «Файлы», предметы одной карточкой.
+
+/** Когда сервер брал баллы из СДО (unix-секунды): «сегодня в 09:40», «вчера
+ *  в 21:10», «8 октября в 09:40» — по Москве, как пары (updatedText). */
+function stUpdatedText(unix, at = now()) {
+  const t = msk(new Date(unix * 1000)), a = msk(at);
+  const days = Math.round((Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(t.y, t.m - 1, t.d)) / 864e5);
+  const time = `${String(t.h).padStart(2, "0")}:${String(t.min).padStart(2, "0")}`;
+  if (days <= 0) return `сегодня в ${time}`;
+  if (days === 1) return `вчера в ${time}`;
+  return `${t.d} ${MONTHS[t.m - 1]} в ${time}`;
+}
+/** Строка под «Учёбой»: откуда баллы и когда обновлены; без входа — что с ним (_sdoLine). */
+function stSdoLine(d) {
+  const expired = ["вход в СДО устарел · подключить заново", "var(--danger)"];
+  if (d.problem && stNeedsSdo(d.problem)) return d.problem.includes("устарел") ? expired : ["СДО не подключено", ""];
+  if (d.sdo === "expired") return expired;
+  return [d.updated == null ? "баллы из СДО" : `баллы из СДО · обновлено ${stUpdatedText(d.updated)}`, ""];
+}
+/** «до «4» ещё 12», «до зачёта ещё 6», «итог — 5», «на «4» уже хватает» (_needText). */
+function stNeedText(c) {
+  if (c.finalMark) return `итог — ${c.finalMark}`;
+  if (c.need <= 0) return c.enoughText;
+  return `до ${c.needLabel === "зачёт" ? "зачёта" : `«${c.needLabel}»`} ещё ${stNum(c.need)}`;
+}
+
+/** Сколько автоматов (Никита 17.11 — вместо среднего балла БРС; _FreshAutos):
+ *  маленькая карточка, только когда хоть где-то баллов хватает на «3» или зачёт.
+ *  Где баллов хватает, а работ зачтено меньше 75 %, — строкой ниже. */
+function stFreshAutos(courses) {
+  if (!courses.some((c) => c.firstReached)) return "";
+  const autos = courses.filter((c) => c.isAuto).length;
+  const rest = courses.filter((c) => c.firstReached && !c.isAuto).length;
+  const where = (n) => `${n}\u00a0${plural(n, "предмете", "предметах", "предметах")}`;
+  const note = !rest ? "" : !autos ? `Баллов хватает в ${where(rest)}, осталось зачесть работы`
+    : `Ещё в ${where(rest)} баллов хватает, осталось зачесть работы`;
+  return `<div class="hx"><div class="tile sf-autos" data-k="autos">
+    ${autos ? `<div class="sf-autos-n"><span class="num" style="--sz:34px">${autos}</span><span class="ttl" style="--sz:21px">${plural(autos, "автомат", "автомата", "автоматов")}</span></div>`
+      : '<div class="ttl" style="--sz:21px">Автоматов пока нет</div>'}
+    ${note ? `<div class="bd mut" style="--sz:13px;margin-top:4px">${esc(note)}</div>` : ""}
+  </div></div>`;
+}
+/** Вход «Kapi ИИ» или «Файлы»: значок, название и строка (_FreshDoor). */
+function stFreshDoor(act, ic, title, text) {
+  return `<button class="tile sf-door" data-act="${act}">${icon(ic, "o", "font-size:24px;color:var(--accent)")}
+    <div class="ttl" style="--sz:21px;margin-top:var(--s)">${title}</div><div class="bd mut" style="--sz:13px;margin-top:2px">${text}</div></button>`;
+}
+/** Строка предмета в общей карточке: кольцо с баллом, название, что дальше (_FreshCourseRow). */
+function stFreshCourseRow(c, k) {
+  const done = !!c.finalMark || c.need <= 0;
+  return `<button class="row sf-row" data-act="course" data-k="${k}">
+    ${stRing(c.score / c.top, ink(c.title), `<span class="num" style="--sz:${c.score >= 100 ? 15 : 17}px">${esc(stNum(c.score))}</span>`, 46, 4)}
+    <div class="grow"><div class="nm sf-fit" style="--sz:15px">${esc(glue(c.title))}</div>
+      <div class="bd mut" style="--sz:13px;margin-top:2px"><span${done ? ' style="color:var(--ok);font-weight:600"' : ""}>${esc(stNeedText(c))}</span>${
+        c.worksTotal > 0 ? ` · зачтено ${c.worksPassed} из ${c.worksTotal}` : ""}</div></div>
+    ${icon("chevron_right", "", "font-size:24px;color:var(--muted)")}</button>`;
+}
+/** Слово через дефис не рвётся (glue), а если такое слово шире строки (узкий
+ *  экран, крупный шрифт) — кегль меньше ровно до влезания (FitWords). */
+function stFitWords(root) {
+  requestAnimationFrame(() => {
+    for (const el of root.querySelectorAll(".sf-fit")) {
+      let sz = parseFloat(el.style.getPropertyValue("--sz")) || 15;
+      // scrollWidth округляется вверх, clientWidth вниз — пиксель запаса
+      while (el.scrollWidth > el.clientWidth + 1 && sz > 10) { sz -= 0.5; el.style.setProperty("--sz", sz + "px"); }
+    }
+  });
+}
+/** Вкладка «Учёба» нового дизайна целиком (_FreshStudy). */
+function stFreshTab(d) {
+  const [line, color] = stSdoLine(d);
+  const doors = `<div class="row sf-doors">${stFreshDoor("chat", "auto_awesome", "Kapi ИИ", "отвечает по лекциям")}${
+    stFreshDoor("files", "folder", "Файлы", "лекции, практики")}</div>`;
+  let rest;
+  if (d.problem && stNeedsSdo(d.problem)) rest = stConnectCard(d.problem) + doors;
+  else if (d.problem) rest = notice("Баллы не видны", d.problem, { retry: "retry" }) + doors;
+  else if (!d.courses.length) rest = notice("Пока пусто", "Преподаватели ещё не завели журналы.") + doors;
+  else {
+    const autos = stFreshAutos(d.courses);
+    rest = autos + doors + section(`Предметы · ${d.courses.length}`)
+      + `<div class="hx"><div class="tile p0">${d.courses.map((c, k) => (k ? '<div class="divider"></div>' : "") + stFreshCourseRow(c, k)).join("")}</div></div>`;
+  }
+  return `<div class="row sf-head"><div class="grow"><div class="ttl" style="--sz:30px">Учёба</div>
+      <button class="bd sf-sdo" data-act="connect" style="--sz:13px${color ? `;color:${color};font-weight:600` : ""}">${esc(line)}</button></div>
+    <span class="sf-capy" aria-hidden="true">${capy("evening", 62)}</span></div>
+    ${rest}<div style="height:120px"></div>`;
+}
+
 Screens.study = {
   mount(body, screen) {
     let data = null, busy = false;
@@ -100,14 +199,16 @@ Screens.study = {
       const status = get("/sdo/status").then((r) => (r && typeof r === "object" ? r.state || null : null), () => null);
       try {
         const j = await get("/sdo/grades");
-        return { courses: (j.courses || []).map(stCourse), problem: null, sdo: await status };
+        const updated = typeof j.updated === "number" ? Math.trunc(j.updated) : null;
+        return { courses: (j.courses || []).map(stCourse), problem: null, sdo: await status, updated };
       } catch (e) {
-        if (e instanceof ApiError && e.status) return { courses: [], problem: e.message, sdo: await status };
+        if (e instanceof ApiError && e.status) return { courses: [], problem: e.message, sdo: await status, updated: null };
         throw e;
       }
     };
     const draw = () => {
       const d = data;
+      if (Theme.fresh) { body.innerHTML = stFreshTab(d); stFitWords(body); return; }
       const badge = d.sdo == null ? "" : (() => {
         const [color, label] = ST_SDO_BADGE[d.sdo] || ["var(--muted)", "СДО не подключено"];
         return `<button class="st-badge" data-act="connect" aria-label="${label}"><i style="background:${color}"></i><span aria-hidden="true">СДО</span></button>`;
@@ -180,13 +281,133 @@ function stBack() {
   return `<div class="st-back"><button data-act="back" aria-label="Назад">${icon("arrow_back_ios_new", "", "font-size:20px")}</button></div>`;
 }
 
+// ── Экран предмета нового дизайна (макет 4; study_fresh.dart _FreshCourse) ──
+/** Срок работы из СДО («четверг, 15 октября 2026, 23:59») — коротко: «сегодня
+ *  до 23:59», «завтра до 23:59», «до 15 октября, 23:59» (workDue). */
+function stWorkDue(raw, at = now()) {
+  const m = /(\d{1,2})\s+([а-яё]+)\s+(\d{4})(?:\D+(\d{1,2}):(\d{2}))?/.exec(String(raw).toLowerCase());
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[2]);
+  if (month < 0) return null;
+  const time = m[4] == null ? "" : `${m[4].padStart(2, "0")}:${m[5]}`;
+  const a = msk(at);
+  const n = Math.round((Date.UTC(+m[3], month, +m[1]) - Date.UTC(a.y, a.m - 1, a.d)) / 864e5);
+  if (n === 0) return time ? `сегодня до ${time}` : "сегодня";
+  if (n === 1) return time ? `завтра до ${time}` : "завтра";
+  return `до ${+m[1]} ${MONTHS[month]}${time ? `, ${time}` : ""}`;
+}
+/** Статус работы словами — теми же, что в «Сдать» и на экране задания (_workLine). */
+function stWorkLine(w, at = now()) {
+  const due = typeof w.due === "string" ? stWorkDue(w.due, at) : null;
+  switch (String(w.status)) {
+    case "ok": return ["зачтено", "var(--ok)"];
+    case "low": return ["ниже порога", "var(--danger)"];
+    case "wait": return ["отправлено, ждёт оценки", "var(--warn)"];
+    case "late": return ["срок прошёл, ждём оценку", "var(--warn)"];
+    case "miss": return ["срок прошёл", "var(--danger)"];
+    case "offline": return ["сдаётся на занятии", "var(--muted)"];
+    case "soon": return ["ещё закрыто", "var(--muted)"];
+    case "todo": case "open": return [due ? `сдать ${due}` : "можно сдать", "var(--accent)"];
+    default: return ["", "var(--muted)"];
+  }
+}
+/** Работа текущего контроля: название, статус словами, балл справа; задание,
+ *  которое можно сдать, — с кнопкой «Сдать» (_FreshWorkRow). */
+function stFreshWorkRow(w, k) {
+  const [text, color] = stWorkLine(w);
+  const isTask = (w.module === "assign" || w.module === "quiz") && Number.isInteger(w.cmid);
+  const url = typeof w.url === "string" ? w.url : null;
+  const submit = isTask && w.module === "assign" && (w.status === "todo" || w.status === "open");
+  const grade = w.grade;
+  const tag = isTask || url ? `button data-act="work" data-k="${k}"` : "div";
+  return `<${tag} class="row sf-work">
+    <div class="grow"><div class="bd b6 sf-fit" style="--sz:15px">${esc(glue(w.name))}</div>
+      ${text ? `<div class="row sf-wst"><i class="cm-dot" style="background:${color}"></i><span class="bd b6" style="--sz:13px;color:${color}">${esc(text)}</span></div>` : ""}</div>
+    ${submit ? `<span class="sf-submit" data-cmid="${w.cmid}">Сдать</span>`
+      : `<span class="bd b7 sf-grade" style="--sz:14px;color:${grade != null ? "var(--text)" : "var(--muted)"}">${
+        esc(grade != null ? `${stNum(grade)} / ${w.max}` : `– / ${w.max ?? "–"}`)}</span>`}
+  </${tag.split(" ")[0]}>`;
+}
+/** «Файлы предмета · 5 файлов · лекции, практики» (_SubjectFiles). */
+function stSubjectFilesRow(files) {
+  const words = { lecture: "лекции", practice: "практики", control: "КР и тесты", method: "методички" };
+  const kinds = Object.keys(words).filter((k) => files.some((f) => f.category === k)).map((k) => words[k]);
+  const n = files.length;
+  const sub = [`${n} ${plural(n, "файл", "файла", "файлов")}`, ...(kinds.length ? [kinds.slice(0, 2).join(", ")] : [])].join(" · ");
+  return section("Материалы") + `<div class="hx"><button class="tile row sf-filesrow" data-act="subjfiles">
+    ${icon("folder", "o", "font-size:22px;color:var(--accent)")}
+    <div class="grow"><div class="bd b6" style="--sz:15px">Файлы предмета</div><div class="bd mut" style="--sz:13px">${esc(sub)}</div></div>
+    ${icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button></div>`;
+}
+/** Строка «Из чего баллы»: название, счёт и тонкая полоса цвета предмета (_FreshCategory). */
+function stFreshCategory(cat, color) {
+  const max = Number(cat.max) || 0, score = Number(cat.score) || 0, v = max === 0 ? 0 : Math.max(0, Math.min(1, score / max));
+  return `<div><div class="row" style="gap:var(--s)"><div class="grow bd" style="--sz:14px">${esc(cat.name)}</div>
+    <div class="bd b6" style="--sz:14px;flex:none">${stNum(score)} / ${stNum(max)}</div></div>
+    <div class="progress" style="margin-top:6px;--c:${color}"><i style="width:${v * 100}%"></i></div></div>`;
+}
+/** Экран предмета нового дизайна целиком; цель, график и файлы дорисовывает openCourse. */
+function stFreshCourse(c) {
+  const color = ink(c.title), att = c.attendance;
+  const lectures = att && Array.isArray(att.lectures) ? att.lectures : [];
+  const next = c.finalMark ? `итог — ${c.finalMark}`
+    : c.need > 0 ? `ещё ${stNum(c.need)} до ${c.needLabel === "зачёт" ? "зачёта" : `«${c.needLabel}»`}` : c.enoughText;
+  // набранная отметка залита цветом предмета; ночью текст на ней тёмный — на ярком белый не читается
+  const onColor = Theme.dark ? "var(--bg)" : "#fff";
+  return backRow(`<button class="ls-ask sf-ask" data-act="ask">${icon("auto_awesome", "o", "font-size:15px;color:var(--accent)")}Спросить Kapi</button>`)
+    + `<div class="sf-ctitle"><div class="row" style="gap:6px"><i class="cm-dot" style="width:8px;height:8px;background:${color}"></i>
+        <span class="bd b6 mut" style="--sz:13px">${c.marks.length > 1 ? "экзамен" : "зачёт"}</span></div>
+      <div class="ttl" style="--sz:${titleSize(c.title, 30)}px;margin-top:6px">${esc(glue(c.title))}</div></div>
+    <div class="hx"><div class="tile st-card row sf-score" style="gap:var(--l)">
+      ${stRing(c.score / c.top, color, `<div style="text-align:center"><div class="num" style="--sz:34px">${esc(stNum(c.score))}</div>
+        <div class="bd mut" style="--sz:12px;margin-top:2px">из ${esc(stNum(c.top))}</div></div>`, 108, 9)}
+      <div class="grow"><div class="eyebrow">Отметки</div>
+        <div class="sf-marks">${c.marks.map((m) => {
+          const got = c.score >= m.at;
+          return `<span class="bd b6" style="--sz:12.5px${got ? `;background:${color};border-color:${color};color:${onColor}` : ""}">${esc(m.label)} · ${esc(stNum(m.at))}</span>`;
+        }).join("")}</div>
+        <div class="bd b7" style="--sz:16px;margin-top:var(--m);color:${c.need > 0 && !c.finalMark ? "var(--text)" : "var(--ok)"}">${esc(next)}</div></div></div></div>
+    ${c.goal ? `<div class="hx" style="margin-top:var(--m)"><div class="st-goal"></div></div>` : ""}
+    ${lectures.length ? section((att.past || 0) > 0 ? `Посещения лекций · был на ${att.attended ?? 0} из ${att.past}` : "Посещения лекций")
+      + `<div class="hx"><div class="tile"${att.ok !== false ? ' data-tap data-act="att"' : ""}>${stAttendance(att, color)}</div></div>` : ""}
+    ${c.works.length ? section(`Текущий контроль · зачтено ${c.worksPassed} из ${c.worksTotal}`)
+      + `<div class="hx"><div class="tile p0">${c.works.map((w, i) => (i ? '<div class="divider"></div>' : "") + stFreshWorkRow(w, i)).join("")}</div></div>` : ""}
+    <div class="sf-files"></div>
+    ${c.categories.length ? section("Из чего баллы") + `<div class="hx"><div class="tile sf-cats">${c.categories.map((cat) => stFreshCategory(cat, color)).join("")}</div></div>` : ""}
+    ${c.history ? section("Как растут баллы") + `<div class="hx"><div class="tile st-hist"></div></div>` : ""}
+    <div style="height:var(--xxl)"></div>`;
+}
+
 function openCourse(raw) {
   const course = stCourse(raw);
   Nav.push((body, screen) => {
-    let data = null, alive = true;
+    let data = null, alive = true, files = null;
     const path = `/sdo/grades/${course.id}`;
+    const back = () => (Theme.fresh ? backRow() : stBack());
+    // новый дизайн: «Файлы предмета», если в «Файлах» группы есть его файлы — один запрос на экран
+    const drawFiles = () => {
+      const el = body.querySelector(".sf-files");
+      if (!el || !data) return;
+      if (files === null) {
+        files = [];
+        Api.get("/files").then((f) => {
+          files = (f && Array.isArray(f.items) ? f.items : []).filter((x) => sameSubject(String(x.subject), data.title)).map(flFileOf);
+          if (alive) drawFiles();
+        }).catch(() => {});
+        return;
+      }
+      el.innerHTML = files.length ? stSubjectFilesRow(files) : "";
+    };
     const draw = () => {
       const c = data, color = ink(c.title);
+      if (Theme.fresh) {
+        body.innerHTML = stFreshCourse(c);
+        stFitWords(body);
+        if (c.goal) stGoalCard(body.querySelector(".st-goal"), c.id, c.goal, color, c.updated);
+        if (c.history) stHistory(body.querySelector(".st-hist"), c.history, color);
+        drawFiles();
+        return;
+      }
       const lectures = c.attendance && Array.isArray(c.attendance.lectures) ? c.attendance.lectures : [];
       body.innerHTML = stBack() + screenTitle(c.title, { sub: c.marks.length > 1 ? "экзамен" : "зачёт" }) + `
         <div class="hx"><div class="tile st-card row" style="gap:var(--l)">
@@ -222,11 +443,17 @@ function openCourse(raw) {
         draw();
       } catch (e) {
         if (!alive || (e instanceof ApiError && e.status === 401)) return;
-        if (!data) body.innerHTML = stBack() + '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(e), { pose: "sad", retry: "retry" });
+        if (!data) body.innerHTML = back() + '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(e), { pose: "sad", retry: "retry" });
       }
     };
     on(body, {
-      retry: () => { body.innerHTML = stBack() + spinner(); refresh(); },
+      retry: () => { body.innerHTML = back() + spinner(); refresh(); },
+      ask: () => { tick(); if (window.openChat) openChat({ subject: data ? data.title : course.title }); else toast("Скоро"); },
+      subjfiles: () => {
+        if (!files || !files.length) return;
+        tick();
+        if (window.openSubjectFiles) openSubjectFiles(files[0].subject, files); else toast("Скоро");
+      },
       att: () => {
         if (!data || !data.attendance) return;
         tick();
@@ -247,7 +474,7 @@ function openCourse(raw) {
     });
     const cached = Api.cached(path);
     if (cached !== undefined) { data = stCourse(cached); draw(); }
-    else body.innerHTML = stBack() + spinner();
+    else body.innerHTML = back() + spinner();
     refresh();
     return () => { alive = false; };
   }, { tint: subjectColor(course.title) });
@@ -330,10 +557,37 @@ function stAngle(el) {
   });
 }
 
-/** Карточка «Цель» в el: выбор отметки и счёта — POST /sdo/goal/<курс>. */
-function stGoalCard(el, courseId, goal, color) {
+/** «до 41 балла», «до 12 баллов», «до 2,5 балла» — после «до» родительный падеж (upToPoints). */
+function stUpTo(v) {
+  v = Number(v) || 0;
+  return `до ${stNum(v)} ${v === Math.round(v) ? plural(Math.round(v), "балла", "баллов", "баллов") : "балла"}`;
+}
+/** Откуда взять баллы — целыми фразами, как в новом дизайне: «Открыто 4 работы,
+ *  они дают до 41 балла» (goalFreshLines). */
+function stFreshLines(g) {
+  const status = String(g.status || "ok"), tk = g.tk || {}, need = g.need || 0;
+  const open = Math.trunc(g.open_count || 0), lost = Math.trunc(g.lost_count || 0);
+  const out = [];
+  if (open > 0) out.push(`Открыто ${open} ${plural(open, "работа", "работы", "работ")}, ${open === 1 ? "она даёт" : "они дают"} ${stUpTo(g.open_points || 0)}`);
+  if ((g.attendance_left || 0) > 0) out.push(`Лекции впереди дают ${stUpTo(g.attendance_left)}`);
+  if ((g.exam_left || 0) > 0) out.push(`Экзамен даёт ${stUpTo(g.exam_left)}`);
+  if ((tk.total || 0) > 0) {
+    out.push(`Зачтено ${tk.passed} из ${tk.total} ${plural(Math.trunc(tk.total), "работы", "работ", "работ")}, нужно ${tk.need}${
+      (tk.left || 0) > 0 ? `: из ${tk.open} открытых зачесть ${tk.left}` : ""}`);
+  }
+  const must = stMustLine(g);
+  if (must) out.push(must[0].toUpperCase() + must.slice(1));
+  if (need > 0 && status !== "done") out.push(`Если сдать всё и ходить на лекции${(g.exam_left || 0) > 0 ? ", а потом сдать экзамен" : ""}, выйдет до ${stNum(g.best || 0)}`);
+  if (lost > 0) out.push(`Ниже порога или срок прошёл: ${lost}. Их не считаю, пригодятся, если дадут пересдать`);
+  return out;
+}
+
+/** Карточка «Цель» в el: выбор отметки и счёта — POST /sdo/goal/<курс>.
+ *  updated — когда баллы брали из СДО (строка внизу в новом дизайне). */
+function stGoalCard(el, courseId, goal, color, updated = null) {
   let g = goal, error = null, shownCapy = null;
   const draw = () => {
+    if (Theme.fresh) { drawFresh(); return; }
     const status = String(g.status || "ok");
     const [tone, verdict] = status === "done" && g.exam_pending === true ? ["var(--ok)", "автомат"]
       : status === "done" ? ["var(--ok)", `${markWord(String(g.label))} есть`]
@@ -351,12 +605,8 @@ function stGoalCard(el, courseId, goal, color) {
     if (must) lines.push(["priority_high", "", must]);
     if (need > 0 && status !== "done") lines.push(["auto_awesome", "o", `если сдать всё, ходить на лекции${(g.exam_left || 0) > 0 ? " и сдать экзамен" : ""} — до ${stNum(g.best || 0)}`]);
     if ((g.lost_count || 0) > 0) lines.push(["warning_amber", "", `ниже порога или срок прошёл: ${g.lost_count} — не считаю, пригодится, если дадут пересдать`]);
-    if (g.skip && typeof g.skip === "object") {
-      const sk = g.skip;
-      const after = sk.status === status ? "ничего не изменится"
-        : { done: "всё равно есть", tight: "станет впритык", no: "уже не хватит" }[sk.status] || "дойдёшь";
-      lines.push(["schedule", "", `пропущу лекцию ${stDayMonth(sk.date)}: −${stNum(sk.value || 0)} → ${after}`]);
-    }
+    const skip = skipLine(status);
+    if (skip) lines.push(["schedule", "", skip]);
     // набрал — капибара прыгает, не хватит — грустит; анимация — только когда появилась
     const pose = status === "done" ? "joy" : status === "no" ? "sad" : null;
     const anim = pose !== shownCapy ? (pose === "joy" ? " st-hop" : " st-sigh") : "";
@@ -383,6 +633,52 @@ function stGoalCard(el, courseId, goal, color) {
       ${error ? `<div class="bd" style="--sz:13px;color:var(--danger);margin-top:var(--s)">${esc(error)}</div>` : ""}
     </div>`;
     stAngle(el.firstElementChild);
+  };
+  /** «пропущу лекцию 15 октября: −2 → станет впритык» — что будет без ближайшей лекции. */
+  const skipLine = (status) => {
+    if (!g.skip || typeof g.skip !== "object") return "";
+    const sk = g.skip;
+    const after = sk.status === status ? "ничего не изменится"
+      : { done: "всё равно есть", tight: "станет впритык", no: "уже не хватит" }[sk.status] || "дойдёшь";
+    return `пропущу лекцию ${stDayMonth(sk.date)}: −${stNum(sk.value || 0)} → ${after}`;
+  };
+  // Новый дизайн (макет 4, Никита 11.11): бумажная карточка с рамкой цвета
+  // прогноза, выбор отметки — капсулой справа от «Цель», прогноз — «По текущим
+  // данным: …», откуда взять баллы — целыми фразами. Счёт и цели — те же, что
+  // в прежней карточке (автомат и «с экзаменом»).
+  const drawFresh = () => {
+    const status = String(g.status || "ok");
+    const tone = { done: "var(--ok)", tight: "var(--warn)", no: "var(--danger)" }[status] || "var(--ok)";
+    const verdict = status === "done" && g.exam_pending === true ? "выходит автоматом"
+      : status === "done" ? `${markWord(String(g.label))} есть`
+      : status === "tight" ? "впритык" : status === "no" ? "не хватит" : "дойдёшь";
+    const tk = g.tk || {}, marks = (g.marks || []).map(String);
+    const skip = skipLine(status);
+    const lines = [...stFreshLines(g), ...(skip ? [skip[0].toUpperCase() + skip.slice(1)] : [])];
+    const pose = status === "done" ? "joy" : status === "no" ? "sad" : null;
+    const anim = pose !== shownCapy ? (pose === "joy" ? " st-hop" : " st-sigh") : "";
+    shownCapy = pose;
+    const mode = g.mode === "auto" || g.mode === "exam" ? g.mode : null;
+    const note = updated == null ? "Это расчёт по баллам из СДО на сейчас. Оценку ставит преподаватель."
+      : `Расчёт по баллам из СДО, обновлено ${stUpdatedText(updated)}. Оценку ставит преподаватель.`;
+    el.innerHTML = `<div class="tile st-card sf-goal" style="border-color:${tone}">
+      <div class="row" style="gap:var(--s)"><div class="grow eyebrow">${esc(marks.length > 1 ? "Цель" : `Цель · ${g.label}`)}</div>
+        ${marks.length > 1 ? `<div class="sf-gmarks">${marks.map((m) => `<button class="${m === String(g.label) ? "on" : ""}" data-act="mark" data-v="${esc(m)}"
+          aria-label="Цель ${esc(m)}" aria-pressed="${m === String(g.label)}">${esc(m)}</button>`).join("")}</div>` : ""}</div>
+      ${mode ? `<div class="row" style="justify-content:flex-end;margin-top:var(--s)"><div class="st-mode">
+        <button class="${mode === "auto" ? "on" : ""}" data-act="mode" data-v="auto" aria-label="Считать автомат">автомат</button>
+        <button class="${mode === "exam" ? "on" : ""}" data-act="mode" data-v="exam" aria-label="Считать с экзаменом">с экзаменом</button></div></div>` : ""}
+      <div class="row" style="gap:var(--s);margin-top:var(--m)"><div class="grow ttl" style="--sz:21px;font-weight:600;color:${tone}">По текущим данным: ${esc(verdict)}</div>
+        ${pose ? `<span class="st-gcapy${pose === "sad" ? " sad" : ""}${anim}" data-act="hop" style="color:${pose === "joy" ? "var(--ok)" : "var(--muted)"}">${capy(pose, 40)}</span>` : ""}</div>
+      <div class="bd b6" style="--sz:15px;margin-top:var(--xs)">${esc(stGoalHeadline(g))}</div>
+      <div class="bd mut" style="--sz:13px;margin-top:2px">${esc(stGoalSubline(g))}</div>
+      ${lines.length ? `<div style="height:var(--s)"></div>${lines.map((t) => `<div class="bd" style="--sz:14px;padding-top:6px">${esc(t)}</div>`).join("")}` : ""}
+      ${status === "no" ? `<div class="bd" style="--sz:13px;color:var(--danger);margin-top:var(--m)">${esc(tk.reachable === false
+        ? "Открытых работ меньше, чем нужно зачесть. По правилам БРС так к экзамену не выйти — спроси преподавателя про пересдачу."
+        : `Даже если сдать всё и ходить на все лекции, будет ${stNum(g.best || 0)} — меньше ${stNum(g.at || 0)}. Можно выбрать цель ниже.`)}</div>` : ""}
+      <div class="bd mut" style="--sz:12px;margin-top:var(--m)">${esc(note)}</div>
+      ${error ? `<div class="bd" style="--sz:13px;color:var(--danger);margin-top:var(--s)">${esc(error)}</div>` : ""}
+    </div>`;
   };
   const post = async (body) => {
     tick();
@@ -412,6 +708,7 @@ function stGoalCard(el, courseId, goal, color) {
 
 // ── Посещения лекций (AttendanceStrip) ──
 function stAttendance(att, color) {
+  if (Theme.fresh) return stAttendanceFresh(att, color);
   const lectures = att.lectures || [];
   const total = att.total ?? lectures.length;
   const box = (l) => {
@@ -429,6 +726,40 @@ function stAttendance(att, color) {
     ${att.ok !== false ? `<div class="row st-att-more" style="${toMark ? `color:${color}` : ""}">
       ${icon(toMark ? "edit" : "list", "", "font-size:16px")}
       <span class="grow bd b6" style="--sz:13px">${toMark && b ? `отметь сам, на каких был до ${esc(stDayMonth(b.day))}` : "все лекции и отметки"}</span>
+      ${icon("chevron_right", "", "font-size:18px;color:var(--muted)")}</div>` : ""}`;
+}
+
+/** Квадратик посещения нового дизайна (_FreshBox): был — залит цветом предмета;
+ *  отметил сам — светлая заливка с рамкой; ждём балл — рамка «жду»; не был —
+ *  красная рамка; «?» — отметь сам; впереди — серый. */
+function stFreshBox(kind, color, size) {
+  const [fill, edge] = {
+    ok: [color, color],
+    mine: [`color-mix(in srgb, ${color} 30%, transparent)`, color],
+    excused: [`color-mix(in srgb, ${color} 55%, transparent)`, `color-mix(in srgb, ${color} 55%, transparent)`],
+    wait: ["transparent", "var(--warn)"],
+    miss: ["transparent", "var(--danger)"],
+    before: ["transparent", "var(--muted)"],
+  }[kind] || ["var(--line)", "var(--line)"];
+  return `<i class="sf-box" style="width:${size}px;height:${size}px;border-radius:${(size * 0.27).toFixed(1)}px;border-width:${size > 16 ? 1.5 : 1.2}px;`
+    + `background:${fill};border-color:${edge}">${kind === "before" && size > 16 ? "?" : ""}</i>`;
+}
+const ST_LEGEND = [["ok", "был"], ["mine", "отметил сам"], ["excused", "уважительная"], ["wait", "ждём балл"], ["miss", "не был"], ["before", "отметь сам"]];
+/** Посещения в новом дизайне (Никита 11.11: «слишком много места занимает
+ *  объяснение»): квадратики те же, «был на 3 из 6» — в заголовке раздела, а
+ *  откуда отметка — короткой легендой внизу и только из тех отметок, что есть. */
+function stAttendanceFresh(att, color) {
+  const lectures = att.lectures || [];
+  const kind = (l) => (l.status === "ok" && l.manual === true ? "mine" : String(l.status));
+  const kinds = new Set(lectures.map(kind));
+  const toMark = lectures.some((l) => l.status === "before"), b = att.before;
+  const src = { pulse: ["из Пульса МИРЭА", "var(--ok)"], pulse_lost: ["Пульс отвалился — новые лекции считаю по СДО", "var(--warn)"] }[att.source];
+  return `${src ? `<div class="bd b6" style="--sz:13px;color:${src[1]};margin-bottom:var(--s)">${src[0]}</div>` : ""}
+    <div class="st-lecs">${lectures.map((l) => `<span class="sf-lec" title="${esc(`${l.n} лекция · ${stDayMonth(l.date)}`)}">${stFreshBox(kind(l), color, 26)}</span>`).join("")}</div>
+    <div class="sf-legend">${ST_LEGEND.filter(([k]) => kinds.has(k)).map(([k, t]) => `<span>${stFreshBox(k, color, 12)}${t}</span>`).join("")}</div>
+    ${att.ok !== false ? `<div class="row st-att-more" style="margin-top:var(--m)${toMark ? `;color:${color}` : ""}">
+      ${icon(toMark ? "edit" : "list", "", "font-size:16px")}
+      <span class="grow bd b6" style="--sz:13px">${toMark && b ? `отметь сам, на каких был до ${esc(stDayMonth(b.day).replace(" ", "\u00a0"))}` : "все лекции и отметки"}</span>
       ${icon("chevron_right", "", "font-size:18px;color:var(--muted)")}</div>` : ""}`;
 }
 

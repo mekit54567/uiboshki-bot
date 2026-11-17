@@ -497,6 +497,8 @@ async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
     from kapibara.features.sdo.net import make_client
     async with make_client(cookie) as client:
         base = _cached(("course", user_id, course_id))
+        # когда баллы брали из СДО — «обновлено в 09:40» на экране предмета
+        fetched = _cache[("course", user_id, course_id)][0] if base else time.time()
         if base:
             course, s = base
         else:
@@ -543,7 +545,7 @@ async def _course_detail(user_id: int, cookie: str, course_id: int) -> dict:
                           can_submit=bool(p.get("can_submit")) and w["module"] == "assign",
                           url=f"{SDO_BASE_URL}/mod/{w['module']}/view.php?id={w['cmid']}"))
     works = order_works(works)
-    out = dict(s, id=course_id, name=course["name"], title=course["title"], works=works)
+    out = dict(s, id=course_id, name=course["name"], title=course["title"], works=works, updated=int(fetched))
     # список предметов из кэша — те же «зачтено X из Y», что здесь (Б4)
     if hit := _cached(("all", user_id)):
         for c in hit["courses"]:

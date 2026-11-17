@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../achievements/ui.dart';
 import '../api/api.dart';
 import '../api/links.dart';
-import '../api/models.dart';
 import '../plus/donate.dart';
 import '../plus/roadmap.dart';
 import '../plus/plus_screen.dart';
@@ -17,7 +16,6 @@ import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
-import '../widgets/goal_card.dart';
 import 'look_screen.dart';
 import 'notify.dart';
 import 'pulse_lab.dart';
@@ -232,9 +230,8 @@ class MoreScreen extends StatelessWidget {
                       icon: Icons.science_outlined,
                       title: 'Пульс · эксперимент',
                       sub: 'вход в Пульс МИРЭА и разведка, что он отдаёт',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => PulseLabScreen(api: api)),
-                      ),
+                      onTap: () =>
+                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => PulseLabScreen(api: api))),
                     ),
                   ],
                   if (me['group'] != null && me['group']['own'] != true) ...[
@@ -338,7 +335,13 @@ class MoreScreen extends StatelessWidget {
         (Icons.campaign_outlined, 'Канал Капибары', 'Новости и обновления', 'Открыть', _url(l['news']!)),
       // приложение для Android — в браузере и не на iPhone (в самом приложении оно уже стоит)
       if (web && (l['rustore'] ?? '').isNotEmpty && !(ios ?? defaultTargetPlatform == TargetPlatform.iOS))
-        (Icons.phone_android_outlined, 'Приложение для Android', 'Капибара в RuStore — с виджетом и уведомлениями', 'Открыть', l['rustore']!),
+        (
+          Icons.phone_android_outlined,
+          'Приложение для Android',
+          'Капибара в RuStore — с виджетом и уведомлениями',
+          'Открыть',
+          l['rustore']!,
+        ),
     ];
   }
 
@@ -471,71 +474,6 @@ class _Profile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Баллы БРС одной фразой: средний балл по журналам, на сколько предметов уже
-/// хватает первой отметки («3» у экзамена, зачёт у зачёта; порог — свой у
-/// курса) и где баллов меньше всего.
-class PointsSummary {
-  /// Предметов в журнале; из них с отметками — rated, первая уже есть — reached.
-  final int total, rated, reached, average;
-
-  /// Где баллов меньше всего (null — предмет один, сравнивать не с чем).
-  final Course? lowest;
-
-  /// Какие первые отметки встречаются: «3», зачёт.
-  final List<String> firsts;
-
-  /// Баллов нет нигде (начало семестра, журналы пустые).
-  final bool blank;
-
-  const PointsSummary._(this.total, this.rated, this.reached, this.average, this.lowest, this.firsts, this.blank);
-
-  factory PointsSummary.of(List<Course> courses) {
-    if (courses.isEmpty) return const PointsSummary._(0, 0, 0, 0, null, [], true);
-    var rated = 0, reached = 0;
-    final firsts = <String>[];
-    for (final c in courses) {
-      if (c.marks.isEmpty) continue;
-      final first = c.marks.reduce((a, b) => b.at < a.at ? b : a);
-      rated++;
-      if (c.score >= first.at) reached++;
-      if (!firsts.contains(first.label)) firsts.add(first.label);
-    }
-    firsts.sort((a, b) => (a == 'зачёт' ? 1 : 0) - (b == 'зачёт' ? 1 : 0)); // «3» раньше зачёта
-    final sum = courses.fold<num>(0, (acc, c) => acc + c.score);
-    final lowest = courses.reduce((a, b) => b.score < a.score ? b : a);
-    return PointsSummary._(
-      courses.length,
-      rated,
-      reached,
-      (sum / courses.length).round(),
-      courses.length > 1 ? lowest : null,
-      firsts,
-      courses.every((c) => c.score <= 0),
-    );
-  }
-
-  /// Фраза кусками: (текст, жирный).
-  List<(String, bool)> get parts {
-    if (total == 0) return const [('Пока пусто — преподаватели ещё не завели журналы.', false)];
-    String of(int n) => plural(n, 'предмета', 'предметов', 'предметов'); // «из 21 предмета»
-    if (blank) {
-      return [(total > 1 ? 'Баллов пока нет — ни в одном из $total ${of(total)}.' : 'Баллов пока нет.', false)];
-    }
-    final mark = firsts.map(markWord).join(' или ');
-    return [
-      if (rated > 0 && reached == 0) ('На $mark пока не хватает ни в одном из $rated ${of(rated)}.', false),
-      if (reached > 0) ...[('На $mark хватает в ', false), ('$reached из $rated', true), (' ${of(rated)}.', false)],
-      if (lowest != null) ...[
-        (' Меньше всего — ', false),
-        (lowest!.title, true),
-        (', ${fmtNum(lowest!.score)}.', false),
-      ],
-    ];
-  }
-
-  String get sentence => parts.map((x) => x.$1).join().trim();
 }
 
 typedef _Points = ({List<Course> courses, String? problem});
