@@ -14,6 +14,40 @@ const CH_MIMES = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp
   pdf: "application/pdf", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", txt: "text/plain" };
 const CH_SUGGEST = ["Чем метрика отличается от KPI?", "Объясни 3 лекцию", "Что сдать на этой неделе?"];
+/** «С чего начать» нового вида (freshStarters): название, подпись, что подставить в поле. */
+const CH_START = [["Объяснить лекцию", "выберешь предмет и номер", "Объясни лекцию "],
+  ["Разобрать задачу", "можно фото или файл", "Разбери задачу: "], ["Что сдать на этой неделе", "", "Что сдать на этой неделе?"]];
+
+/** Строка над полем (freshQuotaLine): «Сегодня осталось 17 вопросов из 20. История чатов хранится на этом телефоне.» */
+function chQuotaLine(left, limit) {
+  const where = "История чатов хранится на этом телефоне.";
+  if (left === null) return where;
+  if (left <= 0) return `На сегодня вопросы кончились, завтра можно снова. ${where}`;
+  const of = limit ? ` из ${limit}` : "";
+  return `Сегодня ${plural(left, "остался", "осталось", "осталось")} ${left} ${plural(left, "вопрос", "вопроса", "вопросов")}${of}. ${where}`;
+}
+/** Название лекции в строке источника — без «!» и «_» в начале (freshSourceTitle). */
+function chSrcTitle(src) {
+  const raw = String(src.title ?? src.label ?? "").trim();
+  return raw.replace(/^[\s!#*_~.\-–—]+/, "").trim() || raw;
+}
+/** «слайд 3», «слайды 3–4», «стр. 7» — хвост подписи сервера (freshSourceWhere). */
+function chSrcWhere(src) {
+  if (src.page == null || src.kind === "часть") return "";
+  const label = String(src.label ?? ""), i = label.lastIndexOf(" · ");
+  return i >= 0 ? label.slice(i + 3) : `стр. ${Math.trunc(src.page)}`;
+}
+/** Ответ простым текстом для «Скопировать»: без разметки и без «[n]» источников (_plain). */
+function chPlain(m) {
+  const cites = new Set(m.sources.filter((s) => typeof s.n === "number").map((s) => Math.trunc(s.n)));
+  let raw = m.content;
+  if (m.html) {
+    // DOMParser не запускает скрипты и не грузит картинки из разметки ответа
+    const doc = new DOMParser().parseFromString(`<body>${m.html.replace(/<br\s*\/?>/gi, "\n")}</body>`, "text/html");
+    raw = doc.body.textContent || "";
+  }
+  return raw.replace(/\[(\d{1,2})\]/g, (x, n) => (cites.has(+n) ? "" : x)).replace(/ +([.,;:!?])/g, "$1").trim();
+}
 
 function chMime(name) { return CH_MIMES[String(name).split(".").pop().toLowerCase()] || ""; }
 /** Сообщение (ChatMsg.fromJson). */
@@ -70,12 +104,12 @@ function openChat(want = {}) {
   Nav.push((wrap, screen) => {
     wrap.classList.add("ch");
     let log = [], id = null, subject = "", subjects = [], waiting = false, att = null, attNote = null;
-    let chats = [], dirty = false, left = null, thinkOffer = null, thinkOn = false, chooseAtt = null, alive = true;
+    let chats = [], dirty = false, left = null, limit = null, thinkOffer = null, thinkOn = false, chooseAtt = null, alive = true;
     const thinkLeft = () => (thinkOffer && typeof thinkOffer.left === "number" ? thinkOffer.left : null);
     const thinkCan = () => thinkOffer !== null && (thinkLeft() === null || thinkLeft() > 0) && att === null;
 
     wrap.innerHTML = `<div class="ch-top"></div><div class="ch-list"></div>
-      <div class="ch-foot"><div class="ch-tg"></div><div class="ch-ap"></div>
+      <div class="ch-foot"><div class="ch-quota"></div><div class="ch-tg"></div><div class="ch-ap"></div>
         <div class="ch-bar"><button class="ch-clip" data-act="attach" aria-label="Прикрепить фото или файл">${icon("attach_file")}</button>
           <textarea rows="1" enterkeyhint="send" placeholder="Спроси про лекцию или задачу" aria-label="Вопрос"></textarea>
           <button class="ch-send" data-act="send" aria-label="Отправить">${icon("arrow_upward")}</button></div></div>
@@ -133,7 +167,9 @@ function openChat(want = {}) {
         <div class="grow row" style="justify-content:flex-end;gap:0;min-width:0">
         ${chats.length ? `<button class="ch-ic" data-act="history" aria-label="Прошлые чаты">${icon("history")}</button>` : ""}
         ${log.length ? `<button class="ch-ic" data-act="newchat" aria-label="Новый чат">${icon("add_comment", "o")}</button>` : ""}
-        <button class="ch-subj" data-act="subject">${icon("menu_book", "o", "font-size:16px;color:var(--accent)")}<span>${esc(subject || "Все предметы")}</span></button></div>`;
+        ${Theme.fresh
+          ? `<button class="ch-subj fr" data-act="subject">${subject ? `<i class="ch-dot" style="background:${ink(subject)}"></i>` : ""}<span>${esc(subject || "Все предметы")}</span></button>`
+          : `<button class="ch-subj" data-act="subject">${icon("menu_book", "o", "font-size:16px;color:var(--accent)")}<span>${esc(subject || "Все предметы")}</span></button>`}</div>`;
     };
     let srcMap = [];
     const srcRef = (src) => srcMap.push(src) - 1;
@@ -162,6 +198,7 @@ function openChat(want = {}) {
         h += `<div class="ch-chips" style="padding:var(--s) 0 0">${m.choose.map((c, i) =>
           `<button class="ch-chip pick" data-act="choose" data-m="${mi}" data-k="${i}">${esc(c)}</button>`).join("")}</div>`;
       }
+      if (Theme.fresh) return `<div class="ch-ai" data-mi="${mi}">${h}${freshTail(m, mi, pages, whole)}</div>`;
       if (m.files.length || pages.length || whole.length) {
         const chip = (ic, label, act, k) => `<button class="ch-chip src" data-act="${act}" data-k="${k}">${icon(ic, "o", "font-size:16px;color:var(--accent)")}<span>${esc(label)}</span></button>`;
         h += `<div class="ch-chips" style="padding:var(--s) 0 0">${[
@@ -172,10 +209,39 @@ function openChat(want = {}) {
       }
       return `<div class="ch-ai">${h}</div>`;
     };
+    /** Новый вид под ответом: источники строками, «Скопировать» и «Подумать ещё · N» (_freshTail). */
+    const freshTail = (m, mi, pages, whole) => {
+      const row = (n, title, where, act, k) => `<button class="ch-src row" data-act="${act}" data-k="${k}">
+        <span class="ch-src-n">${n === null ? icon("insert_drive_file", "o", "font-size:16px") : n}</span>
+        <span class="grow"><span class="bd b6 clamp2" style="--sz:14.5px">${esc(title)}</span>${where ? `<span class="bd mut" style="--sz:12.5px;display:block">${esc(where)}</span>` : ""}</span>
+        ${icon("chevron_right", "", "color:var(--muted)")}</button>`;
+      const num = (s) => (typeof s.n === "number" ? Math.trunc(s.n) : null);
+      const rows = [
+        ...m.files.map((f) => row(null, String(f.title), "", "fileref", srcRef(f))),
+        ...pages.slice(0, 6).map((s) => row(num(s), chSrcTitle(s), chSrcWhere(s), "src", srcRef(s))),
+        ...whole.slice(0, 4).map((s) => row(num(s), chSrcTitle(s), "", "src", srcRef(s))),
+      ];
+      let h = rows.length ? `<div class="tile p0 ch-srcs">${rows.join('<div class="divider"></div>')}</div>` : "";
+      const copy = !m.error && !m.choose.length;
+      const t = mi === log.length - 1 && !waiting ? m.think : null, l = t && typeof t.left === "number" ? t.left : null;
+      if (copy || t) {
+        h += `<div class="ch-acts">${copy ? `<button class="ch-act" data-act="copy" data-m="${mi}">Скопировать</button>` : ""}
+          ${t ? `<button class="ch-act" data-act="think"${l !== 0 ? "" : " disabled"}>${esc(t.label ?? "Подумать ещё")}${l === null ? "" : " · " + l}</button>` : ""}</div>`;
+      }
+      return h;
+    };
     const drawList = () => {
       srcMap = [];
-      let h = screenTitle("Kapi ИИ");
-      if (!log.length) {
+      const fresh = Theme.fresh;
+      let h = fresh
+        ? screenTitle("Kapi ИИ", { sub: "отвечает по лекциям твоей\u00A0группы", trailing: log.length ? "" : `<span class="ch-capy" aria-hidden="true">${capy("day", 62)}</span>` })
+        : screenTitle("Kapi ИИ");
+      if (fresh && !log.length) {
+        h += section("С чего начать") + `<div class="hx"><div class="tile p0">${CH_START.map(([title, sub], i) =>
+          `<button class="ch-start row" data-act="start" data-k="${i}"><span class="grow"><span class="bd b6" style="--sz:15px;display:block">${esc(title)}</span>
+            ${sub ? `<span class="bd mut" style="--sz:13px;display:block">${esc(sub)}</span>` : ""}</span>${icon("chevron_right", "", "color:var(--muted)")}</button>`).join('<div class="divider"></div>')}</div></div>`;
+      }
+      if (!fresh && !log.length) {
         h += `<div style="padding:0 var(--xl) var(--l)"><div class="bd mut" style="--sz:15px">Отвечает по лекциям твоей группы: объяснит тему, решит задачу, скажет, где в лекции.</div>
           ${left !== null ? `<div class="row" style="gap:6px;margin-top:var(--s)">${icon("chat_bubble_outline", "", `font-size:16px;color:${left > 0 ? "var(--accent)" : "var(--warn)"}`)}
             <div class="bd b6 grow" style="--sz:14px;color:${left > 0 ? "var(--text)" : "var(--warn)"}">${left > 0
@@ -184,7 +250,7 @@ function openChat(want = {}) {
       }
       h += log.map(bubble).join("");
       const last = log[log.length - 1];
-      if (!waiting && last && last.think) {
+      if (!fresh && !waiting && last && last.think) {
         const t = last.think, l = typeof t.left === "number" ? t.left : null;
         h += `<div style="padding:0 var(--xl) var(--s)"><button class="ch-chip think" data-act="think"${l !== 0 ? "" : " disabled"}>
           ${icon("psychology", "o", "font-size:18px;color:var(--accent)")}<span>${esc(t.label ?? "Подумать ещё")}${l === null ? "" : " · " + l}</span></button></div>`;
@@ -193,6 +259,7 @@ function openChat(want = {}) {
       list.innerHTML = h;
     };
     const drawFoot = () => {
+      $(".ch-quota").innerHTML = Theme.fresh && !log.length ? `<div class="bd mut ch-q" style="--sz:13px">${esc(chQuotaLine(left, limit))}</div>` : "";
       const tg = $(".ch-tg");
       if (thinkOffer === null) tg.innerHTML = "";
       else {
@@ -412,8 +479,17 @@ function openChat(want = {}) {
     });
 
     // ── поле ввода ──
-    const fit = () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 5 * 20.25 + 20) + "px"; };
+    // пустое поле меряем по подсказке: на узком экране она в две строки и иначе обрезалась снизу
+    const fit = () => {
+      input.style.height = "auto";
+      const empty = !input.value;
+      if (empty) input.value = input.placeholder;
+      const h = input.scrollHeight;
+      if (empty) input.value = "";
+      input.style.height = Math.min(h, 5 * 20.25 + 20) + "px";
+    };
     input.addEventListener("input", fit);
+    addEventListener("resize", fit);
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
     });
@@ -476,12 +552,21 @@ function openChat(want = {}) {
         send(lastQ.content, chooseAtt);
       },
       think,
+      // «С чего начать»: подставить начало вопроса в поле, курсор — в конец; без предмета «Объяснить лекцию» сначала спросит предмет
+      start: async (b) => {
+        const i = +b.dataset.k;
+        if (i === 0 && !subject && subjects.length) { await pickSubject(); if (!alive) return; }
+        input.value = CH_START[i][2]; fit(); input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      },
+      copy: (b) => { tick(); acCopyTo(chPlain(log[+b.dataset.m]), "Скопировано"); },
       src: (b) => openSource(srcMap[+b.dataset.k]),
       fileref: (b) => { tick(); flFileSheet(flFileOf(srcMap[+b.dataset.k])); },
     });
 
     restore();
     draw();
+    requestAnimationFrame(fit);
     requestAnimationFrame(() => (list.scrollTop = list.scrollHeight));
     Api.get("/subjects").then((j) => {
       if (!alive) return;
@@ -490,11 +575,13 @@ function openChat(want = {}) {
       if (want.subject && !log.length) subject = subjects.find((n) => sameSubject(n, want.subject)) || subject;
       const q = j.quota;
       left = q && typeof q.left === "number" ? Math.trunc(q.left) : null;
+      limit = q && typeof q.limit === "number" ? Math.trunc(q.limit) : null;
       thinkOffer = j.think && typeof j.think === "object" ? j.think : null;
       draw();
     }).catch(() => {});
     return () => {
       alive = false;
+      removeEventListener("resize", fit);
       if (vv) { vv.removeEventListener("resize", onVV); vv.removeEventListener("scroll", onVV); }
     };
   });

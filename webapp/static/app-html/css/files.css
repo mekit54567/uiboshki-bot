@@ -123,3 +123,21 @@
 .ch-thread .tile { position: relative; padding: var(--m) var(--xs) var(--m) var(--l); }
 .ch-thread .tile.cur { border-color: var(--accent); }
 .ch-thread .ch-x { width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+
+/* ── Kapi ИИ нового дизайна (chat_fresh.dart; только при «Новом») ── */
+.ch-subj.fr { height: 36px; padding: 0 14px; gap: 8px; background: transparent; border-color: var(--edge); font-size: 13.5px; }
+.ch-subj.fr span:last-child { max-width: 190px; }
+.ch-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ch-capy { width: 62px; height: 62px; flex: none; color: var(--text); margin-left: var(--s); }
+.ch-start, .ch-src { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: var(--m); min-height: 56px; color: var(--text); }
+.ch-src { gap: 0; }
+.ch-src > .mi:last-child { margin-left: var(--s); }
+.ch-src-n { width: 24px; flex: none; color: var(--accent); font-weight: 700; font-size: 14px; }
+.ch-srcs { margin-top: var(--m); }
+.ch-acts { display: flex; flex-wrap: wrap; gap: var(--s); margin-top: var(--m); }
+.ch-act { padding: 8px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--text); }
+.ch-act:disabled { color: var(--muted); }
+.ch-act:active:not(:disabled), .ch-start:active, .ch-src:active { filter: brightness(.95); }
+.ch-q { padding: var(--s) var(--xl) 0; }
+:root[data-fresh="1"] .ch-me > div { background: var(--text); color: var(--bg); font-weight: 500; }
+:root[data-fresh="1"] .ch-bar { border-color: var(--edge); }
