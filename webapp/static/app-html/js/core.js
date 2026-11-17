@@ -344,8 +344,19 @@ function screenTitle(title, { sub = "", trailing = "", lead = "", size = 34 } = 
   return `<div style="padding:var(--l) var(--xl) var(--m)">${lead ? lead + '<div style="height:6px"></div>' : ""}${t}</div>`;
 }
 function section(text) { return `<div class="section eyebrow">${esc(text)}</div>`; }
-/** Пусто или ошибка (Notice): pose — капибара, retry — data-act кнопки. */
+/** Пустой экран и сбой нового вида (FreshEmpty, шаг 8): капибара крупно по центру,
+ *  заголовок, что дальше и кнопка act. capy=false — капибара уже есть на экране. */
+function freshEmpty(pose, title, text, { action = "", act = "", capy: withCapy = true, id = "" } = {}) {
+  const small = innerHeight < 640;
+  return `<div class="fe"${id ? ` id="${id}"` : ""}>${withCapy ? capy(pose, small ? 96 : 150) : ""}
+    <div class="ttl" style="--sz:26px">${esc(title)}</div>
+    <div class="bd mut" style="--sz:15px">${esc(text)}</div>
+    ${action && act ? `<button class="fe-btn" data-act="${act}">${esc(action)}</button>` : ""}</div>`;
+}
+/** Пусто или ошибка (Notice): pose — капибара, retry — data-act кнопки.
+ *  В новом виде «не вышло» с кнопкой — крупно по центру (как Loader в приложении). */
 function notice(title, text, { pose = "", retry = "", retryLabel = "Ещё раз" } = {}) {
+  if (Theme.fresh && pose === "sad" && retry) return freshEmpty("sad", title, text, { action: retryLabel, act: retry });
   // «Пусто, всё хорошо» — капибара выглядывает снизу справа из-за края карточки (CapyPeek)
   if (pose && pose !== "sad") {
     const size = 84, shown = size * 0.8, h = msk(now()).h, night = h >= 23 || h < 5;

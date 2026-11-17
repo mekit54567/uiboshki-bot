@@ -111,7 +111,7 @@ class _FreshView extends StatelessWidget {
     );
     // сбой: плашка сверху, капибара грустит в ней — одна на экран
     final down = !data.scheduleOk
-        ? 'Расписание сейчас не загрузить, а сохранённого нет. Попробую снова через минуту.'
+        ? 'Расписание сейчас не загрузить, а сохранённого нет. Попробую снова через\u00A0минуту.'
         : data.savedAt != null
         ? savedScheduleText(data.savedAt!)
         : null;

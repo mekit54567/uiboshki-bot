@@ -50,6 +50,38 @@ function shortSky(desc) {
     ["туман", "туман"], ["пасмурно", "пасмурно"], ["облачн", "облачно"], ["ясно", "ясно"]]) if (x.includes(k)) return s;
   return x.split(" ").pop();
 }
+// ── Пустой день и сбой нового вида (шаг 8; today.dart: freeDayText, savedScheduleText) ──
+const TD_IN = ["в\u00A0понедельник", "во\u00A0вторник", "в\u00A0среду", "в\u00A0четверг", "в\u00A0пятницу", "в\u00A0субботу", "в\u00A0воскресенье"];
+/** «Завтра первая пара в 10:40.» / «Завтра тоже свободно. Ближайшая пара во вторник в 10:40.» */
+function tdFreeText(today, tf, next) {
+  if (tf) return `Завтра первая пара в\u00A0${tf.start}.`;
+  if (!next) return "Завтра тоже свободно.";
+  const days = Math.round((Date.parse(next.day + "T12:00:00Z") - Date.parse(today + "T12:00:00Z")) / 864e5);
+  const wd = (new Date(next.day + "T12:00:00Z").getUTCDay() + 6) % 7;
+  const when = days < 7 ? TD_IN[wd] : `${+next.day.slice(8)} ${MONTHS[+next.day.slice(5, 7) - 1]}`;
+  return `Завтра тоже свободно. Ближайшая пара ${when} в\u00A0${next.start}.`;
+}
+/** Плашка сбоя по метке сервера «07:30» / «1 окт, 14:20». */
+function tdSavedText(label) {
+  const i = label.indexOf(", ");
+  const when = i < 0 ? `сегодня в ${label}` : `${label.slice(0, i)} в ${label.slice(i + 2)}`;
+  return `Показываю расписание, сохранённое ${when}. Попробую снова через\u00A0минуту.`;
+}
+/** Ближайший день с парами после завтра: эта неделя, не нашлось — следующая. */
+async function tdNextDay(extra, days, today) {
+  const after = addDays(today, 1);
+  const pick = (ds) => { for (const d of ds || []) if (d && String(d.date) > after && (d.dots || []).length) return String(d.date); return null; };
+  let date = pick(days);
+  if (!date) {
+    const nw = await extra(`/week?start=${addDays(mondayOf(), 7)}`);
+    date = pick(nw && Array.isArray(nw.days) ? nw.days : null);
+  }
+  if (!date) return null;
+  const d = await extra(`/day?date=${date}`);
+  const ls = d && Array.isArray(d.lessons) ? d.lessons : [];
+  return ls.length && ls[0] && ls[0].start ? { day: date, start: String(ls[0].start) } : null;
+}
+
 function rainy(raw) { const w = weatherBrief(raw); return !!w && ["дождь", "ливень", "морось", "гроза"].includes(w.sky); }
 
 Screens.today = {
@@ -64,6 +96,10 @@ Screens.today = {
       if (!j) return null;
       if (fromCache && j.date && j.date !== today) return null;     // утром в запасе — вчерашний день
       const days = week && Array.isArray(week.days) ? week.days : null;
+      const tmr = tomorrow && Array.isArray(tomorrow.lessons) ? tomorrow.lessons : [];
+      // старый сервер этих полей не знает — расписание считаем живым
+      const scheduleOk = j.schedule_ok !== false;
+      const next = Theme.fresh && !(j.lessons || []).length && !tmr.length && scheduleOk ? await tdNextDay(extra, days, today) : null;
       return {
         lessons: (j.lessons || []).map(lessonOf),
         cancelled: (j.cancelled || []).map(lessonOf),
@@ -74,7 +110,10 @@ Screens.today = {
         group: me && me.group ? String(me.group.name || "") : "",
         week: week && Number.isInteger(week.week) ? week.week : null,
         more: days && days.length ? days.some((d) => d.date > today && (d.dots || []).length) : null,
-        tomorrow: tomorrow && Array.isArray(tomorrow.lessons) ? tomorrow.lessons.map(lessonOf) : [],
+        tomorrow: tmr.map(lessonOf),
+        scheduleOk,
+        savedAt: typeof j.stale === "string" && j.stale ? j.stale : null,
+        next,
       };
     };
 
@@ -174,6 +213,9 @@ Screens.today = {
         const i = L.indexOf(next);
         title = i === 0 ? (data.name ? `${greeting(h)},\n${data.name}` : greeting(h)) : "Перемена";
         hero = label(`${ordinal(i)} пара через`) + count(minutesTo(t, next.startAt));
+      } else if (!L.length && !data.scheduleOk) {
+        title = "Расписания пока нет";   // пар не видно, потому что сайт молчит, — не «свободно»
+        hero = "";
       } else {
         title = L.length ? "Пары закончились" : "Сегодня пар нет";
         if (hot.length) hero = label("до срока") + count(minutesTo(t, dueOf(hot[0])), "var(--accent)");
@@ -237,9 +279,24 @@ Screens.today = {
       else if (awake && !current && !next) moments.push(data.more === false ? "weekOver" : "dayOver");
       if (awake && rainy(data.weather)) moments.push("rain");
       screen.capyLines = [...moments.map((m) => MOMENT_LINES[m]), ...CAPY_LINES[poseAt(h)]];
-      body.innerHTML = top() + `<div class="td-head" style="align-items:flex-start"><div class="grow" style="min-width:0">
+      // сбой: плашка сверху, капибара грустит в ней — одна на экран
+      const down = !data.scheduleOk ? "Расписание сейчас не загрузить, а сохранённого нет. Попробую снова через\u00A0минуту."
+        : data.savedAt ? tdSavedText(data.savedAt) : "";
+      const banner = down ? `<div class="tile td-down" id="today-down">${capy("sad", 56)}<div class="grow">
+          <div class="bd b7" style="--sz:15px">МИРЭА не отвечает</div><div class="bd mut" style="--sz:13px;margin-top:2px">${esc(down)}</div></div></div>` : "";
+      // пар нет весь день: капибара крупно, ниже — что ждёт и завтрашние пары
+      if (!L.length && data.scheduleOk) {
+        let free = top() + banner + freshEmpty("joy", "Сегодня пар нет", tdFreeText(isoDay(t), data.tf, data.next), { capy: !banner, id: "today-free" });
+        if (data.soon.length) free += section("но кое-что ждёт") + (hot.length ? `<div class="hx">${hot.map(hotCard).join("")}</div>` : "")
+          + (later.length ? `<div class="hx">${soonList(later, t)}</div>` : "");
+        if (ahead.length) free += section(`отменили · ${pairs(ahead.length)}`) + rows(ahead);
+        if (rest.length) free += section(`завтра · ${pairs(rest.length)}`) + rows(rest);
+        body.innerHTML = free + '<div class="pad-bottom"></div>';
+        return;
+      }
+      body.innerHTML = top() + banner + `<div class="td-head" style="align-items:flex-start"><div class="grow" style="min-width:0">
           <div class="ttl td-title${title.includes("\n") ? "" : " one"}" style="--sz:30px">${esc(title)}</div><div style="height:var(--m)"></div>${hero}</div>
-        <button class="td-capy" data-act="capy" aria-label="Капибара">${capy(poseAt(h), 62)}</button></div>
+        ${banner ? "" : `<button class="td-capy" data-act="capy" aria-label="Капибара">${capy(poseAt(h), 62)}</button>`}</div>
         ${list}<div class="pad-bottom"></div>`;
       fitTitle();
     };

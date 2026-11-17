@@ -80,6 +80,15 @@ function dlSdoShown(lastOk, at) {
   const day = n <= 0 ? "" : n === 1 ? "вчера, " : `${t.d} ${MONTHS[t.m - 1]}, `;
   return `Показываю сроки от ${day}${hm(lastOk)}`;
 }
+/** «Активных сроков нет» нового вида (freshNoDueText): просроченное на соседней полке и когда смотрели СДО. */
+function dlNoDueText(late, checked, at) {
+  const shelf = !late ? "" : late === 1 ? "Одна работа просрочена, загляни на соседнюю полку. "
+    : `${late} ${plural(late, "работа просрочена", "работы просрочены", "работ просрочено")}, загляни на соседнюю полку. `;
+  if (!checked) return `${shelf}Новые задания из СДО проверяем несколько раз в день.`;
+  const n = dlDays(checked, at), t = msk(checked);
+  const day = n <= 0 ? "" : n === 1 ? "вчера " : `${t.d} ${MONTHS[t.m - 1]} `;
+  return `${shelf}Новые задания из СДО проверяем несколько раз в день, последний раз ${day}в ${hm(checked)}.`;
+}
 /** Число без лишних нулей: 7 → «7», 7.5 → «7,5» (fmtNum). */
 function dlNum(v) { v = Number(v) || 0; return v === Math.round(v) ? String(Math.round(v)) : v.toFixed(1).replace(".", ","); }
 
@@ -627,8 +636,10 @@ Screens.deadlines = {
         html += `<div class="dl-segwrap"><div class="dl-seg">
           <button class="${bySubject ? "" : "on"}" data-act="view" data-k="0" aria-pressed="${!bySubject}">По срокам</button>
           <button class="${bySubject ? "on" : ""}" data-act="view" data-k="1" aria-pressed="${bySubject}">По предметам</button></div></div>`;
-        const empty = notice("Ближайших сроков нет",
-          data.sdo && data.sdo.checkedAt ? dlSdoChecked(data.sdo.checkedAt, t) : "Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.", { pose: "joy" });
+        // пусто — капибара крупно и что дальше (шаг 8); радостной не бывает, пока есть просроченное
+        const checked = data.sdo && data.sdo.checkedAt;
+        const empty = freshEmpty("joy", "Сроков нет", `${dlNoDueText(0, checked, t)} Свой срок можно добавить кнопкой +.`,
+          { action: "Проверить обновления", act: "retrySdo", id: "due-empty" });
         if (!bySubject) {
           html += `<div class="df-shelves">${[`Активные · ${open.length}`, `Просрочено · ${late.length}`, `Готово · ${done.length}`].map((l, i) =>
             `<button class="df-chip${shelf === i ? " on" : ""}" data-act="shelf" data-k="${i}" aria-pressed="${shelf === i}">${l}</button>`).join("")}</div>`;
@@ -640,16 +651,17 @@ Screens.deadlines = {
                 <button class="dl-retry" data-act="retrySdo">Проверить СДО</button></div></div></div>`;
             }
             if (burning) html += freshHot(burning, t);
-            if (!open.length && sdoDown) html += notice("СДО не ответил", dlSdoShown(sdo.lastOk, t), { pose: "sad", retry: "retrySdo", retryLabel: "Проверить СДО" });
-            else if (!open.length && late.length) html += notice("Впереди сроков нет",
-              `Но на полке «Просрочено» работ: ${late.length}. Сдал — отметь, не нужна — убери.`, { pose: "day" });
-            else if (!open.length) html += empty;
+            if (!open.length && sdoDown) html += freshEmpty("sad", "СДО не ответил", `${dlSdoShown(sdo.lastOk, t)}. Попробую сам чуть позже.`,
+              { action: "Проверить СДО", act: "retrySdo", id: "due-empty" });
+            else if (!open.length) html += freshEmpty(late.length ? "evening" : "joy", "Активных сроков нет", dlNoDueText(late.length, checked, t),
+              { action: "Проверить обновления", act: "retrySdo", id: "due-empty" });
             let i = 0;
             for (const [k, list] of weeks) html += section(i++ === 0 && burning ? "Дальше" : dlWeekLabel(k, t)) + card(list, t);
           } else if (shelf === 1) {
-            html += late.length ? card(late, t, true) : notice("Просроченного нет", "Работы с прошедшим сроком появятся здесь.", { pose: "joy" });
+            html += late.length ? card(late, t, true) : freshEmpty("joy", "Просроченного нет",
+              "Если срок пройдёт, а работа не сдана, она появится здесь. Сдал — отметь, не нужна — убери.", { id: "due-empty" });
           } else {
-            html += done.length ? card(done, t) : notice("Пока ничего", "Сданное появится здесь — свайп вправо по сроку или «Отметить».");
+            html += done.length ? card(done, t) : freshEmpty("day", "Пока ничего", "Сданное появится здесь: свайп вправо по сроку или «Отметить».", { id: "due-empty" });
           }
         } else {
           const groups = new Map();

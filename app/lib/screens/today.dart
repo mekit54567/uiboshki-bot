@@ -97,7 +97,7 @@ String freeDayText(DateTime at, Lesson? tomorrowFirst, ({DateTime day, String st
 String savedScheduleText(String label) {
   final i = label.indexOf(', ');
   final when = i < 0 ? 'сегодня в $label' : '${label.substring(0, i)} в ${label.substring(i + 2)}';
-  return 'Показываю расписание, сохранённое $when. Попробую снова через минуту.';
+  return 'Показываю расписание, сохранённое $when. Попробую снова через\u00A0минуту.';
 }
 
 const _ordinal = ['первая', 'вторая', 'третья', 'четвёртая', 'пятая', 'шестая', 'седьмая', 'восьмая'];

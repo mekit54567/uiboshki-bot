@@ -105,10 +105,10 @@ void main() {
 
   test('плашка сбоя: метка сервера словами', () {
     expect(
-      savedScheduleText('07:30'),
+      _plain(savedScheduleText('07:30')),
       'Показываю расписание, сохранённое сегодня в 07:30. Попробую снова через минуту.',
     );
-    expect(savedScheduleText('1 окт, 14:20'), startsWith('Показываю расписание, сохранённое 1 окт в 14:20.'));
+    expect(_plain(savedScheduleText('1 окт, 14:20')), startsWith('Показываю расписание, сохранённое 1 окт в 14:20.'));
   });
 
   test('«Активных сроков нет»: просроченное на соседней полке и когда смотрели СДО', () {
@@ -165,10 +165,12 @@ void main() {
     );
     await settle(t);
     expect(find.text('МИРЭА не отвечает'), findsOneWidget);
-    expect(
-      find.text('Показываю расписание, сохранённое сегодня в 07:30. Попробую снова через минуту.'),
-      findsOneWidget,
+    final saved = find.byWidgetPredicate(
+      (w) =>
+          w is Text &&
+          _plain(w.data ?? '') == 'Показываю расписание, сохранённое сегодня в 07:30. Попробую снова через минуту.',
     );
+    expect(saved, findsOneWidget);
     expect(find.text('Сегодня пар нет'), findsOneWidget);
     expect(find.byType(CapyImage), findsOneWidget);
     expect(_capy(CapyPose.sad), isTrue);
