@@ -167,6 +167,10 @@ html.ios-home body { min-height: var(--screen-h, 100%); }
   transition: max-width .32s cubic-bezier(.2,.8,.2,1), opacity .2s; overflow: hidden; }
 .capsule .slot.on { flex-grow: 26; background: var(--accent); color: var(--on-accent); }
 .capsule .slot.on .lbl { max-width: 120px; opacity: 1; }
+/* «С подписями» (шаг 8): значок над подписью, вкладки одной ширины */
+:root[data-tabs="labels"] #tabbar .slot, .capsule.labels .slot { flex: 1 1 0; flex-direction: column; gap: 2px; padding: 0 2px; }
+:root[data-tabs="labels"] #tabbar .slot .lbl, .capsule.labels .slot .lbl { font-size: 11px; line-height: 1.15; margin-left: 0;
+  max-width: 100%; opacity: 1; text-overflow: clip; }
 
 /* ── Листы снизу (appSheet) ── */
 .sheet-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }

@@ -194,6 +194,7 @@ const Theme = {
     root.dataset.fresh = fresh ? "1" : "0";
     root.dataset.paper = !dark && (fresh || name === "notebook") ? look.paper : "smooth";
     root.dataset.card = look.card;
+    root.dataset.tabs = fresh && look.tabLabels ? "labels" : "short";   // меню «С подписями» — только в «Новом»
     root.style.filter = "";
     root.style.setProperty("--dusk", String(dusk));
     let font = Prefs.get("uib_font") || "book";
@@ -215,7 +216,7 @@ const Theme = {
   },
 };
 const Look = {
-  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic", fresh: false, freshDepth: false },
+  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic", fresh: false, freshDepth: false, tabLabels: false },
   load() {
     const c = this.classic;
     return { light: Prefs.get("uib_look_light", c.light), dark: Prefs.get("uib_look_dark", c.dark),
@@ -224,10 +225,12 @@ const Look = {
              icon: Prefs.get("uib_look_icon", c.icon),
              // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
              fresh: Prefs.get("uib_look_fresh", Theme.design3 === "on") === true,
-             freshDepth: Prefs.get("uib_look_fresh_depth", false) === true };
+             freshDepth: Prefs.get("uib_look_fresh_depth", false) === true,
+             tabLabels: Prefs.get("uib_look_tab_labels", false) === true };
   },
   save(l) { for (const k of ["light", "dark", "paper", "card", "day", "cheer", "icon"]) Prefs.set("uib_look_" + k, l[k]);
-    Prefs.set("uib_look_fresh", !!l.fresh); Prefs.set("uib_look_fresh_depth", !!l.freshDepth); },
+    Prefs.set("uib_look_fresh", !!l.fresh); Prefs.set("uib_look_fresh_depth", !!l.freshDepth);
+    Prefs.set("uib_look_tab_labels", !!l.tabLabels); },
 };
 /** Восход и закат в Москве (moscowSun) и фаза «по закату» (sunsetPhase). */
 function moscowSun(d) {

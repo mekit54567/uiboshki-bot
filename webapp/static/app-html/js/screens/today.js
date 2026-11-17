@@ -241,7 +241,8 @@ Screens.today = {
         }
       }
       const nowCard = (l) => {
-        const sub = [l.kind ? l.kind.toLowerCase() : "", l.teacher].filter(Boolean).join(" · ");
+        // инициалы не отрываются от фамилии (как today_fresh.dart)
+        const sub = [l.kind ? l.kind.toLowerCase() : "", (l.teacher || "").replace(/ (?=[А-ЯЁ]\.)/g, "\u00A0")].filter(Boolean).join(" · ");
         const room = l.roomWas ? roomWas(l) : l.room ? roomPill(l.room, ink(l.title), 15, true) : "";
         return `<button class="tile tf-now${current ? " live" : ""}" data-act="lesson" data-k="${key(l)}">
           <div class="row" style="align-items:flex-start;gap:0">

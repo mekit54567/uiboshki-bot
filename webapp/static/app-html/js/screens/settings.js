@@ -304,7 +304,7 @@ window.openLook = function openLook() {
     const draw = () => {
       const look = Look.load(), theme = mrLook.theme(), font = mrLook.font();
       const classic = Look.classic, fresh = Theme.fresh;
-      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || look.freshDepth
+      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || look.freshDepth || look.tabLabels
         || (!fresh && (font === "hand" || font === "wide")) || theme === "sunset";
       const sun = moscowSun(now());
       const hint = (t) => `<div class="bd mut mr-hint">${esc(t)}</div>`;
@@ -325,6 +325,7 @@ window.openLook = function openLook() {
           : `<div class="hx mr-two">${swatch("dark", "depth", "Глубина", "синее свечение", look.dark === "depth", "smooth")}
             ${swatch("dark", "library", "Библиотека", "тёмно-зелёная", look.dark === "library", "smooth")}</div>`)
         + (fresh ? "" : section("шрифт заголовков") + `<div class="hx mr-fonts">${fonts}</div>`)
+        + (fresh ? section("меню внизу") + `<div class="hx">${seg("tabs", look.tabLabels ? "labels" : "short", [["short", "Коротко"], ["labels", "С подписями"]])}</div>` : "")
         + section("пары на «сегодня»") + `<div class="hx">${seg("day", look.day, [["cards", "Карточками"], ["rows", "Строками"]])}</div>`
         + (look.day === "cards" ? `<div class="hx" style="margin-top:var(--s)">${seg("card", look.card, [["tint", "С цветом"], ["stripe", "С полоской"]])}</div>` : "")
         + section("когда отметил «сдано»") + `<div class="hx">${seg("cheer", look.cheer, [["quiet", "Тихо"], ["capy", "Капибара"], ["confetti", "Конфетти"]])}</div>`
@@ -342,6 +343,7 @@ window.openLook = function openLook() {
           const look = Look.load();
           if (id === "mode") look.fresh = v === "fresh";
           else if (id === "night") look.freshDepth = v === "depth";
+          else if (id === "tabs") look.tabLabels = v === "labels";
           else look[id] = v;
           mrLook.setLook(look);
         }
@@ -628,7 +630,8 @@ window.openGroupPick = function openGroupPick({ required = false } = {}) {
   });
 };
 
-// ── Знакомство: пять шагов поверх самих экранов, капсула подсвечена ──
+// ── Знакомство: пять шагов поверх самих экранов, капсула подсвечена; в
+// «Новом» шестой — «Каким сделать меню» (tour.dart: tourMenuStep) ──
 const MR_TOUR = [
   ["space_dashboard", "Что где", "Сегодня — пары и что дальше. Неделя — всё расписание. Сдать — сроки и заметки. Учёба — баллы и цели. Ещё — настройки.", 0],
   ["swipe", "Листай недели", "Проведи по неделе влево или вправо — откроется соседняя. Нажми на день сверху — лента приедет к нему.", 1],
@@ -636,11 +639,18 @@ const MR_TOUR = [
   ["touch_app", "Нажми на пару", "Откроется карточка пары: кабинет и корпус, преподаватель, файлы и баллы по предмету.", 0],
   ["flag", "Цель по предмету", "Открой предмет и выбери оценку — капибара посчитает, сколько баллов и работ не хватает.", 3],
 ];
+const MR_TOUR_MENU = ["view_week", "Каким сделать меню", "", 0];
+/** Образец меню: та же капсула, уменьшенная копия настоящей (не сжатая). */
+function mrTabSample(labels) {
+  return `<div class="tr-sample" aria-hidden="true"><nav class="capsule${labels ? " labels" : ""}">${TABS.map((t, k) =>
+    `<span class="slot${k === 0 ? " on" : ""}">${icon(t.icon, t.variant || "")}<span class="lbl">${t.label}</span></span>`).join("")}</nav></div>`;
+}
 window.showTour = function showTour() {
   return new Promise((resolve) => {
     let i = 0;
+    const steps = Theme.fresh ? [...MR_TOUR, MR_TOUR_MENU] : MR_TOUR;
     const open = (tab) => { if (Tabs.index !== tab) Tabs.show(tab); Tabs.setHidden(false); };
-    open(MR_TOUR[0][3]);
+    open(steps[0][3]);
     const ov = document.createElement("div");
     ov.className = "mr-tour";
     document.body.appendChild(ov);
@@ -652,17 +662,33 @@ window.showTour = function showTour() {
         Object.assign(hole.style, { display: "", left: r.left - 4 + "px", top: r.top - 4 + "px", width: r.width + 8 + "px", height: r.height + 8 + "px" });
         box.style.bottom = innerHeight - r.top + 18 + "px";
       } else { hole.style.display = "none"; box.style.bottom = "calc(var(--sab) + 18px)"; }
+      // образцы — во всю ширину настоящего меню и уменьшены под карточку
+      const real = r && r.width ? r.width : innerWidth - 36;
+      ov.querySelectorAll(".tr-sample").forEach((w) => {
+        const nav = w.firstElementChild, k = Math.min(1, w.clientWidth / real);
+        nav.style.width = real + "px";
+        nav.style.transform = `scale(${k})`;
+        w.style.height = 64 * k + "px";
+      });
     };
     const draw = (animate) => {
-      const [ic, title, text] = MR_TOUR[i], last = i === MR_TOUR.length - 1;
+      const [ic, title, text] = steps[i], last = i === steps.length - 1, menu = steps[i] === MR_TOUR_MENU;
+      const tabs = Look.load().tabLabels;
+      const opt = (v, t, sub) => `<button class="tr-opt${v === tabs ? " on" : ""}" data-act="menu" data-v="${v ? "labels" : "short"}"
+          aria-pressed="${v === tabs}" id="tour-menu-${v ? "labels" : "short"}">
+        <div class="row"><div class="grow"><div class="bd b7" style="--sz:15px">${t}</div><div class="bd mut" style="--sz:13px">${sub}</div></div>
+          ${icon(v === tabs ? "check_circle" : "radio_button_unchecked", "", `color:var(${v === tabs ? "--accent" : "--muted"})`)}</div>
+        ${mrTabSample(v)}</button>`;
       ov.innerHTML = `<div class="mr-hole"></div><div class="mr-tbox"><div class="mr-tcard${animate ? " in" : ""}">
         <div class="row"><span class="mr-ticon">${icon(ic, "o")}</span><span class="grow"></span>
-          <span style="display:flex">${MR_TOUR.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</span></div>
+          <span style="display:flex">${steps.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</span></div>
         <div class="ttl" style="--sz:26px;margin-top:var(--m)">${esc(title)}</div>
-        <div class="bd mut" style="--sz:15px;margin-top:var(--s)">${esc(text)}</div>
+        ${menu ? `<div class="tr-opts">${opt(false, "Коротко", "Подпись только у открытой вкладки")}${opt(true, "С подписями", "Каждая вкладка подписана")}</div>
+          <div class="bd mut" style="--sz:13px;margin-top:var(--m)">Поменять можно в любой момент: «Ещё», «Оформление».</div>`
+        : `<div class="bd mut" style="--sz:15px;margin-top:var(--s)">${esc(text)}</div>`}
         <div class="row" style="justify-content:space-between;margin-top:var(--m)">
           ${last ? "<span></span>" : '<button class="mr-skip" data-act="skip">Пропустить</button>'}
-          <button class="mr-next" data-act="next">${last ? "Понятно" : "Дальше"}</button></div></div></div>`;
+          <button class="mr-next" data-act="next">${menu ? "Готово" : last ? "Понятно" : "Дальше"}</button></div></div></div>`;
       place();
     };
     const close = () => {
@@ -675,10 +701,19 @@ window.showTour = function showTour() {
     on(ov, {
       next() {
         tick();
-        if (i + 1 >= MR_TOUR.length) { close(); return; }
+        if (i + 1 >= steps.length) { close(); return; }
         i++;
-        open(MR_TOUR[i][3]);
+        open(steps[i][3]);
         draw(true);
+      },
+      menu(b) {
+        const look = Look.load(), v = b.dataset.v === "labels";
+        if (look.tabLabels === v) return;
+        tick();
+        look.tabLabels = v;
+        Look.save(look);
+        Theme.apply();   // меню внизу меняется сразу
+        draw(false);
       },
       skip() { close(); },
     });

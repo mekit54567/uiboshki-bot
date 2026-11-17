@@ -323,7 +323,9 @@ class _NowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final sub = [if (lesson.kind.isNotEmpty) lesson.kind.toLowerCase(), if (lesson.teacher.isNotEmpty) lesson.teacher];
+    // инициалы не отрываются от фамилии: «Сиганьков\u00A0А.\u00A0А.»
+    final teacher = lesson.teacher.replaceAll(RegExp(r' (?=[А-ЯЁ]\.)'), '\u00A0');
+    final sub = [if (lesson.kind.isNotEmpty) lesson.kind.toLowerCase(), if (teacher.isNotEmpty) teacher];
     return Tile(
       key: const Key('today:now'),
       radius: Radii.card,

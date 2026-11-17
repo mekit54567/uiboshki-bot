@@ -181,5 +181,13 @@ button.mf-row:active { background: color-mix(in srgb, var(--text) 5%, transparen
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .mr-dot { display: block; width: 6px; height: 6px; border-radius: 3px; background: var(--line); margin-left: 5px; transition: width .22s, background .22s; }
 .mr-dot.on { width: 18px; background: var(--accent); }
+/* «Каким сделать меню»: две карточки с образцами */
+.tr-opts { display: flex; flex-direction: column; gap: var(--s); margin-top: var(--m); }
+.tr-opt { display: block; width: 100%; text-align: left; padding: var(--m); background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-tile); transition: border-color .2s; }
+.tr-opt.on { border: 2px solid var(--accent); padding: calc(var(--m) - 1px); }
+.tr-opt .mut { text-wrap: balance; }
+.tr-sample { margin-top: var(--s); overflow: hidden; pointer-events: none; }
+.tr-sample .capsule { transform-origin: 0 0; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
 .mr-skip { padding: 10px 12px; font-size: 15px; font-weight: 600; color: var(--muted); }
 .mr-next { padding: 10px var(--l); min-height: 40px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 500; }
