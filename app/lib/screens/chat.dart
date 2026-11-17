@@ -20,11 +20,14 @@ import '../api/api.dart';
 import '../api/models.dart' show monthsShort, plural;
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../widgets/capy.dart';
 import '../widgets/common.dart';
 import '../widgets/msg_menu.dart';
 import '../widgets/tg_html.dart';
 import 'files.dart';
 import 'lesson.dart' show sameSubject;
+
+part 'chat_fresh.dart';
 
 class ChatMsg {
   final String role, content, html;
@@ -221,6 +224,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// лимита (староста) или сервер не сказал — число не показываем.
   int? _left;
 
+  /// Сколько вопросов в день всего — для «осталось 17 из 20» в новом виде.
+  int? _limit;
+
+  /// Поле ввода: «С чего начать» подставляет текст и ставит в поле курсор.
+  final _focus = FocusNode();
+
   /// «Подумать» до вопроса (подписка, think.py; Никита 18.10: «чтоб можно
   /// было выбрать перед ответом сразу»): {label, left, daily} с сервера; null —
   /// переключателя нет (не подписчик, выключено, iPhone). [_thinkOn] —
@@ -254,6 +263,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               _subject = _subjects.firstWhere((n) => sameSubject(n, want), orElse: () => _subject);
             }
             _left = q is Map && q['left'] is num ? (q['left'] as num).toInt() : null;
+            _limit = q is Map && q['limit'] is num ? (q['limit'] as num).toInt() : null;
             _thinkOffer = j['think'] is Map ? Map<String, dynamic>.from(j['think']) : null;
           });
         })
@@ -265,6 +275,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _input.dispose();
     _scroll.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -648,6 +659,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// «Подумать ещё · 9» под последним ответом (новый вид); 0 — серая.
+  Widget _freshThink(Map<String, dynamic> t) {
+    final left = (t['left'] as num?)?.toInt(); // null — безлимит
+    return _FreshChip(
+      key: const Key('chat:think-more'),
+      text: '${t['label'] ?? 'Подумать ещё'}${left == null ? '' : ' · $left'}',
+      onTap: left != 0 ? _think : null,
+    );
+  }
+
   void _toEnd() => WidgetsBinding.instance.addPostFrameCallback((_) {
     if (_scroll.hasClients) {
       _scroll.animateTo(
@@ -691,10 +712,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// «С чего начать» (новый вид): подставить начало вопроса в поле и
+  /// поставить туда курсор — вопрос уходит, когда допишешь. «Объяснить
+  /// лекцию» без предмета — сначала выбрать предмет.
+  Future<void> _start(int i) async {
+    if (i == 0 && _subject.isEmpty && _subjects.isNotEmpty) {
+      await _pickSubject();
+      if (!mounted) return;
+    }
+    final text = freshStarters[i].$3;
+    _input.text = text;
+    _input.selection = TextSelection.collapsed(offset: text.length);
+    _focus.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
+    final fresh = s.fresh;
     return Scaffold(
       body: Backdrop(
         child: SafeArea(
@@ -723,21 +759,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         Flexible(
                           child: Padding(
                             padding: const EdgeInsets.only(right: Space.l),
-                            child: ActionChip(
-                              onPressed: _pickSubject,
-                              backgroundColor: p.card,
-                              side: BorderSide(color: p.line),
-                              shape: const StadiumBorder(),
-                              avatar: Icon(Icons.menu_book_outlined, size: 16, color: p.accent),
-                              label: ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 170),
-                                child: Text(
-                                  _subject.isEmpty ? 'Все предметы' : _subject,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: s.body(13, weight: FontWeight.w600),
-                                ),
-                              ),
-                            ),
+                            child: fresh
+                                ? _FreshSubject(subject: _subject, onTap: _pickSubject)
+                                : ActionChip(
+                                    onPressed: _pickSubject,
+                                    backgroundColor: p.card,
+                                    side: BorderSide(color: p.line),
+                                    shape: const StadiumBorder(),
+                                    avatar: Icon(Icons.menu_book_outlined, size: 16, color: p.accent),
+                                    label: ConstrainedBox(
+                                      constraints: const BoxConstraints(maxWidth: 170),
+                                      child: Text(
+                                        _subject.isEmpty ? 'Все предметы' : _subject,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: s.body(13, weight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ),
                           ),
                         ),
                       ],
@@ -755,9 +793,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       controller: _scroll,
                       padding: const EdgeInsets.only(bottom: Space.l),
                       children: [
-                        const ScreenTitle(title: 'Kapi ИИ'),
-                        if (_log.isEmpty) _Intro(left: _left),
-                        if (_log.isEmpty)
+                        if (fresh)
+                          ScreenTitle(
+                            title: 'Kapi ИИ',
+                            sub: 'отвечает по лекциям твоей\u00A0группы', // на узком «группы» не уходит одна
+                            trailing: _log.isEmpty ? CapyImage(pose: CapyPose.day, size: 62, color: p.text) : null,
+                          )
+                        else
+                          const ScreenTitle(title: 'Kapi ИИ'),
+                        if (fresh && _log.isEmpty) _FreshStart(onPick: _start),
+                        if (!fresh && _log.isEmpty) _Intro(left: _left),
+                        if (!fresh && _log.isEmpty)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: Space.xl),
                             child: Wrap(
@@ -799,6 +845,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           _Bubble(
                             m: m,
                             api: widget.api,
+                            // новый вид: «Подумать ещё · N» рядом со «Скопировать» под ответом
+                            more: fresh && identical(m, _log.last) && !_waiting && m.think != null
+                                ? _freshThink(m.think!)
+                                : null,
                             onRetry: m.error && identical(m, _log.last) && !_waiting ? _retry : null,
                             onChoose: (subj) {
                               if (_waiting) return;
@@ -810,7 +860,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               _send(again: lastQ.content, againAtt: _chooseAtt);
                             },
                           ),
-                        if (!_waiting && _log.isNotEmpty && _log.last.think != null) _thinkChip(s, _log.last.think!),
+                        if (!fresh && !_waiting && _log.isNotEmpty && _log.last.think != null)
+                          _thinkChip(s, _log.last.think!),
                         if (_waiting)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.xl, 0),
@@ -821,6 +872,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ),
+              if (fresh && _log.isEmpty)
+                Padding(
+                  key: const Key('chat:quota'),
+                  padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.xl, 0),
+                  child: Text(freshQuotaLine(_left, _limit), style: s.body(13, color: p.muted)),
+                ),
               if (_thinkOffer != null)
                 _ThinkToggle(
                   left: _thinkLeft,
@@ -839,7 +896,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               KeyboardDragDismiss(
                 barKey: _bar,
-                child: _InputBar(key: _bar, controller: _input, busy: _waiting, onSend: _send, onAttach: _attach),
+                child: _InputBar(
+                  key: _bar,
+                  controller: _input,
+                  focus: _focus,
+                  busy: _waiting,
+                  onSend: _send,
+                  onAttach: _attach,
+                ),
               ),
             ],
           ),
@@ -1109,19 +1173,25 @@ class _Bubble extends StatelessWidget {
   final Api api;
   final ValueChanged<String> onChoose;
   final VoidCallback? onRetry;
-  const _Bubble({required this.m, required this.api, required this.onChoose, this.onRetry});
+
+  /// Новый вид: ещё кнопка под ответом рядом со «Скопировать» («Подумать ещё · 9»).
+  final Widget? more;
+  const _Bubble({required this.m, required this.api, required this.onChoose, this.onRetry, this.more});
 
   @override
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
+    final fresh = s.fresh;
     if (m.role == 'user') {
       final a = m.att;
+      // новый вид: свой вопрос — тёмным пузырём цвета текста, акцент остаётся кнопкам
+      final fg = fresh ? p.bg : p.onAccent;
       final bubble = Container(
         constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
         padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
         decoration: BoxDecoration(
-          color: p.accent,
+          color: fresh ? p.text : p.accent,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(Radii.tile),
             topRight: Radius.circular(Radii.tile),
@@ -1138,19 +1208,22 @@ class _Bubble extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(a.image ? Icons.image_outlined : Icons.description_outlined, size: 16, color: p.onAccent),
+                    Icon(a.image ? Icons.image_outlined : Icons.description_outlined, size: 16, color: fg),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         a.name,
                         overflow: TextOverflow.ellipsis,
-                        style: s.body(13, weight: FontWeight.w600, color: p.onAccent),
+                        style: s.body(13, weight: FontWeight.w600, color: fg),
                       ),
                     ),
                   ],
                 ),
               ),
-            Text(m.content, style: s.body(15, color: p.onAccent)),
+            Text(
+              m.content,
+              style: s.body(15, weight: fresh ? FontWeight.w500 : FontWeight.w400, color: fg),
+            ),
           ],
         ),
       );
@@ -1263,8 +1336,10 @@ class _Bubble extends StatelessWidget {
               ],
             ),
           ],
+          // новый вид: источники строками, под ними «Скопировать» и «Подумать ещё»
+          if (fresh) ..._freshTail(context, cites, pages, whole),
           // «скинь лк 5 по …» — найденные файлы, нажал — лист файла
-          if (m.files.isNotEmpty || pages.isNotEmpty || whole.isNotEmpty) ...[
+          if (!fresh && (m.files.isNotEmpty || pages.isNotEmpty || whole.isNotEmpty)) ...[
             const SizedBox(height: Space.s),
             Wrap(
               spacing: Space.s,
@@ -1301,6 +1376,51 @@ class _Bubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Новый вид под ответом: файлы и места в лекциях — строками в карточке,
+  /// ниже «Скопировать» (у ошибки — нет) и [more].
+  List<Widget> _freshTail(
+    BuildContext context,
+    Map<int, Map<String, dynamic>> cites,
+    List<Map<String, dynamic>> pages,
+    List<Map<String, dynamic>> whole,
+  ) {
+    void file(Map<String, dynamic> src) =>
+        showFileSheet(context, api, FileItem.fromJson({'id': src['id'], 'title': src['title'], 'has_text': true}));
+    final rows = <FreshSourceRow>[
+      for (final f in m.files)
+        (n: null, title: '${f['title']}', where: null, onTap: () => showFileSheet(context, api, FileItem.fromJson(f))),
+      for (final src in pages.take(6))
+        (
+          n: (src['n'] as num?)?.toInt(),
+          title: freshSourceTitle(src),
+          where: freshSourceWhere(src),
+          onTap: () => _openSource(context, src),
+        ),
+      for (final src in whole.take(4))
+        (n: (src['n'] as num?)?.toInt(), title: freshSourceTitle(src), where: null, onTap: () => file(src)),
+    ];
+    final copy = !m.error && m.choose.isEmpty;
+    return [
+      if (rows.isNotEmpty) ...[const SizedBox(height: Space.m), _FreshSources(rows: rows)],
+      if (copy || more != null) ...[
+        const SizedBox(height: Space.m),
+        Wrap(
+          spacing: Space.s,
+          runSpacing: Space.s,
+          children: [
+            if (copy)
+              _FreshChip(
+                key: const Key('chat:copy'),
+                text: 'Скопировать',
+                onTap: () => copyMessage(Overlay.of(context), _plain(cites)),
+              ),
+            ?more,
+          ],
+        ),
+      ],
+    ];
   }
 
   /// Ответ простым текстом — для «Копировать»: без разметки, «[n]» источников убраны.
@@ -1489,11 +1609,13 @@ class _KeyboardDragDismissState extends State<KeyboardDragDismiss> {
 
 class _InputBar extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode? focus;
   final bool busy;
   final VoidCallback onSend, onAttach;
   const _InputBar({
     super.key,
     required this.controller,
+    this.focus,
     required this.busy,
     required this.onSend,
     required this.onAttach,
@@ -1510,7 +1632,7 @@ class _InputBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: p.tabbar,
           borderRadius: BorderRadius.circular(Radii.tabbar),
-          border: Border.all(color: p.line),
+          border: Border.all(color: s.fresh ? p.edge : p.line),
         ),
         child: Row(
           children: [
@@ -1522,6 +1644,7 @@ class _InputBar extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
+                focusNode: focus,
                 minLines: 1,
                 maxLines: 5,
                 textInputAction: TextInputAction.send,
