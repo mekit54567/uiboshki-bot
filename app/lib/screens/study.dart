@@ -14,8 +14,11 @@ import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
 import 'chat.dart';
 import 'files.dart';
+import 'lesson.dart' show AskKapi, sameSubject;
 import 'sdo_connect.dart';
 import 'task.dart';
+
+part 'study_fresh.dart';
 
 class Course {
   final int id;
@@ -25,6 +28,9 @@ class Course {
   final List<Map<String, dynamic>> works, categories;
   final List<({num at, String label})> marks;
   final Map<String, dynamic>? goal, attendance, history;
+
+  /// Когда сервер брал баллы из СДО (unix-секунды, поле `updated`), если знает.
+  final int? updated;
 
   Course.fromJson(Map<String, dynamic> j)
     : id = j['id'] as int,
@@ -41,7 +47,8 @@ class Course {
       marks = [for (final m in (j['marks'] as List? ?? [])) (at: m['at'] as num, label: '${m['label']}')],
       goal = _map(j['goal']),
       attendance = _map(j['attendance']),
-      history = _map(j['history']);
+      history = _map(j['history']),
+      updated = (j['updated'] as num?)?.toInt();
 
   static Map<String, dynamic>? _map(Object? v) => v is Map ? Map<String, dynamic>.from(v) : null;
 
@@ -60,6 +67,76 @@ class Course {
   }
 }
 
+/// Баллы БРС одной фразой (наверху «Учёбы» в новом дизайне и в «Ещё»):
+/// средний балл по журналам, на сколько предметов уже хватает первой отметки
+/// («3» у экзамена, зачёт у зачёта; порог — свой у курса) и где баллов
+/// меньше всего.
+class PointsSummary {
+  /// Предметов в журнале; из них с отметками — rated, первая уже есть — reached.
+  final int total, rated, reached, average;
+
+  /// Где баллов меньше всего (null — предмет один, сравнивать не с чем).
+  final Course? lowest;
+
+  /// Какие первые отметки встречаются: «3», зачёт.
+  final List<String> firsts;
+
+  /// Баллов нет нигде (начало семестра, журналы пустые).
+  final bool blank;
+
+  const PointsSummary._(this.total, this.rated, this.reached, this.average, this.lowest, this.firsts, this.blank);
+
+  factory PointsSummary.of(List<Course> courses) {
+    if (courses.isEmpty) return const PointsSummary._(0, 0, 0, 0, null, [], true);
+    var rated = 0, reached = 0;
+    final firsts = <String>[];
+    for (final c in courses) {
+      if (c.marks.isEmpty) continue;
+      final first = c.marks.reduce((a, b) => b.at < a.at ? b : a);
+      rated++;
+      if (c.score >= first.at) reached++;
+      if (!firsts.contains(first.label)) firsts.add(first.label);
+    }
+    firsts.sort((a, b) => (a == 'зачёт' ? 1 : 0) - (b == 'зачёт' ? 1 : 0)); // «3» раньше зачёта
+    final sum = courses.fold<num>(0, (acc, c) => acc + c.score);
+    final lowest = courses.reduce((a, b) => b.score < a.score ? b : a);
+    return PointsSummary._(
+      courses.length,
+      rated,
+      reached,
+      (sum / courses.length).round(),
+      courses.length > 1 ? lowest : null,
+      firsts,
+      courses.every((c) => c.score <= 0),
+    );
+  }
+
+  /// Фраза кусками: (текст, жирный).
+  List<(String, bool)> get parts {
+    if (total == 0) return const [('Пока пусто — преподаватели ещё не завели журналы.', false)];
+    String of(int n) => plural(n, 'предмета', 'предметов', 'предметов'); // «из 21 предмета»
+    if (blank) {
+      return [(total > 1 ? 'Баллов пока нет — ни в одном из $total ${of(total)}.' : 'Баллов пока нет.', false)];
+    }
+    final mark = firsts.map(markWord).join(' или ');
+    return [
+      if (rated > 0 && reached == 0) ('На $mark пока не хватает ни в одном из $rated ${of(rated)}.', false),
+      if (reached > 0) ...[
+        ('На $mark хватает в ', false),
+        ('$reached\u00A0из\u00A0$rated', true),
+        (' ${of(rated)}.', false),
+      ],
+      if (lowest != null) ...[
+        (' Меньше всего\u00A0— ', false), // тире не начинает строку
+        (lowest!.title, true),
+        (', ${fmtNum(lowest!.score)}.', false),
+      ],
+    ];
+  }
+
+  String get sentence => parts.map((x) => x.$1).join().trim();
+}
+
 class StudyScreen extends StatelessWidget {
   final Api api;
   final VoidCallback? onUnauthorized;
@@ -72,9 +149,14 @@ class StudyScreen extends StatelessWidget {
         .then<String?>((r) => r is Map ? r['state'] as String? : null, onError: (_) => null);
     try {
       final j = await api.get('/sdo/grades');
-      return (courses: [for (final c in j['courses'] as List) Course.fromJson(c)], problem: null, sdo: await status);
+      return (
+        courses: [for (final c in j['courses'] as List) Course.fromJson(c)],
+        problem: null,
+        sdo: await status,
+        updated: (j['updated'] as num?)?.toInt(),
+      );
     } on ApiError catch (e) {
-      return (courses: <Course>[], problem: e.message, sdo: await status);
+      return (courses: <Course>[], problem: e.message, sdo: await status, updated: null);
     }
   }
 
@@ -88,61 +170,65 @@ class StudyScreen extends StatelessWidget {
   Widget build(BuildContext context) => Loader<_StudyData>(
     load: _load,
     onUnauthorized: onUnauthorized,
-    builder: (context, d, reload) => ListView(
-      padding: const EdgeInsets.only(bottom: 120),
-      children: [
-        ScreenTitle(
-          title: 'Учёба',
-          trailing: d.sdo == null ? null : _SdoBadge(state: d.sdo!, onTap: () => _openConnect(context, reload)),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.l),
-          child: Row(
+    builder: (context, d, reload) => AppStyle.of(context).fresh
+        ? _FreshStudy(api: api, d: d, reload: reload, onConnect: () => _openConnect(context, reload))
+        : ListView(
+            padding: const EdgeInsets.only(bottom: 120),
             children: [
-              Expanded(
-                child: _Door(
-                  icon: Icons.auto_awesome_outlined,
-                  title: 'Kapi ИИ',
-                  text: 'Отвечает по лекциям',
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(api: api))),
+              ScreenTitle(
+                title: 'Учёба',
+                trailing: d.sdo == null ? null : _SdoBadge(state: d.sdo!, onTap: () => _openConnect(context, reload)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.l),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _Door(
+                        icon: Icons.auto_awesome_outlined,
+                        title: 'Kapi ИИ',
+                        text: 'Отвечает по лекциям',
+                        onTap: () =>
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(api: api))),
+                      ),
+                    ),
+                    const SizedBox(width: Space.s),
+                    Expanded(
+                      child: _Door(
+                        icon: Icons.folder_outlined,
+                        title: 'Файлы',
+                        text: 'лекции, практики',
+                        onTap: () =>
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => FilesScreen(api: api))),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: Space.s),
-              Expanded(
-                child: _Door(
-                  icon: Icons.folder_outlined,
-                  title: 'Файлы',
-                  text: 'лекции, практики',
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FilesScreen(api: api))),
+              if (d.problem != null && needsSdo(d.problem!))
+                _ConnectCard(problem: d.problem!, onTap: () => _openConnect(context, reload))
+              else if (d.problem != null)
+                Notice(title: 'Баллы не видны', text: d.problem!, onRetry: reload)
+              else if (d.courses.isEmpty)
+                const Notice(title: 'Пока пусто', text: 'Преподаватели ещё не завели журналы.'),
+              for (final c in d.courses)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
+                  child: _CourseRow(
+                    c: c,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CourseScreen(api: api, course: c),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
-        ),
-        if (d.problem != null && needsSdo(d.problem!))
-          _ConnectCard(problem: d.problem!, onTap: () => _openConnect(context, reload))
-        else if (d.problem != null)
-          Notice(title: 'Баллы не видны', text: d.problem!, onRetry: reload)
-        else if (d.courses.isEmpty)
-          const Notice(title: 'Пока пусто', text: 'Преподаватели ещё не завели журналы.'),
-        for (final c in d.courses)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
-            child: _CourseRow(
-              c: c,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CourseScreen(api: api, course: c),
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
   );
 }
 
-typedef _StudyData = ({List<Course> courses, String? problem, String? sdo});
+typedef _StudyData = ({List<Course> courses, String? problem, String? sdo, int? updated});
 
 /// Статус СДО в шапке: точка (работает / устарел / нет) и «СДО».
 class _SdoBadge extends StatelessWidget {
@@ -457,152 +543,154 @@ class CourseScreen extends StatelessWidget {
         child: SafeArea(
           child: Loader<Course>(
             load: () async => Course.fromJson(await api.get('/sdo/grades/${course.id}')),
-            builder: (context, c, _) => ListView(
-              padding: const EdgeInsets.only(bottom: Space.xxl),
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: Space.s),
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: p.text),
-                    ),
-                  ),
-                ),
-                ScreenTitle(title: c.title, sub: c.marks.length > 1 ? 'экзамен' : 'зачёт'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                  child: Tile(
-                    radius: Radii.card,
-                    child: Row(
-                      children: [
-                        ScoreRing(
-                          value: c.score / c.top,
-                          color: color,
-                          size: 120,
-                          stroke: 10,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+            builder: (context, c, _) => s.fresh
+                ? _FreshCourse(api: api, c: c)
+                : ListView(
+                    padding: const EdgeInsets.only(bottom: Space.xxl),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: Space.s),
+                          child: IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: p.text),
+                          ),
+                        ),
+                      ),
+                      ScreenTitle(title: c.title, sub: c.marks.length > 1 ? 'экзамен' : 'зачёт'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                        child: Tile(
+                          radius: Radii.card,
+                          child: Row(
                             children: [
-                              Text('${c.score}', style: s.number(40)),
-                              Text('из ${c.top}', style: s.body(12, color: p.muted)),
+                              ScoreRing(
+                                value: c.score / c.top,
+                                color: color,
+                                size: 120,
+                                stroke: 10,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text('${c.score}', style: s.number(40)),
+                                    Text('из ${c.top}', style: s.body(12, color: p.muted)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: Space.l),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Отметки', style: s.body(13, color: p.muted)),
+                                    const SizedBox(height: Space.s),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        for (final m in c.marks)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: c.score >= m.at ? color : p.line,
+                                              borderRadius: BorderRadius.circular(Radii.pill),
+                                            ),
+                                            child: Text(
+                                              '${m.label} · ${m.at}',
+                                              style: s.body(
+                                                13,
+                                                weight: FontWeight.w600,
+                                                color: c.score >= m.at ? Colors.white : p.muted,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: Space.m),
+                                    Text(
+                                      c.need > 0 ? 'ещё ${c.need} до «${c.needLabel}»' : c.enoughText,
+                                      style: s.body(16, weight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: Space.l),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Отметки', style: s.body(13, color: p.muted)),
-                              const SizedBox(height: Space.s),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  for (final m in c.marks)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: c.score >= m.at ? color : p.line,
-                                        borderRadius: BorderRadius.circular(Radii.pill),
-                                      ),
-                                      child: Text(
-                                        '${m.label} · ${m.at}',
-                                        style: s.body(
-                                          13,
-                                          weight: FontWeight.w600,
-                                          color: c.score >= m.at ? Colors.white : p.muted,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: Space.m),
-                              Text(
-                                c.need > 0 ? 'ещё ${c.need} до «${c.needLabel}»' : c.enoughText,
-                                style: s.body(16, weight: FontWeight.w700),
-                              ),
-                            ],
+                      ),
+                      if (c.goal != null) ...[
+                        const SizedBox(height: Space.m),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                          child: GoalCard(api: api, courseId: c.id, goal: c.goal!, color: color),
+                        ),
+                      ],
+                      if (c.attendance != null && (c.attendance!['lectures'] as List? ?? []).isNotEmpty) ...[
+                        const Section('Посещения лекций'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                          child: Tile(
+                            child: AttendanceStrip(att: c.attendance!, color: color, api: api, courseId: c.id),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                if (c.goal != null) ...[
-                  const SizedBox(height: Space.m),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                    child: GoalCard(api: api, courseId: c.id, goal: c.goal!, color: color),
-                  ),
-                ],
-                if (c.attendance != null && (c.attendance!['lectures'] as List? ?? []).isNotEmpty) ...[
-                  const Section('Посещения лекций'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                    child: Tile(
-                      child: AttendanceStrip(att: c.attendance!, color: color, api: api, courseId: c.id),
-                    ),
-                  ),
-                ],
-                if (c.works.isNotEmpty) ...[
-                  Section('Текущий контроль · ${c.worksPassed} из ${c.worksTotal} зачтено'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                    child: Tile(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          for (var i = 0; i < c.works.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.line),
-                            _WorkRow(w: c.works[i], color: color, api: api, course: c.title),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-                if (c.categories.isNotEmpty) ...[
-                  const Section('Из чего баллы'),
-                  for (final cat in c.categories)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.m),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(child: Text('${cat['name']}', style: s.body(14))),
-                              Text('${cat['score']} / ${cat['max']}', style: s.body(14, weight: FontWeight.w600)),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
-                            child: LinearProgressIndicator(
-                              value: (cat['max'] ?? 0) == 0 ? 0 : (cat['score'] as num) / (cat['max'] as num),
-                              minHeight: 5,
-                              color: color,
-                              backgroundColor: p.line,
+                      if (c.works.isNotEmpty) ...[
+                        Section('Текущий контроль · ${c.worksPassed} из ${c.worksTotal} зачтено'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                          child: Tile(
+                            padding: EdgeInsets.zero,
+                            child: Column(
+                              children: [
+                                for (var i = 0; i < c.works.length; i++) ...[
+                                  if (i > 0) Divider(height: 1, color: p.line),
+                                  _WorkRow(w: c.works[i], color: color, api: api, course: c.title),
+                                ],
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                ],
-                if (c.history != null) ...[
-                  const Section('Как растут баллы'),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.l),
-                    child: Tile(
-                      child: HistoryChart(history: c.history!, color: color),
-                    ),
+                        ),
+                      ],
+                      if (c.categories.isNotEmpty) ...[
+                        const Section('Из чего баллы'),
+                        for (final cat in c.categories)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.m),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: Text('${cat['name']}', style: s.body(14))),
+                                    Text('${cat['score']} / ${cat['max']}', style: s.body(14, weight: FontWeight.w600)),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: (cat['max'] ?? 0) == 0 ? 0 : (cat['score'] as num) / (cat['max'] as num),
+                                    minHeight: 5,
+                                    color: color,
+                                    backgroundColor: p.line,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                      if (c.history != null) ...[
+                        const Section('Как растут баллы'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.l),
+                          child: Tile(
+                            child: HistoryChart(history: c.history!, color: color),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
           ),
         ),
       ),

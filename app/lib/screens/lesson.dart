@@ -262,7 +262,7 @@ class _LessonScreenState extends State<LessonScreen> {
                   const Expanded(child: Section('По предмету')),
                   Padding(
                     padding: const EdgeInsets.only(right: Space.l, top: Space.m),
-                    child: _AskKapi(
+                    child: AskKapi(
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ChatScreen(api: api, subject: lesson.title),
@@ -474,10 +474,14 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 }
 
-/// Небольшая кнопка «Спросить Kapi» — чат Kapi ИИ сразу с этим предметом.
-class _AskKapi extends StatelessWidget {
+/// Небольшая кнопка «Спросить Kapi» — чат Kapi ИИ сразу с этим предметом
+/// (экран пары и экран предмета в «Учёбе»).
+class AskKapi extends StatelessWidget {
   final VoidCallback onTap;
-  const _AskKapi({required this.onTap});
+
+  /// Ключ самой кнопки — для тестов экрана.
+  final Key tapKey;
+  const AskKapi({super.key, required this.onTap, this.tapKey = const Key('lesson:ask')});
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +490,7 @@ class _AskKapi extends StatelessWidget {
     return Semantics(
       button: true,
       child: GestureDetector(
-        key: const Key('lesson:ask'),
+        key: tapKey,
         behavior: HitTestBehavior.opaque,
         onTap: () {
           tick();

@@ -72,8 +72,8 @@ function mrPointsSummary(courses) {
   const mark = firsts.map(markWord).join(" или ");
   const parts = [];
   if (rated > 0 && reached === 0) parts.push([`На ${mark} пока не хватает ни в одном из ${rated} ${of(rated)}.`, false]);
-  if (reached > 0) parts.push([`На ${mark} хватает в `, false], [`${reached} из ${rated}`, true], [` ${of(rated)}.`, false]);
-  if (lowest) parts.push([" Меньше всего — ", false], [lowest.title, true], [`, ${mrNum(lowest.score)}.`, false]);
+  if (reached > 0) parts.push([`На ${mark} хватает в `, false], [`${reached}\u00a0из\u00a0${rated}`, true], [` ${of(rated)}.`, false]);
+  if (lowest) parts.push([" Меньше всего\u00a0— ", false], [lowest.title, true], [`, ${mrNum(lowest.score)}.`, false]);
   return { total, average, parts };
 }
 

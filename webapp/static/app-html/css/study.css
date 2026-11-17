@@ -106,3 +106,50 @@
 .st-back { padding-left: var(--s); }
 .st-back button { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--text); border-radius: 50%; }
 .st-back button:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+
+/* ── «Учёба» и предмет нового дизайна (study_fresh.dart; только при «Новом») ── */
+.sf-head { align-items: flex-start; gap: var(--s); padding: var(--l) var(--m) var(--m) var(--l); }
+.sf-sdo { display: block; padding: 4px 0; margin-top: 2px; text-align: left; color: var(--muted); }
+.sf-capy { width: 62px; height: 62px; flex: none; color: var(--text); }
+/* сводка БРС: цифра слева, фраза справа; узко — фраза под цифрой */
+.sf-points { container-type: inline-size; }
+.sf-pin { display: flex; align-items: center; gap: var(--l); }
+.sf-pw { flex: 1; min-width: 0; }
+.sf-pwords { line-height: 1.4; margin-top: 4px; }
+.sf-pwords b { font-weight: 700; }
+@container (max-width: 259px) {
+  .sf-pin { flex-direction: column; align-items: flex-start; gap: 0; }
+  .sf-pw { display: contents; }
+  .sf-pin .eyebrow { order: -1; margin-bottom: var(--s); }
+  .sf-pwords { margin-top: 0; }
+}
+.sf-doors { padding: var(--m) var(--l) 0; gap: var(--s); align-items: stretch; }
+.sf-door { flex: 1; min-width: 0; padding: var(--m) var(--m) var(--m) var(--l); display: flex; flex-direction: column; justify-content: flex-start; }
+.sf-door .mi { display: block; }
+.sf-row { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: var(--m); }
+.sf-row:active, .sf-work:active, .sf-filesrow:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+/* экран предмета */
+/* «Спросить Kapi» в строке «назад»: у её кнопок 44×44 — у этой своя ширина */
+.backrow button.sf-ask { width: auto; height: 32px; align-self: center; margin: 0 calc(var(--l) - var(--m)) 0 auto; white-space: nowrap; }
+.sf-ctitle { padding: var(--xs) var(--xl) var(--l); }
+.sf-marks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s); }
+.sf-marks > span { padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.sf-work { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: var(--s); }
+div.sf-work { cursor: default; }
+.sf-wst { gap: 6px; margin-top: 3px; align-items: center; }
+.sf-grade { flex: none; white-space: nowrap; }
+.sf-submit { flex: none; height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center;
+  background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; }
+.sf-filesrow { padding: var(--m) var(--m) var(--m) var(--l); gap: var(--m); }
+.sf-cats { display: flex; flex-direction: column; gap: var(--m); }
+/* цель: рамка цвета прогноза, выбор отметки капсулой */
+.sf-gmarks { display: inline-flex; flex: none; padding: 3px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.sf-gmarks button { min-width: 40px; min-height: 34px; padding: 0 10px; border-radius: 999px; font-size: 14px; font-weight: 700; color: var(--muted);
+  transition: background-color .24s cubic-bezier(.33,1,.68,1), color .24s; }
+.sf-gmarks button.on { background: var(--text); color: var(--bg); }
+/* посещения: квадратики и короткая легенда */
+.sf-lec { display: flex; }
+.sf-box { box-sizing: border-box; flex: none; border-style: solid; display: grid; place-items: center;
+  font-weight: 700; font-size: 13px; font-style: normal; color: var(--muted); }
+.sf-legend { display: flex; flex-wrap: wrap; gap: 4px var(--m); margin-top: var(--m); }
+.sf-legend > span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); }

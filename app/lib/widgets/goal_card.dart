@@ -109,12 +109,72 @@ String? mustLine(Map<String, dynamic> g) {
 
 const goalNote = 'Это расчёт по баллам из СДО на сейчас. Оценку ставит преподаватель.';
 
+/// «до 41 балла», «до 12 баллов», «до 2,5 балла» — после «до» родительный падеж.
+String upToPoints(num v) {
+  final whole = v == v.roundToDouble();
+  return 'до ${fmtNum(v)} ${whole ? plural(v.round(), 'балла', 'баллов', 'баллов') : 'балла'}';
+}
+
+/// Когда сервер брал баллы из СДО ([unix] — секунды): «сегодня в 09:40»,
+/// «вчера в 21:10», «8 октября в 09:40». Время — московское, как у пар.
+String updatedText(int unix, DateTime at) {
+  DateTime msk(DateTime t) {
+    final u = t.toUtc().add(const Duration(hours: 3));
+    return DateTime(u.year, u.month, u.day, u.hour, u.minute);
+  }
+
+  final t = msk(DateTime.fromMillisecondsSinceEpoch(unix * 1000, isUtc: true)), a = msk(at);
+  final days = DateTime(a.year, a.month, a.day).difference(DateTime(t.year, t.month, t.day)).inHours ~/ 24;
+  final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  if (days <= 0) return 'сегодня в\u00A0$hm';
+  if (days == 1) return 'вчера в\u00A0$hm';
+  return '${t.day}\u00A0${monthsGen[t.month - 1]} в\u00A0$hm';
+}
+
+/// Строки «откуда взять» цели в новом дизайне (макет 4, 11.11) — те же данные,
+/// что значками в прежней карточке, но целыми фразами: «Открыто 4 работы,
+/// они дают до 41 балла».
+List<String> goalFreshLines(Map<String, dynamic> g) {
+  final status = '${g['status'] ?? 'ok'}';
+  final tk = Map<String, dynamic>.from(g['tk'] ?? {});
+  final need = (g['need'] as num?) ?? 0;
+  final open = (g['open_count'] as num?)?.toInt() ?? 0;
+  final lost = (g['lost_count'] as num?)?.toInt() ?? 0;
+  String up(String t) => t.isEmpty ? t : t[0].toUpperCase() + t.substring(1);
+  return [
+    if (open > 0)
+      'Открыто $open ${plural(open, 'работа', 'работы', 'работ')}, ${open == 1 ? 'она даёт' : 'они дают'} '
+          '${upToPoints((g['open_points'] as num?) ?? 0)}',
+    if (((g['attendance_left'] as num?) ?? 0) > 0) 'Лекции впереди дают ${upToPoints(g['attendance_left'] as num)}',
+    if (((g['exam_left'] as num?) ?? 0) > 0) 'Экзамен даёт ${upToPoints(g['exam_left'] as num)}',
+    if (((tk['total'] as num?) ?? 0) > 0)
+      'Зачтено ${tk['passed']} из ${tk['total']} ${plural((tk['total'] as num).toInt(), 'работы', 'работ', 'работ')}, '
+          'нужно ${tk['need']}'
+          '${((tk['left'] as num?) ?? 0) > 0 ? ': из ${tk['open']} открытых зачесть ${tk['left']}' : ''}',
+    if (mustLine(g) case final must?) up(must),
+    if (need > 0 && status != 'done')
+      'Если сдать всё и ходить на лекции${((g['exam_left'] as num?) ?? 0) > 0 ? ', а потом сдать экзамен' : ''}, '
+          'выйдет до ${fmtNum((g['best'] as num?) ?? 0)}',
+    if (lost > 0) 'Ниже порога или срок прошёл: $lost. Их не считаю, пригодятся, если дадут пересдать',
+  ];
+}
+
 class GoalCard extends StatefulWidget {
   final Api api;
   final int courseId;
   final Map<String, dynamic> goal;
   final Color color;
-  const GoalCard({super.key, required this.api, required this.courseId, required this.goal, required this.color});
+
+  /// Когда баллы брали из СДО (unix-секунды) — строкой внизу карточки нового дизайна.
+  final int? updated;
+  const GoalCard({
+    super.key,
+    required this.api,
+    required this.courseId,
+    required this.goal,
+    required this.color,
+    this.updated,
+  });
 
   @override
   State<GoalCard> createState() => _GoalCardState();
@@ -171,6 +231,7 @@ class _GoalCardState extends State<GoalCard> {
     final headline = goalHeadline(g);
     final tk = Map<String, dynamic>.from(g['tk'] ?? {});
     final marks = [for (final m in (g['marks'] as List? ?? [])) '$m'];
+    if (s.fresh) return _fresh(s, status, tone, headline, tk, marks);
     final lines = <(IconData, String)>[
       if ((g['open_count'] ?? 0) > 0)
         (Icons.upload_rounded, 'работы: открыто ${g['open_count']} · до +${fmtNum(g['open_points'] ?? 0)}'),
@@ -314,6 +375,97 @@ class _GoalCardState extends State<GoalCard> {
     );
   }
 
+  /// Новый дизайн (макет 4, Никита 11.11): бумажная карточка с рамкой цвета
+  /// прогноза, выбор отметки — капсулой справа от «Цель», прогноз начинается
+  /// со слов «по текущим данным», откуда взять баллы — целыми фразами. Счёт
+  /// и цели — те же, что в прежней карточке (автомат и «с экзаменом»).
+  Widget _fresh(AppStyle s, String status, Color tone, String headline, Map<String, dynamic> tk, List<String> marks) {
+    final p = s.p;
+    final g = _g;
+    final verdict = switch (status) {
+      'done' when g['exam_pending'] == true => 'выходит автоматом',
+      'done' => '${markWord('${g['label']}')} есть',
+      'tight' => 'впритык',
+      'no' => 'не хватит',
+      _ => 'дойдёшь',
+    };
+    final skip = g['skip'] is Map ? _skipLine(Map<String, dynamic>.from(g['skip']), status).$2 : '';
+    final lines = [...goalFreshLines(g), if (skip.isNotEmpty) skip[0].toUpperCase() + skip.substring(1)];
+    final when = widget.updated;
+    return Tile(
+      key: const Key('goal:fresh'),
+      radius: Radii.card,
+      border: tone,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // одна отметка (зачёт) — выбирать нечего, она просто названа
+              Expanded(child: Text(marks.length > 1 ? 'Цель' : 'Цель · ${g['label']}', style: s.eyebrow())),
+              if (marks.length > 1) _FreshMarks(marks: marks, label: '${g['label']}', onPick: _set),
+            ],
+          ),
+          // пока экзамен впереди — счёт: автомат или с экзаменом
+          if (g['mode'] == 'auto' || g['mode'] == 'exam') ...[
+            const SizedBox(height: Space.s),
+            Align(
+              alignment: Alignment.centerRight,
+              child: GoalModeToggle(mode: '${g['mode']}', onChanged: _setMode),
+            ),
+          ],
+          const SizedBox(height: Space.m),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'По текущим данным: $verdict',
+                  style: s.title(21, weight: FontWeight.w600, color: tone),
+                ),
+              ),
+              // набрал — капибара прыгает, не хватит — грустит (17Б)
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: switch (status) {
+                  'done' => CapyHop(key: const ValueKey('goal:joy'), size: 40, color: p.ok),
+                  'no' => CapySigh(key: const ValueKey('goal:sad'), size: 40, color: p.muted),
+                  _ => const SizedBox.shrink(),
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.xs),
+          Text(headline, style: s.body(15, weight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(goalSubline(g), style: s.body(13, color: p.muted)),
+          if (lines.isNotEmpty) const SizedBox(height: Space.s),
+          for (final text in lines)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(text, style: s.body(14)),
+            ),
+          if (status == 'no') ...[
+            const SizedBox(height: Space.m),
+            Text(
+              tk['reachable'] == false
+                  ? 'Открытых работ меньше, чем нужно зачесть. По правилам БРС так к экзамену не выйти — спроси преподавателя про пересдачу.'
+                  : 'Даже если сдать всё и ходить на все лекции, будет ${fmtNum(g['best'] ?? 0)} — меньше ${fmtNum(g['at'] ?? 0)}. Можно выбрать цель ниже.',
+              style: s.body(13, color: p.danger),
+            ),
+          ],
+          const SizedBox(height: Space.m),
+          Text(
+            when == null
+                ? goalNote
+                : 'Расчёт по баллам из СДО, обновлено ${updatedText(when, now())}. Оценку ставит преподаватель.',
+            style: s.body(12, color: p.muted),
+          ),
+          if (_error != null) ...[const SizedBox(height: Space.s), Text(_error!, style: s.body(13, color: p.danger))],
+        ],
+      ),
+    );
+  }
+
   (IconData, String) _skipLine(Map<String, dynamic> skip, String now) {
     final day = dayMonth('${skip['date']}');
     final after = switch ('${skip['status']}') {
@@ -324,6 +476,60 @@ class _GoalCardState extends State<GoalCard> {
       _ => 'дойдёшь',
     };
     return (Icons.schedule_rounded, 'пропущу лекцию $day: −${fmtNum(skip['value'] ?? 0)} → $after');
+  }
+}
+
+/// Выбор отметки цели в новом дизайне: капсула «3 · 4 · 5», выбранная залита
+/// цветом текста (как полки «Сдать»), а не цветом предмета.
+class _FreshMarks extends StatelessWidget {
+  final List<String> marks;
+  final String label;
+  final ValueChanged<String> onPick;
+  const _FreshMarks({required this.marks, required this.label, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: p.bg,
+        borderRadius: BorderRadius.circular(Radii.pill),
+        border: Border.all(color: p.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final m in marks)
+            Semantics(
+              button: true,
+              selected: m == label,
+              label: 'Цель $m',
+              excludeSemantics: true,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onPick(m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 34),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: m == label ? p.text : p.text.withValues(alpha: 0),
+                    borderRadius: BorderRadius.circular(Radii.pill),
+                  ),
+                  child: Text(
+                    m,
+                    style: s.body(14, weight: FontWeight.w700, color: m == label ? p.bg : p.muted),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -437,6 +643,28 @@ class _AttendanceStripState extends State<AttendanceStrip> {
     final before = att['before'] as Map?;
     final toMark = lectures.any((l) => l['status'] == 'before');
     final source = attendanceSource(att);
+    final more = !tappable
+        ? null
+        : Row(
+            children: [
+              Icon(toMark ? Icons.edit_rounded : Icons.list_rounded, size: 16, color: toMark ? color : p.muted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  toMark && before != null
+                      // в новом дизайне «7 сентября» не рвётся
+                      ? 'отметь сам, на каких был до ${s.fresh ? dayMonth('${before['day']}').replaceAll(' ', '\u00A0') : dayMonth('${before['day']}')}'
+                      : 'все лекции и отметки',
+                  style: s.body(13, weight: FontWeight.w600, color: toMark ? color : p.muted),
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
+            ],
+          );
+    if (s.fresh) {
+      final fresh = _fresh(s, lectures, source, more);
+      return tappable ? GestureDetector(behavior: HitTestBehavior.opaque, onTap: _open, child: fresh) : fresh;
+    }
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -504,28 +732,112 @@ class _AttendanceStripState extends State<AttendanceStrip> {
           '${(att['waiting'] ?? 0) > 0 ? ' · ждём балл за ${att['waiting']}' : ''}',
           style: s.body(13, color: p.muted),
         ),
-        if (tappable) ...[
-          const SizedBox(height: Space.s),
-          Row(
-            children: [
-              Icon(toMark ? Icons.edit_rounded : Icons.list_rounded, size: 16, color: toMark ? color : p.muted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  toMark && before != null
-                      ? 'отметь сам, на каких был до ${dayMonth('${before['day']}')}'
-                      : 'все лекции и отметки',
-                  style: s.body(13, weight: FontWeight.w600, color: toMark ? color : p.muted),
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, size: 18, color: p.muted),
-            ],
-          ),
-        ],
+        if (more != null) ...[const SizedBox(height: Space.s), more],
       ],
     );
     if (!tappable) return body;
     return GestureDetector(behavior: HitTestBehavior.opaque, onTap: _open, child: body);
+  }
+
+  /// Новый дизайн (Никита 11.11: «слишком много места занимает объяснение»):
+  /// квадратики те же, «был на 3 из 6» — в заголовке раздела, а откуда отметка
+  /// (по баллам СДО, отметил сам, ждём балл) — одной строкой-легендой внизу
+  /// и только из тех отметок, что есть.
+  Widget _fresh(AppStyle s, List<Map<String, dynamic>> lectures, String? source, Widget? more) {
+    final p = s.p;
+    final color = widget.color;
+    String kind(Map<String, dynamic> l) => l['status'] == 'ok' && l['manual'] == true ? 'mine' : '${l['status']}';
+    final kinds = {for (final l in lectures) kind(l)};
+    const legend = [
+      ('ok', 'был'),
+      ('mine', 'отметил сам'),
+      ('excused', 'уважительная'),
+      ('wait', 'ждём балл'),
+      ('miss', 'не был'),
+      ('before', 'отметь сам'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (source != null) ...[
+          Text(
+            source,
+            style: s.body(13, weight: FontWeight.w600, color: widget.att['source'] == 'pulse' ? p.ok : p.warn),
+          ),
+          const SizedBox(height: Space.s),
+        ],
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final l in lectures)
+              Tooltip(
+                message: '${l['n']} лекция · ${dayMonth('${l['date']}')}',
+                child: _FreshBox(kind: kind(l), color: color, size: 26),
+              ),
+          ],
+        ),
+        const SizedBox(height: Space.m),
+        Wrap(
+          spacing: Space.m,
+          runSpacing: 4,
+          children: [
+            for (final (k, label) in legend)
+              if (kinds.contains(k))
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _FreshBox(kind: k, color: color, size: 12),
+                    const SizedBox(width: 5),
+                    Text(label, style: s.body(12.5, color: p.muted)),
+                  ],
+                ),
+          ],
+        ),
+        if (more != null) ...[const SizedBox(height: Space.m), more],
+      ],
+    );
+  }
+}
+
+/// Квадратик посещения нового дизайна: был — залит цветом предмета; отметил
+/// сам — светлая заливка с рамкой; ждём балл — рамка «жду»; не был — красная
+/// рамка; «?» — отметь сам; впереди — серый.
+class _FreshBox extends StatelessWidget {
+  final String kind;
+  final Color color;
+  final double size;
+  const _FreshBox({required this.kind, required this.color, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final (Color fill, Color edge) = switch (kind) {
+      'ok' => (color, color),
+      'mine' => (color.withValues(alpha: 0.3), color),
+      'excused' => (color.withValues(alpha: 0.55), color.withValues(alpha: 0.55)),
+      'wait' => (p.warn.withValues(alpha: 0), p.warn),
+      'miss' => (p.danger.withValues(alpha: 0), p.danger),
+      'before' => (p.muted.withValues(alpha: 0), p.muted),
+      _ => (p.line, p.line),
+    };
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(size * 0.27),
+        border: Border.all(color: edge, width: size > 16 ? 1.5 : 1.2),
+      ),
+      child: kind == 'before' && size > 16
+          ? Text(
+              '?',
+              style: s.body(13, weight: FontWeight.w700, color: p.muted),
+            )
+          : null,
+    );
   }
 }
 

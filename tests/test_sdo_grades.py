@@ -441,6 +441,36 @@ async def test_course_detail_does_not_wait_slow_pages(monkeypatch):
     assert sdo_grades._cached(("detail", 1, 18672)) is d
 
 
+async def test_course_detail_tells_when_grades_were_fetched(monkeypatch):
+    """Новый дизайн: «Расчёт по баллам из СДО, обновлено в 09:40» на экране
+    предмета. Время — когда брали журнал: из списка предметов (кэш) — его
+    время, иначе — сейчас."""
+    import time
+    sdo_grades._cache.clear()
+    sdo_grades._pages.clear()
+    course = {"id": 18672, "name": "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]",
+              "title": "Основы предпринимательской деятельности"}
+
+    async def courses(client):
+        return [course]
+
+    async def moodle(request):
+        if "grade/report/user" in str(request.url):
+            return httpx.Response(200, text=REPORT)
+        return httpx.Response(200, text="<table><tr><th>Проходной балл</th><td>7,0</td></tr></table>")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *a, **kw: real(*a, transport=httpx.MockTransport(moodle), **kw))
+    monkeypatch.setattr(sdo_grades, "this_semester_courses", courses)
+    d = await sdo_grades.course_detail(1, "c", 18672)
+    assert abs(d["updated"] - time.time()) < 5                     # журнал взяли только что
+    sdo_grades._cache.clear()
+    then = time.time() - 300
+    sdo_grades._cache[("course", 1, 18672)] = (then, (course, sdo_grades.summarize(sdo_grades.parse_report(REPORT), course["name"])))
+    d = await sdo_grades.course_detail(1, "c", 18672)
+    assert d["updated"] == int(then)                              # журнал из списка — его время
+
+
 async def test_course_detail_shared_and_stale_for_actions(monkeypatch):
     """19.10: смена цели — 15 с: каждое нажатие заново грузило предмет из СДО.
     Одновременные запросы ждут одну загрузку, цели хватает прошлой."""
