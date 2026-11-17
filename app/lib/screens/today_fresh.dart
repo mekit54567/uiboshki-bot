@@ -4,6 +4,9 @@
 // карточка пары; под ней «Важно сегодня» — сроки ближайших суток с кнопкой
 // «Сдать»; дальше остальные пары строками. Пары кончились — цифра считает
 // время до ближайшего срока, завтра раскрыто, прошедшее свёрнуто в строку.
+// Шаг 8 (макет «Пустые экраны и сбои»): пар нет весь день — капибара крупно
+// по центру, когда ближайшая пара и «но кое-что ждёт» со сроками; сайт
+// расписания молчит — плашка сверху, под ней сохранённое расписание.
 part of 'today.dart';
 
 class _FreshView extends StatelessWidget {
@@ -72,6 +75,10 @@ class _FreshView extends StatelessWidget {
       final i = lessons.indexOf(next);
       title = i == 0 ? (data.name.isEmpty ? greeting(t.hour) : '${greeting(t.hour)},\n${data.name}') : 'Перемена';
       hero = [_FreshLabel('${ordinal(i)} пара через'), _Countdown(minutes: minutesTo(t, next.startAt!), color: p.text)];
+    } else if (lessons.isEmpty && !data.scheduleOk) {
+      // пар не видно, потому что сайт молчит, — не «свободно»
+      title = 'Расписания пока нет';
+      hero = const [];
     } else {
       title = lessons.isEmpty ? 'Сегодня пар нет' : 'Пары закончились';
       final tf = data.tomorrowFirst;
@@ -102,10 +109,62 @@ class _FreshView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: Space.l),
       child: child,
     );
+    // сбой: плашка сверху, капибара грустит в ней — одна на экран
+    final down = !data.scheduleOk
+        ? 'Расписание сейчас не загрузить, а сохранённого нет. Попробую снова через минуту.'
+        : data.savedAt != null
+        ? savedScheduleText(data.savedAt!)
+        : null;
+    final banner = down == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
+            child: _FreshDown(text: down),
+          );
+    final hotCards = [
+      for (final d in hot)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
+          child: _HotCard(d, at: t, onTap: onDeadlines),
+        ),
+    ];
+
+    // пар нет весь день: капибара крупно, ниже — что ждёт и завтрашние пары
+    if (lessons.isEmpty && data.scheduleOk) {
+      final nCancelled = ahead.length;
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 120),
+        children: [
+          top,
+          ?banner,
+          FreshEmpty(
+            key: const Key('today:free'),
+            pose: CapyPose.joy,
+            capy: banner == null,
+            title: 'Сегодня пар нет',
+            text: freeDayText(t, data.tomorrowFirst, data.nextDay),
+          ),
+          if (data.soon.isNotEmpty) ...[
+            const Section('но кое-что ждёт'),
+            ...hotCards,
+            if (later.isNotEmpty) pad(_SoonList(later, at: t)),
+          ],
+          if (nCancelled > 0) ...[
+            Section('отменили · $nCancelled ${plural(nCancelled, 'пара', 'пары', 'пар')}'),
+            pad(LessonList(lessons: ahead, at: t, onTap: open)),
+          ],
+          if (rest.isNotEmpty) ...[
+            Section('завтра · ${rest.length} ${plural(rest.length, 'пара', 'пары', 'пар')}'),
+            pad(LessonList(lessons: rest, at: t, onTap: open)),
+          ],
+        ],
+      );
+    }
     return ListView(
       padding: const EdgeInsets.only(bottom: 120),
       children: [
         top,
+        ?banner,
         Padding(
           padding: const EdgeInsets.fromLTRB(Space.l, Space.s, Space.m, 0),
           child: Row(
@@ -121,8 +180,10 @@ class _FreshView extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: Space.s),
-              CapyBadge(hour: t.hour, size: 62, moments: _MainView.momentsOf(data, t, current, next)),
+              if (banner == null) ...[
+                const SizedBox(width: Space.s),
+                CapyBadge(hour: t.hour, size: 62, moments: _MainView.momentsOf(data, t, current, next)),
+              ],
             ],
           ),
         ),
@@ -137,14 +198,7 @@ class _FreshView extends StatelessWidget {
             ),
           ),
         ],
-        if (hot.isNotEmpty) ...[
-          const Section('важно сегодня'),
-          for (final d in hot)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
-              child: _HotCard(d, at: t, onTap: onDeadlines),
-            ),
-        ],
+        if (hot.isNotEmpty) ...[const Section('важно сегодня'), ...hotCards],
         if (ahead.isNotEmpty) ...[
           Section(
             focusLesson == null
@@ -207,6 +261,40 @@ class _FreshView extends StatelessWidget {
   }
 }
 
+/// Сбой (макет «Сбой»): «МИРЭА не отвечает» и что показываем вместо —
+/// плашкой сверху, экран под ней остаётся.
+class _FreshDown extends StatelessWidget {
+  final String text;
+  const _FreshDown({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Tile(
+      key: const Key('today:down'),
+      border: p.warn,
+      padding: const EdgeInsets.fromLTRB(Space.m, Space.m, Space.l, Space.m),
+      child: Row(
+        children: [
+          CapyImage(pose: CapyPose.sad, size: 56, color: p.text),
+          const SizedBox(width: Space.m),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('МИРЭА не отвечает', style: s.body(15, weight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(text, style: s.body(13, color: p.muted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Тихая подпись над большой цифрой.
 class _FreshLabel extends StatelessWidget {
   final String text;
@@ -265,7 +353,8 @@ class _NowCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(lesson.title, style: s.name(16)),
+                    // рядом кабинет — длинное слово («Моделирование») не рвётся посередине, а мельчает
+                    FitWords(lesson.title, style: s.name(16)),
                     if (sub.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(sub.join(' · '), style: s.body(13, color: p.muted)),
