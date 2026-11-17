@@ -162,6 +162,73 @@ async def test_groups_ranked_with_min_people(db):
     assert data["university_top"][1]["mine"] is True
     other = await xp.for_user(7, 502)
     assert other["group"]["place"] is None and other["group"]["need"] == 2
+    # сколько опыта до группы выше: в институте и в вузе
+    assert (g["up_inst"], g["up_all"]) == (150 - 30 + 1, 150 - 30 + 1)
+    assert data["university_top"][0]["place"] == 1 and other["group"]["up_all"] is None
+
+
+@pytest.mark.asyncio
+async def test_personal_ranks(db):
+    """Личное место (шаг 7, Никита 11.11): в группе, институте и вузе — среди
+    тех, у кого есть опыт. Чужой ник — только по согласию, как в группе;
+    скрытый — одно место без опыта и группы. В институте и вузе — верх и
+    соседи, между ними «дальше N человек»."""
+    from database.groups import home, upsert_group
+    await upsert_group(501, "УИБО-01-24")
+    await upsert_group(502, "ИКБО-02-24")
+    for uid, gid, pts in [(1, None, 40), (2, None, 30), (3, None, 20), (4, None, 0),
+                          (5, 501, 100), (6, 501, 50), (7, 502, 200), (8, 502, 10)]:
+        await _person(db, uid, f"Имя{uid} Ф", gid)
+        if pts:
+            await db.save_score_points(uid, _day(-1), {1: pts})
+    await xp.save(2, show=True)
+    await xp.save(5, show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    await xp.save(7, nick="Ночной дедлайн", show_all=True, consent=legal_texts.RATING_ALL_VERSION)
+    capy = f"Капибара №{(await xp.profile(5))['alias']}"
+    r = (await xp.for_user(3, home()))["ranks"]
+    me = {"nick": "Имя3 Ф.", "xp": 20, "me": True}
+    assert r["group"] == {"place": 3, "of": 3, "up": 11, "above": None, "rows": [
+        {"place": 1, "hidden": True},
+        {"place": 2, "nick": "Имя2 Ф.", "xp": 30, "me": False},
+        {"place": 3, **me, "seen": False}]}
+    # институт ИТУ: свои и УИБО-01-24; у кого нет опыта (4) — не в списке
+    assert (r["inst"]["place"], r["inst"]["of"], r["inst"]["up"]) == (5, 5, 11)
+    assert r["inst"]["rows"] == [
+        {"place": 1, "nick": capy, "xp": 100, "me": False, "group": "УИБО-01-24"},
+        {"place": 2, "hidden": True}, {"place": 3, "hidden": True},
+        {"place": 4, "nick": "Имя2 Ф.", "xp": 30, "me": False, "group": "УИБО-03-24"},
+        {"place": 5, **me, "group": "УИБО-03-24", "seen": False}]
+    # вуз: верх — трое, потом пропуск, соседи и я, после — ещё один
+    assert (r["all"]["place"], r["all"]["of"]) == (6, 7)
+    assert [x.get("place", x.get("gap")) for x in r["all"]["rows"]] == [1, 2, 3, 1, 5, 6, 7]
+    assert r["all"]["rows"][0] == {"place": 1, "nick": "Ночной дедлайн", "xp": 200, "me": False, "group": "ИКБО-02-24"}
+    assert r["all"]["rows"][3] == {"gap": 1}
+    # не участник своей группы не видит тех, кто разрешил только группе
+    assert (await xp.for_user(3, home(), member=False))["ranks"]["group"]["rows"][1] == {"place": 2, "hidden": True}
+    # без опыта — места нет, но верх списка виден
+    four = (await xp.for_user(4, home()))["ranks"]
+    assert four["group"]["place"] is None and four["all"]["up"] is None
+    assert [x.get("place") for x in four["all"]["rows"]] == [1, 2, 3, None]
+    # себя — под своим ником; кто включил «всем», того видят и в институте, и в вузе
+    five = (await xp.for_user(5, 501))["ranks"]
+    assert five["all"]["rows"][1] == {"place": 2, "nick": "Имя5 Ф.", "xp": 100, "me": True, "group": "УИБО-01-24",
+                                      "seen": True}
+
+
+@pytest.mark.asyncio
+async def test_personal_week_and_above(db):
+    """«+N за неделю» — опыт с понедельника по Москве; «выше N %» — с 10 человек."""
+    from datetime import UTC, datetime
+
+    from database.groups import home
+    for uid in range(1, 12):
+        await _person(db, uid, f"Имя{uid} Ф")
+        await db.save_score_points(uid, _day(-20), {1: 5})
+        await db.save_score_points(uid, _day(0), {1: 10 + uid})
+    monday = xp._week_ends(datetime.now(UTC))[-2].date()
+    data = await xp.for_user(3, home())
+    assert data["me"]["week"] == (13 - 5 if date.today() >= monday else 0)
+    assert (data["ranks"]["all"]["place"], data["ranks"]["all"]["of"], data["ranks"]["all"]["above"]) == (9, 11, 18)
 
 
 @pytest.mark.asyncio
@@ -303,7 +370,7 @@ async def test_show_all_is_own_consent(db, monkeypatch):
     assert got.get("rating_all") == legal_texts.RATING_ALL_VERSION and "rating" not in got
     assert (await xp.for_user(1, home()))["me"]["public_nick"] == f"Капибара №{p['alias']}"
     ver = legal_texts.RATING_ALL_VERSION
-    monkeypatch.setattr(legal_texts, "RATING_ALL_VERSION", "2")
+    monkeypatch.setattr(legal_texts, "RATING_ALL_VERSION", str(int(ver) + 1))
     assert (await xp.profile(1))["show_all"] is False                  # текст поменялся — спросить заново
     monkeypatch.setattr(legal_texts, "RATING_ALL_VERSION", ver)
     await xp.save(1, show_all=False)

@@ -22,6 +22,12 @@
 legal_texts.RATING_ALL), а чужим группам виден только свой ник или «Капибара
 №…» со случайным номером (alias), не имя. История по неделям (графики)
 считается из тех же отметок по их датам.
+
+Личное место (шаг 7 нового дизайна, Никита 11.11: рейтинг открывается на
+«Я»): среди людей своей группы, своего института и всего вуза — у кого опыт
+больше нуля. Своё место человек видит всегда; чужой ник — по тем же
+согласиям, что и в группе (_seen_as), остальные — строкой «N место не
+показывает себя», без опыта и группы.
 Кому обрабатывать данные нельзя (privacy.blocked: нет согласия, ждёт удаления),
 в рейтинге нет совсем.
 """
@@ -40,6 +46,8 @@ FILE_CAP = 20
 SEMESTER_DAYS = 160
 MIN_PEOPLE = 3
 TOP = 10
+# личные списки института и вуза: верх и соседи сверху и снизу, между ними — «дальше N человек»
+TOP_PEOPLE, NEIGHBORS = 3, 1
 WEEKS = 8
 CACHE_SECONDS = 300
 PARTS = ("brs", "submit", "early", "ach", "file")
@@ -243,16 +251,23 @@ async def board() -> dict:
     # история: та же раскладка на конец каждой недели (неделя подписана своим понедельником)
     history: dict[int, list] = {}
     ends = _week_ends(datetime.now(UTC))
+    week_start: dict[int, dict] = {}
     for i, end in enumerate(ends):
         start = end - timedelta(weeks=1) if i < len(ends) - 1 else ends[-2]
         label = start.strftime("%d.%m")
-        past = _groups(_totals(raw, end), people, names)
+        totals = _totals(raw, end)
+        if i == len(ends) - 2:
+            week_start = totals                             # опыт на понедельник — «+38 за неделю»
+        past = _groups(totals, people, names)
         _rank(past)
         for gid, g in past.items():
             history.setdefault(gid, []).append({"week": label, "xp": g["xp"], "place": g.get("place"),
                                                 "place_inst": g.get("place_inst")})
+    # люди с опытом по убыванию: личные места (при равном опыте — кто раньше пришёл)
+    people_ranked = sorted(((uid, x["total"]) for uid, x in xp.items() if uid in people and x["total"] > 0),
+                           key=lambda r: (-r[1], r[0]))
     data = {"xp": xp, "people": people, "groups": groups, "ranked": ranked, "by_inst": by_inst,
-            "history": history}
+            "history": history, "people_ranked": people_ranked, "week_start": week_start}
     _cache = (now, data)
     return data
 
@@ -296,14 +311,70 @@ def _people_of(b: dict, group_id: int, viewer_id: int, member: bool) -> tuple[li
     return rows, hidden
 
 
+def _gap(ranked: list, place: int | None, key=lambda g: g["xp"]) -> int | None:
+    """Сколько опыта до места выше (на 1 больше, чем у того, кто там)."""
+    if not place or place < 2:
+        return None
+    return key(ranked[place - 2]) - key(ranked[place - 1]) + 1
+
+
 def _group_full(b: dict, g: dict, viewer_gid: int) -> dict:
     from kapibara.features.groups import institutes
     inst = g.get("institute") or ""
     return {**_row(g, viewer_gid), "people": g["people"], "need": max(0, MIN_PEOPLE - g["people"]),
+            "up_inst": _gap(b["by_inst"].get(inst, []), g.get("place_inst")),
+            "up_all": _gap(b["ranked"], g.get("place")),
             "institute_name": institutes.INSTITUTES.get(inst, ""),
             "groups_inst": len(b["by_inst"].get(inst, [])), "groups_all": len(b["ranked"]),
             "parts": dict(g.get("parts") or dict.fromkeys(PARTS, 0)),
             "history": b["history"].get(g["id"], [])}
+
+
+def _inst_of(b: dict, uid: int) -> str:
+    return (b["groups"].get(b["people"][uid]["group"]) or {}).get("institute") or ""
+
+
+def _seen_as(p: dict, uid: int, viewer_id: int, viewer_gid: int, member: bool) -> str | None:
+    """Под каким ником человека видно этому зрителю (как в _people_of): себя —
+    всегда; свою группу — с «группе»; всех — с «всем» и номером. None — не
+    показывает себя."""
+    if uid == viewer_id or (member and p["group"] == viewer_gid and p["show"]):
+        return nick_of(p)
+    return public_nick(p) if p["show_all"] else None
+
+
+def _scope(b: dict, ranked: list, viewer_id: int, viewer_gid: int, member: bool, full: bool = False) -> dict:
+    """Личное место среди ranked [(user_id, опыт)] и строки списка: full — все
+    (группа), иначе верх и соседи с пропусками {"gap": N}. Скрытый — только
+    место; себя видно всегда, seen — видят ли тебя другие здесь."""
+    n = len(ranked)
+    place = next((i for i, (uid, _) in enumerate(ranked, 1) if uid == viewer_id), None)
+    keep = range(1, n + 1) if full else sorted(
+        {*range(1, min(TOP_PEOPLE, n) + 1),
+         *(range(max(1, place - NEIGHBORS), min(n, place + NEIGHBORS) + 1) if place else ())})
+    rows: list[dict] = []
+    prev = 0
+    for i in keep:
+        if i - prev > 1:
+            rows.append({"gap": i - prev - 1})
+        prev = i
+        uid, total = ranked[i - 1]
+        p = b["people"][uid]
+        nick = _seen_as(p, uid, viewer_id, viewer_gid, member)
+        if nick is None:
+            rows.append({"place": i, "hidden": True})
+            continue
+        row = {"place": i, "nick": nick, "xp": total, "me": uid == viewer_id}
+        if not full:
+            row["group"] = (b["groups"].get(p["group"]) or {}).get("name", "")
+        if uid == viewer_id:
+            me = b["people"][uid]
+            row["seen"] = bool(me["show_all"] and public_nick(me)) or (full and me["show"])
+        rows.append(row)
+    if prev < n:
+        rows.append({"gap": n - prev})
+    return {"place": place, "of": n, "up": _gap(ranked, place, key=lambda r: r[1]),
+            "above": (n - place) * 100 // n if place and n >= 10 else None, "rows": rows}
 
 
 def _empty_group(gid: int) -> dict:
@@ -321,9 +392,18 @@ async def for_user(user_id: int, group_id: int, member: bool = True) -> dict:
     in_inst = b["by_inst"].get(g.get("institute") or "", [])
     mates, _hidden = _people_of(b, group_id, user_id, member)
     parts = b["xp"].get(user_id) or {**dict.fromkeys(PARTS, 0), "total": 0}
+    week = parts["total"] - b["week_start"].get(user_id, {}).get("total", 0)
+    inst = g.get("institute") or ""
+    ranked = b["people_ranked"]
+    mates_ranked = [r for r in ranked if b["people"][r[0]]["group"] == group_id]
+    inst_ranked = [r for r in ranked if inst and _inst_of(b, r[0]) == inst]
+    ranks = {"group": _scope(b, mates_ranked, user_id, group_id, member, full=True),
+             "inst": _scope(b, inst_ranked, user_id, group_id, member) if inst else None,
+             "all": _scope(b, ranked, user_id, group_id, member)}
     return {
         "me": {**parts, "nick": nick_of(me), "custom_nick": bool(me.get("nick")), "show": me["show"],
-               "show_all": me["show_all"], "public_nick": public_nick(me)},
+               "show_all": me["show_all"], "public_nick": public_nick(me), "week": max(0, week)},
+        "ranks": ranks,
         "group": _group_full(b, g, group_id),
         "institute_top": [_row(x, group_id) for x in in_inst[:TOP]],
         "university_top": [_row(x, group_id) for x in b["ranked"][:TOP]],
