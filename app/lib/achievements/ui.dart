@@ -732,6 +732,60 @@ class AchievementsRow extends StatelessWidget {
   }
 }
 
+/// Ачивки строкой в общей карточке нового «Ещё» (макет Е3): значок последней
+/// полученной (ещё ни одной — закрытый «Рассвет»), «N из 25» и полоска.
+class AchievementsLine extends StatelessWidget {
+  const AchievementsLine({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return ValueListenableBuilder(
+      valueListenable: AchStore.got,
+      builder: (context, got, _) {
+        final last = got.entries.isEmpty ? null : got.entries.reduce((a, b) => b.value.isAfter(a.value) ? b : a);
+        final a = last == null ? null : achievementById(last.key);
+        return InkWell(
+          key: const Key('more:achievements'),
+          onTap: () {
+            tick();
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AchievementsScreen()));
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.m, Space.m),
+            child: Row(
+              children: [
+                a == null ? const RankBadge(rank: Rank.dawn, size: 52, open: false) : RankBadge(rank: a.rank, size: 52),
+                const SizedBox(width: Space.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('Ачивки', style: s.body(17, weight: FontWeight.w700)),
+                          ),
+                          Text('${got.length} из ${achievements.length}', style: s.body(13, color: p.muted)),
+                        ],
+                      ),
+                      const SizedBox(height: Space.s),
+                      _Bar(value: got.length / achievements.length),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: Space.s),
+                Icon(Icons.chevron_right_rounded, color: p.muted),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ── плашка новой ачивки ────────────────────────────────────────────────
 
 OverlayEntry? _banner;

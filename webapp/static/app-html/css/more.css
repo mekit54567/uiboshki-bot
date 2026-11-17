@@ -40,6 +40,34 @@ button.mr-mrow:active { background: color-mix(in srgb, var(--text) 5%, transpare
   font-size: 14px; font-weight: 500; }
 .btn.text.mr-cancel { color: var(--muted); }
 
+/* ── «Ещё» нового дизайна (макет Е3, more_fresh.dart) ── */
+.mf-head { align-items: flex-start; gap: var(--s); padding: var(--l) var(--m) var(--m) var(--l); }
+.mf-name { overflow-wrap: anywhere; }
+.mf-capy { flex: none; display: flex; }
+.mf-list { border-radius: var(--r-card); overflow: hidden; }
+.mf-row { display: flex; align-items: center; gap: var(--m); width: 100%; min-height: 60px; padding: var(--m) var(--m) var(--m) var(--l);
+  text-align: left; color: var(--text); }
+button.mf-row:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.mf-row > .grow { display: flex; flex-direction: column; gap: 2px; }
+.mf-row > .mi { flex: none; }
+.mf-t { --sz: 15px; font-weight: 700; }
+.mf-t.big { --sz: 17px; }
+.mf-s { --sz: 13px; color: var(--muted); }
+.mf-s.ac { color: var(--accent); font-weight: 600; }
+.mf-ic { width: 36px; height: 36px; border-radius: 12px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.mf-ic .mi { font-size: 20px; }
+.mf-row.da .mf-ic { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.mf-row.da .mf-t { color: var(--danger); }
+.mf-place { width: 52px; height: 52px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.mf-place .num { --sz: 24px; color: var(--accent); }
+.mf-bar { display: block; height: 6px; margin-top: var(--s); border-radius: 4px; }
+.mf-bar > i { border-radius: 4px; }
+.sheet.mf-sheet { background: var(--bg); }
+.mf-sheet .body { padding: 0 var(--l); }
+.mf-opt { margin-bottom: var(--s); }
+
 /* ── «Уведомления» ── */
 .mr-gap { margin-bottom: var(--s); }
 .mr-info { gap: var(--s); padding: 0 var(--xl) var(--m); }

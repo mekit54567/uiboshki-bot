@@ -3,6 +3,7 @@
 // рейтинг строками, настройки плитками по две; действия с пояснениями —
 // строками под плитками, «Выйти» и приписка для магазинов. Экраны настроек
 // (Уведомления, Оформление, Безопасность, Группа, тур) — js/screens/settings.js.
+// С «Новым» в «Оформлении» — короткий экран по макету Е3 (more_fresh.dart).
 "use strict";
 
 /** Приписка для магазинов (api/links.dart: unofficialNote). */
@@ -153,10 +154,68 @@ async function mrSubscribe(copy) {
              : "Календарь не открылся — ссылка скопирована, добавь подписку в календаре", "done");
 }
 
+// ── «Ещё» нового дизайна (макет Е3, Никита 11.11; app/lib/screens/more_fresh.dart) ──
+// Имя, группа и курс; ачивки и рейтинг одной карточкой; «Моя учёба»,
+// «Настройки», «Ещё» строками; «Сообщество» и «О Капибаре» — листы.
+// Баллов БРС здесь нет — они на «Учёбе».
+
+/** «3 курс» по году поступления в конце названия группы (courseOfGroup); учебный год — с сентября. */
+function mrCourseOf(name, at) {
+  const m = /-(\d{2})$/.exec(String(name).trim());
+  if (!m) return null;
+  const start = at.getMonth() >= 8 ? at.getFullYear() : at.getFullYear() - 1;
+  const n = start - (2000 + Number(m[1])) + 1;
+  return n >= 1 && n <= 6 ? `${n}\u00a0курс` : null;
+}
+const MR_NOTIFY = [["morning", "утро"], ["lessons", "перед парой"], ["deadlines", "дедлайны"], ["weekly", "обзор недели"],
+  ["grades", "новые баллы"], ["new_tasks", "новые задания"], ["evening", "вечер"]];
+/** Что включено в «Уведомлениях» — одной строкой под пунктом (notifySummary). */
+function mrNotifySummary(d) {
+  if (!d || d.subscribed !== true) return "выключены";
+  const prefs = d.prefs || {};
+  const known = MR_NOTIFY.filter(([k]) => k in prefs);
+  const onNow = known.filter(([k]) => prefs[k] === true).map(([, t]) => t);
+  if (!onNow.length) return "ничего не включено";
+  if (onNow.length === known.length) return "включены все";
+  if (onNow.length <= 2) return onNow.join(", ");
+  return `${onNow.slice(0, 2).join(", ")} и ещё ${onNow.length - 2}`;
+}
+/** «Тетрадь, книжный шрифт» — что сейчас в «Оформлении» (lookSummary). */
+function mrLookSummary() {
+  const r = document.documentElement.dataset;
+  const theme = { night: "Ночная тетрадь", depth: "Глубина" }[r.appTheme] || "Тетрадь";
+  return `${theme}, ${r.font === "strict" ? "строгий" : "книжный"} шрифт`;
+}
+/** Строка списка (_FreshRow): значок в мягком квадрате, название, пояснение и стрелка; act пусто — не нажимается. */
+function mrFRow(act, ic, variant, title, sub = "", { key = "", subCls = "", danger = false } = {}) {
+  const tag = act ? "button" : "div";
+  return `<${tag} class="mf-row${danger ? " da" : ""}"${act ? ` data-act="${act}"` : ""}${key ? ` data-key="${key}"` : ""}>
+    <span class="mf-ic">${icon(ic, variant)}</span>
+    <span class="grow"><span class="bd mf-t">${esc(title)}</span>${sub ? `<span class="bd mf-s${subCls ? " " + subCls : ""}">${esc(sub)}</span>` : ""}</span>
+    ${act && !danger ? icon("chevron_right", "", "color:var(--muted)") : ""}</${tag}>`;
+}
+/** Карточка-список (_FreshList): строки через тонкую линию; пустые пропускаются. */
+function mrFList(rows) { return `<div class="tile p0 mf-list">${rows.filter(Boolean).join('<div class="divider"></div>')}</div>`; }
+/** Лист нового вида: заголовок и карточки на цвете экрана; пункт сначала закрывает лист, потом делает своё. */
+function mrFSheet(title, html, acts, { keep = false } = {}) {
+  return Sheet.show(`<div class="ttl" style="--sz:22px;margin-bottom:var(--m)">${esc(title)}</div>${html}`, (b, close, sh) => {
+    sh.classList.add("mf-sheet");
+    const wrapped = {};
+    for (const [k, f] of Object.entries(acts)) wrapped[k] = (el) => { if (!keep) close(); f(el, b); };
+    on(b, wrapped);
+  });
+}
+/** Ранг ачивки: из общего каталога, если он уже есть. */
+function mrRankOf(id) {
+  const a = Array.isArray(window.ACHIEVEMENTS) && window.ACHIEVEMENTS.find((x) => x.id === id);
+  return (a && a.rank) || MR_ACH_RANK[id] || "dawn";
+}
+function mrAchTotal() { return Array.isArray(window.ACHIEVEMENTS) ? window.ACHIEVEMENTS.length : Object.keys(MR_ACH_RANK).length; }
+
 Screens.more = {
   mount(body, screen) {
     const st = { me: null, error: null, points: null, pointsFailed: false, pointsBusy: false, rating: undefined,
-      links: {}, plus: false, donate: false, optPending: [], optAnswers: {}, adminNote: null };
+      links: {}, plus: false, donate: false, optPending: [], optAnswers: {}, adminNote: null, notify: null };
 
     // ── баллы: грузятся сами по себе, СДО не отвечает — остальной экран работает ──
     const fetchPoints = async () => {
@@ -191,6 +250,7 @@ Screens.more = {
         draw();
       } catch (e) {}
     };
+    const loadNotify = () => Api.get("/notify").then((v) => { st.notify = v; draw(); }, () => {});
     const loadExtras = () => {
       mrAppLinks().catch(() => ({})).then((l) => { st.links = l; draw(); });
       mrShownBy("/plus").then((v) => { st.plus = v; draw(); });
@@ -229,11 +289,7 @@ Screens.more = {
     };
     const achRow = () => {
       const got = Ach.done;
-      const total = Array.isArray(window.ACHIEVEMENTS) ? window.ACHIEVEMENTS.length : Object.keys(MR_ACH_RANK).length;
-      const rankOf = (id) => {
-        const a = Array.isArray(window.ACHIEVEMENTS) && window.ACHIEVEMENTS.find((x) => x.id === id);
-        return (a && a.rank) || MR_ACH_RANK[id] || "dawn";
-      };
+      const total = mrAchTotal(), rankOf = mrRankOf;
       const last = Object.entries(got).filter(([id]) => rankOf(id)).sort((a, b) => String(b[1]).localeCompare(String(a[1]))).slice(0, 3);
       const n = Object.keys(got).length;
       const badges = !last.length ? mrRankBadge("dawn", 36, false)
@@ -302,11 +358,77 @@ Screens.more = {
       return `<div class="hx"><div class="tile p0">${rows.join('<div class="divider"></div>')}</div></div>`;
     };
 
+    const optSubjects = () => [...st.optPending, ...Object.keys(st.optAnswers).filter((k) => !st.optPending.includes(k))];
+    const freshHtml = () => {
+      const me = st.me;
+      const first = String(me.first_name || "").trim(), user = String(me.username || "").trim();
+      const name = first || (user ? "@" + user : "Ещё");
+      const g = me.group, group = g && g.name ? String(g.name) : "";
+      const course = mrCourseOf(group, now());
+      const chev = icon("chevron_right", "", "color:var(--muted)");
+      // ачивки: значок последней полученной (ни одной — закрытый «Рассвет»), «N из 25» и полоска
+      const got = Ach.done, n = Object.keys(got).length, total = mrAchTotal();
+      const last = Object.entries(got).sort((a, b) => String(b[1]).localeCompare(String(a[1])))[0];
+      const ach = `<button class="mf-row mf-big" data-act="ach" data-key="more:achievements">
+        ${last ? mrRankBadge(mrRankOf(last[0]), 52) : mrRankBadge("dawn", 52, false)}
+        <span class="grow"><span class="row" style="gap:var(--s)"><span class="bd mf-t big grow">Ачивки</span>
+          <span class="bd mut" style="--sz:13px">${Math.min(n, total)}\u00a0из\u00a0${total}</span></span>
+          <span class="progress mf-bar"><i style="width:${Math.min(1, n / total) * 100}%"></i></span></span>${chev}</button>`;
+      // рейтинг: место группы в институте, иначе в вузе
+      const rg = st.rating && st.rating.group;
+      const inst = rg && rg.place_inst != null ? rg.place_inst : null;
+      const place = inst != null ? inst : (rg && rg.place != null ? rg.place : null);
+      const rname = rg && rg.name ? String(rg.name) : group;
+      const rline = place == null ? "места групп в институте и вузе"
+        : `${rname} на ${place}\u00a0месте ${inst != null ? "в\u00a0институте" : "в\u00a0вузе"}`;
+      const rating = `<button class="mf-row mf-big" data-act="rating" data-key="more:rating">
+        <span class="mf-place">${place == null ? icon("leaderboard", "o") : `<span class="num">${esc(place)}</span>`}</span>
+        <span class="grow"><span class="bd mf-t big">Рейтинг</span><span class="bd mf-s">${esc(rline)}</span></span>${chev}</button>`;
+      const subjects = optSubjects();
+      let opt = "";
+      if (subjects.length) {
+        const s0 = subjects[0];
+        const state = st.optPending.includes(s0) ? "ходишь?" : st.optAnswers[s0] ? "хожу" : "не хожу";
+        opt = mrFRow("optional", "school", "o", "Предметы по выбору",
+          `${s0}: ${state}${subjects.length > 1 ? ` · ещё ${subjects.length - 1}` : ""}`,
+          { key: "more:optional", subCls: st.optPending.length ? "ac" : "" });
+      }
+      const news = mrNewsLinks(st.links).length > 0;
+      return `<div class="row mf-head"><div class="grow"><div class="ttl mf-name" style="--sz:30px">${esc(name)}</div>
+          <div class="bd mut" style="--sz:13px;margin-top:6px">${esc(group ? [group, course].filter(Boolean).join(" · ") : "группа не выбрана")}</div></div>
+          <span class="mf-capy" aria-hidden="true">${capy("joy", 62)}</span></div>
+        <div class="hx">${mrFList([ach, rating])}</div>
+        ${section("Моя учёба")}
+        <div class="hx">${mrFList([
+          mrFRow("group", "group", "o", "Сменить мою группу", group ? "сейчас " + group : "группа не выбрана", { key: "more:group" }),
+          g && g.own !== true ? mrFRow(st.adminNote ? "" : "admin", "verified_user", "o", "Я староста этой группы",
+            st.adminNote || "спрошу владельца бота — сможешь вести общие сроки и ДЗ") : "",
+          opt,
+          mrFRow("calendar", "event_available", "o", "Добавить в\u00a0календарь телефона", "", { key: "more:calendar" }),
+        ])}</div>
+        ${section("Настройки")}
+        <div class="hx">${mrFList([
+          mrFRow("notify", "notifications_none", "", "Уведомления", st.notify ? mrNotifySummary(st.notify) : "", { key: "more:notify" }),
+          mrFRow("look", "palette", "o", "Оформление", mrLookSummary(), { key: "more:theme" }),
+          mrFRow("security", "shield", "o", "Безопасность и мои данные", "", { key: "more:security" }),
+        ])}</div>
+        ${section("Ещё")}
+        <div class="hx">${mrFList([
+          mrFRow("community", "person_add_alt", "o", "Сообщество", news ? "позвать друга, новости и связь" : "позвать друга или группу", { key: "more:community" }),
+          mrFRow("about", "lightbulb", "o", "О Капибаре", st.plus || st.donate ? "как пользоваться, другие устройства, поддержка"
+            : "как пользоваться и другие устройства", { key: "more:about" }),
+        ])}</div>
+        <div style="height:var(--m)"></div>
+        <div class="hx">${mrFList([mrFRow("logout", "logout", "", "Выйти", "", { key: "more:logout", danger: true })])}</div>
+        <div style="height:120px"></div>`;
+    };
+
     const draw = () => {
       if (!st.me) {
         body.innerHTML = st.error ? '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(st.error), { pose: "sad", retry: "retry" }) : spinner();
         return;
       }
+      if (Theme.fresh) { body.innerHTML = freshHtml(); return; }
       body.innerHTML = profile(st.me) + points() + '<div style="height:var(--m)"></div>' + achRow()
         + '<div style="height:var(--s)"></div>' + ratingRowHtml() + '<div style="height:var(--m)"></div>' + tiles()
         + optional() + '<div style="height:var(--m)"></div>' + menu() + '<div style="height:var(--s)"></div>'
@@ -335,7 +457,8 @@ Screens.more = {
         st.me = me || {};
         st.error = null;
         draw();
-        if (first || !st.pointsBusy) loadPoints(first);
+        // баллов в новом «Ещё» нет — они на «Учёбе»
+        if (!Theme.fresh && (first || !st.pointsBusy)) loadPoints(first);
       } catch (e) {
         if (e.status === 401) return;
         st.error = e;
@@ -343,7 +466,17 @@ Screens.more = {
       }
     };
 
-    on(body, {
+    // ответ «хожу / не хожу» на предмет по выбору — и в прежнем экране, и в листе нового
+    const answerOpt = async (s, attend) => {
+      try { await Api.post("/optional", { subject: s, attend }); }
+      catch (e) { toast("Не сохранилось: " + errorText(e), "error"); return false; }
+      st.optPending = st.optPending.filter((x) => x !== s);
+      st.optAnswers[s] = attend;
+      draw();
+      toast(attend ? `Пары «${s}» будут в расписании` : `Убрал «${s}» из расписания`, "done");
+      return true;
+    };
+    const acts = {
       retry() { st.error = null; draw(); load(); },
       study() { tick(); Tabs.show(3); },
       "points-retry"() { tick(); loadPoints(false); },
@@ -393,20 +526,59 @@ Screens.more = {
       },
       async opt(b) {
         tick();
-        const subjects = [...st.optPending, ...Object.keys(st.optAnswers).filter((k) => !st.optPending.includes(k))];
-        const s = subjects[+b.dataset.i], attend = b.dataset.a === "1";
-        try { await Api.post("/optional", { subject: s, attend }); }
-        catch (e) { toast("Не сохранилось: " + errorText(e), "error"); return; }
-        st.optPending = st.optPending.filter((x) => x !== s);
-        st.optAnswers[s] = attend;
-        draw();
-        toast(attend ? `Пары «${s}» будут в расписании` : `Убрал «${s}» из расписания`, "done");
+        await answerOpt(optSubjects()[+b.dataset.i], b.dataset.a === "1");
+      },
+      // ── новый вид: листы «Сообщество», «О Капибаре», «Предметы по выбору» ──
+      community() {
+        tick();
+        const news = mrNewsLinks(st.links), ch = !!st.links.channel, co = !!st.links.contact;
+        mrFSheet("Сообщество", mrFList([
+          mrFRow("invite", "person_add_alt", "o", "Позвать", "готовое сообщение другу или в\u00a0чат группы", { key: "more:invite" }),
+          news.length ? mrFRow("links", "chat_bubble_outline", "", "Новости и связь",
+            ch && co ? "канал Капибары и «Написать нам»" : ch ? "канал Капибары" : "«Написать нам»", { key: "more:links" }) : "",
+        ]), { invite: () => acts.invite(), links: () => acts.links() });
+      },
+      about() {
+        tick();
+        // на iPhone сервер «Капибару+» и «Поддержать» не показывает — и в листе их нет (App Store 3.1.1)
+        const paid = st.plus || st.donate ? '<div style="height:var(--m)"></div>' + mrFList([
+          st.plus ? mrFRow("plus", "star_outline", "", "Капибара+", "", { key: "more:plus" }) : "",
+          st.donate ? mrFRow("donate", "favorite_border", "", "Поддержать проект", "разово, сумма на выбор", { key: "more:donate" }) : "",
+          st.donate ? mrFRow("roadmap", "push_pin", "o", "Роадмап", "что дальше, для тех, кто поддержал", { key: "more:roadmap" }) : "",
+        ]) : "";
+        mrFSheet("О Капибаре", mrFList([
+          mrFRow("tour", "lightbulb", "o", "Как пользоваться", "короткий тур: что где и какие есть жесты", { key: "more:tour" }),
+          mrFRow("places", "devices_other", "o", "Капибара в других местах", "Telegram-бот, браузер и компьютер", { key: "more:places" }),
+        ]) + paid + `<div class="bd mut" style="--sz:13px;margin-top:var(--m)">${esc(MR_UNOFFICIAL)}</div>`,
+        { tour: () => acts.tour(), places: () => acts.places(), plus: () => acts.plus(), donate: () => acts.donate(), roadmap: () => acts.roadmap() });
+      },
+      optional() {
+        tick();
+        const list = optSubjects();   // порядок не меняется, пока лист открыт
+        const cards = () => list.map((s) => {
+          const text = st.optPending.includes(s) ? "Ходишь? Если нет — уберу эти пары из твоего расписания."
+            : st.optAnswers[s] ? "Хожу — пары в расписании" : "Не хожу — пары скрыты";
+          const choice = (attend) => {
+            const onNow = st.optAnswers[s] === attend && !st.optPending.includes(s);
+            return `<button class="mr-choice${onNow ? " on" : ""}" data-act="fopt" data-s="${esc(s)}" data-a="${attend ? 1 : 0}"${onNow ? " disabled" : ""}>${attend ? "Хожу" : "Не хожу"}</button>`;
+          };
+          return `<div class="tile mf-opt"><div class="row">${icon("military_tech", "o", "color:var(--accent)")}<div class="bd b6 grow" style="--sz:16px">${esc(s)}</div></div>
+            <div class="bd mut" style="--sz:13px;margin-top:4px">${esc(text)}</div>
+            <div class="row" style="gap:var(--s);margin-top:var(--m)">${choice(true)}${choice(false)}</div></div>`;
+        }).join("");
+        mrFSheet("Предметы по выбору", `<div class="mf-opts">${cards()}</div>`, {
+          async fopt(el, b) {
+            tick();
+            if (await answerOpt(el.dataset.s, el.dataset.a === "1")) b.querySelector(".mf-opts").innerHTML = cards();
+          },
+        }, { keep: true });
       },
       async logout() {
         const ok = await confirmSheet({ title: "Выйти?", text: "На этом устройстве. Войти снова — через бота.", action: "Выйти", cancel: "Остаться", danger: true });
         if (ok) logout();
       },
-    });
+    };
+    on(body, acts);
 
     // сразу — из запаса телефона, свежие следом (Loader.fromCache)
     const c = Api.cached("/me");
@@ -416,8 +588,10 @@ Screens.more = {
     loadRating();
     loadOptional();
     loadExtras();
-    screen.mrDraw = () => { if (st.me) draw(); };
-    pullRefresh(screen, () => Promise.all([load(), loadRating(), loadOptional(), loadExtras()]));
+    if (Theme.fresh) loadNotify();
+    // вернулся из «Уведомлений» или с другой вкладки — строка под ними свежая
+    screen.mrDraw = () => { if (st.me) draw(); if (Theme.fresh) loadNotify(); };
+    pullRefresh(screen, () => Promise.all([load(), loadRating(), loadOptional(), loadExtras(), Theme.fresh ? loadNotify() : null]));
   },
   // ачивки могли открыться на других вкладках — строка ачивок свежая
   onShow(body, screen) { if (screen.mrDraw) screen.mrDraw(); },

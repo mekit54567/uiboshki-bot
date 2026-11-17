@@ -1,6 +1,7 @@
 // «Ещё» (дизайн 23Б, владелец 09.10): сверху кто я и группа, под ними баллы
 // БРС одной цифрой и одной фразой (нажал — «Учёба»), ниже настройки плитками
-// по две; действия с пояснениями — строками под плитками.
+// по две; действия с пояснениями — строками под плитками. С «Новым» в
+// «Оформлении» — короткий экран по макету Е3 (more_fresh.dart).
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,7 @@ import '../plus/plus_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
+import '../widgets/capy.dart';
 import '../widgets/common.dart';
 import 'look_screen.dart';
 import 'notify.dart';
@@ -24,6 +26,8 @@ import 'sdo_connect.dart';
 import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'security.dart';
 import 'study.dart';
+
+part 'more_fresh.dart';
 
 class MoreScreen extends StatelessWidget {
   final Api api;
@@ -67,6 +71,13 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
+    if (s.fresh) {
+      return Loader<Map<String, dynamic>>(
+        load: () async => Map<String, dynamic>.from(await api.get('/me')),
+        onUnauthorized: onUnauthorized,
+        builder: (context, me, _) => _FreshMore(screen: this, me: me),
+      );
+    }
     return Loader<Map<String, dynamic>>(
       load: () async => Map<String, dynamic>.from(await api.get('/me')),
       onUnauthorized: onUnauthorized,
@@ -897,7 +908,12 @@ class _MenuRow extends StatelessWidget {
 /// скрыты (optional_subjects.py). Нет таких в расписании группы — блока нет.
 class _Optional extends StatefulWidget {
   final Api api;
-  const _Optional({required this.api});
+
+  /// В листе «Предметы по выбору» нового «Ещё»: без подписи раздела и
+  /// боковых отступов, сразу с тем, что экран уже знает.
+  final bool sheet;
+  final ({List<String> pending, Map<String, bool> answers})? initial;
+  const _Optional({required this.api, this.sheet = false, this.initial});
 
   @override
   State<_Optional> createState() => _OptionalState();
@@ -910,7 +926,13 @@ class _OptionalState extends State<_Optional> {
   @override
   void initState() {
     super.initState();
-    _load();
+    final i = widget.initial;
+    if (i == null) {
+      _load();
+    } else {
+      _pending = [...i.pending];
+      _answers = {...i.answers};
+    }
   }
 
   Future<void> _load() async {
@@ -954,10 +976,12 @@ class _OptionalState extends State<_Optional> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Section('Предметы по выбору'),
+        if (!widget.sheet) const Section('Предметы по выбору'),
         for (final subj in subjects)
           Padding(
-            padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
+            padding: widget.sheet
+                ? const EdgeInsets.only(bottom: Space.s)
+                : const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.s),
             child: Tile(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1137,7 +1161,10 @@ class _FontCard extends StatelessWidget {
 /// общие сроки, ДЗ и заметки группы). Строкой под плитками: действие с пояснением.
 class _AdminRequest extends StatefulWidget {
   final Api api;
-  const _AdminRequest({required this.api});
+
+  /// Строкой нового «Ещё» (значок в квадрате, как соседние).
+  final bool fresh;
+  const _AdminRequest({required this.api, this.fresh = false});
 
   @override
   State<_AdminRequest> createState() => _AdminRequestState();
@@ -1146,22 +1173,24 @@ class _AdminRequest extends StatefulWidget {
 class _AdminRequestState extends State<_AdminRequest> {
   String? _note;
 
+  Future<void> _ask() async {
+    try {
+      await widget.api.post('/me/group/admin');
+      setState(() => _note = 'Запрос отправлен — ответ придёт в бота.');
+    } on ApiError catch (e) {
+      setState(() => _note = e.message);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => _MenuRow(
-    icon: Icons.verified_user_outlined,
-    title: 'Я староста этой группы',
-    sub: _note ?? 'спрошу владельца бота — сможешь вести общие сроки и ДЗ',
-    onTap: _note != null
-        ? null
-        : () async {
-            try {
-              await widget.api.post('/me/group/admin');
-              setState(() => _note = 'Запрос отправлен — ответ придёт в бота.');
-            } on ApiError catch (e) {
-              setState(() => _note = e.message);
-            }
-          },
-  );
+  Widget build(BuildContext context) {
+    const title = 'Я староста этой группы';
+    final sub = _note ?? 'спрошу владельца бота — сможешь вести общие сроки и ДЗ';
+    final onTap = _note != null ? null : _ask;
+    return widget.fresh
+        ? _FreshRow(icon: Icons.verified_user_outlined, title: title, sub: sub, onTap: onTap)
+        : _MenuRow(icon: Icons.verified_user_outlined, title: title, sub: sub, onTap: onTap);
+  }
 }
 
 /// Лист «Новости и связь»: что за ссылка — и кнопка «Перейти», решает человек.
