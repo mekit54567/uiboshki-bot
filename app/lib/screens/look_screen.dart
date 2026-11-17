@@ -184,6 +184,18 @@ class LookScreen extends StatelessWidget {
                   ),
                 ),
 
+              if (fresh) ...[
+                const Section('меню внизу'),
+                _Pad(
+                  _Seg<_Tabs>(
+                    id: 'tabs',
+                    value: look.tabLabels ? _Tabs.labels : _Tabs.short,
+                    items: const [(_Tabs.short, 'Коротко'), (_Tabs.labels, 'С подписями')],
+                    onPick: (v) => set(look.copyWith(tabLabels: v == _Tabs.labels)),
+                  ),
+                ),
+              ],
+
               const Section('пары на «сегодня»'),
               _Pad(
                 _Seg<DayView>(
@@ -282,6 +294,9 @@ class LookScreen extends StatelessWidget {
 
 /// «Новое» — дизайн по брендбуку v1, «Классика» — прежний вид.
 enum _Mode { fresh, classic }
+
+/// Меню внизу в «Новом»: подпись только у открытой вкладки или у каждой.
+enum _Tabs { short, labels }
 
 /// Тёмная тема «Нового»: «Ночная тетрадь» или запасная «Глубина».
 enum _Night { night, depth }

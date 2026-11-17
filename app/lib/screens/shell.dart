@@ -301,7 +301,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   /// Короткий тур по приложению — при первом запуске и из «Ещё».
   Future<void> tour() {
     _open(tourSteps.first.tab);
-    return showTour(context, onStep: _open, barRect: _barRect);
+    return showTour(context, onStep: _open, barRect: _barRect, onLook: widget.onLook);
   }
 
   @override
@@ -372,6 +372,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         onTap: _open,
         // с экранным диктором меню не прячем — до вкладок всегда дойти
         hidden: _barHidden && AppStyle.of(context).design2 && !MediaQuery.accessibleNavigationOf(context),
+        labels: AppStyle.of(context).fresh && AppStyle.of(context).look.tabLabels,
       ),
     );
   }

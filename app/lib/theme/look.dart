@@ -54,6 +54,11 @@ class Look {
   /// В «Новом» тёмная — «Глубина» вместо «Ночной тетради» (запасной выход).
   final bool freshDepth;
 
+  /// Меню внизу «С подписями»: подписана каждая вкладка, а не только открытая
+  /// (шаг 8, Н1 из макетов; выбирают в последнем шаге знакомства и в
+  /// «Оформлении»). Только при «Новом».
+  final bool tabLabels;
+
   const Look({
     this.light = LightTheme.notebook,
     this.dark = DarkTheme.depth,
@@ -65,6 +70,7 @@ class Look {
     this.iconDark = false,
     this.fresh = false,
     this.freshDepth = false,
+    this.tabLabels = false,
   });
 
   /// Как до 5.79 — и по умолчанию, и при выключенном новом дизайне.
@@ -81,6 +87,7 @@ class Look {
     bool? iconDark,
     bool? fresh,
     bool? freshDepth,
+    bool? tabLabels,
   }) => Look(
     light: light ?? this.light,
     dark: dark ?? this.dark,
@@ -92,6 +99,7 @@ class Look {
     iconDark: iconDark ?? this.iconDark,
     fresh: fresh ?? this.fresh,
     freshDepth: freshDepth ?? this.freshDepth,
+    tabLabels: tabLabels ?? this.tabLabels,
   );
 
   static T _pick<T extends Enum>(List<T> values, String? name, T fallback) =>
@@ -109,6 +117,7 @@ class Look {
     // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
     fresh: p.getBool('uib_look_fresh') ?? design3FromPrefs(p) == 'on',
     freshDepth: p.getBool('uib_look_fresh_depth') ?? false,
+    tabLabels: p.getBool('uib_look_tab_labels') ?? false,
   );
 
   Future<void> save(SharedPreferences p) => Future.wait([
@@ -122,6 +131,7 @@ class Look {
     p.setBool('uib_look_icon_dark', iconDark),
     p.setBool('uib_look_fresh', fresh),
     p.setBool('uib_look_fresh_depth', freshDepth),
+    p.setBool('uib_look_tab_labels', tabLabels),
   ]);
 
   @override
@@ -136,10 +146,11 @@ class Look {
       other.icon == icon &&
       other.iconDark == iconDark &&
       other.fresh == fresh &&
-      other.freshDepth == freshDepth;
+      other.freshDepth == freshDepth &&
+      other.tabLabels == tabLabels;
 
   @override
-  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark, fresh, freshDepth);
+  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark, fresh, freshDepth, tabLabels);
 }
 
 /// Включён ли новый дизайн: последнее слово сервера, без ответа — включён.
