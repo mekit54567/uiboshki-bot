@@ -6,10 +6,11 @@
 с @упоминанием и ответы на свои сообщения; если теги не доходят — выключить."""
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from aiogram import F, Bot, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, FSInputFile, Message
 
 from kapibara.core import config
@@ -43,19 +44,64 @@ async def send_intro(bot: Bot, chat_id: int, *, force: bool = False) -> bool:
 
 def _is_for_bot(message: Message, bot_id: int, username: str) -> bool:
     low = f"@{username}".lower()
-    if (message.text or "").lower().find(low) != -1:
+    text = (message.text or "").lower()
+    if low in text or text.startswith(("/ask ", "/ask@", "/kapi ", "/kapi@")) or text in ("/ask", "/kapi"):
         return True
     reply = message.reply_to_message
     return bool(reply and reply.from_user and reply.from_user.id == bot_id)
 
 
+_hinted: dict[int, float] = {}
+HINT_EVERY = 3600.0
+
+
+async def consent_hint(message, bot: Bot):
+    """Тегнул бота в чате группы, но не дал согласие на обработку данных: бот текст не обрабатывает,
+    а только раз в час подсказывает, как включить ответы (ConsentMiddleware, 152-ФЗ)."""
+    if message.chat.type not in ("group", "supergroup") or not message.from_user or message.from_user.is_bot:
+        return
+    me = await bot.me()
+    if not _is_for_bot(message, me.id, me.username or config.BOT_USERNAME):
+        return
+    if message.chat.id != await members.chat_id():
+        return
+    now = time.monotonic()
+    if now - _hinted.get(message.from_user.id, -HINT_EVERY) < HINT_EVERY:
+        return
+    _hinted[message.from_user.id] = now
+    with aside(logger, "подсказка про согласие в группе", EXTERNAL):
+        await message.reply(f"Чтобы я отвечала, один раз напиши мне в личку @{config.BOT_USERNAME} и нажми «Даю согласие» — "
+                            "без него текст сообщений я не обрабатываю.")
+
+
 @router.message(GROUP, F.text, ~F.text.startswith("/"))
 async def talk(message: Message, bot: Bot):
+    """Тег @бота в тексте или ответ на сообщение бота."""
     if not message.from_user or message.from_user.is_bot:
         return
     me = await bot.me()
     if not _is_for_bot(message, me.id, me.username or config.BOT_USERNAME):
         return
+    await respond(message, message.text or "")
+
+
+@router.message(GROUP, Command("ask", "kapi"))
+async def ask(message: Message, command: CommandObject):
+    """/ask вопрос — то же, что тег. Нужна, потому что в Telegram сообщение, которое НАЧИНАЕТСЯ с @бота,
+    для бота с inline-режимом превращается в inline-запрос и не отправляется."""
+    if not message.from_user or message.from_user.is_bot:
+        return
+    question = (command.args or "").strip()
+    if not question:
+        reply = message.reply_to_message
+        question = (reply.text or "") if reply else ""
+    if not question:
+        await message.reply("Напиши вопрос после команды: /ask как тебя скачать?")
+        return
+    await respond(message, question)
+
+
+async def respond(message: Message, question: str):
     starosta = config.is_starosta(message.from_user.id)
     chat = await members.chat_id()
     logger.info(f"группа: обратились к боту в чате {message.chat.id} (запомнен {chat}), "
@@ -69,7 +115,9 @@ async def talk(message: Message, bot: Bot):
             await message.reply(f"Не отвечаю: этот чат (id {message.chat.id}) не запомнен как чат группы"
                                 f"{f', запомнен {chat}' if chat else ''}. Напиши здесь /groupchat.")
         return
-    refusal = group_talk.allow(message.from_user.id, message.chat.id)
+    refusal = None if starosta else group_talk.allow(message.from_user.id, message.chat.id)
+    if refusal:
+        logger.info(f"группа: не отвечаю {message.from_user.id}: {refusal}")
     if refusal == "user":
         return                                              # слишком часто — молча
     if refusal == "day":
@@ -77,7 +125,7 @@ async def talk(message: Message, bot: Bot):
         return
     try:
         async with asyncio.timeout(group_talk.TOTAL_TIMEOUT):
-            text = await group_talk.answer(message.text or "")
+            text = await group_talk.answer(question)
     except (group_talk.TalkError, TimeoutError):
         await message.reply("Сейчас не могу ответить — задумалась. Попробуй чуть позже.")
         return

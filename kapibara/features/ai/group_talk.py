@@ -25,7 +25,7 @@ DEFAULT_MODELS = (
     "nvidia/nemotron-3.5-super-vl:free",
     "nvidia/nemotron-3.5-lightning:free",
 )
-USER_PAUSE = 20.0
+USER_PAUSE = 10.0
 DAILY = int(os.getenv("GROUP_TALK_DAILY", "300"))
 MAX_QUESTION = 600           # длиннее — режем: это болтовня, а не решалка
 MAX_ANSWER = 700             # знаков в ответе

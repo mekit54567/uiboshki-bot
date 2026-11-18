@@ -197,3 +197,36 @@ async def test_groupchat_remembers_chat(db, monkeypatch):
     m = FakeMsg("/groupchat", chat_id=-555, uid=STAROSTA_ID)
     await h.groupchat(m)
     assert await members.chat_id() == -555 and "Запомнила" in m.replies[0]
+
+
+@pytest.mark.asyncio
+async def test_consent_hint_once_per_hour_only_for_tag(db, monkeypatch):
+    from handlers import group_talk as h
+    h._hinted.clear()
+    tagged = FakeMsg("@UiboshkiBot привет", uid=31)
+    await h.consent_hint(tagged, FakeBot())
+    assert tagged.replies and "согласие" in tagged.replies[0]
+    again = FakeMsg("@UiboshkiBot ещё раз", uid=31)
+    await h.consent_hint(again, FakeBot())
+    assert again.replies == []                                   # второй раз за час — нет
+    plain = FakeMsg("просто болтовня", uid=32)
+    await h.consent_hint(plain, FakeBot())
+    assert plain.replies == []                                   # не к боту — молчим
+
+
+@pytest.mark.asyncio
+async def test_ask_command_answers_like_a_tag(monkeypatch):
+    from aiogram.filters import CommandObject
+    from handlers import group_talk as h
+
+    async def fake(q):
+        return f"ответ на: {q}"
+    monkeypatch.setattr(group_talk, "answer", fake)
+    m = FakeMsg("/ask ты кто?")
+    await h.ask(m, CommandObject(prefix="/", command="ask", args="ты кто?"))
+    assert m.replies == ["ответ на: ты кто?"]
+    empty = FakeMsg("/ask", uid=8)
+    await h.ask(empty, CommandObject(prefix="/", command="ask", args=None))
+    assert "после команды" in empty.replies[0]
+    assert h._is_for_bot(FakeMsg("/ask привет"), 42, "UiboshkiBot")
+    assert not h._is_for_bot(FakeMsg("/askew привет"), 42, "UiboshkiBot")
