@@ -191,3 +191,17 @@ button.mf-row:active { background: color-mix(in srgb, var(--text) 5%, transparen
 .tr-sample .capsule { transform-origin: 0 0; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
 .mr-skip { padding: 10px 12px; font-size: 15px; font-weight: 600; color: var(--muted); }
 .mr-next { padding: 10px var(--l); min-height: 40px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 500; }
+
+/* ── Уведомления нового дизайна (notify_fresh.dart): лента и «Что присылать» ── */
+.nf-list { overflow: hidden; border-radius: var(--r-card); }
+.nf-row { display: flex; align-items: flex-start; gap: var(--s); width: 100%; text-align: left; padding: var(--m) var(--l) var(--m) var(--m); }
+.nf-row[disabled] { cursor: default; }
+.nf-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; background: transparent; }
+.nf-dot.on { background: var(--accent); }
+.nf-time { flex: none; display: flex; flex-direction: column; align-items: flex-end; }
+.nf-choices { display: flex; flex-direction: column; gap: var(--s); }
+.nf-choice { display: flex; align-items: center; gap: var(--s); width: 100%; text-align: left; padding: var(--l); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-tile); transition: border-color .2s; }
+.nf-choice.on { border: 2px solid var(--accent); padding: calc(var(--l) - 1px); }
+.nf-line { display: flex; align-items: center; gap: var(--m); width: 100%; min-height: 60px; text-align: left; padding: var(--s) var(--m) var(--s) var(--l); }
+.nf-where { display: flex; align-items: center; gap: var(--m); width: 100%; text-align: left; padding: var(--m) 0; }

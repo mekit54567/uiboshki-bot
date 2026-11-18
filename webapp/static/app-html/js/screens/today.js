@@ -114,6 +114,7 @@ Screens.today = {
         scheduleOk,
         savedAt: typeof j.stale === "string" && j.stale ? j.stale : null,
         next,
+        inbox: Number.isInteger(j.inbox_unread) ? j.inbox_unread : null,   // старый сервер ленты не знает — без колокольчика
       };
     };
 
@@ -318,7 +319,10 @@ Screens.today = {
       const card = wxOpen && d ? `<button class="td-wx" data-act="wx"><div class="row"><span class="num" style="--sz:40px">${esc(d.temp)}</span>
         <div class="grow">${d.desc ? `<div class="bd b6" style="--sz:15px">${esc(d.desc)}</div>` : ""}${d.feels ? `<div class="bd mut" style="--sz:13px">${esc(d.feels)}</div>` : ""}</div></div>
         ${d.advice ? `<span class="td-advice">${icon("checkroom", "", "font-size:15px")}<span>${esc(d.advice)}</span></span>` : ""}</button>` : "";
-      return `<div class="td-top">${chips}${card}</div>`;
+      // колокольчик — лента уведомлений (notify_fresh.dart: InboxBell)
+      const bell = Theme.fresh && data.inbox != null ? `<button class="td-bell" data-act="inbox" id="today-bell"
+        aria-label="${data.inbox > 0 ? `Уведомления, новых: ${data.inbox}` : "Уведомления"}">${icon("notifications_none")}${data.inbox > 0 ? '<i class="td-bell-dot"></i>' : ""}</button>` : "";
+      return `<div class="td-top">${chips}${bell}${card}</div>`;
     };
 
     const nameRow = (l, key) => `<button class="nm" style="--sz:18px;display:block;text-align:left" data-act="lesson" data-k="${key(l)}">${esc(l.title)}</button>`;
@@ -385,6 +389,7 @@ Screens.today = {
 
     on(body, {
       wx() { tick(); wxOpen = !wxOpen; draw(); },
+      inbox() { tick(); window.openInbox(() => refresh()); },   // вернулся — точка гаснет
       dl() { tick(); Tabs.show(2); },                       // срок из «Важно сегодня» — на вкладку «Сдать»
       past() { tick(); pastOpen = !pastOpen; draw(); },
       lesson(b) { const l = lessons[+b.dataset.k]; if (l && window.openLesson) openLesson(l.raw); },

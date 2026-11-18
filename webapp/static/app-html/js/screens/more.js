@@ -180,6 +180,14 @@ function mrNotifySummary(d) {
   if (onNow.length <= 2) return onNow.join(", ");
   return `${onNow.slice(0, 2).join(", ")} и ещё ${onNow.length - 2}`;
 }
+/** Строка в «Ещё» нового вида: «только важное · тихо с 23:00» (freshNotifySummary). */
+function mrFreshNotifySummary(d) {
+  if (!d || d.subscribed !== true) return "выключены";
+  const what = { important: "только важное", daily: "помощь каждый день", custom: "своя настройка" }[d.profile]
+    || mrNotifySummary(d);                     // старый сервер наборов не знает
+  const q = (d.quiet_hours && d.quiet_hours.from) || "23:00";
+  return d.prefs && d.prefs.quiet === true ? `${what} · тихо с ${q}` : what;
+}
 /** «Тетрадь, книжный шрифт» — что сейчас в «Оформлении» (lookSummary). */
 function mrLookSummary() {
   const r = document.documentElement.dataset;
@@ -408,7 +416,7 @@ Screens.more = {
         ])}</div>
         ${section("Настройки")}
         <div class="hx">${mrFList([
-          mrFRow("notify", "notifications_none", "", "Уведомления", st.notify ? mrNotifySummary(st.notify) : "", { key: "more:notify" }),
+          mrFRow("notify", "notifications_none", "", "Уведомления", st.notify ? mrFreshNotifySummary(st.notify) : "", { key: "more:notify" }),
           mrFRow("look", "palette", "o", "Оформление", mrLookSummary(), { key: "more:theme" }),
           mrFRow("security", "shield", "o", "Безопасность и мои данные", "", { key: "more:security" }),
         ])}</div>
@@ -497,7 +505,12 @@ Screens.more = {
         await window.openRating();
         loadRating();
       },
-      notify() { tick(); window.openNotify(); },
+      notify() {
+        tick();
+        // новый вид и сервер знает наборы — «Что присылать» (У2), иначе прежний экран
+        if (Theme.fresh && (!st.notify || "profile" in st.notify)) window.openNotifyHome(() => loadNotify());
+        else window.openNotify(() => loadNotify());
+      },
       look() { tick(); window.openLook(); },
       security() { tick(); window.openSecurity(); },
       calendar() { tick(); mrCalendarSheet(); },

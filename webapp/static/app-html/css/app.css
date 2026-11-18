@@ -251,7 +251,11 @@ textarea.field { resize: none; min-height: 96px; }
 .cm-bar { width: 3px; border-radius: 2px; margin-right: var(--m); flex: none; }
 
 /* ── «Сегодня» (screens/today.js) ── */
-.td-top { padding: calc(var(--m) + 6px) var(--l) 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.td-top { padding: calc(var(--m) + 6px) var(--l) 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+.td-bell { position: relative; margin: -8px -6px -8px auto; align-self: flex-start; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
+.td-bell::before { content: ""; position: absolute; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--edge); box-sizing: border-box; }
+.td-bell .mi { font-size: 20px; color: var(--text); }
+.td-bell-dot { position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-sizing: border-box; }
 .td-chip { padding: 4.5px 8px; border-radius: 999px; background: var(--line); font-size: 12px; font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .td-wx { width: 100%; margin-top: var(--s); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-tile);

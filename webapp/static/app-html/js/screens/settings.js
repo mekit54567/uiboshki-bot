@@ -66,8 +66,150 @@ const mrPush = {
   },
 };
 
+// ── Уведомления нового дизайна (notify_fresh.dart, макеты У1 и У2) ──
+/** «23:00 – 07:30» (quietRange). */
+function nfQuietRange(d) { const q = (d && d.quiet_hours) || {}; return `${q.from || "23:00"} – ${q.to || "07:30"}`; }
+/** Куда ведёт строка ленты (inboxAction). */
+function nfAction(tab) {
+  return { today: "Открыть «Сегодня»", week: "Открыть «Неделю»", deadlines: "Открыть «Сдать»", sdo: "Открыть «Учёбу»", study: "Открыть «Учёбу»" }[tab] || null;
+}
+/** «Сегодня», «Вчера», «8 октября» (inboxDay). */
+function nfDay(at, today) {
+  const day = String(at || "").slice(0, 10);
+  if (day === today) return "Сегодня";
+  if (day === addDays(today, -1)) return "Вчера";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  return m ? `${+m[3]} ${MONTHS[+m[2] - 1]}` : day;
+}
+/** У1: лента уведомлений; открыл — всё прочитано. onClose — вернулся назад. */
+window.openInbox = function openInbox(onClose) {
+  Nav.push((body) => {
+    let d = null, error = null;
+    const draw = () => {
+      const head = backRow(`<button class="ls-ask sf-ask" data-act="settings" id="inbox-settings">${icon("tune", "", "font-size:17px;color:var(--accent)")}Настроить</button>`)
+        + screenTitle("Уведомления");
+      if (!d) {
+        body.innerHTML = head + (error ? notice("Не загрузилось", errorText(error), { pose: "sad", retry: "retry" }) : spinner());
+        return;
+      }
+      const items = d.items || [], keep = d.keep_days || 30, today = isoDay(now());
+      if (!items.length) {
+        body.innerHTML = head + '<div style="height:var(--xl)"></div>' + freshEmpty("day", "Пока пусто",
+          `Здесь будет всё, что пришло пушем или в Telegram: сроки, баллы, новые задания. Хранится ${keep}\u00A0дней.`, { id: "inbox-empty" });
+        return;
+      }
+      const days = [];
+      for (const it of items) {
+        const label = nfDay(it.at, today);
+        if (!days.length || days[days.length - 1][0] !== label) days.push([label, []]);
+        days[days.length - 1][1].push(it);
+      }
+      const row = (it) => {
+        const act = nfAction(it.tab), time = String(it.at || "").slice(11, 16), b = String(it.body || "").trim();
+        return `<button class="nf-row" data-act="open" data-tab="${esc(it.tab || "")}" id="inbox-${it.id}"${act ? "" : " disabled"}>
+          <i class="nf-dot${it.read ? "" : " on"}"></i>
+          <div class="grow" style="min-width:0"><div class="bd b7" style="--sz:15px">${esc(it.title)}</div>
+            ${b ? `<div class="bd mut clamp3" style="--sz:13px;margin-top:2px">${esc(b)}</div>` : ""}
+            ${act ? `<div class="bd b7" style="--sz:13px;margin-top:4px;color:var(--accent)">${esc(act)}</div>` : ""}</div>
+          <div class="nf-time"><span class="bd mut" style="--sz:12.5px">${esc(time)}</span>
+            ${it.quiet ? icon("bedtime", "o", "font-size:14px;color:var(--muted);margin-top:4px") : ""}</div></button>`;
+      };
+      body.innerHTML = head + days.map(([label, list]) => section(label)
+        + `<div class="hx"><div class="tile p0 nf-list">${list.map(row).join('<div class="divider"></div>')}</div></div>`).join("")
+        + `<div class="bd mut" style="--sz:13px;padding:var(--l) var(--xl) 0">${esc(d.quiet
+          ? `Ночью в тихие часы уведомления не приходят, а ждут здесь. Лента хранится ${keep}\u00A0дней.` : `Лента хранится ${keep}\u00A0дней.`)}</div>`
+        + '<div style="height:var(--xxl)"></div>';
+    };
+    const load = () => Api.get("/inbox").then((v) => {
+      d = v; draw();
+      if (v && v.unread > 0) Api.post("/inbox/read", {}).catch(() => {});   // точка погаснет
+    }, (e) => { error = e; draw(); });
+    on(body, {
+      settings() { tick(); window.openNotifyHome(); },
+      open(b) {
+        const tab = b.dataset.tab;
+        if (!nfAction(tab)) return;
+        tick();
+        Nav.popAll();                       // как нажатый пуш: экраны поверх закрыть, открыть вкладку
+        Tabs.show(tabByName(tab));
+      },
+      retry() { error = null; draw(); load(); },
+    });
+    draw();
+    load();
+    return () => { if (onClose) onClose(); };
+  });
+};
+/** У2: «Что присылать» — три набора, тихие часы, куда присылать. onClose — вернулся назад. */
+window.openNotifyHome = function openNotifyHome(onClose) {
+  Nav.push((body) => {
+    let s = null, error = null, queue = Promise.resolve();
+    const prefs = () => (s && s.prefs) || {};
+    const save = (patch, optimistic) => {
+      tick();
+      s = { ...s, ...optimistic, prefs: { ...prefs(), ...((optimistic && optimistic.prefs) || {}) } };
+      draw();
+      queue = queue.then(async () => {
+        try { const fresh = await Api.post("/notify", patch); if (fresh && fresh.prefs) { s = fresh; draw(); } }
+        catch (e) { toast("Не сохранилось: " + errorText(e), "error"); load(); }
+      });
+    };
+    const choice = (id, title, sub, sel, chevron = false) => `<button class="nf-choice${sel ? " on" : ""}" data-act="${chevron ? "custom" : "pick"}" data-v="${id}"
+        id="notify-profile-${id}" aria-pressed="${sel}"><div class="grow"><div class="bd b7" style="--sz:16px">${esc(title)}</div>
+        <div class="bd mut" style="--sz:13.5px;margin-top:2px">${esc(sub)}</div></div>
+        ${chevron ? icon("chevron_right", "", `color:var(${sel ? "--accent" : "--muted"})`) : sel ? icon("check_circle", "", "color:var(--accent)") : ""}</button>`;
+    const draw = () => {
+      if (!s || !s.prefs) {
+        body.innerHTML = backRow() + (error ? '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(error), { pose: "sad", retry: "retry" }) : spinner());
+        return;
+      }
+      const on = s.subscribed === true, profile = on ? s.profile : "", p = prefs(), hasQuiet = "quiet" in p;
+      body.innerHTML = backRow() + screenTitle("Что присылать")
+        + (on ? "" : '<div class="bd mut" style="--sz:14px;padding:0 var(--xl) var(--m)">Сейчас уведомления выключены. Выбери, что присылать, и они включатся.</div>')
+        + `<div class="hx nf-choices">${choice("important", "Только важное", "Сроки, новые задания, баллы. Около\u00A03\u00A0в\u00A0день", profile === "important")}
+          ${choice("daily", "Помощь каждый день", "Плюс утро, пары и обзор недели. Около\u00A08\u00A0в\u00A0день", profile === "daily")}
+          ${choice("custom", "Настроить самому", profile === "custom" ? "Сейчас своя настройка. Каждый вид отдельно" : "Каждый вид отдельно", profile === "custom", true)}</div>`
+        + `<div class="hx" style="margin-top:var(--l)"><div class="tile p0 nf-list">
+          ${hasQuiet ? `<div class="nf-line" id="notify-quiet">${icon("bedtime", "o", "color:var(--accent)")}<div class="grow"><div class="bd b7" style="--sz:15px">Тихие часы</div>
+            <div class="bd mut" style="--sz:13px">${esc(nfQuietRange(s))}, по Москве</div></div>${mrSwitch(p.quiet === true, "quiet")}</div><div class="divider"></div>` : ""}
+          <button class="nf-line" data-act="where" id="notify-where">${icon("notifications_none", "", "color:var(--accent)")}<div class="grow"><div class="bd b7" style="--sz:15px">Куда присылать</div>
+            <div class="bd mut" style="--sz:13px">${p.tg_copy !== false ? "Пуш и Telegram" : "Пуш. Telegram, если пуш не\u00A0дошёл"}</div></div>${icon("chevron_right", "", "color:var(--muted)")}</button></div></div>`
+        + `<div class="bd mut" style="--sz:13px;padding:var(--m) var(--xl) 0">${hasQuiet
+          ? "Всё время в приложении московское. Срочное про тест, который закрывается ночью, придёт и в тихие часы." : "Всё время в приложении московское."}</div>`
+        + '<div style="height:var(--xxl)"></div>';
+    };
+    const load = () => Api.get("/notify").then((v) => { s = v; error = null; draw(); }, (e) => { error = e; draw(); });
+    on(body, {
+      pick(b) {
+        const v = b.dataset.v;
+        if (s.profile === v && s.subscribed === true) return;
+        save({ profile: v }, { profile: v, subscribed: true });
+      },
+      custom() { tick(); window.openNotify(() => load()); },
+      quiet() { const q = prefs().quiet === true; save({ prefs: { quiet: !q } }, { prefs: { quiet: !q } }); },
+      async where() {
+        tick();
+        const copy = prefs().tg_copy !== false;
+        const opt = (v, title, sub) => `<button class="nf-where" data-act="w" data-v="${v ? 1 : 0}" id="notify-where-${v ? "both" : "push"}">
+          <div class="grow"><div class="bd b7" style="--sz:15px">${title}</div><div class="bd mut" style="--sz:13px">${sub}</div></div>
+          ${icon(v === copy ? "check_circle" : "radio_button_unchecked", "", `color:var(${v === copy ? "--accent" : "--muted"})`)}</button>`;
+        const got = await Sheet.show(`<div class="ttl" style="--sz:24px">Куда присылать</div><div style="height:var(--s)"></div>
+          ${opt(true, "Пуш и Telegram", "Одно и то же приходит в оба места")}${opt(false, "Только пуш", "Telegram — только если пуш не\u00A0дошёл")}
+          <div class="bd mut" style="--sz:13px;margin-top:var(--s)">Пуши на этом устройстве включаются в «Настроить самому».</div>`,
+        (sb, close) => on(sb, { w: (x) => close(x.dataset.v === "1") }));
+        if (typeof got !== "boolean" || got === copy) return;
+        save({ prefs: { tg_copy: got } }, { prefs: { tg_copy: got } });
+      },
+      retry() { error = null; draw(); load(); },
+    });
+    draw();
+    load();
+    return () => { if (onClose) onClose(); };
+  });
+};
+
 // ── «Уведомления» — что бот присылает и в какие дни (/api/notify): сохраняется сразу ──
-window.openNotify = function openNotify() {
+window.openNotify = function openNotify(onClose) {
   Nav.push((body) => {
     let s = Api.cached("/notify") || null, error = null, pending = 0, queue = Promise.resolve();
     let quizOpen = false, push = "", pushBusy = false;
@@ -146,7 +288,10 @@ window.openNotify = function openNotify() {
         + `<div class="row mr-info">${icon("info_outline", "", "font-size:18px;color:var(--muted)")}
           <div class="bd mut grow" style="--sz:13px">Уведомления приходят в Telegram, а сюда — когда включишь их ниже.</div></div>`
         + pushCard()
-        + card({ title: "Присылать уведомления", sub: on ? "Включены — ниже, что именно" : "Выключены — бот ничего не пришлёт сам", key: "subscribed", on });
+        + card({ title: "Присылать уведомления", sub: on ? "Включены — ниже, что именно" : "Выключены — бот ничего не пришлёт сам", key: "subscribed", on })
+        // тихие часы (шаг 8) — в новом виде; старый сервер ключа не знает
+        + (on && Theme.fresh && "quiet" in p ? card({ ic: "bedtime", title: "Тихие часы", key: "quiet", on: p.quiet === true,
+            sub: `${nfQuietRange(s)} по Москве: уведомления ждут в ленте, срочное про тесты и сроки приходит` }) : "");
       if (on) {
         html += card({ ic: "wb_sunny", title: "Утреннее расписание", sub: `в ${s.morning_time || "8:00"} — пары на сегодня`, key: "morning", on: p.morning === true,
           children: days(p.morning_days || [], "morning_days")
@@ -258,6 +403,7 @@ window.openNotify = function openNotify() {
     draw();
     load();
     mrPush.state().then((v) => { push = v; if (s && s.prefs) draw(); });
+    return () => { if (onClose) onClose(); };
   });
 };
 
