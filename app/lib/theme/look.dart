@@ -114,8 +114,8 @@ class Look {
     cheer: _pick(Cheer.values, p.getString('uib_look_cheer'), Cheer.quiet),
     icon: AppIcon.byName(p.getString('uib_look_icon')),
     iconDark: p.getBool('uib_look_icon_dark') ?? false,
-    // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
-    fresh: p.getBool('uib_look_fresh') ?? design3FromPrefs(p) == 'on',
+    // сам не выбирал — как велит сервер (с шага 9 новое — основной вид)
+    fresh: p.getBool('uib_look_fresh') ?? freshByDefault(design3FromPrefs(p)),
     freshDepth: p.getBool('uib_look_fresh_depth') ?? false,
     tabLabels: p.getBool('uib_look_tab_labels') ?? false,
   );
@@ -157,9 +157,15 @@ class Look {
 bool design2FromPrefs(SharedPreferences p) => p.getBool('uib_design2') ?? true;
 
 /// Дизайн по брендбуку v1: 'off' — сервер выключил (все в «Классике»,
-/// переключателя нет), 'opt' — по выбору человека, 'on' — новое по умолчанию.
-/// Последнее слово сервера; без ответа — 'opt'.
+/// переключателя нет), 'opt' — по выбору человека, 'new' — новое основное
+/// (шаг 9: один раз переводим всех из «Классики», dark_vote.dart), 'on' — то
+/// же и в сборках до шага 9. Последнее слово сервера; без ответа — 'opt'.
 String design3FromPrefs(SharedPreferences p) => p.getString('uib_design3') ?? 'opt';
+
+/// Новый вид по умолчанию: сервер сказал «new» (шаг 9) или «on».
+bool freshByDefault(String design3) => design3 == 'new' || design3 == 'on';
+
+const _design3 = {'off', 'opt', 'new', 'on'};
 
 /// Спросить сервер (/api/meta → features.design2) и запомнить ответ.
 /// [get] — запрос к API; ошибка сети — остаётся то, что помнили. Выключает
@@ -173,7 +179,7 @@ Future<bool?> refreshDesign2(Future<dynamic> Function(String) get) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('uib_design2', on);
     final d3 = f is Map ? f['design3'] : null;
-    await prefs.setString('uib_design3', d3 == 'off' || d3 == 'on' ? d3 as String : 'opt');
+    await prefs.setString('uib_design3', _design3.contains(d3) ? d3 as String : 'opt');
     return on;
   } catch (_) {
     return null;

@@ -49,7 +49,7 @@ class LookScreen extends StatelessWidget {
             children: [
               const BackRow(),
               const ScreenTitle(title: 'Оформление'),
-              const Padding(padding: EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0), child: _Preview()),
+              const Padding(padding: EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0), child: LookPreview()),
 
               // дизайн по брендбуку v1 (11.11): «Новое» — «Тетрадь», «Ночная
               // тетрадь» и «Книжный»; сервер выключил (DESIGN3=0) — строки нет
@@ -328,8 +328,8 @@ class _Hint extends StatelessWidget {
 
 /// Живой пример: фон темы (с бумагой), заголовок выбранным шрифтом и пары
 /// так, как они будут на «Сегодня».
-class _Preview extends StatelessWidget {
-  const _Preview();
+class LookPreview extends StatelessWidget {
+  const LookPreview({super.key});
 
   @override
   Widget build(BuildContext context) {

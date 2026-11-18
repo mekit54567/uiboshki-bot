@@ -17,6 +17,7 @@ import '../widgets/capy.dart';
 import '../widget_data.dart';
 import '../widgets/common.dart';
 import 'lesson.dart';
+import 'dark_intro.dart' show DarkAskCard;
 import 'notify_fresh.dart' show InboxBell, InboxScreen;
 import 'week.dart' show mondayOf;
 
@@ -336,22 +337,24 @@ class _TodayScreenState extends State<TodayScreen> {
             key: const ValueKey('today:fresh'),
             data: d,
             api: widget.api,
-            top: TodayTop(
-              data: d,
-              // колокольчик — лента уведомлений (У1); вернулся — точка гаснет
-              trailing: d.inboxUnread == null
-                  ? null
-                  : InboxBell(
-                      unread: d.inboxUnread!,
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => InboxScreen(api: widget.api, onUnauthorized: widget.onUnauthorized),
-                          ),
-                        );
-                        await reload();
-                      },
-                    ),
+            top: _withAsk(
+              TodayTop(
+                data: d,
+                // колокольчик — лента уведомлений (У1); вернулся — точка гаснет
+                trailing: d.inboxUnread == null
+                    ? null
+                    : InboxBell(
+                        unread: d.inboxUnread!,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => InboxScreen(api: widget.api, onUnauthorized: widget.onUnauthorized),
+                            ),
+                          );
+                          await reload();
+                        },
+                      ),
+              ),
             ),
             onDeadlines: widget.onDeadlines,
           )
@@ -359,9 +362,14 @@ class _TodayScreenState extends State<TodayScreen> {
             key: const ValueKey('today:main'),
             data: d,
             api: widget.api,
-            top: TodayTop(data: d),
+            top: _withAsk(TodayTop(data: d)),
           ),
   );
+
+  /// Под шапкой — карточка опроса «какая тёмная лучше» (шаг 9), если пора;
+  /// в «Классике» тоже: туда возвращаются те, у кого была «Библиотека».
+  static Widget _withAsk(Widget top) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [top, const DarkAskCard()]);
 }
 
 /// Шапка: группа с неделей и погода одной строкой (не влезает — погода

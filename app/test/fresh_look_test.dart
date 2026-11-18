@@ -1,7 +1,7 @@
 // Дизайн по брендбуку v1 (Никита 11.11): «Новое / Классика» в «Оформлении».
 // «Новое» — «Тетрадь», «Ночная тетрадь» (запасная «Глубина») и «Книжный»;
-// по умолчанию — «Классика»; сервер выключает или включает всем одной
-// переменной (features.design3: off / opt / on).
+// сервер выключает или включает всем одной переменной (features.design3:
+// off / opt / new / on); с шага 9 новое — основной вид (dark_vote_test.dart).
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -113,9 +113,10 @@ void main() {
     expect(styleOf(t).p.bg, Palette.night.bg);
   });
 
-  testWidgets('выбрал «Классику» — сервер «on» её не перебивает; старый сервер — как было', (t) async {
+  testWidgets('выбрал «Классику» после перехода — сервер «on» её не перебивает; старый сервер — как было', (t) async {
     phone(t);
-    SharedPreferences.setMockInitialValues({'uib_toured': true, 'uib_look_fresh': false});
+    // переход (шаг 9, dark_vote_test.dart) уже был, «Классику» выбрал после
+    SharedPreferences.setMockInitialValues({'uib_toured': true, 'uib_look_fresh': false, 'uib_fresh_moved': true});
     await t.pumpWidget(UiboApp(api: fakeApi(overrides: meta('on')), design2: true));
     await settle(t);
     expect(styleOf(t).fresh, isFalse);

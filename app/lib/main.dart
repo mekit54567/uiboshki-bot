@@ -18,6 +18,7 @@ import 'screens/sdo_relogin.dart';
 import 'screens/shell.dart';
 import 'theme/app_icon.dart';
 import 'theme/app_theme.dart';
+import 'theme/dark_vote.dart';
 import 'theme/look.dart';
 import 'web_safe_area.dart';
 import 'widget_data.dart';
@@ -87,18 +88,27 @@ class _UiboAppState extends State<UiboApp> {
   @override
   void initState() {
     super.initState();
+    // опрос «какая тёмная лучше» (шаг 9): меняет вид и шлёт голос отсюда
+    DarkVote.setLook = _setLook;
+    DarkVote.look = () => _look;
+    DarkVote.send = (choice) => widget.api.post('/design/vote', {'choice': choice});
     // сервер мог выключить новый дизайн (откат) — узнаём при запуске
     refreshDesign2(widget.api.get).then((on) {
       if (on == false) HomeWidgets.clear(); // откат дизайна — виджеты без данных
       if (on != null && on != _design2 && mounted) setState(() => _design2 = on);
       // дизайн по брендбуку: сервер мог выключить его или включить всем
-      SharedPreferences.getInstance().then((prefs) {
+      SharedPreferences.getInstance().then((prefs) async {
         final d3 = design3FromPrefs(prefs);
         if (on == null || !mounted) return;
         final chosen = prefs.getBool('uib_look_fresh');
+        var look = chosen == null ? _look.copyWith(fresh: freshByDefault(d3)) : _look;
+        // шаг 9: новое — основной вид; из «Классики» переводим один раз
+        look = await DarkVote.migrate(prefs, look, design3: d3);
+        await DarkVote.load(prefs, now());
+        if (!mounted) return;
         setState(() {
           _design3 = d3;
-          if (chosen == null) _look = _look.copyWith(fresh: d3 == 'on');
+          _look = look;
         });
       });
       // иконка на телефоне — по выбору, а без нового дизайна — обычная
@@ -138,6 +148,7 @@ class _UiboAppState extends State<UiboApp> {
 
   Future<void> _setLook(Look l) async {
     AchStore.unlock('look');
+    unawaited(DarkVote.manual(_look, l)); // сам поменял тёмную — опрос окончен
     final icon = l.icon != _look.icon || l.iconDark != _look.iconDark;
     setState(() => _look = l);
     await l.save(await SharedPreferences.getInstance());
