@@ -170,3 +170,30 @@ async def test_talktest_report(monkeypatch):
     monkeypatch.setattr(group_talk, "answer", ans)
     rep = await group_talk.run_test(pause=0)
     assert rep.count("→ ответ") == len(group_talk.TEST_QUESTIONS) >= 25
+
+
+@pytest.mark.asyncio
+async def test_starosta_gets_diagnostic_when_bot_cannot_answer(db, monkeypatch):
+    from tests.conftest import STAROSTA_ID
+    monkeypatch.setattr(config, "GROUP_CHAT_ID", -999)           # чат запомнен другой
+    m = FakeMsg("@UiboshkiBot привет", uid=STAROSTA_ID)
+    await _talk(m, monkeypatch)
+    assert m.replies and "/groupchat" in m.replies[0]
+    other = FakeMsg("@UiboshkiBot привет", uid=77)               # обычному человеку — молча
+    await _talk(other, monkeypatch)
+    assert other.replies == []
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+    m2 = FakeMsg("@UiboshkiBot привет", uid=STAROSTA_ID)
+    await _talk(m2, monkeypatch)
+    assert "OPENROUTER_API_KEY" in m2.replies[0]
+
+
+@pytest.mark.asyncio
+async def test_groupchat_remembers_chat(db, monkeypatch):
+    from handlers import group_talk as h
+    from kapibara.features.groups import members
+    from tests.conftest import STAROSTA_ID
+    monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
+    m = FakeMsg("/groupchat", chat_id=-555, uid=STAROSTA_ID)
+    await h.groupchat(m)
+    assert await members.chat_id() == -555 and "Запомнила" in m.replies[0]

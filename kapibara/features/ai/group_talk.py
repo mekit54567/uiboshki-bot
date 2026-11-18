@@ -29,7 +29,8 @@ USER_PAUSE = 20.0
 DAILY = int(os.getenv("GROUP_TALK_DAILY", "300"))
 MAX_QUESTION = 600           # длиннее — режем: это болтовня, а не решалка
 MAX_ANSWER = 700             # знаков в ответе
-TIMEOUT = 40.0
+TIMEOUT = 20.0              # на одну модель
+TOTAL_TIMEOUT = 50.0        # на весь ответ (все модели по очереди)
 
 _last_by_user: dict[int, float] = {}
 _day: dict[str, str | int] = {"date": "", "n": 0}

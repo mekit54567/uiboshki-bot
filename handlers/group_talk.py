@@ -51,12 +51,23 @@ def _is_for_bot(message: Message, bot_id: int, username: str) -> bool:
 
 @router.message(GROUP, F.text, ~F.text.startswith("/"))
 async def talk(message: Message, bot: Bot):
-    if not message.from_user or message.from_user.is_bot or not group_talk.enabled():
-        return
-    if message.chat.id != await members.chat_id():
+    if not message.from_user or message.from_user.is_bot:
         return
     me = await bot.me()
     if not _is_for_bot(message, me.id, me.username or config.BOT_USERNAME):
+        return
+    starosta = config.is_starosta(message.from_user.id)
+    chat = await members.chat_id()
+    logger.info(f"группа: обратились к боту в чате {message.chat.id} (запомнен {chat}), "
+                f"включено: {group_talk.enabled()}")
+    if not group_talk.enabled():
+        if starosta:                                        # диагностика только старосте
+            await message.reply("Не отвечаю: на сервере нет OPENROUTER_API_KEY (или стоит GROUP_TALK=off).")
+        return
+    if message.chat.id != chat:
+        if starosta:
+            await message.reply(f"Не отвечаю: этот чат (id {message.chat.id}) не запомнен как чат группы"
+                                f"{f', запомнен {chat}' if chat else ''}. Напиши здесь /groupchat.")
         return
     refusal = group_talk.allow(message.from_user.id, message.chat.id)
     if refusal == "user":
@@ -65,11 +76,26 @@ async def talk(message: Message, bot: Bot):
         await message.reply("Я на сегодня выговорилась 🦫 Завтра отвечу, а расписание и дедлайны — в боте.")
         return
     try:
-        text = await group_talk.answer(message.text or "")
-    except group_talk.TalkError:
+        async with asyncio.timeout(group_talk.TOTAL_TIMEOUT):
+            text = await group_talk.answer(message.text or "")
+    except (group_talk.TalkError, TimeoutError):
         await message.reply("Сейчас не могу ответить — задумалась. Попробуй чуть позже.")
         return
     await message.reply(text)
+
+
+@router.message(GROUP, Command("groupchat"))
+async def groupchat(message: Message):
+    """Староста: запомнить этот чат как чат своей группы (если бот не отвечает на теги)."""
+    from database import set_setting
+    if not message.from_user or not config.is_starosta(message.from_user.id):
+        return
+    if config.GROUP_CHAT_ID and message.chat.id != config.GROUP_CHAT_ID:
+        await message.reply("Чат задан в переменных сервера (GROUP_CHAT_ID) и это другой чат.")
+        return
+    await set_setting("group_chat_id", str(message.chat.id))
+    members.forget_chat()
+    await message.reply("Запомнила этот чат как чат группы. Теперь отвечаю на теги.")
 
 
 @router.message(GROUP, Command("groupintro"))
