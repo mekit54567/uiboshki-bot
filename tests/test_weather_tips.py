@@ -13,9 +13,9 @@ def test_every_phrase_fits_the_app_parser():
     for pool in pools:
         assert len(pool) >= 2
         for phrase in pool:
-            emoji, text = phrase.split(" ", 1)
-            assert emoji and text[0].isupper()
-            assert "·" not in phrase
+            assert phrase[0].islower() and "·" not in phrase
+            assert all(ord(ch) < 0x2000 for ch in phrase), "без эмодзи"
+            assert len(phrase) <= 34, phrase
 
 
 def test_feels_beats_thermometer():
@@ -45,3 +45,10 @@ def test_phrase_is_stable_within_a_day_and_changes_between_days():
     assert clothes_tip(4, day=DAY) == clothes_tip(4, day=DAY)
     seen = {clothes_tip(4, day=DAY + timedelta(days=i)) for i in range(3)}
     assert len(seen) == 3  # пять фраз на ситуацию
+
+
+def test_storm_and_hail_change_by_the_hour():
+    storm = {clothes_tip(15, code=95, day=DAY, hour=h) for h in range(3)}
+    hail = {clothes_tip(15, code=96, day=DAY, hour=h) for h in range(3)}
+    assert len(storm) == 3 and len(hail) == 3
+    assert clothes_tip(1, feels=-2, code=75, day=DAY, hour=3) == clothes_tip(1, feels=-2, code=75, day=DAY, hour=9)

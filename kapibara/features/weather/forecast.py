@@ -124,14 +124,15 @@ async def format_weather() -> str:
         text += f"🌧 Осадки {precip} мм\n"
 
     tip = _clothes_tip(temp, feels, code, wind, precip)
-    text += f"\n{tip}"
+    text += f"\n{tip[:1].upper()}{tip[1:]}"
 
     return text
 
 
 def _clothes_tip(temp: int, feels: int | None = None, code: int = 0,
                  wind: float = 0, precip: float = 0) -> str:
-    return clothes_tip(temp, feels, code, wind, precip, datetime.now(TZ).date())
+    now = datetime.now(TZ)
+    return clothes_tip(temp, feels, code, wind, precip, now.date(), now.hour)
 
 
 async def get_weather_for_morning() -> str:
