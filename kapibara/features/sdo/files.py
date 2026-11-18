@@ -35,11 +35,10 @@ from kapibara.core.config import SDO_BASE_URL
 from kapibara.core.categories import detect_category
 from kapibara.features.sdo.courses import clean_course_name, is_old_semester, match_subject, off_schedule  # noqa: F401
 from kapibara.features.sdo.net import SdoSessionExpired, get_checked, make_client  # noqa: F401 — make_client брали отсюда
+from kapibara.core.errors import NETWORK, log_failure
 from kapibara.core.telegram import cosmetic
 
 logger = logging.getLogger(__name__)
-
-from kapibara.core.errors import NETWORK  # noqa: E402
 
 MAX_FILE_BYTES = 45 * 1024 * 1024   # sendDocument бота — до 50 МБ
 SEND_PAUSE = 1.1                    # не упираться в лимиты Telegram на отправку
@@ -220,9 +219,7 @@ async def scan_course(client: httpx.AsyncClient, course: dict, subject: str) -> 
                     category=_category(f["name"], it["title"], it["section"]),
                     source=f"sdo:{it['cmid']}:{f['name']}", url=f["url"], file_name=f["name"],
                 ))
-    except SdoSessionExpired:
-        raise
-    except Exception as e:
+    except (*NETWORK, ValueError, KeyError, IndexError, TypeError) as e:     # сеть или страница не той формы
         logger.warning(f"sdo_files: курс {course['id']} не прочитался: {e}")
         result.error = str(e) or type(e).__name__
     return result
@@ -323,8 +320,8 @@ async def import_files(bot, chat_id: int, client: httpx.AsyncClient, files: list
             stats["too_big"] += 1
         except NotAFile:
             stats["not_file"] += 1
-        except Exception as e:
-            logger.warning(f"sdo_files: {f.source} не выгрузился: {e}")
+        except Exception as e:   # noqa: BLE001 — граница файла: один битый не останавливает выгрузку сотни
+            log_failure(logger, f"sdo_files: {f.source} не выгрузился", e, expected=(ValueError, OSError))
             stats["failed"] += 1
         finally:
             if progress:

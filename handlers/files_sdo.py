@@ -1,6 +1,7 @@
 """Файлы из СДО (/sdofiles): пробный прогон, перенос по предметам, выгрузка по кнопке."""
 
 import asyncio
+import sqlite3
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import (
@@ -11,6 +12,7 @@ from kapibara.core.config import STAROSTA_ID, is_starosta
 from kapibara.bot.tg import bot_of, msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
+from kapibara.core.errors import EXTERNAL, NETWORK
 
 router = Router()
 
@@ -104,7 +106,7 @@ async def cmd_sdo_files(message: Message):
     except sdo_parser.SdoSessionExpired:
         await wait.edit_text("⚠️ Кука СДО протухла — обнови SDO_SESSION_COOKIE в переменных хостинга (подробно — /syncsdo).")
         return
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:          # сеть или странный ответ СДО; баг — в dp.error
         await wait.edit_text(f"❌ СДО не ответил: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")
         return
     if not courses:
@@ -187,7 +189,7 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
     try:
         async with sdo_files.make_client((await sdo_parser.home_cookie())[0]) as client:
             st = await sdo_files.import_files(bot, chat_id, client, files, progress)
-    except Exception as e:
+    except (*EXTERNAL, sqlite3.Error, OSError) as e:     # по файлу сбои считает import_files; тут — общее
         await bot.send_message(chat_id, f"❌ Выгрузка прервалась: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")
         return
     lines = [f"✅ <b>Из СДО добавлено: {st['added']}</b>"]

@@ -24,7 +24,10 @@ import random
 import re
 import tempfile
 import time
+import contextlib
 from html import escape
+
+from kapibara.core.errors import NETWORK
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +40,10 @@ _lock = asyncio.Lock()
 
 
 def _rss_mb() -> float:
-    try:
-        with open("/proc/self/status") as f:
-            for line in f:
-                if line.startswith("VmRSS:"):
-                    return int(line.split()[1]) / 1024
-    except OSError:
-        pass
+    with contextlib.suppress(OSError), open("/proc/self/status") as f:    # не Linux — память не покажем
+        for line in f:
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) / 1024
     return 0.0
 
 
@@ -139,6 +139,11 @@ async def _local_run(key: str, hay, targets, questions) -> dict:
     return res
 
 
+# Модель не скачалась, не та, не хватило памяти, Gemini упёрлась в лимит — строка
+# в отчёте; баг — наружу, Никите с traceback (ADR 0004)
+BENCH_ERRORS = (*NETWORK, RuntimeError, ValueError, OSError, MemoryError)
+
+
 async def run(keys: list[str] | None = None) -> str:
     from kapibara.features.ai import local_embed
     keys = keys or list(local_embed.MODELS)
@@ -149,7 +154,7 @@ async def run(keys: list[str] | None = None) -> str:
     results = {}
     try:
         results["gemini"] = await _gemini_run(hay, targets, questions)
-    except Exception as e:
+    except BENCH_ERRORS as e:
         results["gemini"] = {"error": f"{type(e).__name__}: {e}"}
     # модели — во временную папку, если своя не задана (на старом хостинге том был маленький)
     own_dir = os.environ.get("EMBED_DIR")
@@ -159,7 +164,7 @@ async def run(keys: list[str] | None = None) -> str:
         for key in keys:
             try:
                 results[key] = await _local_run(key, hay, targets, questions)
-            except Exception as e:
+            except BENCH_ERRORS as e:
                 logger.warning(f"embedtest {key}: {type(e).__name__}: {e}")
                 results[key] = {"error": f"{type(e).__name__}: {e}"}
     finally:

@@ -31,11 +31,11 @@ async def week_grades(user_id: int) -> list[tuple[str, float]]:
     cookie = await cookie_for(user_id)
     if not cookie:
         return []
-    try:
+    from kapibara.features.sdo.net import SdoSessionExpired
+    courses: list = []
+    with aside(logger, f"обзор недели {user_id}: баллы не загрузились",
+               expected=(SdoSessionExpired, ValueError), level=logging.INFO):
         courses = (await sdo_grades.overview(user_id, cookie)).get("courses") or []
-    except Exception as e:
-        logger.info(f"обзор недели {user_id}: баллы не загрузились: {type(e).__name__}")
-        return []
     out = []
     for c in courses:
         if c.get("id") is None or c.get("score") is None:

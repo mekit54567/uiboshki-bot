@@ -11,6 +11,12 @@ from kapibara.core.config import STAROSTA_ID, is_starosta
 from database import init_hw_table, set_setting
 from kapibara.core.utils import esc, plural
 from kapibara.bot.tg import data_of, msg, sender, text_of
+from kapibara.core.errors import NETWORK
+
+# Инструменты старосты (/aitest, /embedtest, /pulseprobe): сеть, чужой сервис
+# (RuntimeError — GeminiError, EmbedUnavailable…), странный ответ. Баг — не
+# «Не вышло»: уходит в dp.error, Никите с traceback (ADR 0004).
+TOOL_ERRORS = (*NETWORK, RuntimeError, ValueError, KeyError, OSError)
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -119,7 +125,7 @@ async def cmd_aitest(message: Message):
     async with ai_bench._lock:
         try:
             plan = await ai_bench.prepare(OPENROUTER_API_KEY, args or None, intents=mode != "vote")
-        except Exception as e:
+        except TOOL_ERRORS as e:
             await message.answer(f"Не вышло: {e}")
             return
         if mode == "list":
@@ -128,7 +134,7 @@ async def cmd_aitest(message: Message):
         await message.answer(f"🧪 {plan['text']}\n\nГоняю — это минут 15–20, пришлю ссылку.")
         try:
             html, summary = await (ai_bench.vote if mode == "vote" else ai_bench.screen)(OPENROUTER_API_KEY, plan)
-        except Exception as e:
+        except TOOL_ERRORS as e:
             await message.answer(f"Не вышло: {e}")
             return
         kind = "vote" if mode == "vote" else "report"
@@ -179,7 +185,7 @@ async def cmd_embedtest(message: Message):
                              "пара минут, модели скачиваются при первом запуске.")
         try:
             text = await embed_bench.run(keys)
-        except Exception as e:
+        except TOOL_ERRORS as e:
             text = f"Не вышло: {type(e).__name__}: {e}"
     await message.answer(text, parse_mode="HTML")
 
@@ -236,7 +242,7 @@ async def cmd_pulseprobe(message: Message):
     wait = await message.answer("Собираю Пульс: файлы приложения и свои данные…")
     try:
         data, summary = await pulse_probe.probe()
-    except Exception as e:
+    except TOOL_ERRORS as e:
         await wait.edit_text(f"Не вышло: {type(e).__name__}: {esc(str(e))}")
         return
     await message.answer_document(BufferedInputFile(data, filename="pulse-probe.zip"), caption=summary)

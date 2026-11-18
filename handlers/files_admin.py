@@ -17,6 +17,12 @@ from aiogram.types import (
 from database import add_file, get_files, delete_file
 from kapibara.core.config import STAROSTA_ID, is_starosta
 from kapibara.core.utils import esc, today_msk
+from kapibara.core.errors import EXTERNAL
+from kapibara.ops.backup import RestoreError
+
+# Импорт из JSON старосты: файл не скачался, битый JSON, не тот формат, база.
+# Баг — не «❌ Ошибка»: уходит в dp.error, Никите с traceback (ADR 0004).
+IMPORT_ERRORS = (*EXTERNAL, RuntimeError, ValueError, TypeError, AttributeError, sqlite3.Error)
 from kapibara.bot.tg import bot_of, document_of, download_bytes, msg, sender, text_of
 
 router = Router()
@@ -223,7 +229,7 @@ async def restore_confirm(callback: CallbackQuery):
         note = f"Прежняя база сохранена на томе: <code>{esc(os.path.basename(local))}</code>."
     try:
         await apply_backup(tmp)
-    except Exception as e:
+    except (RestoreError, sqlite3.Error, OSError) as e:     # остальное — баг: в dp.error с traceback
         await msg(callback).edit_text(f"❌ Не получилось: {esc(str(e))}. {note}", parse_mode="HTML")
         return
     await msg(callback).edit_text(f"✅ База восстановлена из копии. {note}", parse_mode="HTML")
@@ -303,7 +309,7 @@ async def handle_sync_json(message: Message):
             await wait.edit_text(
                 f"✅ Дедлайны импортированы!\n\nДобавлено: {added}\nПропущено: {skipped}"
             )
-        except Exception as e:
+        except IMPORT_ERRORS as e:
             await wait.edit_text(f"❌ Ошибка: {e}")
         return
 
@@ -347,5 +353,5 @@ async def handle_sync_json(message: Message):
         await wait.edit_text(
             f"✅ Синхронизация завершена!\n\nДобавлено: {added}\nС текстом лекции: {with_text}\nПропущено: {skipped}"
         )
-    except Exception as e:
+    except IMPORT_ERRORS as e:
         await wait.edit_text(f"❌ Ошибка: {e}")

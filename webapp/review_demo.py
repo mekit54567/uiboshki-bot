@@ -328,8 +328,10 @@ async def demo_chat(raw: bytes, now: datetime) -> tuple[int, dict]:
     except HTTPException as e:
         if e.status_code != 502:            # вложение не то — как у настоящего чата
             return e.status_code, {"detail": e.detail}
-    except Exception:  # noqa: BLE001 — демо не должно падать 500
-        pass
+    except Exception as e:  # noqa: BLE001 — демо не должно падать 500: баг — с traceback, проверяющему — запись
+        import logging
+        from kapibara.core.errors import log_failure
+        log_failure(logging.getLogger(__name__), "демо-чат", e)
     import logging
     logging.getLogger(__name__).warning("демо-чат: модель не ответила — запись стенда")
     return 200, shifted(fixtures()["POST /api/chat"], now)
