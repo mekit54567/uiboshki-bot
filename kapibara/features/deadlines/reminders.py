@@ -80,4 +80,5 @@ async def send_due(bot, now: datetime | None = None):
             await delivery.deliver(bot, r["user_id"], text, kind="deadlines", tab="deadlines",
                                    title=f"Напоминание: {name}",
                                    body=" · ".join(x for x in (course, "срок " + when(r["due_date"], r.get("due_time"), now.date())) if x),
-                                   reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
+                                   reply_markup=app_button("📋 Открыть дедлайны", "deadlines"),
+                                   urgent=True)          # время выбрал сам — и в тихие часы

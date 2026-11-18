@@ -12,6 +12,7 @@
 import json
 import re
 from collections import Counter
+from datetime import datetime
 from typing import TypedDict
 
 ALL_DAYS = [0, 1, 2, 3, 4, 5, 6]
@@ -54,6 +55,7 @@ DEFAULTS = {
     "deadline_soon": True,   # «срок скоро, а ты не сдал» (deadline_soon.py, Никита 25.10)
     "deadline_soon_hours": 3,
     "tg_copy": True,         # пуш дошёл — дублировать ли ещё в Telegram (delivery.deliver, Никита 14.10)
+    "quiet": False,          # тихие часы QUIET по Москве (delivery.deliver, новый дизайн, шаг 8)
 }
 # Тесты СДО (quiz_alerts.CHOICES): за 1 день, 3 ч, 1 ч, 30 мин, 10 мин до закрытия
 QUIZ_REMIND_CHOICES = (1440, 180, 60, 30, 10)
@@ -62,6 +64,44 @@ DEADLINE_SOON_CHOICES = (1, 3, 6, 12, 24)
 DAYS_KEY = {"morning": "morning_days", "lessons": "lesson_days", "deadlines": "deadline_days"}
 _BOOLS = [k for k, v in DEFAULTS.items() if isinstance(v, bool)]
 _DAYS = [k for k in DEFAULTS if k.endswith("_days")]
+
+
+# Тихие часы (макет «Что присылать», Никита 11.11): с 23:00 до 07:30 по Москве
+# пуш и Telegram молчат, сообщение ждёт в ленте уведомлений. Утро в 07:30 уже
+# приходит. Срочное (тест или срок закрывается, своё напоминание) — приходит.
+QUIET = ("23:00", "07:30")
+
+
+def quiet_now(prefs: dict, at: datetime) -> bool:
+    """Включены тихие часы и сейчас (at — время по Москве) внутри них."""
+    if not prefs.get("quiet"):
+        return False
+    hm = f"{at.hour:02d}:{at.minute:02d}"
+    start, end = QUIET
+    return hm >= start or hm < end
+
+
+# Три профиля вместо двадцати тумблеров (макет У2): «Только важное» — сроки,
+# новые задания, баллы, тесты и смена расписания, без утра, напоминаний о паре
+# и обзоров; «Помощь каждый день» — всё, как было по умолчанию. Остальное —
+# «Настроить самому» (custom). Вечернюю сводку человек включает сам — «каждый
+# день» её не трогает.
+_ALWAYS = {"deadlines": True, "new_tasks": True, "grades": True, "quiz_open": True, "deadline_soon": True,
+           "lessons": True, "deadline_days": ALL_DAYS, "lesson_days": ALL_DAYS}
+PROFILES: dict[str, dict] = {
+    "important": {**_ALWAYS, "morning": False, "weekly": False, "evening": False,
+                  **dict.fromkeys(REMIND, 0)},
+    "daily": {**_ALWAYS, "morning": True, "weekly": True, "morning_days": ALL_DAYS,
+              **{k: v["default"] for k, v in REMIND.items()}},
+}
+
+
+def profile(prefs: dict) -> str:
+    """important / daily / custom — какой профиль сейчас совпадает с настройками."""
+    for name, preset in PROFILES.items():
+        if all(prefs.get(k) == v for k, v in preset.items()):
+            return name
+    return "custom"
 
 
 def merge(raw: str | dict | None) -> dict:

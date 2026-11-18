@@ -101,6 +101,7 @@ class NotifyBody(BaseModel):
     subscribed: bool | None = None
     reminder_minutes: int | None = None
     prefs: dict | None = None
+    profile: str | None = None      # «Что присылать»: important / daily (prefs.PROFILES)
 
 
 # Вечерняя сводка (evening_digest.py) — часть второго круга дизайна: при
@@ -128,7 +129,10 @@ async def _notify_view(uid: int) -> dict:
             "quiz_choices": list(notify_prefs.QUIZ_REMIND_CHOICES),      # «Тесты СДО»: минут до закрытия
             "deadline_soon_choices": list(notify_prefs.DEADLINE_SOON_CHOICES),   # «Срок скоро»: часов до срока
             "home_campus": home, "morning_time": f"{SCHEDULE_HOUR}:{SCHEDULE_MINUTE:02d}",
-            "deadline_time": f"{DEADLINE_REMINDER_HOUR}:{DEADLINE_REMINDER_MINUTE:02d}"}
+            "deadline_time": f"{DEADLINE_REMINDER_HOUR}:{DEADLINE_REMINDER_MINUTE:02d}",
+            # новый дизайн («Что присылать»): какой профиль совпадает, тихие часы
+            "profile": notify_prefs.profile(prefs),
+            "quiet_hours": {"from": notify_prefs.QUIET[0], "to": notify_prefs.QUIET[1]}}
 
 
 @router.get("/api/notify")
@@ -148,6 +152,11 @@ async def api_notify_save(body: NotifyBody, user: dict = CurrentUser):
         if body.reminder_minutes not in notify_prefs.REMINDER_CHOICES:
             raise HTTPException(status_code=400, detail="такого времени напоминания нет")
         await set_reminder_minutes(uid, body.reminder_minutes)
+    if body.profile is not None and body.profile not in notify_prefs.PROFILES:
+        raise HTTPException(status_code=400, detail="такого набора уведомлений нет")
+    if body.profile is not None:
+        await set_subscription(uid, 1)              # выбрал, что присылать, — значит, присылать
+        body.prefs = {**notify_prefs.PROFILES[body.profile], **(body.prefs or {})}
     if body.prefs is not None:
         from kapibara.core.locks import lock
         async with lock("notify", uid):          # два быстрых нажатия не перетирают друг друга
@@ -158,6 +167,27 @@ async def api_notify_save(body: NotifyBody, user: dict = CurrentUser):
                     new.pop(k, None)
             await set_notify(uid, notify_prefs.merge({**current, **new}))
     return await _notify_view(uid)
+
+
+@router.get("/api/inbox")
+async def api_inbox(user: dict = CurrentUser):
+    """Лента уведомлений (новый дизайн, макет У1): что приходило, новые
+    сверху; unread — сколько не видел. Открыл — POST /api/inbox/read."""
+    from database import inbox
+    from kapibara.features.notifications import prefs as notify_prefs
+    from database import get_user
+    rows = await inbox.items(user["id"])
+    prefs = notify_prefs.merge((await get_user(user["id"]) or {}).get("notify"))
+    return {"items": [{"id": r["id"], "kind": r["kind"], "title": r["title"], "body": r["body"], "tab": r["tab"],
+                       "at": r["at"], "quiet": bool(r["quiet"]), "read": bool(r["read"])} for r in rows],
+            "unread": sum(1 for r in rows if not r["read"]),
+            "quiet": prefs["quiet"], "keep_days": inbox.KEEP_DAYS}
+
+
+@router.post("/api/inbox/read")
+async def api_inbox_read(user: dict = CurrentUser):
+    from database import inbox
+    return {"read": await inbox.mark_read(user["id"])}
 
 
 @router.post("/api/pulsecheck")
