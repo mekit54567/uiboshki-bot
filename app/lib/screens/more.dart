@@ -20,6 +20,7 @@ import '../widgets/capy.dart';
 import '../widgets/common.dart';
 import 'look_screen.dart';
 import 'notify.dart';
+import 'notify_fresh.dart' show NotifyHome, freshNotifySummary;
 import 'pulse_lab.dart';
 import 'rating.dart';
 import 'sdo_connect.dart';

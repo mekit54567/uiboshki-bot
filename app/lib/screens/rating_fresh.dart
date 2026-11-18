@@ -59,7 +59,7 @@ class _FreshRating extends StatelessWidget {
             const Spacer(),
             Padding(
               padding: const EdgeInsets.only(right: Space.l),
-              child: _Pill(
+              child: FreshPill(
                 key: const Key('rating:mine:open'),
                 icon: Icons.person_outline_rounded,
                 text: 'Мой опыт',
@@ -173,46 +173,6 @@ Widget _pad(Widget child) => Padding(
   padding: const EdgeInsets.symmetric(horizontal: Space.l),
   child: child,
 );
-
-/// Кнопка-капсула в шапке («Мой опыт»), как «Спросить Kapi» у предмета.
-class _Pill extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  final VoidCallback onTap;
-  const _Pill({super.key, required this.icon, required this.text, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStyle.of(context);
-    final p = s.p;
-    return Semantics(
-      button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          tick();
-          onTap();
-        },
-        child: Container(
-          height: 36,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: p.edge),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 17, color: p.accent),
-              const SizedBox(width: 6),
-              Text(text, style: s.body(13.5, weight: FontWeight.w600)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Переключатель-капсула: [accent] — главный («Я | Группы», как «По срокам |
 /// По предметам» в «Сдать»), иначе тёмный — вкладки внутри (как цель 3/4/5).

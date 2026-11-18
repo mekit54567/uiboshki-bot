@@ -17,6 +17,7 @@ import '../widgets/capy.dart';
 import '../widget_data.dart';
 import '../widgets/common.dart';
 import 'lesson.dart';
+import 'notify_fresh.dart' show InboxBell, InboxScreen;
 import 'week.dart' show mondayOf;
 
 part 'today_fresh.dart';
@@ -54,6 +55,10 @@ class TodayData {
   /// Свободный день и завтра свободно: ближайший день с парами и первая пара
   /// («Ближайшая пара во вторник в 10:40»); не нашли — null.
   final ({DateTime day, String start})? nextDay;
+
+  /// Непрочитанное в ленте уведомлений (inbox_unread); null — сервер ленты
+  /// не знает, колокольчика нет.
+  final int? inboxUnread;
   TodayData(
     this.lessons,
     this.tomorrowFirst,
@@ -68,6 +73,7 @@ class TodayData {
     this.scheduleOk = true,
     this.savedAt,
     this.nextDay,
+    this.inboxUnread,
   });
 }
 
@@ -290,6 +296,7 @@ class _TodayScreenState extends State<TodayScreen> {
       scheduleOk: scheduleOk,
       savedAt: savedAt,
       nextDay: nextDay,
+      inboxUnread: !stale && j['inbox_unread'] is int ? j['inbox_unread'] as int : null,
     );
     // виджеты рабочего стола — свежим днём, не запасом (запас догонит сеть)
     if (!Api.cacheOnly) unawaited(HomeWidgets.fromToday(api, stale ? today : '${j['date'] ?? today}', data));
@@ -324,12 +331,28 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) => Loader<TodayData>(
     load: _load,
     onUnauthorized: widget.onUnauthorized,
-    builder: (context, d, _) => AppStyle.of(context).fresh
+    builder: (context, d, reload) => AppStyle.of(context).fresh
         ? _FreshView(
             key: const ValueKey('today:fresh'),
             data: d,
             api: widget.api,
-            top: TodayTop(data: d),
+            top: TodayTop(
+              data: d,
+              // колокольчик — лента уведомлений (У1); вернулся — точка гаснет
+              trailing: d.inboxUnread == null
+                  ? null
+                  : InboxBell(
+                      unread: d.inboxUnread!,
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => InboxScreen(api: widget.api, onUnauthorized: widget.onUnauthorized),
+                          ),
+                        );
+                        await reload();
+                      },
+                    ),
+            ),
             onDeadlines: widget.onDeadlines,
           )
         : _MainView(
@@ -346,7 +369,10 @@ class _TodayScreenState extends State<TodayScreen> {
 /// чип раскрывается карточкой на месте и сдвигает экран вниз (П5, 09.10).
 class TodayTop extends StatefulWidget {
   final TodayData data;
-  const TodayTop({super.key, required this.data});
+
+  /// Справа от чипов (новый вид: колокольчик ленты уведомлений).
+  final Widget? trailing;
+  const TodayTop({super.key, required this.data, this.trailing});
 
   // на 320 pt «УИБО-03-24 · 6 неделя» и «+12° пасмурно» влезают в строку
   static const _gap = 5.0, _pad = 8.0, _padV = 4.5;
@@ -438,6 +464,7 @@ class _TodayTopState extends State<TodayTop> {
               },
             ),
           ),
+          if (widget.trailing != null) ...[const SizedBox(width: Space.s), widget.trailing!],
         ],
       ),
     );

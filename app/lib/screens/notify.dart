@@ -13,6 +13,7 @@ import '../theme/tokens.dart';
 import '../web_push.dart';
 import '../widgets/common.dart';
 import 'files.dart' show BackRow;
+import 'notify_fresh.dart' show quietRange;
 
 class NotifyScreen extends StatelessWidget {
   final Api api;
@@ -179,6 +180,16 @@ class _NotifyBodyState extends State<_NotifyBody> {
           on: on,
           onChanged: () => _save({'subscribed': !on}),
         ),
+        // тихие часы (шаг 8) — в новом виде; старый сервер ключа не знает
+        if (on && s.fresh && _prefs.containsKey('quiet'))
+          _Card(
+            icon: Icons.bedtime_outlined,
+            title: 'Тихие часы',
+            sub: '${quietRange(_s)} по Москве: уведомления ждут в ленте, срочное про тесты и сроки приходит',
+            switchKey: 'quiet',
+            on: _prefs['quiet'] == true,
+            onChanged: () => _toggle('quiet'),
+          ),
         if (on) ...[
           _Card(
             icon: Icons.wb_sunny_outlined,

@@ -816,6 +816,47 @@ class _AppToastState extends State<AppToast> with SingleTickerProviderStateMixin
   }
 }
 
+/// Кнопка-капсула в шапке нового вида: «Мой опыт» в рейтинге, «Настроить» в
+/// ленте уведомлений.
+class FreshPill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+  const FreshPill({super.key, required this.icon, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          tick();
+          onTap();
+        },
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: p.edge),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: p.accent),
+              const SizedBox(width: 6),
+              Text(text, style: s.body(13.5, weight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Лист снизу в дизайне приложения (как «Тема и шрифт»).
 Future<T?> appSheet<T>(BuildContext context, WidgetBuilder builder) => showModalBottomSheet<T>(
   useSafeArea: true,

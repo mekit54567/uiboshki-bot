@@ -375,9 +375,15 @@ class _FreshMoreState extends State<_FreshMore> {
               key: const Key('more:notify'),
               icon: Icons.notifications_none_rounded,
               title: 'Уведомления',
-              sub: _notify == null ? null : notifySummary(_notify!),
+              sub: _notify == null ? null : freshNotifySummary(_notify!),
               onTap: () async {
-                await _push(NotifyScreen(api: _api, onUnauthorized: screen.onUnauthorized));
+                // сервер знает наборы — «Что присылать» (У2), иначе прежний экран
+                final home = _notify == null || _notify!.containsKey('profile');
+                await _push(
+                  home
+                      ? NotifyHome(api: _api, onUnauthorized: screen.onUnauthorized)
+                      : NotifyScreen(api: _api, onUnauthorized: screen.onUnauthorized),
+                );
                 _loadNotify();
               },
             ),
