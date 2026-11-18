@@ -72,8 +72,8 @@ async def test_user_pause_and_daily_limit(monkeypatch):
     b = FakeMsg("@UiboshkiBot два")
     await _talk(a, monkeypatch)
     await _talk(b, monkeypatch)
-    assert len(a.replies) == 1 and b.replies == []        # второй раз подряд — молча
-    monkeypatch.setattr(group_talk, "DAILY", 1)
+    assert len(a.replies) == 1 and len(b.replies) == 1     # паузы нет (Никита 18.11)
+    monkeypatch.setattr(group_talk, "DAILY", 2)
     c = FakeMsg("@UiboshkiBot три", uid=6)
     await _talk(c, monkeypatch)
     assert "выговорилась" in c.replies[0]
@@ -200,18 +200,24 @@ async def test_groupchat_remembers_chat(db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_consent_hint_once_per_hour_only_for_tag(db, monkeypatch):
+async def test_answers_even_without_consent_in_own_chat(monkeypatch):
     from handlers import group_talk as h
-    h._hinted.clear()
+
+    async def fake(q):
+        return f"ответ: {q}"
+    monkeypatch.setattr(group_talk, "answer", fake)
     tagged = FakeMsg("@UiboshkiBot привет", uid=31)
-    await h.consent_hint(tagged, FakeBot())
-    assert tagged.replies and "согласие" in tagged.replies[0]
-    again = FakeMsg("@UiboshkiBot ещё раз", uid=31)
-    await h.consent_hint(again, FakeBot())
-    assert again.replies == []                                   # второй раз за час — нет
-    plain = FakeMsg("просто болтовня", uid=32)
-    await h.consent_hint(plain, FakeBot())
-    assert plain.replies == []                                   # не к боту — молчим
+    await h.answer_without_consent(tagged, FakeBot())
+    assert tagged.replies == ["ответ: @UiboshkiBot привет"]
+    ask = FakeMsg("/ask ты кто?", uid=32)
+    await h.answer_without_consent(ask, FakeBot())
+    assert ask.replies == ["ответ: ты кто?"]
+    plain = FakeMsg("просто болтовня", uid=33)
+    await h.answer_without_consent(plain, FakeBot())
+    assert plain.replies == []
+    other = FakeMsg("/start", uid=34)
+    await h.answer_without_consent(other, FakeBot())
+    assert other.replies == []
 
 
 @pytest.mark.asyncio
@@ -241,11 +247,10 @@ async def test_reply_to_reply_chain_answers_after_pause(monkeypatch):
     first = FakeMsg("а ещё?", reply_to=prev, uid=9)
     await _talk(first, monkeypatch)
     assert len(first.replies) == 1
-    now[0] += 3                                                  # быстрее паузы — молча
+    now[0] += 1                                                  # паузы нет — отвечает сразу
     quick = FakeMsg("и ещё?", reply_to=prev, uid=9)
     await _talk(quick, monkeypatch)
-    assert quick.replies == []
-    now[0] += group_talk.USER_PAUSE                              # пауза прошла — отвечает
+    assert len(quick.replies) == 1
     later = FakeMsg("а теперь?", reply_to=prev, uid=9)
     await _talk(later, monkeypatch)
     assert len(later.replies) == 1

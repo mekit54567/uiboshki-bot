@@ -171,8 +171,8 @@ class ConsentMiddleware(BaseMiddleware):
             return None
         chat = getattr(event, "chat", None)
         if not chat or chat.type != "private":
-            from handlers.group_talk import consent_hint
-            await consent_hint(event, data["bot"])      # в группах — молча, только тегнувшему — подсказка про согласие
+            from handlers.group_talk import answer_without_consent
+            await answer_without_consent(event, data["bot"])   # в группах — молча, кроме обращений к боту в чате своей группы
             return None
         text = getattr(event, "text", None) or ""
         name = _command_name(text)

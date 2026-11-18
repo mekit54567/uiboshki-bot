@@ -6,7 +6,6 @@
 с @упоминанием и ответы на свои сообщения; если теги не доходят — выключить."""
 import asyncio
 import logging
-import time
 from pathlib import Path
 
 from aiogram import F, Bot, Router
@@ -51,27 +50,23 @@ def _is_for_bot(message: Message, bot_id: int, username: str) -> bool:
     return bool(reply and reply.from_user and reply.from_user.id == bot_id)
 
 
-_hinted: dict[int, float] = {}
-HINT_EVERY = 3600.0
-
-
-async def consent_hint(message, bot: Bot):
-    """Тегнул бота в чате группы, но не дал согласие на обработку данных: бот текст не обрабатывает,
-    а только раз в час подсказывает, как включить ответы (ConsentMiddleware, 152-ФЗ)."""
+async def answer_without_consent(message, bot: Bot):
+    """Обращение к боту в чате своей группы от человека без согласия на обработку данных (Никита 18.11:
+    отвечаем и ему — это его группа в Telegram). Идёт только текст вопроса, без имени и id, ничего не
+    сохраняется; ConsentMiddleware пропускает сюда только такие обращения."""
     if message.chat.type not in ("group", "supergroup") or not message.from_user or message.from_user.is_bot:
         return
     me = await bot.me()
     if not _is_for_bot(message, me.id, me.username or config.BOT_USERNAME):
         return
-    if message.chat.id != await members.chat_id():
-        return
-    now = time.monotonic()
-    if now - _hinted.get(message.from_user.id, -HINT_EVERY) < HINT_EVERY:
-        return
-    _hinted[message.from_user.id] = now
-    with aside(logger, "подсказка про согласие в группе", EXTERNAL):
-        await message.reply(f"Чтобы я отвечала, один раз напиши мне в личку @{config.BOT_USERNAME} и нажми «Даю согласие» — "
-                            "без него текст сообщений я не обрабатываю.")
+    text = message.text or ""
+    if text.startswith("/"):
+        parts = text.split(maxsplit=1)
+        if parts[0].split("@")[0].lower() not in ("/ask", "/kapi"):
+            return
+        text = parts[1] if len(parts) > 1 else ""
+    if text.strip():
+        await respond(message, text)
 
 
 @router.message(GROUP, F.text, ~F.text.startswith("/"))
