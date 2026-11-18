@@ -1,1 +1,0 @@
-- Android: SDK пушей RuStore — из нового репозитория RuStore (старый artifactory больше не отдаёт пакет, сборка с RUSTORE_PROJECT_ID падала).

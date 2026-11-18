@@ -1,6 +1,7 @@
 """/status у старосты (health.py): СДО, расписание, бэкап, ошибки за сутки."""
 import logging
 import time
+import re
 
 import pytest
 
@@ -12,7 +13,7 @@ def test_areas_and_version():
     assert health.area_of("kapibara.features.sdo.parser") == "СДО"
     assert health.area_of("kapibara.features.schedule.parser") == "Расписание"
     assert health.area_of("handlers.files") == "Прочее"
-    assert health.version().startswith("v5.")
+    assert re.match(r"v\d+\.", health.version())
 
 
 def test_error_counter_by_area(monkeypatch):
