@@ -57,7 +57,7 @@ Future<bool> pulseLoggedHere() async {
 const pulsePerks = [
   (Icons.verified_outlined, 'Посещения лекций в «Цели» — ровно как отметил преподаватель'),
   (Icons.qr_code_scanner_rounded, 'Отметка по QR с «Сегодня»: кружок над меню, без сайта Пульса'),
-  (Icons.restore_rounded, 'Если вход слетит, посещения снова считаются по СДО, ничего не пропадёт'),
+  (Icons.restore_rounded, 'Если вход слетит, посещения снова считаются по СДО, ничего не\u00a0пропадёт'),
 ];
 
 /// Подпись строки «Пульс МИРЭА» в «Ещё» по /pulse/status.
