@@ -286,7 +286,8 @@ def summary(s: dict) -> str:
             + (f"\nИИ сегодня: <b>{s['ai_today']}</b> вопросов, у самого активного — <b>{s['ai_top']}</b>"
                if s["ai_today"] else "")
             + platforms_line(s.get("platforms") or [])
-            + groups_line(s.get("groups") or []))
+            + groups_line(s.get("groups") or [])
+            + dark_vote_line(s.get("dark_votes") or {}))
 
 
 def platforms_line(rows: list[tuple[str, int]]) -> str:
@@ -294,6 +295,14 @@ def platforms_line(rows: list[tuple[str, int]]) -> str:
     if not any(n for _, n in rows):
         return ""
     return "\nГде открывают: " + " · ".join(f"{label} — <b>{n}</b>" for label, n in rows)
+
+
+def dark_vote_line(votes: dict[str, int]) -> str:
+    """«Какая тёмная лучше: новая — 12 · прежняя — 4» (новый дизайн, шаг 9)."""
+    if not any(votes.values()):
+        return ""
+    return (f"\nКакая тёмная лучше: новая — <b>{votes.get('new', 0)}</b>"
+            f" · прежняя — <b>{votes.get('old', 0)}</b>")
 
 
 def groups_line(rows: list[dict], top: int = 6) -> str:
@@ -414,5 +423,10 @@ async def report(days: int = 30) -> tuple[bytes, str]:
         s["groups"] = await group_counts()
     except sqlite3.Error as e:
         logger.info(f"/stats: группы: {e}")
+    try:
+        from database import design_votes
+        s["dark_votes"] = await design_votes.counts()
+    except sqlite3.Error as e:
+        logger.info(f"/stats: голоса за тёмную: {e}")
     png = await asyncio.to_thread(render, s)
     return png, summary(s)

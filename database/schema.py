@@ -458,6 +458,16 @@ async def init_db():
             )
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_inbox_user ON inbox(user_id, id)")
+        # Какая тёмная лучше (design_votes.py, новый дизайн, шаг 9): голос одного
+        # человека — «new» (Ночная тетрадь) или «old» (прежняя тёмная); новый
+        # голос заменяет прежний. В /stats только счёт, без имён.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS design_votes (
+                user_id INTEGER PRIMARY KEY,
+                choice  TEXT NOT NULL,
+                at      TEXT NOT NULL
+            )
+        """)
         # Свои напоминания о дедлайне (deadline_reminders.py): кто, о каком, когда
         # (время МСК «ГГГГ-ММ-ДД ЧЧ:ММ»); sent — уже пришло.
         await db.execute("""

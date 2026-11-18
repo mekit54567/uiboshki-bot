@@ -190,6 +190,23 @@ async def api_inbox_read(user: dict = CurrentUser):
     return {"read": await inbox.mark_read(user["id"])}
 
 
+class DesignVoteBody(BaseModel):
+    choice: str
+
+
+@router.post("/api/design/vote")
+async def api_design_vote(body: DesignVoteBody, user: dict = CurrentUser):
+    """Голос «какая тёмная лучше» (новый дизайн, шаг 9): «new» — «Ночная
+    тетрадь», «old» — прежняя тёмная. Один на человека, в /stats — счёт."""
+    from datetime import datetime
+    from database import design_votes
+    from kapibara.core.utils import TZ
+    if body.choice not in design_votes.CHOICES:
+        raise HTTPException(400, "choice: new или old")
+    await design_votes.vote(user["id"], body.choice, datetime.now(TZ).isoformat(timespec="seconds"))
+    return {"ok": True}
+
+
 @router.post("/api/pulsecheck")
 async def api_pulsecheck(user: dict = CurrentUser):
     """Пускает ли pulse.mirea.ru сервер бота — кнопка старосты в листе «СДО»."""

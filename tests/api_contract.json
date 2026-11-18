@@ -84,6 +84,7 @@
  "POST /api/deadlines",
  "POST /api/deadlines/{deadline_id}/remind",
  "POST /api/deadlines/{deadline_id}/toggle",
+ "POST /api/design/vote",
  "POST /api/files/delete",
  "POST /api/files/{file_id}/link",
  "POST /api/files/{file_id}/send",
