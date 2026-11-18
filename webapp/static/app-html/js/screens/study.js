@@ -108,9 +108,9 @@ function stUpdatedText(unix, at = now()) {
   const t = msk(new Date(unix * 1000)), a = msk(at);
   const days = Math.round((Date.UTC(a.y, a.m - 1, a.d) - Date.UTC(t.y, t.m - 1, t.d)) / 864e5);
   const time = `${String(t.h).padStart(2, "0")}:${String(t.min).padStart(2, "0")}`;
-  if (days <= 0) return `сегодня в ${time}`;
-  if (days === 1) return `вчера в ${time}`;
-  return `${t.d} ${MONTHS[t.m - 1]} в ${time}`;
+  if (days <= 0) return `сегодня\u00A0в\u00A0${time}`;
+  if (days === 1) return `вчера\u00A0в\u00A0${time}`;
+  return `${t.d}\u00A0${MONTHS[t.m - 1]}\u00A0в\u00A0${time}`;
 }
 /** Строка под «Учёбой»: откуда баллы и когда обновлены; без входа — что с ним (_sdoLine). */
 function stSdoLine(d) {

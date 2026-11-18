@@ -15,6 +15,7 @@ import '../theme/look.dart';
 import '../theme/tokens.dart';
 import '../widgets/capy.dart';
 import '../widget_data.dart';
+import '../widgets/capsule_tabbar.dart' show CapsuleAction;
 import '../widgets/common.dart';
 import 'lesson.dart';
 import 'dark_intro.dart' show DarkAskCard;
@@ -208,7 +209,11 @@ class TodayScreen extends StatefulWidget {
 
   /// Открыть вкладку «Сдать» — кнопка у срока в «Важно сегодня» (новый дизайн).
   final VoidCallback? onDeadlines;
-  const TodayScreen({super.key, required this.api, this.onUnauthorized, this.onDeadlines});
+
+  /// Над меню кружок QR (shell.dart): списку нужно место снизу, чтобы
+  /// последняя карточка уходила выше кружка, а не садилась под него.
+  final bool qr;
+  const TodayScreen({super.key, required this.api, this.onUnauthorized, this.onDeadlines, this.qr = false});
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -357,14 +362,19 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
             ),
             onDeadlines: widget.onDeadlines,
+            bottom: _bottom,
           )
         : _MainView(
             key: const ValueKey('today:main'),
             data: d,
             api: widget.api,
             top: _withAsk(TodayTop(data: d)),
+            bottom: _bottom,
           ),
   );
+
+  /// Под списком — место под меню (120), с кружком QR — и под него.
+  double get _bottom => 120 + (widget.qr ? CapsuleAction.reserve : 0);
 
   /// Под шапкой — карточка опроса «какая тёмная лучше» (шаг 9), если пора;
   /// в «Классике» тоже: туда возвращаются те, у кого была «Библиотека».
@@ -601,7 +611,8 @@ class _MainView extends StatelessWidget {
   final TodayData data;
   final Api api;
   final Widget top;
-  const _MainView({super.key, required this.data, required this.api, required this.top});
+  final double bottom;
+  const _MainView({super.key, required this.data, required this.api, required this.top, this.bottom = 120});
 
   /// Случай для подписи капибары: выходной, пары кончились (последняя пара
   /// недели — своя подпись), дождь. Ночью капибара спит — только выходной.
@@ -679,7 +690,7 @@ class _MainView extends StatelessWidget {
     final rest = free ? data.tomorrow : const <Lesson>[];
     final n = rest.length;
     return ListView(
-      padding: const EdgeInsets.only(bottom: 120),
+      padding: EdgeInsets.only(bottom: bottom),
       children: [
         top,
         Padding(

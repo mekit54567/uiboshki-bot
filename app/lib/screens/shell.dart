@@ -334,7 +334,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     final un = widget.onUnauthorized;
     final g = _gen;
     final pages = [
-      TodayScreen(key: ValueKey('today$_epoch.${g[0]}'), api: api, onUnauthorized: un, onDeadlines: () => _open(2)),
+      TodayScreen(
+        key: ValueKey('today$_epoch.${g[0]}'),
+        api: api,
+        onUnauthorized: un,
+        onDeadlines: () => _open(2),
+        qr: _qr,
+      ),
       WeekScreen(key: ValueKey('week$_epoch.${g[1]}'), api: api, onUnauthorized: un),
       DeadlinesScreen(key: ValueKey('dl$_epoch.${g[2]}'), api: api, onUnauthorized: un),
       StudyScreen(key: ValueKey('study$_epoch.$_sdo.${g[3]}'), api: api, onUnauthorized: un),
@@ -374,18 +380,15 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       ),
       // QR — только на «Сегодня», всегда, над меню справа (Никита 01.11)
       floatingActionButton: _qr && _index == 0
-          ? Padding(
-              padding: const EdgeInsets.only(bottom: Space.s),
-              child: FloatingActionButton.small(
+          ? Transform.translate(
+              // кружок — ровно по правому краю капсулы (Space.l, а у Material
+              // 16) и на 16 выше неё; вырез вокруг кружка в счёт не идёт
+              offset: const Offset(CapsuleAction.ring - (Space.l - 16), CapsuleAction.ring),
+              child: CapsuleAction(
                 key: const Key('today:qr'),
-                heroTag: 'qr',
-                tooltip: 'Отметиться по QR',
-                elevation: 2,
-                backgroundColor: AppStyle.of(context).p.accent,
-                foregroundColor: AppStyle.of(context).p.onAccent,
-                shape: const CircleBorder(),
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Отметиться по QR',
                 onPressed: _scan,
-                child: const Icon(Icons.qr_code_scanner_rounded),
               ),
             )
           : null,

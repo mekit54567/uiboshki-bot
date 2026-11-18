@@ -47,11 +47,11 @@ void main() {
   test('«обновлено», сроки работ и «до N баллов» — коротко и по Москве', () {
     final at = DateTime.parse('2026-10-08T10:07:00+03:00');
     int unix(String s) => DateTime.parse(s).millisecondsSinceEpoch ~/ 1000;
-    expect(updatedText(unix('2026-10-08T09:40:00+03:00'), at), 'сегодня в 09:40');
+    expect(updatedText(unix('2026-10-08T09:40:00+03:00'), at), 'сегодня\u00A0в\u00A009:40');
     // полночь по Москве — уже «сегодня», хотя по UTC ещё вчера
-    expect(updatedText(unix('2026-10-08T00:30:00+03:00'), at), 'сегодня в 00:30');
-    expect(updatedText(unix('2026-10-07T21:10:00+03:00'), at), 'вчера в 21:10');
-    expect(updatedText(unix('2026-10-05T09:05:00+03:00'), at), '5 октября в 09:05');
+    expect(updatedText(unix('2026-10-08T00:30:00+03:00'), at), 'сегодня\u00A0в\u00A000:30');
+    expect(updatedText(unix('2026-10-07T21:10:00+03:00'), at), 'вчера\u00A0в\u00A021:10');
+    expect(updatedText(unix('2026-10-05T09:05:00+03:00'), at), '5\u00A0октября\u00A0в\u00A009:05');
     expect(workDue('четверг, 8 октября 2026, 23:59', at), 'сегодня до 23:59');
     expect(workDue('пятница, 9 октября 2026, 9:00', at), 'завтра до 09:00');
     expect(workDue('четверг, 15 октября 2026, 23:59', at), 'до 15 октября, 23:59');

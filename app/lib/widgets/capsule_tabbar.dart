@@ -306,3 +306,50 @@ class _Blur extends StatelessWidget {
   Widget build(BuildContext context) =>
       kIsWeb ? child : BackdropFilter(filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18), child: child);
 }
+
+/// Кнопка над меню справа — кружок QR на «Сегодня» (Никита 01.11: всегда,
+/// над меню справа). Залит акцентом, как раньше, но крупнее (56, было 40 —
+/// меньше 44 pt для пальца), без тени и с тонким вырезом цвета фона: над
+/// карточкой он ровно режет её край, видно, что кружок лежит сверху.
+class CapsuleAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  const CapsuleAction({super.key, required this.icon, required this.label, required this.onPressed});
+
+  /// Поперечник кружка без выреза.
+  static const size = 56.0;
+
+  /// Вырез вокруг кружка.
+  static const ring = 2.0;
+
+  /// Сколько добавить снизу списку, чтобы докрученная до конца последняя
+  /// карточка уходила выше кружка, а не садилась под него.
+  static const reserve = size + 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppStyle.of(context).p;
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          tick();
+          onPressed();
+        },
+        child: Container(
+          width: size + 2 * ring,
+          height: size + 2 * ring,
+          padding: const EdgeInsets.all(ring),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: p.bg),
+          child: DecoratedBox(
+            decoration: BoxDecoration(shape: BoxShape.circle, color: p.accent),
+            child: Center(child: Icon(icon, size: 26, color: p.onAccent)),
+          ),
+        ),
+      ),
+    );
+  }
+}
