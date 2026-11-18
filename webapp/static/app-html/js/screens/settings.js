@@ -418,11 +418,93 @@ const mrLook = {
   },
   setTheme(t) { Ach.unlock("look"); Prefs.set("uib_theme", t); Theme.apply(); this.dirty = true; },
   setFont(f) { Ach.unlock("look"); Prefs.set("uib_font", f); Theme.apply(); this.dirty = true; },
-  setLook(l) { Ach.unlock("look"); Look.save(l); Theme.apply(); this.dirty = true; },
+  setLook(l) { Ach.unlock("look"); DarkVote.manual(Look.load(), l); Look.save(l); Theme.apply(); this.dirty = true; },
   done() { if (this.dirty) { this.dirty = false; Tabs.rebuild(); } },
 };
 const MR_FONTS = [["book", "SourceSerif", 500, 26, "Книжный", "с засечками"], ["strict", "Onest", 800, 26, "Строгий", "ровный"],
   ["hand", "Neucha", 400, 28, "Рукописный", "как от руки"], ["wide", "Unbounded", 500, 21, "Широкий", "плакатный"]];
+
+/** Живой пример: фон темы, заголовок и пары так, как они будут на «Сегодня»
+ *  (LookPreview); day — карточками или строками. */
+function mrPreview(day = "cards") {
+  const iso = isoDay();
+  const mk = (h, m, title, kind, room, teacher, n) => {
+    const a = new Date(`${iso}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+03:00`), b = new Date(a.getTime() + 90 * 60000);
+    return lessonOf({ start: hm(a), end: hm(b), title, kind, room, teacher, num: n, start_iso: a.toISOString(), end_iso: b.toISOString() });
+  };
+  const lessons = [mk(9, 0, "Анализ данных", "лекция", "А-332 (МП-1)", "Иванова А. С.", 1), mk(10, 40, "Основы предпринимательства", "практика", "Г-412 (МП-1)", "", 2)];
+  const at = new Date(`${iso}T09:40:00+03:00`);
+  return `<div class="mr-prev"><div class="ttl" style="--sz:26px">Идёт первая пара</div><div style="height:var(--m)"></div>
+    ${day === "rows" ? lessonList(lessons, at, { tappable: false }) : lessons.map((l) => `<div style="margin-bottom:var(--s)">${lessonCard(l, at)}</div>`).join("")}</div>`;
+}
+
+// ── Переход на новый дизайн (шаг 9, dark_intro.dart; логика — DarkVote в core.js) ──
+let dkOpen = false;
+/** В тёмной — один раз экран «Мы обновили дизайн». */
+window.maybeDarkIntro = function maybeDarkIntro() {
+  if (dkOpen || !Theme.dark || !Theme.fresh || DarkVote.stage() !== "intro") return;
+  window.openDarkIntro();
+};
+window.openDarkIntro = function openDarkIntro() {
+  dkOpen = true;
+  Nav.push((body, screen) => {
+    const look = Look.load(), library = look.dark === "library", old = DarkVote.oldName(look);
+    // кабинеты и подсветка пар красятся по светлой или тёмной теме — пример
+    // светлой «Тетради» рисуем как в светлой, хотя вокруг сейчас тёмная
+    const preview = (dark) => { const was = Theme.dark; Theme.dark = dark; try { return mrPreview("cards"); } finally { Theme.dark = was; } };
+    const shot = (theme, title, id) => `<div class="dk-shot-col"><div class="dk-shot" data-app-theme="${theme}" id="${id}" aria-hidden="true">
+      <div class="dk-shot-in">${preview(theme === "night")}</div></div><div class="bd b6" style="--sz:13px;text-align:center;margin-top:var(--s)">${esc(title)}</div></div>`;
+    body.innerHTML = `<div class="dk-intro">
+      <div class="ttl" style="--sz:30px">Мы обновили дизайн</div>
+      <div class="bd mut" style="--sz:15px;margin-top:var(--s)">Теперь по умолчанию так:</div>
+      <div class="dk-shots">${shot("paper", "Тетрадь", "intro-paper")}${shot("night", "Ночная тетрадь", "intro-night")}</div>
+      <div class="bd" style="--sz:15px">${esc(library
+        ? "У тебя стояла тёмная «Библиотека». Она осталась в\u00A0«Классике», прежнем виде приложения."
+        : `У тебя стояла прежняя тёмная «${old}». Она никуда не делась, но теперь не\u00A0основная.`)}</div>
+      <div class="grow"></div>
+      <button class="btn primary" data-act="fresh" id="intro-new">Попробовать новую</button>
+      <button class="btn text dk-second" data-act="old" id="intro-old">${library ? "Оставить прежний вид" : "Оставить прежнюю"}</button>
+      <div class="bd mut" style="--sz:13px;text-align:center;margin-top:var(--xs)">Поменять можно в любой момент: «Ещё», «Оформление».</div></div>`;
+    // пример рисуется шириной 330 и уменьшается до колонки (как в приложении)
+    const fit = () => body.querySelectorAll(".dk-shot").forEach((el) => {
+      const w = el.clientWidth;
+      if (w) el.querySelector(".dk-shot-in").style.zoom = String(w / 330);
+    });
+    fit();
+    addEventListener("resize", fit);
+    const answer = (fn) => { tick(); fn(); Nav.pop(); Tabs.rebuild(); };
+    on(body, { fresh: () => answer(() => DarkVote.tryNew()), old: () => answer(() => DarkVote.keepOld()) });
+    return () => { removeEventListener("resize", fit); dkOpen = false; };
+  }, { cls: "dk-screen" });
+};
+/** Карточка опроса на «Сегодня» — только в тёмной и только когда пора. */
+window.darkAskCard = function darkAskCard() {
+  const ask = Theme.dark ? DarkVote.ask() : null;
+  if (!ask) return "";
+  const old = DarkVote.oldName(Look.load());
+  const [title, text, a, b] = {
+    howNew: ["Как тебе новая тёмная?", `Можно на пару дней вернуть прежнюю, «${old === "Глубина" ? "Глубину" : "Библиотеку"}», и\u00A0сравнить.`,
+      ["likeNew", "Нравится новая"], ["compare", "Сравнить"]],
+    which: ["Какая тёмная лучше?", "Обе уже знакомы. Что выберешь, то\u00A0и\u00A0останется, а мы посчитаем голоса.",
+      ["pickNew", "Ночная тетрадь"], ["pickOld", old]],
+    retry: ["Попробуешь новую тёмную?", "«Ночная тетрадь» теперь основная. Вернуть прежнюю можно в\u00A0любой момент.",
+      ["retry", "Попробовать"], ["stayOld", "Нет, спасибо"]],
+  }[ask];
+  // «какая лучше» — обе кнопки одинаковые, чтобы не подсказывать
+  const btn = ([v, label], main) => `<button class="dk-ask-btn${main ? " main" : ""}" data-act="dark" data-v="${v}" id="dark-${ask}-${v}">${esc(label)}</button>`;
+  return `<div class="hx" style="padding-top:var(--m)"><div class="tile dk-ask" id="dark-${ask}">
+    <div class="ttl" style="--sz:20px">${esc(title)}</div><div class="bd mut" style="--sz:14px;margin-top:var(--xs)">${esc(text)}</div>
+    <div class="dk-ask-row">${btn(a, true)}${btn(b, ask === "which")}</div></div></div>`;
+};
+/** Ответ на карточку: вид меняется, голос уходит; экраны строятся заново. */
+window.darkAnswer = function darkAnswer(v) {
+  const run = { likeNew: () => DarkVote.likeNew(), compare: () => DarkVote.compare(), pickNew: () => DarkVote.pick(true),
+    pickOld: () => DarkVote.pick(false), retry: () => DarkVote.retry(), stayOld: () => DarkVote.stayOld() }[v];
+  if (!run) return;
+  tick();
+  run();
+  Tabs.rebuild();
+};
 
 window.openLook = function openLook() {
   if (!Theme.design2) { mrThemeSheet(); return; }
@@ -435,18 +517,7 @@ window.openLook = function openLook() {
         <div class="row" style="gap:4px;margin-top:7px"><i style="width:22px;height:8px;border-radius:4px;background:var(--t-accent)"></i>
           <i style="width:8px;height:8px;border-radius:50%;background:var(--t-ok)"></i></div></div></div>
       <div style="padding:8px 6px 4px"><div class="bd b6" style="--sz:14.5px">${esc(title)}</div><div class="bd mut" style="--sz:12px">${esc(sub)}</div></div></button>`;
-    const preview = () => {
-      const iso = isoDay();
-      const mk = (h, m, title, kind, room, teacher, n) => {
-        const a = new Date(`${iso}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+03:00`), b = new Date(a.getTime() + 90 * 60000);
-        return lessonOf({ start: hm(a), end: hm(b), title, kind, room, teacher, num: n, start_iso: a.toISOString(), end_iso: b.toISOString() });
-      };
-      const lessons = [mk(9, 0, "Анализ данных", "лекция", "А-332 (МП-1)", "Иванова А. С.", 1), mk(10, 40, "Основы предпринимательства", "практика", "Г-412 (МП-1)", "", 2)];
-      const at = new Date(`${iso}T09:40:00+03:00`);
-      const look = Look.load();
-      return `<div class="mr-prev"><div class="ttl" style="--sz:26px">Идёт первая пара</div><div style="height:var(--m)"></div>
-        ${look.day === "rows" ? lessonList(lessons, at, { tappable: false }) : lessons.map((l) => `<div style="margin-bottom:var(--s)">${lessonCard(l, at)}</div>`).join("")}</div>`;
-    };
+    const preview = () => mrPreview(Look.load().day);
     const draw = () => {
       const look = Look.load(), theme = mrLook.theme(), font = mrLook.font();
       const classic = Look.classic, fresh = Theme.fresh;

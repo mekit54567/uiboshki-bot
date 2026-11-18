@@ -121,15 +121,17 @@ async function start() {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
   }
   Theme.apply();
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => Theme.apply());
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { Theme.apply(); if (Api.token && window.maybeDarkIntro) maybeDarkIntro(); });
   setInterval(() => { if (Prefs.get("uib_theme") === "sunset") Theme.apply(); }, 60000);
   Api.onUnauthorized = () => logout(true);
   // сервер мог выключить новый дизайн (DESIGN2=0) — узнаём при запуске
   Api.get("/meta").then((m) => {
     const on = !(m && m.features && m.features.design2 === false);
-    const f3 = m && m.features && m.features.design3, d3 = f3 === "off" || f3 === "on" ? f3 : "opt";
+    const f3 = m && m.features && m.features.design3, d3 = ["off", "opt", "new", "on"].includes(f3) ? f3 : "opt";
     const was = Theme.fresh;
     if (d3 !== Theme.design3) { Theme.design3 = d3; Prefs.set("uib_design3", d3); }
+    DarkVote.migrate(d3);   // шаг 9: из «Классики» в «Новое» — один раз
+    if (Api.token && window.maybeDarkIntro) maybeDarkIntro();
     if (on !== Theme.design2) { Theme.design2 = on; Prefs.set("uib_design2", on); Theme.apply(); if (Api.token) Tabs.rebuild(); }
     else { Theme.apply(); if (Theme.fresh !== was && Api.token) Tabs.rebuild(); }
   }).catch(() => {});
@@ -166,6 +168,8 @@ async function afterStart() {
   }
   if (window.sendRef) sendRef().catch(() => {});
   if (window.maybeTour) await maybeTour();
+  DarkVote.send();   // голос, не ушедший без сети
+  if (window.maybeDarkIntro) maybeDarkIntro();
 }
 
 async function logout(expired = false) {

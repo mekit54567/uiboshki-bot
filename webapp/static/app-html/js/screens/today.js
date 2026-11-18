@@ -322,7 +322,8 @@ Screens.today = {
       // колокольчик — лента уведомлений (notify_fresh.dart: InboxBell)
       const bell = Theme.fresh && data.inbox != null ? `<button class="td-bell" data-act="inbox" id="today-bell"
         aria-label="${data.inbox > 0 ? `Уведомления, новых: ${data.inbox}` : "Уведомления"}">${icon("notifications_none")}${data.inbox > 0 ? '<i class="td-bell-dot"></i>' : ""}</button>` : "";
-      return `<div class="td-top">${chips}${bell}${card}</div>`;
+      // под шапкой — опрос «какая тёмная лучше» (шаг 9), если пора; и в «Классике»
+      return `<div class="td-top">${chips}${bell}${card}</div>` + (window.darkAskCard ? darkAskCard() : "");
     };
 
     const nameRow = (l, key) => `<button class="nm" style="--sz:18px;display:block;text-align:left" data-act="lesson" data-k="${key(l)}">${esc(l.title)}</button>`;
@@ -390,6 +391,7 @@ Screens.today = {
     on(body, {
       wx() { tick(); wxOpen = !wxOpen; draw(); },
       inbox() { tick(); window.openInbox(() => refresh()); },   // вернулся — точка гаснет
+      dark(b) { window.darkAnswer(b.dataset.v); },              // ответ на опрос о тёмной
       dl() { tick(); Tabs.show(2); },                       // срок из «Важно сегодня» — на вкладку «Сдать»
       past() { tick(); pastOpen = !pastOpen; draw(); },
       lesson(b) { const l = lessons[+b.dataset.k]; if (l && window.openLesson) openLesson(l.raw); },

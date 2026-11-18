@@ -205,3 +205,22 @@ button.mf-row:active { background: color-mix(in srgb, var(--text) 5%, transparen
 .nf-choice.on { border: 2px solid var(--accent); padding: calc(var(--l) - 1px); }
 .nf-line { display: flex; align-items: center; gap: var(--m); width: 100%; min-height: 60px; text-align: left; padding: var(--s) var(--m) var(--s) var(--l); }
 .nf-where { display: flex; align-items: center; gap: var(--m); width: 100%; text-align: left; padding: var(--m) 0; }
+
+/* ── Переход на новый дизайн (шаг 9, dark_intro.dart) ── */
+.dk-intro { display: flex; flex-direction: column; box-sizing: border-box; padding: calc(var(--sat) + var(--xl)) var(--l) calc(var(--sab) + var(--m));
+  min-height: 100dvh; }
+.dk-intro .grow { flex: 1; min-height: var(--xl); }
+.dk-shots { display: flex; gap: var(--m); margin: var(--l) 0; }
+.dk-shot-col { flex: 1; min-width: 0; }
+/* пример в своей теме: цвета — от data-app-theme на самой коробке */
+.dk-shot { --bg: var(--t-bg); --glow1: var(--t-bg-glow-1); --glow2: var(--t-bg-glow-2); --card: var(--t-card);
+  --card-solid: var(--t-card-solid); --line: var(--t-line); --edge: var(--t-edge); --text: var(--t-text); --muted: var(--t-muted);
+  --accent: var(--t-accent); --on-accent: var(--t-on-accent); --ok: var(--t-ok); --warn: var(--t-warn); --danger: var(--t-danger);
+  color: var(--text); pointer-events: none; }
+.dk-shot[data-app-theme="paper"] { color-scheme: light; --g1a: 60%; --g2a: 50%; }
+.dk-shot-in { width: 330px; }
+.dk-intro .btn.dk-second { color: var(--text); min-height: 48px; margin-top: var(--s); font-weight: 600; }
+.dk-ask-row { display: flex; gap: var(--s); margin-top: var(--m); }
+.dk-ask-btn { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border-radius: 22px; border: 1px solid var(--edge);
+  font: 600 14.5px/1.2 Onest, sans-serif; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-ask-btn.main { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
