@@ -230,3 +230,22 @@ async def test_ask_command_answers_like_a_tag(monkeypatch):
     assert "после команды" in empty.replies[0]
     assert h._is_for_bot(FakeMsg("/ask привет"), 42, "UiboshkiBot")
     assert not h._is_for_bot(FakeMsg("/askew привет"), 42, "UiboshkiBot")
+
+
+@pytest.mark.asyncio
+async def test_reply_to_reply_chain_answers_after_pause(monkeypatch):
+    """Человек ответил на ответ бота, бот ответил, человек снова ответил на ответ бота."""
+    prev = type("P", (), {"from_user": type("U", (), {"id": 42})()})()
+    now = [1000.0]
+    monkeypatch.setattr(group_talk.time, "monotonic", lambda: now[0])
+    first = FakeMsg("а ещё?", reply_to=prev, uid=9)
+    await _talk(first, monkeypatch)
+    assert len(first.replies) == 1
+    now[0] += 3                                                  # быстрее паузы — молча
+    quick = FakeMsg("и ещё?", reply_to=prev, uid=9)
+    await _talk(quick, monkeypatch)
+    assert quick.replies == []
+    now[0] += group_talk.USER_PAUSE                              # пауза прошла — отвечает
+    later = FakeMsg("а теперь?", reply_to=prev, uid=9)
+    await _talk(later, monkeypatch)
+    assert len(later.replies) == 1
