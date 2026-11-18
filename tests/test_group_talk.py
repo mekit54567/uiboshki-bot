@@ -72,8 +72,8 @@ async def test_user_pause_and_daily_limit(monkeypatch):
     b = FakeMsg("@UiboshkiBot два")
     await _talk(a, monkeypatch)
     await _talk(b, monkeypatch)
-    assert len(a.replies) == 1 and b.replies == []        # второй раз подряд — молча
-    monkeypatch.setattr(group_talk, "DAILY", 1)
+    assert len(a.replies) == 1 and len(b.replies) == 1     # паузы нет (Никита 18.11)
+    monkeypatch.setattr(group_talk, "DAILY", 2)
     c = FakeMsg("@UiboshkiBot три", uid=6)
     await _talk(c, monkeypatch)
     assert "выговорилась" in c.replies[0]
@@ -170,3 +170,87 @@ async def test_talktest_report(monkeypatch):
     monkeypatch.setattr(group_talk, "answer", ans)
     rep = await group_talk.run_test(pause=0)
     assert rep.count("→ ответ") == len(group_talk.TEST_QUESTIONS) >= 25
+
+
+@pytest.mark.asyncio
+async def test_starosta_gets_diagnostic_when_bot_cannot_answer(db, monkeypatch):
+    from tests.conftest import STAROSTA_ID
+    monkeypatch.setattr(config, "GROUP_CHAT_ID", -999)           # чат запомнен другой
+    m = FakeMsg("@UiboshkiBot привет", uid=STAROSTA_ID)
+    await _talk(m, monkeypatch)
+    assert m.replies and "/groupchat" in m.replies[0]
+    other = FakeMsg("@UiboshkiBot привет", uid=77)               # обычному человеку — молча
+    await _talk(other, monkeypatch)
+    assert other.replies == []
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+    m2 = FakeMsg("@UiboshkiBot привет", uid=STAROSTA_ID)
+    await _talk(m2, monkeypatch)
+    assert "OPENROUTER_API_KEY" in m2.replies[0]
+
+
+@pytest.mark.asyncio
+async def test_groupchat_remembers_chat(db, monkeypatch):
+    from handlers import group_talk as h
+    from kapibara.features.groups import members
+    from tests.conftest import STAROSTA_ID
+    monkeypatch.setattr(config, "GROUP_CHAT_ID", 0)
+    m = FakeMsg("/groupchat", chat_id=-555, uid=STAROSTA_ID)
+    await h.groupchat(m)
+    assert await members.chat_id() == -555 and "Запомнила" in m.replies[0]
+
+
+@pytest.mark.asyncio
+async def test_answers_even_without_consent_in_own_chat(monkeypatch):
+    from handlers import group_talk as h
+
+    async def fake(q):
+        return f"ответ: {q}"
+    monkeypatch.setattr(group_talk, "answer", fake)
+    tagged = FakeMsg("@UiboshkiBot привет", uid=31)
+    await h.answer_without_consent(tagged, FakeBot())
+    assert tagged.replies == ["ответ: @UiboshkiBot привет"]
+    ask = FakeMsg("/ask ты кто?", uid=32)
+    await h.answer_without_consent(ask, FakeBot())
+    assert ask.replies == ["ответ: ты кто?"]
+    plain = FakeMsg("просто болтовня", uid=33)
+    await h.answer_without_consent(plain, FakeBot())
+    assert plain.replies == []
+    other = FakeMsg("/start", uid=34)
+    await h.answer_without_consent(other, FakeBot())
+    assert other.replies == []
+
+
+@pytest.mark.asyncio
+async def test_ask_command_answers_like_a_tag(monkeypatch):
+    from aiogram.filters import CommandObject
+    from handlers import group_talk as h
+
+    async def fake(q):
+        return f"ответ на: {q}"
+    monkeypatch.setattr(group_talk, "answer", fake)
+    m = FakeMsg("/ask ты кто?")
+    await h.ask(m, CommandObject(prefix="/", command="ask", args="ты кто?"))
+    assert m.replies == ["ответ на: ты кто?"]
+    empty = FakeMsg("/ask", uid=8)
+    await h.ask(empty, CommandObject(prefix="/", command="ask", args=None))
+    assert "после команды" in empty.replies[0]
+    assert h._is_for_bot(FakeMsg("/ask привет"), 42, "UiboshkiBot")
+    assert not h._is_for_bot(FakeMsg("/askew привет"), 42, "UiboshkiBot")
+
+
+@pytest.mark.asyncio
+async def test_reply_to_reply_chain_answers_after_pause(monkeypatch):
+    """Человек ответил на ответ бота, бот ответил, человек снова ответил на ответ бота."""
+    prev = type("P", (), {"from_user": type("U", (), {"id": 42})()})()
+    now = [1000.0]
+    monkeypatch.setattr(group_talk.time, "monotonic", lambda: now[0])
+    first = FakeMsg("а ещё?", reply_to=prev, uid=9)
+    await _talk(first, monkeypatch)
+    assert len(first.replies) == 1
+    now[0] += 1                                                  # паузы нет — отвечает сразу
+    quick = FakeMsg("и ещё?", reply_to=prev, uid=9)
+    await _talk(quick, monkeypatch)
+    assert len(quick.replies) == 1
+    later = FakeMsg("а теперь?", reply_to=prev, uid=9)
+    await _talk(later, monkeypatch)
+    assert len(later.replies) == 1
