@@ -103,6 +103,7 @@ class _FreshStudy extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (pulseVariant == 'b' && pulseAvailable) PulseStudyLine(api: api),
                   ],
                 ),
               ),

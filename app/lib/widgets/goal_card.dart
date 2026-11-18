@@ -10,6 +10,7 @@ import '../api/api.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../screens/pulse.dart' show PulseScreen, pulseAvailable;
 import 'capy.dart';
 import 'common.dart';
 
@@ -940,6 +941,31 @@ class _AttendanceSheetState extends State<AttendanceSheet> {
             ),
             const SizedBox(height: Space.s),
             Text(hint, style: s.body(14, color: p.muted)),
+            // посещения не из Пульса — предложить его (18.11: Пульс для всех)
+            if (a['source'] != 'pulse' && pulseAvailable) ...[
+              const SizedBox(height: Space.m),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('att:pulse'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: p.accent,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: StadiumBorder(side: BorderSide(color: p.edge)),
+                  ),
+                  icon: const Icon(Icons.verified_outlined, size: 17),
+                  label: Text(
+                    a['source'] == 'pulse_lost' ? 'Войти в Пульс заново' : 'Брать отметки из Пульса',
+                    style: s.body(13.5, weight: FontWeight.w600),
+                  ),
+                  onPressed: () async {
+                    tick();
+                    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PulseScreen(api: widget.api)));
+                    widget.onChanged();
+                  },
+                ),
+              ),
+            ],
             const SizedBox(height: Space.m),
             for (final l in lectures) _row(s, p, color, unit, l),
           ],

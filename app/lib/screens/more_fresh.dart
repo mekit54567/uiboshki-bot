@@ -67,6 +67,7 @@ class _FreshMoreState extends State<_FreshMore> {
   Object? _rating;
   List<String> _optPending = const [];
   Map<String, bool> _optAnswers = const {};
+  Map? _pulse;
 
   Api get _api => widget.screen.api;
 
@@ -91,10 +92,16 @@ class _FreshMoreState extends State<_FreshMore> {
     _loadRating();
     _loadNotify();
     _loadOptional();
+    _loadPulse();
   }
 
   void _set(VoidCallback f) {
     if (mounted) setState(f);
+  }
+
+  Future<void> _loadPulse() async {
+    if (!pulseOpen(widget.me)) return;
+    await _api.get('/pulse/status').then((v) => _set(() => _pulse = v is Map ? v : null), onError: (_) {});
   }
 
   Future<void> _loadRating() => _api.get('/rating').then((v) => _set(() => _rating = v), onError: (_) {});
@@ -341,6 +348,19 @@ class _FreshMoreState extends State<_FreshMore> {
               sub: group.isEmpty ? 'группа не выбрана' : 'сейчас $group',
               onTap: screen.onGroup,
             ),
+            // Пульс МИРЭА (18.11 — всем; только в приложении): посещения и QR
+            if (pulseOpen(me))
+              _FreshRow(
+                key: const Key('more:pulse'),
+                icon: Icons.verified_outlined,
+                title: 'Пульс МИРЭА',
+                sub: pulseRowSub(_pulse).text,
+                subColor: pulseRowSub(_pulse).warn ? p.danger : null,
+                onTap: () async {
+                  await _push(PulseScreen(api: _api));
+                  _loadPulse();
+                },
+              ),
             if (g is Map && g['own'] != true) _AdminRequest(api: _api, fresh: true),
             if (subjects.isNotEmpty)
               _FreshRow(
@@ -357,15 +377,6 @@ class _FreshMoreState extends State<_FreshMore> {
               title: 'Добавить в календарь телефона',
               onTap: () => screen._calendarSheet(context),
             ),
-            // экспериментальный вход в Пульс (31.10) — только старосте и только в приложении
-            if (me['lab'] == true && sdoWebLoginAvailable)
-              _FreshRow(
-                key: const Key('more:pulse'),
-                icon: Icons.science_outlined,
-                title: 'Пульс · эксперимент',
-                sub: 'вход в Пульс МИРЭА и разведка, что он отдаёт',
-                onTap: () => _push(PulseLabScreen(api: _api)),
-              ),
           ],
         ),
         const Section('Настройки'),
