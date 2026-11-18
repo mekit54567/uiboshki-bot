@@ -1,7 +1,8 @@
 // Нижнее меню «капсула»: выбранная вкладка — пилюля с подписью, остальные —
 // только значки. Пилюля плавно перетекает, касание — лёгкий отклик.
 // В длинном списке (новый дизайн) капсула уезжает вниз, пока читаешь дальше
-// ([hidden], решает shell.dart).
+// ([hidden], решает shell.dart). «С подписями» ([labels], Н1, шаг 8) —
+// подписана каждая вкладка, все одной ширины, ничего не прыгает.
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -25,7 +26,76 @@ class CapsuleTabBar extends StatelessWidget {
   /// Спрятана под край экрана. Место под ней в вёрстке остаётся: конец
   /// списка и плашки не прыгают.
   final bool hidden;
-  const CapsuleTabBar({super.key, required this.items, required this.index, required this.onTap, this.hidden = false});
+
+  /// Подписи у всех вкладок, а не только у открытой (Look.tabLabels).
+  final bool labels;
+  const CapsuleTabBar({
+    super.key,
+    required this.items,
+    required this.index,
+    required this.onTap,
+    this.hidden = false,
+    this.labels = false,
+  });
+
+  /// Образец меню — в выборе «Коротко / С подписями» (знакомство): та же
+  /// капсула, без нажатий и размытия. Уже настоящей — уменьшенной копией
+  /// во всю ширину экрана, а не сжатой: иначе подписи упираются в пилюлю.
+  static Widget sample({Key? key, required List<TabItem> items, required int index, required bool labels}) =>
+      IgnorePointer(
+        key: key,
+        child: ExcludeSemantics(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final real = MediaQuery.sizeOf(context).width - 2 * Space.l;
+              final bar = ClipRRect(
+                borderRadius: BorderRadius.circular(Radii.tabbar),
+                child: _row(context, items, index, labels, (_) {}),
+              );
+              if (real <= box.maxWidth) return bar;
+              return FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(width: real, child: bar),
+              );
+            },
+          ),
+        ),
+      );
+
+  static Widget _row(BuildContext context, List<TabItem> items, int index, bool labels, ValueChanged<int> onTap) {
+    final p = AppStyle.of(context).p;
+    return Container(
+      height: 64,
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        color: kIsWeb ? Color.alphaBlend(p.tabbar, p.bg) : p.tabbar,
+        borderRadius: BorderRadius.circular(Radii.tabbar),
+        border: Border.all(color: p.line),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++)
+            labels
+                ? _LabeledSlot(
+                    item: items[i],
+                    selected: i == index,
+                    onTap: () {
+                      if (i != index) tick();
+                      onTap(i);
+                    },
+                  )
+                : _Slot(
+                    item: items[i],
+                    selected: i == index,
+                    onTap: () {
+                      if (i != index) tick();
+                      onTap(i);
+                    },
+                  ),
+        ],
+      ),
+    );
+  }
 
   /// Сколько едет капсула: motion.sheet_ms из design/tokens.json.
   static const slide = Duration(milliseconds: 280);
@@ -74,7 +144,6 @@ class CapsuleTabBar extends StatelessWidget {
   }
 
   Widget _capsule(BuildContext context) {
-    final p = AppStyle.of(context).p;
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: Space.m),
@@ -85,30 +154,7 @@ class CapsuleTabBar extends StatelessWidget {
           // В браузере (PWA) размытие под меню перерисовывается каждый кадр и
           // тормозит (Никита 15.10: «ПВА стала лаганной») — там меню плотное,
           // того же цвета, что размытое поверх фона.
-          child: _Blur(
-            child: Container(
-              height: 64,
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                color: kIsWeb ? Color.alphaBlend(p.tabbar, p.bg) : p.tabbar,
-                borderRadius: BorderRadius.circular(Radii.tabbar),
-                border: Border.all(color: p.line),
-              ),
-              child: Row(
-                children: [
-                  for (var i = 0; i < items.length; i++)
-                    _Slot(
-                      item: items[i],
-                      selected: i == index,
-                      onTap: () {
-                        if (i != index) tick();
-                        onTap(i);
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ),
+          child: _Blur(child: _row(context, items, index, labels, onTap)),
         ),
       ),
     );
@@ -165,6 +211,60 @@ class _Slot extends StatelessWidget {
                             ),
                           )
                         : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Вкладка «С подписями»: значок над подписью, все одной ширины; открытая —
+/// пилюлей цвета акцента.
+class _LabeledSlot extends StatelessWidget {
+  final TabItem item;
+  final bool selected;
+  final VoidCallback onTap;
+  const _LabeledSlot({required this.item, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final fg = selected ? p.onAccent : p.muted;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: item.label,
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: selected ? p.accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(Radii.pill),
+            ),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            // крупный системный шрифт — подпись мельчает, а не обрезается
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(item.icon, size: 22, color: fg),
+                  const SizedBox(height: 2),
+                  Text(
+                    item.label,
+                    maxLines: 1,
+                    style: s.body(11, weight: FontWeight.w600, color: fg).copyWith(height: 1.15),
                   ),
                 ],
               ),

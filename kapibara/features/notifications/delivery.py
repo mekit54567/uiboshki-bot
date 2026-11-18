@@ -22,6 +22,11 @@ TITLES = {"morning": "Доброе утро", "lesson": "Скоро пара", "
 # платят на сайте, ответ должен прийти и в PWA, и в Telegram).
 ALWAYS_ALL = {"plus"}
 
+# Мимо тихих часов (prefs.QUIET): оплата — человек сам платит и ждёт ответа;
+# вечерняя сводка — время выбрал сам, бывает и 23:30. Срочное (тест или срок
+# вот-вот закроется, своё напоминание) рассылка помечает urgent=True.
+QUIET_EXEMPT = {"plus", "evening"}
+
 
 def plain(html: str, limit: int = 180) -> str:
     """Текст пуша: без HTML-разметки, первые строки."""
@@ -81,18 +86,41 @@ async def _tg_copy(user_id: int) -> bool:
     return notify_prefs.merge((await get_user(user_id) or {}).get("notify"))["tg_copy"]
 
 
+def _now():
+    """Сейчас по Москве (тесты подменяют — тихие часы)."""
+    from datetime import datetime
+    from kapibara.core.utils import TZ
+    return datetime.now(TZ)
+
+
 async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = None, reply_markup=None,
                   parse_mode: str = "HTML", title: str | None = None, body: str | None = None,
-                  always_tg: bool = False):
+                  always_tg: bool = False, urgent: bool = False):
     """Сообщение человеку: пуш на его устройства + Telegram (выключен
     тумблером tg_copy — только если пуш дошёл). always_tg — в Telegram
     всегда, мимо тумблера: оплата и донаты (Никита 02.11: платят на сайте,
     часто из Telegram, — ответ должен прийти и туда).
+    Всё ложится в ленту уведомлений (database.inbox); в тихие часы — только
+    туда, кроме urgent и QUIET_EXEMPT.
     Ошибка Telegram пробрасывается (рассылки её логируют), пуш — молча.
     До согласия на обработку данных (privacy.blocked) — ничего."""
+    from kapibara.features.notifications import prefs as notify_prefs
     from kapibara.features.privacy import privacy
+    from database import get_user
     if await privacy.blocked(user_id):
         return None
+    prefs = notify_prefs.merge(None)          # не прочитались настройки — как по умолчанию, но доставить
+    with aside(logger, f"настройки уведомлений {user_id}", level=logging.INFO):
+        prefs = notify_prefs.merge((await get_user(user_id) or {}).get("notify"))
+    now = _now()
+    quiet = not urgent and kind not in QUIET_EXEMPT and notify_prefs.quiet_now(prefs, now)
+    with aside(logger, f"лента уведомлений {user_id}", level=logging.INFO):
+        from database import inbox
+        await inbox.add(user_id, kind, title or TITLES.get(kind, "Капибара"),
+                        plain(body) if body else _body(html, title), tab,
+                        now.isoformat(timespec="seconds"), quiet=quiet)
+    if quiet:
+        return None               # тихие часы: ждёт в ленте
     sent = 0
     with aside(logger, f"доставка {user_id}: пуш не ушёл", level=logging.INFO):
         sent = await push(user_id, kind, html, tab, **({"title": title} if title else {}),
@@ -100,6 +128,6 @@ async def deliver(bot, user_id: int, html: str, *, kind: str, tab: str | None = 
     from database.identities import is_local
     if is_local(user_id):
         return None               # вошёл через VK/Яндекс, Telegram нет — только пуш
-    if sent and not always_tg and not await _tg_copy(user_id):
+    if sent and not always_tg and not prefs["tg_copy"]:
         return None               # «только в приложение»: пуш дошёл — в Telegram не дублируем
     return await bot.send_message(user_id, html, parse_mode=parse_mode, reply_markup=reply_markup)

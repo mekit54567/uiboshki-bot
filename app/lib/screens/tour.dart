@@ -1,12 +1,17 @@
 // Знакомство при первом запуске (владелец, 09.10, 2.8): пять коротких шагов
 // поверх самих экранов — вкладка под шагом открывается, меню-капсула
 // подсвечена, остальное притушено. «Дальше» / «Пропустить»; повторить —
-// «Ещё → Как пользоваться».
+// «Ещё → Как пользоваться». В «Новом» последний шаг — «Каким сделать меню»
+// (шаг 8, Никита 11.11): «Коротко» или «С подписями», образцы настоящие, а
+// подсвеченное меню внизу меняется сразу. По умолчанию «Коротко», как было.
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/look.dart';
 import '../theme/tokens.dart';
+import '../widgets/capsule_tabbar.dart';
 import '../widgets/common.dart';
+import 'shell.dart' show tabs;
 
 class TourStep {
   final IconData icon;
@@ -51,24 +56,32 @@ const tourSteps = [
   ),
 ];
 
+/// Последний шаг в «Новом»: каким сделать меню внизу.
+const tourMenuStep = TourStep(Icons.view_week_outlined, 'Каким сделать меню', '', 0);
+
 /// Показать тур. onStep — открыть вкладку шага; barRect — где меню-капсула
-/// (подсветить), null — без подсветки.
-Future<void> showTour(BuildContext context, {required ValueChanged<int> onStep, Rect? Function()? barRect}) =>
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (context, appear, _) => FadeTransition(
-        opacity: appear,
-        child: TourOverlay(onStep: onStep, barRect: barRect),
-      ),
-    );
+/// (подсветить), null — без подсветки; onLook — сменить вид (шаг про меню).
+Future<void> showTour(
+  BuildContext context, {
+  required ValueChanged<int> onStep,
+  Rect? Function()? barRect,
+  ValueChanged<Look>? onLook,
+}) => showGeneralDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  barrierColor: Colors.transparent,
+  transitionDuration: const Duration(milliseconds: 260),
+  pageBuilder: (context, appear, _) => FadeTransition(
+    opacity: appear,
+    child: TourOverlay(onStep: onStep, barRect: barRect, onLook: onLook),
+  ),
+);
 
 class TourOverlay extends StatefulWidget {
   final ValueChanged<int> onStep;
   final Rect? Function()? barRect;
-  const TourOverlay({super.key, required this.onStep, this.barRect});
+  final ValueChanged<Look>? onLook;
+  const TourOverlay({super.key, required this.onStep, this.barRect, this.onLook});
 
   @override
   State<TourOverlay> createState() => _TourOverlayState();
@@ -77,11 +90,21 @@ class TourOverlay extends StatefulWidget {
 class _TourOverlayState extends State<TourOverlay> {
   int _i = 0;
 
+  /// Шаг про меню — в «Новом», решается один раз на весь тур.
+  bool? _menu;
+  List<TourStep> get _steps => [...tourSteps, if (_menu ?? false) tourMenuStep];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _menu ??= widget.onLook != null && AppStyle.of(context).fresh;
+  }
+
   void _next() {
     tick();
-    if (_i + 1 >= tourSteps.length) return _close();
+    if (_i + 1 >= _steps.length) return _close();
     setState(() => _i++);
-    widget.onStep(tourSteps[_i].tab);
+    widget.onStep(_steps[_i].tab);
   }
 
   void _close() {
@@ -93,8 +116,10 @@ class _TourOverlayState extends State<TourOverlay> {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final step = tourSteps[_i];
-    final last = _i == tourSteps.length - 1;
+    final steps = _steps;
+    final step = steps[_i];
+    final last = _i == steps.length - 1;
+    final menu = identical(step, tourMenuStep);
     final mq = MediaQuery.of(context);
     final hole = widget.barRect?.call();
     // карточка — над капсулой (её и подсвечиваем), а без неё — у нижнего края
@@ -151,7 +176,7 @@ class _TourOverlayState extends State<TourOverlay> {
                             ),
                             const Spacer(),
                             // шаги точками: где ты сейчас
-                            for (var k = 0; k < tourSteps.length; k++)
+                            for (var k = 0; k < steps.length; k++)
                               AnimatedContainer(
                                 duration: const Duration(milliseconds: 220),
                                 margin: const EdgeInsets.only(left: 5),
@@ -166,8 +191,19 @@ class _TourOverlayState extends State<TourOverlay> {
                         ),
                         const SizedBox(height: Space.m),
                         Text(step.title, style: s.title(26)),
-                        const SizedBox(height: Space.s),
-                        Text(step.text, style: s.body(15, color: p.muted)),
+                        if (menu)
+                          _MenuChoice(
+                            labels: s.look.tabLabels,
+                            onPick: (v) {
+                              if (v == s.look.tabLabels) return;
+                              tick();
+                              widget.onLook?.call(s.look.copyWith(tabLabels: v));
+                            },
+                          )
+                        else ...[
+                          const SizedBox(height: Space.s),
+                          Text(step.text, style: s.body(15, color: p.muted)),
+                        ],
                         const SizedBox(height: Space.m),
                         // узкий экран и крупный шрифт — надписи чуть мельче, а не за край
                         Row(
@@ -196,7 +232,10 @@ class _TourOverlayState extends State<TourOverlay> {
                                   padding: const EdgeInsets.symmetric(horizontal: Space.l),
                                 ),
                                 onPressed: _next,
-                                child: FittedBox(fit: BoxFit.scaleDown, child: Text(last ? 'Понятно' : 'Дальше')),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(menu ? 'Готово' : (last ? 'Понятно' : 'Дальше')),
+                                ),
                               ),
                             ),
                           ],
@@ -208,6 +247,79 @@ class _TourOverlayState extends State<TourOverlay> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Коротко» / «С подписями»: две карточки с настоящими образцами меню.
+class _MenuChoice extends StatelessWidget {
+  final bool labels;
+  final ValueChanged<bool> onPick;
+  const _MenuChoice({required this.labels, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    Widget option(bool v, String title, String sub) {
+      final on = v == labels;
+      return Semantics(
+        button: true,
+        selected: on,
+        child: GestureDetector(
+          key: Key('tour:menu:${v ? 'labels' : 'short'}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onPick(v),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            // рамка выбранной толще на 1 — отступ меньше на 1, текст не прыгает
+            padding: EdgeInsets.all(Space.m - (on ? 1 : 0)),
+            decoration: BoxDecoration(
+              color: p.card,
+              borderRadius: BorderRadius.circular(Radii.tile),
+              border: Border.all(color: on ? p.accent : p.line, width: on ? 2 : 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: s.body(15, weight: FontWeight.w700)),
+                          Text(sub, style: s.body(13, color: p.muted)),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      on ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      color: on ? p.accent : p.muted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Space.s),
+                CapsuleTabBar.sample(items: tabs, index: 0, labels: v),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: Space.m),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          option(false, 'Коротко', 'Подпись только у открытой вкладки'),
+          const SizedBox(height: Space.s),
+          option(true, 'С подписями', 'Каждая вкладка подписана'),
+          const SizedBox(height: Space.m),
+          Text('Поменять можно в любой момент: «Ещё», «Оформление».', style: s.body(13, color: p.muted)),
         ],
       ),
     );

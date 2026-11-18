@@ -771,13 +771,35 @@ window.openRating = function openRating() {
   tick();
   return new Promise((resolve) => {
     Nav.push((body) => {
-      let me = {};
+      let me = {}, data = {};
+      // «Новое»: что открыто — «Я» (0) или «Группы» (1), вкладка «Я», свёрнут ли хвост группы, вкладка «Групп»
+      const st = { view: 0, scope: "group", expanded: false, gtab: 0 };
       const save = async (b) => {
         tick();
-        try { await Api.put("/rating/me", b); } catch (e) { toast(errorText(e), "error"); return; }
+        try { await Api.put("/rating/me", b); } catch (e) { toast(errorText(e), "error"); return false; }
         reload();
+        return true;
       };
+      /** Включить «всем» — только через лист отдельного согласия; выключить — сразу. */
+      const showAll = async (m) => {
+        if (m.show_all === true) return save({ show_all: false });
+        tick();
+        let doc;
+        try { doc = await Api.get("/legal/rating_all"); } catch (e) { toast(errorText(e), "error"); return false; }
+        const version = await acShowAllSheet(doc, m.public_nick ?? null);
+        return version != null && save({ show_all: true, consent: version });
+      };
+      const nick = async (m) => {
+        tick();
+        const v = await acInputSheet({ title: "Ник в рейтинге",
+          text: "Можно: 2–24 знака — буквы, цифры, пробел, точка, дефис и _. Слово «капибара» в своём нике тоже можно: «Капибара на паре».\nНельзя: мат и оскорбления, а ещё выдавать себя за сервис, МИРЭА или старост — «Капибара», «Капибара МИРЭА», «Админ», «Поддержка», «Староста».\nНик видит твоя группа, если включишь «Показывать меня группе», и все — если «Показывать меня всем». Пустое поле — имя и первая буква фамилии: так тебя видит только группа, остальные — «Капибара №…».",
+          hint: m.nick || "", initial: m.custom_nick === true ? m.nick || "" : "" });
+        return v != null && save({ nick: v });
+      };
+      const redraw = () => rfDraw(body, data, st);
       const reload = acLoad(body, "/rating", (d) => {
+        data = d;
+        if (Theme.fresh) { me = d.me || {}; redraw(); return; }
         const g = d.group || {}, inst = d.institute_top || [], all = d.university_top || [], people = d.people || [];
         me = d.me || {};
         const show = me.show === true, sAll = me.show_all === true;
@@ -810,20 +832,16 @@ window.openRating = function openRating() {
       on(body, {
         group: (b) => { if (b.dataset.id) { tick(); openGroupRating(+b.dataset.id, b.dataset.name); } },
         "rating-show": () => save({ show: me.show !== true }),
-        "rating-show_all": async () => {
-          if (me.show_all === true) { save({ show_all: false }); return; }
+        "rating-show_all": () => showAll(me),
+        nick: () => nick(me),
+        "rf-view": (b) => { tick(); st.view = +b.dataset.i; redraw(); },
+        "rf-scope": (b) => { tick(); st.scope = ["group", "inst", "all"].filter((k) => k !== "inst" || (data.ranks || {}).inst)[+b.dataset.i]; st.expanded = false; redraw(); },
+        "rf-gtab": (b) => { tick(); st.gtab = +b.dataset.i; redraw(); },
+        "rf-more": () => { tick(); st.expanded = true; redraw(); },
+        "rf-mine": () => {
           tick();
-          let doc;
-          try { doc = await Api.get("/legal/rating_all"); } catch (e) { toast(errorText(e), "error"); return; }
-          const version = await acShowAllSheet(doc, me.public_nick ?? null);
-          if (version != null) save({ show_all: true, consent: version });
-        },
-        nick: async () => {
-          tick();
-          const v = await acInputSheet({ title: "Ник в рейтинге",
-            text: "Можно: 2–24 знака — буквы, цифры, пробел, точка, дефис и _. Слово «капибара» в своём нике тоже можно: «Капибара на паре».\nНельзя: мат и оскорбления, а ещё выдавать себя за сервис, МИРЭА или старост — «Капибара», «Капибара МИРЭА», «Админ», «Поддержка», «Староста».\nНик видит твоя группа, если включишь «Показывать меня группе», и все — если «Показывать меня всем». Пустое поле — имя и первая буква фамилии: так тебя видит только группа, остальные — «Капибара №…».",
-            hint: me.nick || "", initial: me.custom_nick === true ? me.nick || "" : "" });
-          if (v != null) save({ nick: v });
+          rfMineSheet(me, data.rules || {}, { show: (m) => save({ show: m.show !== true }), showAll, nick },
+            () => Api.get("/rating").then((d) => (d && d.me) || null, () => null));
         },
       });
       return () => resolve();
@@ -835,6 +853,7 @@ window.openRating = function openRating() {
 window.openGroupRating = function openGroupRating(id, name = "") {
   Nav.push((body) => {
     acLoad(body, `/rating/group/${id}`, (g) => {
+      if (Theme.fresh) { rfGroupScreen(body, g, name); return; }
       const people = g.people_list || [], hidden = Math.trunc(g.hidden || 0), member = g.member === true, inst = g.institute_name || "";
       body.innerHTML = backRow() + screenTitle(g.name || name, { sub: inst })
         + `<div class="hx">${acGroupCard(g)}</div>` + acGroupCharts(g)

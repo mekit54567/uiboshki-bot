@@ -441,6 +441,33 @@ async def init_db():
                 PRIMARY KEY (user_id, deadline_id)
             )
         """)
+        # Лента уведомлений (inbox.py, новый дизайн, шаг 8): что приходило пушем
+        # и в Telegram — заголовок и короткий текст, куда ведёт (tab); quiet —
+        # пришло в тихие часы и ждало здесь. Хранится 30 дней, не больше 100.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS inbox (
+                id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                kind    TEXT NOT NULL,
+                title   TEXT NOT NULL,
+                body    TEXT NOT NULL DEFAULT '',
+                tab     TEXT,
+                at      TEXT NOT NULL,
+                quiet   INTEGER NOT NULL DEFAULT 0,
+                read    INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_inbox_user ON inbox(user_id, id)")
+        # Какая тёмная лучше (design_votes.py, новый дизайн, шаг 9): голос одного
+        # человека — «new» (Ночная тетрадь) или «old» (прежняя тёмная); новый
+        # голос заменяет прежний. В /stats только счёт, без имён.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS design_votes (
+                user_id INTEGER PRIMARY KEY,
+                choice  TEXT NOT NULL,
+                at      TEXT NOT NULL
+            )
+        """)
         # Свои напоминания о дедлайне (deadline_reminders.py): кто, о каком, когда
         # (время МСК «ГГГГ-ММ-ДД ЧЧ:ММ»); sent — уже пришло.
         await db.execute("""

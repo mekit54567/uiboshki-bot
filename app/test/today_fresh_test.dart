@@ -114,7 +114,8 @@ void main() {
     expect(find.text('до конца'), findsOneWidget);
     final card = find.byKey(const Key('today:now'));
     expect(find.descendant(of: card, matching: find.text('Моделирование')), findsOneWidget);
-    expect(find.descendant(of: card, matching: find.text('лекция · Сиганьков А. А.')), findsOneWidget);
+    // инициалы не уезжают на отдельную строку на узком экране
+    expect(find.descendant(of: card, matching: find.text('лекция · Сиганьков\u00A0А.\u00A0А.')), findsOneWidget);
     expect(find.text('Дальше в ${second['start']} тот же кабинет, никуда не идти'), findsOneWidget);
     // срок ближайших суток — наверху, с кнопкой; дальний — тихим списком
     expect(find.text('важно сегодня'), findsOneWidget);

@@ -17,6 +17,8 @@ import '../widgets/capy.dart';
 import '../widget_data.dart';
 import '../widgets/common.dart';
 import 'lesson.dart';
+import 'dark_intro.dart' show DarkAskCard;
+import 'notify_fresh.dart' show InboxBell, InboxScreen;
 import 'week.dart' show mondayOf;
 
 part 'today_fresh.dart';
@@ -43,6 +45,21 @@ class TodayData {
   /// Отменённые сегодня пары (5.79): в счёт пар и «идёт сейчас» не входят,
   /// в списке — серыми и зачёркнутыми.
   final List<Lesson> cancelled;
+
+  /// Сайт расписания МИРЭА не ответил (schedule_ok с сервера): false — пар
+  /// нет потому, что их не узнать, а не потому, что свободно.
+  final bool scheduleOk;
+
+  /// Сервер отдаёт сохранённое расписание: «07:30» или «1 окт, 14:20» (stale).
+  final String? savedAt;
+
+  /// Свободный день и завтра свободно: ближайший день с парами и первая пара
+  /// («Ближайшая пара во вторник в 10:40»); не нашли — null.
+  final ({DateTime day, String start})? nextDay;
+
+  /// Непрочитанное в ленте уведомлений (inbox_unread); null — сервер ленты
+  /// не знает, колокольчика нет.
+  final int? inboxUnread;
   TodayData(
     this.lessons,
     this.tomorrowFirst,
@@ -54,7 +71,40 @@ class TodayData {
     this.moreThisWeek,
     this.cancelled = const [],
     this.tomorrow = const [],
+    this.scheduleOk = true,
+    this.savedAt,
+    this.nextDay,
+    this.inboxUnread,
   });
+}
+
+// с неразрывным пробелом: «в» не остаётся одно в конце строки
+const _weekdayIn = [
+  'в\u00A0понедельник',
+  'во\u00A0вторник',
+  'в\u00A0среду',
+  'в\u00A0четверг',
+  'в\u00A0пятницу',
+  'в\u00A0субботу',
+  'в\u00A0воскресенье',
+];
+
+/// Под «Сегодня пар нет» (новый вид): «Завтра первая пара в 10:40.» или
+/// «Завтра тоже свободно. Ближайшая пара во вторник в 10:40.»
+String freeDayText(DateTime at, Lesson? tomorrowFirst, ({DateTime day, String start})? next) {
+  if (tomorrowFirst != null) return 'Завтра первая пара в\u00A0${tomorrowFirst.start}.';
+  if (next == null) return 'Завтра тоже свободно.';
+  final d = next.day;
+  final days = DateTime(d.year, d.month, d.day).difference(DateTime(at.year, at.month, at.day)).inDays;
+  final when = days < 7 ? _weekdayIn[d.weekday - 1] : '${d.day} ${monthsGen[d.month - 1]}';
+  return 'Завтра тоже свободно. Ближайшая пара $when в\u00A0${next.start}.';
+}
+
+/// Плашка сбоя (новый вид) по метке сервера «07:30» / «1 окт, 14:20».
+String savedScheduleText(String label) {
+  final i = label.indexOf(', ');
+  final when = i < 0 ? 'сегодня в $label' : '${label.substring(0, i)} в ${label.substring(i + 2)}';
+  return 'Показываю расписание, сохранённое $when. Попробую снова через\u00A0минуту.';
 }
 
 const _ordinal = ['первая', 'вторая', 'третья', 'четвёртая', 'пятая', 'шестая', 'седьмая', 'восьмая'];
@@ -223,6 +273,14 @@ class _TodayScreenState extends State<TodayScreen> {
     final group = me['group'] is Map ? '${me['group']['name'] ?? ''}' : '';
     final week = res[2] is Map ? res[2]['week'] : null;
     final days = res[2] is Map && res[2]['days'] is List ? res[2]['days'] as List : null;
+    // старый сервер этих полей не знает — расписание считаем живым
+    final scheduleOk = stale || j['schedule_ok'] != false;
+    final savedAt = !stale && j['stale'] is String && '${j['stale']}'.isNotEmpty ? '${j['stale']}' : null;
+    // свободный день и завтра свободно — когда ближайшая пара (только новый вид её пишет)
+    final fresh = mounted && (context.getInheritedWidgetOfExactType<AppStyle>()?.fresh ?? false);
+    final nextDay = lessonsJson.isEmpty && tomorrowJson.isEmpty && scheduleOk && fresh
+        ? await _nextDay(extra, days)
+        : null;
     final data = TodayData(
       lessons,
       tf == null ? null : Lesson.fromJson(tf),
@@ -236,31 +294,82 @@ class _TodayScreenState extends State<TodayScreen> {
           ? null
           : days.any((d) => d is Map && '${d['date']}'.compareTo(today) > 0 && (d['dots'] as List? ?? []).isNotEmpty),
       tomorrow: [for (final l in tomorrowJson) Lesson.fromJson(l)],
+      scheduleOk: scheduleOk,
+      savedAt: savedAt,
+      nextDay: nextDay,
+      inboxUnread: !stale && j['inbox_unread'] is int ? j['inbox_unread'] as int : null,
     );
     // виджеты рабочего стола — свежим днём, не запасом (запас догонит сеть)
     if (!Api.cacheOnly) unawaited(HomeWidgets.fromToday(api, stale ? today : '${j['date'] ?? today}', data));
     return data;
   }
 
+  /// Ближайший день с парами после завтра: эта неделя, не нашлось — следующая.
+  static Future<({DateTime day, String start})?> _nextDay(Future<dynamic> Function(String) extra, List? days) async {
+    final after = iso(now().add(const Duration(days: 1)));
+    String? pick(List? ds) {
+      for (final d in ds ?? const []) {
+        if (d is Map && '${d['date']}'.compareTo(after) > 0 && (d['dots'] as List? ?? const []).isNotEmpty) {
+          return '${d['date']}';
+        }
+      }
+      return null;
+    }
+
+    var date = pick(days);
+    if (date == null) {
+      final next = await extra('/week?start=${iso(mondayOf(now()).add(const Duration(days: 7)))}');
+      date = pick(next is Map && next['days'] is List ? next['days'] as List : null);
+    }
+    if (date == null) return null;
+    final d = await extra('/day?date=$date');
+    final ls = d is Map && d['lessons'] is List ? d['lessons'] as List : const [];
+    if (ls.isEmpty || ls.first is! Map || '${ls.first['start'] ?? ''}'.isEmpty) return null;
+    return (day: DateTime.parse(date), start: '${ls.first['start']}');
+  }
+
   @override
   Widget build(BuildContext context) => Loader<TodayData>(
     load: _load,
     onUnauthorized: widget.onUnauthorized,
-    builder: (context, d, _) => AppStyle.of(context).fresh
+    builder: (context, d, reload) => AppStyle.of(context).fresh
         ? _FreshView(
             key: const ValueKey('today:fresh'),
             data: d,
             api: widget.api,
-            top: TodayTop(data: d),
+            top: _withAsk(
+              TodayTop(
+                data: d,
+                // колокольчик — лента уведомлений (У1); вернулся — точка гаснет
+                trailing: d.inboxUnread == null
+                    ? null
+                    : InboxBell(
+                        unread: d.inboxUnread!,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => InboxScreen(api: widget.api, onUnauthorized: widget.onUnauthorized),
+                            ),
+                          );
+                          await reload();
+                        },
+                      ),
+              ),
+            ),
             onDeadlines: widget.onDeadlines,
           )
         : _MainView(
             key: const ValueKey('today:main'),
             data: d,
             api: widget.api,
-            top: TodayTop(data: d),
+            top: _withAsk(TodayTop(data: d)),
           ),
   );
+
+  /// Под шапкой — карточка опроса «какая тёмная лучше» (шаг 9), если пора;
+  /// в «Классике» тоже: туда возвращаются те, у кого была «Библиотека».
+  static Widget _withAsk(Widget top) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [top, const DarkAskCard()]);
 }
 
 /// Шапка: группа с неделей и погода одной строкой (не влезает — погода
@@ -268,7 +377,10 @@ class _TodayScreenState extends State<TodayScreen> {
 /// чип раскрывается карточкой на месте и сдвигает экран вниз (П5, 09.10).
 class TodayTop extends StatefulWidget {
   final TodayData data;
-  const TodayTop({super.key, required this.data});
+
+  /// Справа от чипов (новый вид: колокольчик ленты уведомлений).
+  final Widget? trailing;
+  const TodayTop({super.key, required this.data, this.trailing});
 
   // на 320 pt «УИБО-03-24 · 6 неделя» и «+12° пасмурно» влезают в строку
   static const _gap = 5.0, _pad = 8.0, _padV = 4.5;
@@ -360,6 +472,7 @@ class _TodayTopState extends State<TodayTop> {
               },
             ),
           ),
+          if (widget.trailing != null) ...[const SizedBox(width: Space.s), widget.trailing!],
         ],
       ),
     );

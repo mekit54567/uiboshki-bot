@@ -49,7 +49,7 @@ class LookScreen extends StatelessWidget {
             children: [
               const BackRow(),
               const ScreenTitle(title: 'Оформление'),
-              const Padding(padding: EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0), child: _Preview()),
+              const Padding(padding: EdgeInsets.fromLTRB(Space.l, Space.s, Space.l, 0), child: LookPreview()),
 
               // дизайн по брендбуку v1 (11.11): «Новое» — «Тетрадь», «Ночная
               // тетрадь» и «Книжный»; сервер выключил (DESIGN3=0) — строки нет
@@ -184,6 +184,18 @@ class LookScreen extends StatelessWidget {
                   ),
                 ),
 
+              if (fresh) ...[
+                const Section('меню внизу'),
+                _Pad(
+                  _Seg<_Tabs>(
+                    id: 'tabs',
+                    value: look.tabLabels ? _Tabs.labels : _Tabs.short,
+                    items: const [(_Tabs.short, 'Коротко'), (_Tabs.labels, 'С подписями')],
+                    onPick: (v) => set(look.copyWith(tabLabels: v == _Tabs.labels)),
+                  ),
+                ),
+              ],
+
               const Section('пары на «сегодня»'),
               _Pad(
                 _Seg<DayView>(
@@ -283,6 +295,9 @@ class LookScreen extends StatelessWidget {
 /// «Новое» — дизайн по брендбуку v1, «Классика» — прежний вид.
 enum _Mode { fresh, classic }
 
+/// Меню внизу в «Новом»: подпись только у открытой вкладки или у каждой.
+enum _Tabs { short, labels }
+
 /// Тёмная тема «Нового»: «Ночная тетрадь» или запасная «Глубина».
 enum _Night { night, depth }
 
@@ -313,8 +328,8 @@ class _Hint extends StatelessWidget {
 
 /// Живой пример: фон темы (с бумагой), заголовок выбранным шрифтом и пары
 /// так, как они будут на «Сегодня».
-class _Preview extends StatelessWidget {
-  const _Preview();
+class LookPreview extends StatelessWidget {
+  const LookPreview({super.key});
 
   @override
   Widget build(BuildContext context) {

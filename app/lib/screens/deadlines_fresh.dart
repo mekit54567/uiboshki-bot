@@ -9,6 +9,22 @@ part of 'deadlines.dart';
 
 const _viewKey = 'uib_due_view';
 
+/// «Активных сроков нет» (шаг 8): что просрочено — на соседней полке, и
+/// когда последний раз смотрели СДО.
+String freshNoDueText(int late, DateTime? checked, DateTime at) {
+  final shelf = switch (late) {
+    0 => '',
+    1 => 'Одна работа просрочена, загляни на соседнюю полку. ',
+    _ =>
+      '$late ${plural(late, 'работа просрочена', 'работы просрочены', 'работ просрочено')}, загляни на соседнюю полку. ',
+  };
+  if (checked == null) return '$shelfНовые задания из СДО проверяем несколько раз в день.';
+  final t = _msk(checked);
+  final n = _daysBetween(t, at);
+  final day = n <= 0 ? '' : (n == 1 ? 'вчера ' : '${t.day} ${monthsGen[t.month - 1]} ');
+  return '$shelfНовые задания из СДО проверяем несколько раз в день, последний раз $dayв ${_hm(t)}.';
+}
+
 class _FreshDue extends StatelessWidget {
   final DeadlinesView w;
   final DateTime at;
@@ -87,27 +103,25 @@ class _FreshDue extends StatelessWidget {
                 onOpen: () => w.onOpen(hot),
               ),
             ),
+          // пусто — капибара крупно и что дальше (макет «Всё сдано»): радостной
+          // она не бывает, пока на соседней полке есть просроченное
           if (open.isEmpty && sdoDown)
-            Notice(
-              title: 'СДО не ответил',
-              text: sdoShownText(sdo.lastOk, t),
+            FreshEmpty(
+              key: const Key('due:empty'),
               pose: CapyPose.sad,
-              onRetry: w.onRetry,
-              retryLabel: 'Проверить СДО',
-            )
-          else if (open.isEmpty && late.isNotEmpty)
-            Notice(
-              title: 'Впереди сроков нет',
-              text: 'Но на полке «Просрочено» работ: ${late.length}. Сдал — отметь, не нужна — убери.',
-              pose: CapyPose.day,
+              title: 'СДО не ответил',
+              text: '${sdoShownText(sdo.lastOk, t)}. Попробую сам чуть позже.',
+              action: 'Проверить СДО',
+              onAction: w.onRetry,
             )
           else if (open.isEmpty)
-            Notice(
-              title: 'Ближайших сроков нет',
-              text: sdo?.checkedAt != null
-                  ? sdoCheckedText(sdo!.checkedAt!, t)
-                  : 'Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.',
-              pose: CapyPose.joy,
+            FreshEmpty(
+              key: const Key('due:empty'),
+              pose: late.isEmpty ? CapyPose.joy : CapyPose.evening,
+              title: 'Активных сроков нет',
+              text: freshNoDueText(late.length, sdo?.checkedAt, t),
+              action: 'Проверить обновления',
+              onAction: w.onRetry,
             ),
           for (final (i, e) in weeks.entries.indexed) ...[
             Section(i == 0 && hot != null ? 'Дальше' : weekLabel(e.key, t)),
@@ -115,16 +129,22 @@ class _FreshDue extends StatelessWidget {
           ],
         ] else if (shelf == 1) ...[
           if (late.isEmpty)
-            const Notice(
-              title: 'Просроченного нет',
-              text: 'Работы с прошедшим сроком появятся здесь.',
+            const FreshEmpty(
+              key: Key('due:empty'),
               pose: CapyPose.joy,
+              title: 'Просроченного нет',
+              text: 'Если срок пройдёт, а работа не сдана, она появится здесь. Сдал — отметь, не нужна — убери.',
             )
           else
             card(late, late: true),
         ] else ...[
           if (done.isEmpty)
-            const Notice(title: 'Пока ничего', text: 'Сданное появится здесь — свайп вправо по сроку или «Отметить».')
+            const FreshEmpty(
+              key: Key('due:empty'),
+              pose: CapyPose.day,
+              title: 'Пока ничего',
+              text: 'Сданное появится здесь: свайп вправо по сроку или «Отметить».',
+            )
           else
             card(done),
         ],
@@ -154,10 +174,13 @@ class _FreshDue extends StatelessWidget {
         });
       if (keys.isEmpty) {
         return [
-          const Notice(
-            title: 'Ближайших сроков нет',
-            text: 'Новые задания из СДО появятся здесь сами. Свой срок — кнопкой +.',
+          FreshEmpty(
+            key: const Key('due:empty'),
             pose: CapyPose.joy,
+            title: 'Сроков нет',
+            text: '${freshNoDueText(0, sdo?.checkedAt, t)} Свой срок можно добавить кнопкой +.',
+            action: 'Проверить обновления',
+            onAction: w.onRetry,
           ),
         ];
       }
@@ -257,9 +280,15 @@ class _ShelfChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(Radii.pill),
             border: Border.all(color: on ? p.text : p.edge),
           ),
-          child: Text(
-            label,
-            style: s.body(14, weight: FontWeight.w600, color: on ? p.bg : p.text),
+          // на 360 «Активные · 0» переносилось на две строки — теперь одна, при нехватке мельче
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: s.body(14, weight: FontWeight.w600, color: on ? p.bg : p.text),
+            ),
           ),
         ),
       ),

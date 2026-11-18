@@ -164,7 +164,8 @@ async def send_due(bot, now: datetime | None = None) -> int:
             with aside(logger, f"тест СДО {uid}", level=logging.INFO):  # обычно — бот заблокирован
                 from kapibara.features.notifications import delivery
                 await delivery.deliver(bot, uid, text, kind="quiz", tab="deadlines", title=title, body=short,
-                                       reply_markup=app_button("📋 Открыть дедлайны", "deadlines"))
+                                       reply_markup=app_button("📋 Открыть дедлайны", "deadlines"),
+                                       urgent=kind != "open")   # тест закрывается — и в тихие часы
                 sent += 1
     return sent
 

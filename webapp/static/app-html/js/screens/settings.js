@@ -66,8 +66,150 @@ const mrPush = {
   },
 };
 
+// ── Уведомления нового дизайна (notify_fresh.dart, макеты У1 и У2) ──
+/** «23:00 – 07:30» (quietRange). */
+function nfQuietRange(d) { const q = (d && d.quiet_hours) || {}; return `${q.from || "23:00"} – ${q.to || "07:30"}`; }
+/** Куда ведёт строка ленты (inboxAction). */
+function nfAction(tab) {
+  return { today: "Открыть «Сегодня»", week: "Открыть «Неделю»", deadlines: "Открыть «Сдать»", sdo: "Открыть «Учёбу»", study: "Открыть «Учёбу»" }[tab] || null;
+}
+/** «Сегодня», «Вчера», «8 октября» (inboxDay). */
+function nfDay(at, today) {
+  const day = String(at || "").slice(0, 10);
+  if (day === today) return "Сегодня";
+  if (day === addDays(today, -1)) return "Вчера";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  return m ? `${+m[3]} ${MONTHS[+m[2] - 1]}` : day;
+}
+/** У1: лента уведомлений; открыл — всё прочитано. onClose — вернулся назад. */
+window.openInbox = function openInbox(onClose) {
+  Nav.push((body) => {
+    let d = null, error = null;
+    const draw = () => {
+      const head = backRow(`<button class="ls-ask sf-ask" data-act="settings" id="inbox-settings">${icon("tune", "", "font-size:17px;color:var(--accent)")}Настроить</button>`)
+        + screenTitle("Уведомления");
+      if (!d) {
+        body.innerHTML = head + (error ? notice("Не загрузилось", errorText(error), { pose: "sad", retry: "retry" }) : spinner());
+        return;
+      }
+      const items = d.items || [], keep = d.keep_days || 30, today = isoDay(now());
+      if (!items.length) {
+        body.innerHTML = head + '<div style="height:var(--xl)"></div>' + freshEmpty("day", "Пока пусто",
+          `Здесь будет всё, что пришло пушем или в Telegram: сроки, баллы, новые задания. Хранится ${keep}\u00A0дней.`, { id: "inbox-empty" });
+        return;
+      }
+      const days = [];
+      for (const it of items) {
+        const label = nfDay(it.at, today);
+        if (!days.length || days[days.length - 1][0] !== label) days.push([label, []]);
+        days[days.length - 1][1].push(it);
+      }
+      const row = (it) => {
+        const act = nfAction(it.tab), time = String(it.at || "").slice(11, 16), b = String(it.body || "").trim();
+        return `<button class="nf-row" data-act="open" data-tab="${esc(it.tab || "")}" id="inbox-${it.id}"${act ? "" : " disabled"}>
+          <i class="nf-dot${it.read ? "" : " on"}"></i>
+          <div class="grow" style="min-width:0"><div class="bd b7" style="--sz:15px">${esc(it.title)}</div>
+            ${b ? `<div class="bd mut clamp3" style="--sz:13px;margin-top:2px">${esc(b)}</div>` : ""}
+            ${act ? `<div class="bd b7" style="--sz:13px;margin-top:4px;color:var(--accent)">${esc(act)}</div>` : ""}</div>
+          <div class="nf-time"><span class="bd mut" style="--sz:12.5px">${esc(time)}</span>
+            ${it.quiet ? icon("bedtime", "o", "font-size:14px;color:var(--muted);margin-top:4px") : ""}</div></button>`;
+      };
+      body.innerHTML = head + days.map(([label, list]) => section(label)
+        + `<div class="hx"><div class="tile p0 nf-list">${list.map(row).join('<div class="divider"></div>')}</div></div>`).join("")
+        + `<div class="bd mut" style="--sz:13px;padding:var(--l) var(--xl) 0">${esc(d.quiet
+          ? `Ночью в тихие часы уведомления не приходят, а ждут здесь. Лента хранится ${keep}\u00A0дней.` : `Лента хранится ${keep}\u00A0дней.`)}</div>`
+        + '<div style="height:var(--xxl)"></div>';
+    };
+    const load = () => Api.get("/inbox").then((v) => {
+      d = v; draw();
+      if (v && v.unread > 0) Api.post("/inbox/read", {}).catch(() => {});   // точка погаснет
+    }, (e) => { error = e; draw(); });
+    on(body, {
+      settings() { tick(); window.openNotifyHome(); },
+      open(b) {
+        const tab = b.dataset.tab;
+        if (!nfAction(tab)) return;
+        tick();
+        Nav.popAll();                       // как нажатый пуш: экраны поверх закрыть, открыть вкладку
+        Tabs.show(tabByName(tab));
+      },
+      retry() { error = null; draw(); load(); },
+    });
+    draw();
+    load();
+    return () => { if (onClose) onClose(); };
+  });
+};
+/** У2: «Что присылать» — три набора, тихие часы, куда присылать. onClose — вернулся назад. */
+window.openNotifyHome = function openNotifyHome(onClose) {
+  Nav.push((body) => {
+    let s = null, error = null, queue = Promise.resolve();
+    const prefs = () => (s && s.prefs) || {};
+    const save = (patch, optimistic) => {
+      tick();
+      s = { ...s, ...optimistic, prefs: { ...prefs(), ...((optimistic && optimistic.prefs) || {}) } };
+      draw();
+      queue = queue.then(async () => {
+        try { const fresh = await Api.post("/notify", patch); if (fresh && fresh.prefs) { s = fresh; draw(); } }
+        catch (e) { toast("Не сохранилось: " + errorText(e), "error"); load(); }
+      });
+    };
+    const choice = (id, title, sub, sel, chevron = false) => `<button class="nf-choice${sel ? " on" : ""}" data-act="${chevron ? "custom" : "pick"}" data-v="${id}"
+        id="notify-profile-${id}" aria-pressed="${sel}"><div class="grow"><div class="bd b7" style="--sz:16px">${esc(title)}</div>
+        <div class="bd mut" style="--sz:13.5px;margin-top:2px">${esc(sub)}</div></div>
+        ${chevron ? icon("chevron_right", "", `color:var(${sel ? "--accent" : "--muted"})`) : sel ? icon("check_circle", "", "color:var(--accent)") : ""}</button>`;
+    const draw = () => {
+      if (!s || !s.prefs) {
+        body.innerHTML = backRow() + (error ? '<div style="height:120px"></div>' + notice("Не загрузилось", errorText(error), { pose: "sad", retry: "retry" }) : spinner());
+        return;
+      }
+      const on = s.subscribed === true, profile = on ? s.profile : "", p = prefs(), hasQuiet = "quiet" in p;
+      body.innerHTML = backRow() + screenTitle("Что присылать")
+        + (on ? "" : '<div class="bd mut" style="--sz:14px;padding:0 var(--xl) var(--m)">Сейчас уведомления выключены. Выбери, что присылать, и они включатся.</div>')
+        + `<div class="hx nf-choices">${choice("important", "Только важное", "Сроки, новые задания, баллы. Около\u00A03\u00A0в\u00A0день", profile === "important")}
+          ${choice("daily", "Помощь каждый день", "Плюс утро, пары и обзор недели. Около\u00A08\u00A0в\u00A0день", profile === "daily")}
+          ${choice("custom", "Настроить самому", profile === "custom" ? "Сейчас своя настройка. Каждый вид отдельно" : "Каждый вид отдельно", profile === "custom", true)}</div>`
+        + `<div class="hx" style="margin-top:var(--l)"><div class="tile p0 nf-list">
+          ${hasQuiet ? `<div class="nf-line" id="notify-quiet">${icon("bedtime", "o", "color:var(--accent)")}<div class="grow"><div class="bd b7" style="--sz:15px">Тихие часы</div>
+            <div class="bd mut" style="--sz:13px">${esc(nfQuietRange(s))}, по Москве</div></div>${mrSwitch(p.quiet === true, "quiet")}</div><div class="divider"></div>` : ""}
+          <button class="nf-line" data-act="where" id="notify-where">${icon("notifications_none", "", "color:var(--accent)")}<div class="grow"><div class="bd b7" style="--sz:15px">Куда присылать</div>
+            <div class="bd mut" style="--sz:13px">${p.tg_copy !== false ? "Пуш и Telegram" : "Пуш. Telegram, если пуш не\u00A0дошёл"}</div></div>${icon("chevron_right", "", "color:var(--muted)")}</button></div></div>`
+        + `<div class="bd mut" style="--sz:13px;padding:var(--m) var(--xl) 0">${hasQuiet
+          ? "Всё время в приложении московское. Срочное про тест, который закрывается ночью, придёт и в тихие часы." : "Всё время в приложении московское."}</div>`
+        + '<div style="height:var(--xxl)"></div>';
+    };
+    const load = () => Api.get("/notify").then((v) => { s = v; error = null; draw(); }, (e) => { error = e; draw(); });
+    on(body, {
+      pick(b) {
+        const v = b.dataset.v;
+        if (s.profile === v && s.subscribed === true) return;
+        save({ profile: v }, { profile: v, subscribed: true });
+      },
+      custom() { tick(); window.openNotify(() => load()); },
+      quiet() { const q = prefs().quiet === true; save({ prefs: { quiet: !q } }, { prefs: { quiet: !q } }); },
+      async where() {
+        tick();
+        const copy = prefs().tg_copy !== false;
+        const opt = (v, title, sub) => `<button class="nf-where" data-act="w" data-v="${v ? 1 : 0}" id="notify-where-${v ? "both" : "push"}">
+          <div class="grow"><div class="bd b7" style="--sz:15px">${title}</div><div class="bd mut" style="--sz:13px">${sub}</div></div>
+          ${icon(v === copy ? "check_circle" : "radio_button_unchecked", "", `color:var(${v === copy ? "--accent" : "--muted"})`)}</button>`;
+        const got = await Sheet.show(`<div class="ttl" style="--sz:24px">Куда присылать</div><div style="height:var(--s)"></div>
+          ${opt(true, "Пуш и Telegram", "Одно и то же приходит в оба места")}${opt(false, "Только пуш", "Telegram — только если пуш не\u00A0дошёл")}
+          <div class="bd mut" style="--sz:13px;margin-top:var(--s)">Пуши на этом устройстве включаются в «Настроить самому».</div>`,
+        (sb, close) => on(sb, { w: (x) => close(x.dataset.v === "1") }));
+        if (typeof got !== "boolean" || got === copy) return;
+        save({ prefs: { tg_copy: got } }, { prefs: { tg_copy: got } });
+      },
+      retry() { error = null; draw(); load(); },
+    });
+    draw();
+    load();
+    return () => { if (onClose) onClose(); };
+  });
+};
+
 // ── «Уведомления» — что бот присылает и в какие дни (/api/notify): сохраняется сразу ──
-window.openNotify = function openNotify() {
+window.openNotify = function openNotify(onClose) {
   Nav.push((body) => {
     let s = Api.cached("/notify") || null, error = null, pending = 0, queue = Promise.resolve();
     let quizOpen = false, push = "", pushBusy = false;
@@ -146,7 +288,10 @@ window.openNotify = function openNotify() {
         + `<div class="row mr-info">${icon("info_outline", "", "font-size:18px;color:var(--muted)")}
           <div class="bd mut grow" style="--sz:13px">Уведомления приходят в Telegram, а сюда — когда включишь их ниже.</div></div>`
         + pushCard()
-        + card({ title: "Присылать уведомления", sub: on ? "Включены — ниже, что именно" : "Выключены — бот ничего не пришлёт сам", key: "subscribed", on });
+        + card({ title: "Присылать уведомления", sub: on ? "Включены — ниже, что именно" : "Выключены — бот ничего не пришлёт сам", key: "subscribed", on })
+        // тихие часы (шаг 8) — в новом виде; старый сервер ключа не знает
+        + (on && Theme.fresh && "quiet" in p ? card({ ic: "bedtime", title: "Тихие часы", key: "quiet", on: p.quiet === true,
+            sub: `${nfQuietRange(s)} по Москве: уведомления ждут в ленте, срочное про тесты и сроки приходит` }) : "");
       if (on) {
         html += card({ ic: "wb_sunny", title: "Утреннее расписание", sub: `в ${s.morning_time || "8:00"} — пары на сегодня`, key: "morning", on: p.morning === true,
           children: days(p.morning_days || [], "morning_days")
@@ -258,6 +403,7 @@ window.openNotify = function openNotify() {
     draw();
     load();
     mrPush.state().then((v) => { push = v; if (s && s.prefs) draw(); });
+    return () => { if (onClose) onClose(); };
   });
 };
 
@@ -272,11 +418,93 @@ const mrLook = {
   },
   setTheme(t) { Ach.unlock("look"); Prefs.set("uib_theme", t); Theme.apply(); this.dirty = true; },
   setFont(f) { Ach.unlock("look"); Prefs.set("uib_font", f); Theme.apply(); this.dirty = true; },
-  setLook(l) { Ach.unlock("look"); Look.save(l); Theme.apply(); this.dirty = true; },
+  setLook(l) { Ach.unlock("look"); DarkVote.manual(Look.load(), l); Look.save(l); Theme.apply(); this.dirty = true; },
   done() { if (this.dirty) { this.dirty = false; Tabs.rebuild(); } },
 };
 const MR_FONTS = [["book", "SourceSerif", 500, 26, "Книжный", "с засечками"], ["strict", "Onest", 800, 26, "Строгий", "ровный"],
   ["hand", "Neucha", 400, 28, "Рукописный", "как от руки"], ["wide", "Unbounded", 500, 21, "Широкий", "плакатный"]];
+
+/** Живой пример: фон темы, заголовок и пары так, как они будут на «Сегодня»
+ *  (LookPreview); day — карточками или строками. */
+function mrPreview(day = "cards") {
+  const iso = isoDay();
+  const mk = (h, m, title, kind, room, teacher, n) => {
+    const a = new Date(`${iso}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+03:00`), b = new Date(a.getTime() + 90 * 60000);
+    return lessonOf({ start: hm(a), end: hm(b), title, kind, room, teacher, num: n, start_iso: a.toISOString(), end_iso: b.toISOString() });
+  };
+  const lessons = [mk(9, 0, "Анализ данных", "лекция", "А-332 (МП-1)", "Иванова А. С.", 1), mk(10, 40, "Основы предпринимательства", "практика", "Г-412 (МП-1)", "", 2)];
+  const at = new Date(`${iso}T09:40:00+03:00`);
+  return `<div class="mr-prev"><div class="ttl" style="--sz:26px">Идёт первая пара</div><div style="height:var(--m)"></div>
+    ${day === "rows" ? lessonList(lessons, at, { tappable: false }) : lessons.map((l) => `<div style="margin-bottom:var(--s)">${lessonCard(l, at)}</div>`).join("")}</div>`;
+}
+
+// ── Переход на новый дизайн (шаг 9, dark_intro.dart; логика — DarkVote в core.js) ──
+let dkOpen = false;
+/** В тёмной — один раз экран «Мы обновили дизайн». */
+window.maybeDarkIntro = function maybeDarkIntro() {
+  if (dkOpen || !Theme.dark || !Theme.fresh || DarkVote.stage() !== "intro") return;
+  window.openDarkIntro();
+};
+window.openDarkIntro = function openDarkIntro() {
+  dkOpen = true;
+  Nav.push((body, screen) => {
+    const look = Look.load(), library = look.dark === "library", old = DarkVote.oldName(look);
+    // кабинеты и подсветка пар красятся по светлой или тёмной теме — пример
+    // светлой «Тетради» рисуем как в светлой, хотя вокруг сейчас тёмная
+    const preview = (dark) => { const was = Theme.dark; Theme.dark = dark; try { return mrPreview("cards"); } finally { Theme.dark = was; } };
+    const shot = (theme, title, id) => `<div class="dk-shot-col"><div class="dk-shot" data-app-theme="${theme}" id="${id}" aria-hidden="true">
+      <div class="dk-shot-in">${preview(theme === "night")}</div></div><div class="bd b6" style="--sz:13px;text-align:center;margin-top:var(--s)">${esc(title)}</div></div>`;
+    body.innerHTML = `<div class="dk-intro">
+      <div class="ttl" style="--sz:30px">Мы обновили дизайн</div>
+      <div class="bd mut" style="--sz:15px;margin-top:var(--s)">Теперь по умолчанию так:</div>
+      <div class="dk-shots">${shot("paper", "Тетрадь", "intro-paper")}${shot("night", "Ночная тетрадь", "intro-night")}</div>
+      <div class="bd" style="--sz:15px">${esc(library
+        ? "У тебя стояла тёмная «Библиотека». Она осталась в\u00A0«Классике», прежнем виде приложения."
+        : `У тебя стояла прежняя тёмная «${old}». Она никуда не делась, но теперь не\u00A0основная.`)}</div>
+      <div class="grow"></div>
+      <button class="btn primary" data-act="fresh" id="intro-new">Попробовать новую</button>
+      <button class="btn text dk-second" data-act="old" id="intro-old">${library ? "Оставить прежний вид" : "Оставить прежнюю"}</button>
+      <div class="bd mut" style="--sz:13px;text-align:center;margin-top:var(--xs)">Поменять можно в любой момент: «Ещё», «Оформление».</div></div>`;
+    // пример рисуется шириной 330 и уменьшается до колонки (как в приложении)
+    const fit = () => body.querySelectorAll(".dk-shot").forEach((el) => {
+      const w = el.clientWidth;
+      if (w) el.querySelector(".dk-shot-in").style.zoom = String(w / 330);
+    });
+    fit();
+    addEventListener("resize", fit);
+    const answer = (fn) => { tick(); fn(); Nav.pop(); Tabs.rebuild(); };
+    on(body, { fresh: () => answer(() => DarkVote.tryNew()), old: () => answer(() => DarkVote.keepOld()) });
+    return () => { removeEventListener("resize", fit); dkOpen = false; };
+  }, { cls: "dk-screen" });
+};
+/** Карточка опроса на «Сегодня» — только в тёмной и только когда пора. */
+window.darkAskCard = function darkAskCard() {
+  const ask = Theme.dark ? DarkVote.ask() : null;
+  if (!ask) return "";
+  const old = DarkVote.oldName(Look.load());
+  const [title, text, a, b] = {
+    howNew: ["Как тебе новая тёмная?", `Можно на пару дней вернуть прежнюю, «${old === "Глубина" ? "Глубину" : "Библиотеку"}», и\u00A0сравнить.`,
+      ["likeNew", "Нравится новая"], ["compare", "Сравнить"]],
+    which: ["Какая тёмная лучше?", "Обе уже знакомы. Что выберешь, то\u00A0и\u00A0останется, а мы посчитаем голоса.",
+      ["pickNew", "Ночная тетрадь"], ["pickOld", old]],
+    retry: ["Попробуешь новую тёмную?", "«Ночная тетрадь» теперь основная. Вернуть прежнюю можно в\u00A0любой момент.",
+      ["retry", "Попробовать"], ["stayOld", "Нет, спасибо"]],
+  }[ask];
+  // «какая лучше» — обе кнопки одинаковые, чтобы не подсказывать
+  const btn = ([v, label], main) => `<button class="dk-ask-btn${main ? " main" : ""}" data-act="dark" data-v="${v}" id="dark-${ask}-${v}">${esc(label)}</button>`;
+  return `<div class="hx" style="padding-top:var(--m)"><div class="tile dk-ask" id="dark-${ask}">
+    <div class="ttl" style="--sz:20px">${esc(title)}</div><div class="bd mut" style="--sz:14px;margin-top:var(--xs)">${esc(text)}</div>
+    <div class="dk-ask-row">${btn(a, true)}${btn(b, ask === "which")}</div></div></div>`;
+};
+/** Ответ на карточку: вид меняется, голос уходит; экраны строятся заново. */
+window.darkAnswer = function darkAnswer(v) {
+  const run = { likeNew: () => DarkVote.likeNew(), compare: () => DarkVote.compare(), pickNew: () => DarkVote.pick(true),
+    pickOld: () => DarkVote.pick(false), retry: () => DarkVote.retry(), stayOld: () => DarkVote.stayOld() }[v];
+  if (!run) return;
+  tick();
+  run();
+  Tabs.rebuild();
+};
 
 window.openLook = function openLook() {
   if (!Theme.design2) { mrThemeSheet(); return; }
@@ -289,22 +517,11 @@ window.openLook = function openLook() {
         <div class="row" style="gap:4px;margin-top:7px"><i style="width:22px;height:8px;border-radius:4px;background:var(--t-accent)"></i>
           <i style="width:8px;height:8px;border-radius:50%;background:var(--t-ok)"></i></div></div></div>
       <div style="padding:8px 6px 4px"><div class="bd b6" style="--sz:14.5px">${esc(title)}</div><div class="bd mut" style="--sz:12px">${esc(sub)}</div></div></button>`;
-    const preview = () => {
-      const iso = isoDay();
-      const mk = (h, m, title, kind, room, teacher, n) => {
-        const a = new Date(`${iso}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+03:00`), b = new Date(a.getTime() + 90 * 60000);
-        return lessonOf({ start: hm(a), end: hm(b), title, kind, room, teacher, num: n, start_iso: a.toISOString(), end_iso: b.toISOString() });
-      };
-      const lessons = [mk(9, 0, "Анализ данных", "лекция", "А-332 (МП-1)", "Иванова А. С.", 1), mk(10, 40, "Основы предпринимательства", "практика", "Г-412 (МП-1)", "", 2)];
-      const at = new Date(`${iso}T09:40:00+03:00`);
-      const look = Look.load();
-      return `<div class="mr-prev"><div class="ttl" style="--sz:26px">Идёт первая пара</div><div style="height:var(--m)"></div>
-        ${look.day === "rows" ? lessonList(lessons, at, { tappable: false }) : lessons.map((l) => `<div style="margin-bottom:var(--s)">${lessonCard(l, at)}</div>`).join("")}</div>`;
-    };
+    const preview = () => mrPreview(Look.load().day);
     const draw = () => {
       const look = Look.load(), theme = mrLook.theme(), font = mrLook.font();
       const classic = Look.classic, fresh = Theme.fresh;
-      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || look.freshDepth
+      const changed = ["light", "dark", "paper", "card", "day", "cheer", "icon"].some((k) => look[k] !== classic[k]) || look.freshDepth || look.tabLabels
         || (!fresh && (font === "hand" || font === "wide")) || theme === "sunset";
       const sun = moscowSun(now());
       const hint = (t) => `<div class="bd mut mr-hint">${esc(t)}</div>`;
@@ -325,6 +542,7 @@ window.openLook = function openLook() {
           : `<div class="hx mr-two">${swatch("dark", "depth", "Глубина", "синее свечение", look.dark === "depth", "smooth")}
             ${swatch("dark", "library", "Библиотека", "тёмно-зелёная", look.dark === "library", "smooth")}</div>`)
         + (fresh ? "" : section("шрифт заголовков") + `<div class="hx mr-fonts">${fonts}</div>`)
+        + (fresh ? section("меню внизу") + `<div class="hx">${seg("tabs", look.tabLabels ? "labels" : "short", [["short", "Коротко"], ["labels", "С подписями"]])}</div>` : "")
         + section("пары на «сегодня»") + `<div class="hx">${seg("day", look.day, [["cards", "Карточками"], ["rows", "Строками"]])}</div>`
         + (look.day === "cards" ? `<div class="hx" style="margin-top:var(--s)">${seg("card", look.card, [["tint", "С цветом"], ["stripe", "С полоской"]])}</div>` : "")
         + section("когда отметил «сдано»") + `<div class="hx">${seg("cheer", look.cheer, [["quiet", "Тихо"], ["capy", "Капибара"], ["confetti", "Конфетти"]])}</div>`
@@ -342,6 +560,7 @@ window.openLook = function openLook() {
           const look = Look.load();
           if (id === "mode") look.fresh = v === "fresh";
           else if (id === "night") look.freshDepth = v === "depth";
+          else if (id === "tabs") look.tabLabels = v === "labels";
           else look[id] = v;
           mrLook.setLook(look);
         }
@@ -628,7 +847,8 @@ window.openGroupPick = function openGroupPick({ required = false } = {}) {
   });
 };
 
-// ── Знакомство: пять шагов поверх самих экранов, капсула подсвечена ──
+// ── Знакомство: пять шагов поверх самих экранов, капсула подсвечена; в
+// «Новом» шестой — «Каким сделать меню» (tour.dart: tourMenuStep) ──
 const MR_TOUR = [
   ["space_dashboard", "Что где", "Сегодня — пары и что дальше. Неделя — всё расписание. Сдать — сроки и заметки. Учёба — баллы и цели. Ещё — настройки.", 0],
   ["swipe", "Листай недели", "Проведи по неделе влево или вправо — откроется соседняя. Нажми на день сверху — лента приедет к нему.", 1],
@@ -636,11 +856,18 @@ const MR_TOUR = [
   ["touch_app", "Нажми на пару", "Откроется карточка пары: кабинет и корпус, преподаватель, файлы и баллы по предмету.", 0],
   ["flag", "Цель по предмету", "Открой предмет и выбери оценку — капибара посчитает, сколько баллов и работ не хватает.", 3],
 ];
+const MR_TOUR_MENU = ["view_week", "Каким сделать меню", "", 0];
+/** Образец меню: та же капсула, уменьшенная копия настоящей (не сжатая). */
+function mrTabSample(labels) {
+  return `<div class="tr-sample" aria-hidden="true"><nav class="capsule${labels ? " labels" : ""}">${TABS.map((t, k) =>
+    `<span class="slot${k === 0 ? " on" : ""}">${icon(t.icon, t.variant || "")}<span class="lbl">${t.label}</span></span>`).join("")}</nav></div>`;
+}
 window.showTour = function showTour() {
   return new Promise((resolve) => {
     let i = 0;
+    const steps = Theme.fresh ? [...MR_TOUR, MR_TOUR_MENU] : MR_TOUR;
     const open = (tab) => { if (Tabs.index !== tab) Tabs.show(tab); Tabs.setHidden(false); };
-    open(MR_TOUR[0][3]);
+    open(steps[0][3]);
     const ov = document.createElement("div");
     ov.className = "mr-tour";
     document.body.appendChild(ov);
@@ -652,17 +879,33 @@ window.showTour = function showTour() {
         Object.assign(hole.style, { display: "", left: r.left - 4 + "px", top: r.top - 4 + "px", width: r.width + 8 + "px", height: r.height + 8 + "px" });
         box.style.bottom = innerHeight - r.top + 18 + "px";
       } else { hole.style.display = "none"; box.style.bottom = "calc(var(--sab) + 18px)"; }
+      // образцы — во всю ширину настоящего меню и уменьшены под карточку
+      const real = r && r.width ? r.width : innerWidth - 36;
+      ov.querySelectorAll(".tr-sample").forEach((w) => {
+        const nav = w.firstElementChild, k = Math.min(1, w.clientWidth / real);
+        nav.style.width = real + "px";
+        nav.style.transform = `scale(${k})`;
+        w.style.height = 64 * k + "px";
+      });
     };
     const draw = (animate) => {
-      const [ic, title, text] = MR_TOUR[i], last = i === MR_TOUR.length - 1;
+      const [ic, title, text] = steps[i], last = i === steps.length - 1, menu = steps[i] === MR_TOUR_MENU;
+      const tabs = Look.load().tabLabels;
+      const opt = (v, t, sub) => `<button class="tr-opt${v === tabs ? " on" : ""}" data-act="menu" data-v="${v ? "labels" : "short"}"
+          aria-pressed="${v === tabs}" id="tour-menu-${v ? "labels" : "short"}">
+        <div class="row"><div class="grow"><div class="bd b7" style="--sz:15px">${t}</div><div class="bd mut" style="--sz:13px">${sub}</div></div>
+          ${icon(v === tabs ? "check_circle" : "radio_button_unchecked", "", `color:var(${v === tabs ? "--accent" : "--muted"})`)}</div>
+        ${mrTabSample(v)}</button>`;
       ov.innerHTML = `<div class="mr-hole"></div><div class="mr-tbox"><div class="mr-tcard${animate ? " in" : ""}">
         <div class="row"><span class="mr-ticon">${icon(ic, "o")}</span><span class="grow"></span>
-          <span style="display:flex">${MR_TOUR.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</span></div>
+          <span style="display:flex">${steps.map((_, k) => `<i class="mr-dot${k === i ? " on" : ""}"></i>`).join("")}</span></div>
         <div class="ttl" style="--sz:26px;margin-top:var(--m)">${esc(title)}</div>
-        <div class="bd mut" style="--sz:15px;margin-top:var(--s)">${esc(text)}</div>
+        ${menu ? `<div class="tr-opts">${opt(false, "Коротко", "Подпись только у открытой вкладки")}${opt(true, "С подписями", "Каждая вкладка подписана")}</div>
+          <div class="bd mut" style="--sz:13px;margin-top:var(--m)">Поменять можно в любой момент: «Ещё», «Оформление».</div>`
+        : `<div class="bd mut" style="--sz:15px;margin-top:var(--s)">${esc(text)}</div>`}
         <div class="row" style="justify-content:space-between;margin-top:var(--m)">
           ${last ? "<span></span>" : '<button class="mr-skip" data-act="skip">Пропустить</button>'}
-          <button class="mr-next" data-act="next">${last ? "Понятно" : "Дальше"}</button></div></div></div>`;
+          <button class="mr-next" data-act="next">${menu ? "Готово" : last ? "Понятно" : "Дальше"}</button></div></div></div>`;
       place();
     };
     const close = () => {
@@ -675,10 +918,19 @@ window.showTour = function showTour() {
     on(ov, {
       next() {
         tick();
-        if (i + 1 >= MR_TOUR.length) { close(); return; }
+        if (i + 1 >= steps.length) { close(); return; }
         i++;
-        open(MR_TOUR[i][3]);
+        open(steps[i][3]);
         draw(true);
+      },
+      menu(b) {
+        const look = Look.load(), v = b.dataset.v === "labels";
+        if (look.tabLabels === v) return;
+        tick();
+        look.tabLabels = v;
+        Look.save(look);
+        Theme.apply();   // меню внизу меняется сразу
+        draw(false);
       },
       skip() { close(); },
     });

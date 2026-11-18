@@ -13,11 +13,13 @@ import '../app_push.dart';
 import '../plus/plus.dart';
 import '../theme/app_icon.dart';
 import '../theme/app_theme.dart';
+import '../theme/dark_vote.dart';
 import '../theme/look.dart';
 import '../theme/tokens.dart';
 import '../widgets/capsule_tabbar.dart';
 import '../widget_data.dart';
 import '../widgets/common.dart';
+import 'dark_intro.dart';
 import 'deadlines.dart';
 import 'group_pick.dart';
 import 'legal.dart';
@@ -99,6 +101,25 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       }
     }
     _style = cur;
+    _darkCheck();
+  }
+
+  /// Переход на новый дизайн (шаг 9, dark_vote.dart): в тёмной — один раз
+  /// экран «Мы обновили дизайн», потом считаем тёмные дни для опроса.
+  bool _intro = false;
+  void _darkCheck() {
+    if (!mounted) return;
+    final s = AppStyle.of(context);
+    if (!s.p.dark) return;
+    unawaited(DarkVote.darkDay(now()));
+    if (_intro || DarkVote.stage.value != 'intro' || !s.fresh) return;
+    _intro = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => const DarkIntroScreen()));
+      _intro = false;
+    });
   }
 
   void _open(int i) => setState(() {
@@ -160,6 +181,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     AchStore.api = widget.api;
     WidgetsBinding.instance.addObserver(this);
     AppPush.tab.addListener(_pushTab);
+    DarkVote.stage.addListener(_darkCheck);
     _visit();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureGroup();
@@ -184,6 +206,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     AppPush.tab.removeListener(_pushTab);
+    DarkVote.stage.removeListener(_darkCheck);
     Api.onOk = null;
     AchStore.onUnlock = null;
     AchStore.openTab = null;
@@ -197,6 +220,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _visit();
       _sdoRefresh();
+      _darkCheck(); // вернулся назавтра — ещё один тёмный день
     }
   }
 
@@ -301,7 +325,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   /// Короткий тур по приложению — при первом запуске и из «Ещё».
   Future<void> tour() {
     _open(tourSteps.first.tab);
-    return showTour(context, onStep: _open, barRect: _barRect);
+    return showTour(context, onStep: _open, barRect: _barRect, onLook: widget.onLook);
   }
 
   @override
@@ -372,6 +396,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         onTap: _open,
         // с экранным диктором меню не прячем — до вкладок всегда дойти
         hidden: _barHidden && AppStyle.of(context).design2 && !MediaQuery.accessibleNavigationOf(context),
+        labels: AppStyle.of(context).fresh && AppStyle.of(context).look.tabLabels,
       ),
     );
   }

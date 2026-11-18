@@ -519,6 +519,83 @@ class Notice extends StatelessWidget {
   }
 }
 
+/// Пустой экран и сбой нового вида (шаг 8, макет «Пустые экраны и сбои»,
+/// Никита 11.11): здесь капибара крупно по центру, под ней заголовок и
+/// подсказка, что дальше; кнопка — когда есть что нажать. Брендбук: она не
+/// ругает и всегда подсказывает следующий шаг. Только при «Новом».
+class FreshEmpty extends StatelessWidget {
+  final CapyPose pose;
+  final String title, text;
+  final String? action;
+  final VoidCallback? onAction;
+
+  /// false — без капибары: на экране она уже есть (грустит в плашке сбоя).
+  final bool capy;
+  const FreshEmpty({
+    super.key,
+    required this.pose,
+    required this.title,
+    required this.text,
+    this.action,
+    this.onAction,
+    this.capy = true,
+  });
+
+  /// Капибара по центру; на низком экране (альбомный, крупный шрифт) меньше.
+  static const capySize = 150.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    final small = MediaQuery.sizeOf(context).height < 640;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.xl, Space.l, Space.xl, Space.m),
+      child: Column(
+        children: [
+          if (capy) ...[
+            CapyImage(pose: pose, size: small ? 96 : capySize, color: p.text),
+            const SizedBox(height: Space.m),
+          ],
+          Text(title, textAlign: TextAlign.center, style: s.title(26)),
+          const SizedBox(height: Space.s),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: s.body(15, color: p.muted),
+          ),
+          if (action != null && onAction != null) ...[
+            const SizedBox(height: Space.l),
+            Semantics(
+              button: true,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  key: const Key('empty:action'),
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: () {
+                    tick();
+                    onAction!();
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: p.edge),
+                    ),
+                    child: Text(action!, style: s.body(15, weight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// Загрузка экрана: Future → данные, ошибка или «потяни, чтобы обновить».
 class Loader<T> extends StatefulWidget {
   final Future<T> Function() load;
@@ -573,8 +650,19 @@ class _LoaderState<T> extends State<Loader<T>> {
     if (_error != null) {
       return ListView(
         children: [
-          const SizedBox(height: 120),
-          Notice(title: 'Не загрузилось', text: errorText(_error!), onRetry: _reload, pose: CapyPose.sad),
+          if (AppStyle.of(context).fresh) ...[
+            const SizedBox(height: 80),
+            FreshEmpty(
+              pose: CapyPose.sad,
+              title: 'Не загрузилось',
+              text: errorText(_error!),
+              action: 'Ещё раз',
+              onAction: _reload,
+            ),
+          ] else ...[
+            const SizedBox(height: 120),
+            Notice(title: 'Не загрузилось', text: errorText(_error!), onRetry: _reload, pose: CapyPose.sad),
+          ],
         ],
       );
     }
@@ -721,6 +809,47 @@ class _AppToastState extends State<AppToast> with SingleTickerProviderStateMixin
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Кнопка-капсула в шапке нового вида: «Мой опыт» в рейтинге, «Настроить» в
+/// ленте уведомлений.
+class FreshPill extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+  const FreshPill({super.key, required this.icon, required this.text, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppStyle.of(context);
+    final p = s.p;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          tick();
+          onTap();
+        },
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: p.edge),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 17, color: p.accent),
+              const SizedBox(width: 6),
+              Text(text, style: s.body(13.5, weight: FontWeight.w600)),
+            ],
           ),
         ),
       ),

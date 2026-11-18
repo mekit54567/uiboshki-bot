@@ -167,6 +167,10 @@ html.ios-home body { min-height: var(--screen-h, 100%); }
   transition: max-width .32s cubic-bezier(.2,.8,.2,1), opacity .2s; overflow: hidden; }
 .capsule .slot.on { flex-grow: 26; background: var(--accent); color: var(--on-accent); }
 .capsule .slot.on .lbl { max-width: 120px; opacity: 1; }
+/* «С подписями» (шаг 8): значок над подписью, вкладки одной ширины */
+:root[data-tabs="labels"] #tabbar .slot, .capsule.labels .slot { flex: 1 1 0; flex-direction: column; gap: 2px; padding: 0 2px; }
+:root[data-tabs="labels"] #tabbar .slot .lbl, .capsule.labels .slot .lbl { font-size: 11px; line-height: 1.15; margin-left: 0;
+  max-width: 100%; opacity: 1; text-overflow: clip; }
 
 /* ── Листы снизу (appSheet) ── */
 .sheet-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
@@ -247,7 +251,11 @@ textarea.field { resize: none; min-height: 96px; }
 .cm-bar { width: 3px; border-radius: 2px; margin-right: var(--m); flex: none; }
 
 /* ── «Сегодня» (screens/today.js) ── */
-.td-top { padding: calc(var(--m) + 6px) var(--l) 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.td-top { padding: calc(var(--m) + 6px) var(--l) 0; display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+.td-bell { position: relative; margin: -8px -6px -8px auto; align-self: flex-start; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex: none; }
+.td-bell::before { content: ""; position: absolute; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--edge); box-sizing: border-box; }
+.td-bell .mi { font-size: 20px; color: var(--text); }
+.td-bell-dot { position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-sizing: border-box; }
 .td-chip { padding: 4.5px 8px; border-radius: 999px; background: var(--line); font-size: 12px; font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .td-wx { width: 100%; margin-top: var(--s); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-tile);
@@ -441,3 +449,13 @@ textarea.field { resize: none; min-height: 96px; }
 .wf-tight .wk-lt { font-size: 12px !important; padding: 7px 9px !important; }
 .wf-tight .wk-label > button:not(.wk-lt):not(.wk-today) { padding: 6px 1px; }
 .wf-tight .wf-lead { gap: 4px; }
+
+/* ── Пустые экраны и сбой нового дизайна (FreshEmpty, шаг 8) ── */
+.fe { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s); padding: var(--l) var(--xl) var(--m); }
+.fe .capy { color: var(--text); margin-bottom: 4px; }
+.fe-btn { margin-top: var(--s); min-height: 44px; padding: 10px 20px; border-radius: 22px; border: 1px solid var(--edge);
+  background: transparent; color: var(--text); font-size: 15px; font-weight: 600; }
+.fe-btn:active { filter: brightness(.95); }
+.td-down { display: flex; align-items: center; gap: var(--m); margin: var(--m) var(--l) 0; padding: var(--m) var(--l) var(--m) var(--m);
+  border: 1px solid var(--warn); }
+.td-down .capy { color: var(--text); }

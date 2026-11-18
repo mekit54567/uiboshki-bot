@@ -54,6 +54,11 @@ class Look {
   /// В «Новом» тёмная — «Глубина» вместо «Ночной тетради» (запасной выход).
   final bool freshDepth;
 
+  /// Меню внизу «С подписями»: подписана каждая вкладка, а не только открытая
+  /// (шаг 8, Н1 из макетов; выбирают в последнем шаге знакомства и в
+  /// «Оформлении»). Только при «Новом».
+  final bool tabLabels;
+
   const Look({
     this.light = LightTheme.notebook,
     this.dark = DarkTheme.depth,
@@ -65,6 +70,7 @@ class Look {
     this.iconDark = false,
     this.fresh = false,
     this.freshDepth = false,
+    this.tabLabels = false,
   });
 
   /// Как до 5.79 — и по умолчанию, и при выключенном новом дизайне.
@@ -81,6 +87,7 @@ class Look {
     bool? iconDark,
     bool? fresh,
     bool? freshDepth,
+    bool? tabLabels,
   }) => Look(
     light: light ?? this.light,
     dark: dark ?? this.dark,
@@ -92,6 +99,7 @@ class Look {
     iconDark: iconDark ?? this.iconDark,
     fresh: fresh ?? this.fresh,
     freshDepth: freshDepth ?? this.freshDepth,
+    tabLabels: tabLabels ?? this.tabLabels,
   );
 
   static T _pick<T extends Enum>(List<T> values, String? name, T fallback) =>
@@ -106,9 +114,10 @@ class Look {
     cheer: _pick(Cheer.values, p.getString('uib_look_cheer'), Cheer.quiet),
     icon: AppIcon.byName(p.getString('uib_look_icon')),
     iconDark: p.getBool('uib_look_icon_dark') ?? false,
-    // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
-    fresh: p.getBool('uib_look_fresh') ?? design3FromPrefs(p) == 'on',
+    // сам не выбирал — как велит сервер (с шага 9 новое — основной вид)
+    fresh: p.getBool('uib_look_fresh') ?? freshByDefault(design3FromPrefs(p)),
     freshDepth: p.getBool('uib_look_fresh_depth') ?? false,
+    tabLabels: p.getBool('uib_look_tab_labels') ?? false,
   );
 
   Future<void> save(SharedPreferences p) => Future.wait([
@@ -122,6 +131,7 @@ class Look {
     p.setBool('uib_look_icon_dark', iconDark),
     p.setBool('uib_look_fresh', fresh),
     p.setBool('uib_look_fresh_depth', freshDepth),
+    p.setBool('uib_look_tab_labels', tabLabels),
   ]);
 
   @override
@@ -136,19 +146,26 @@ class Look {
       other.icon == icon &&
       other.iconDark == iconDark &&
       other.fresh == fresh &&
-      other.freshDepth == freshDepth;
+      other.freshDepth == freshDepth &&
+      other.tabLabels == tabLabels;
 
   @override
-  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark, fresh, freshDepth);
+  int get hashCode => Object.hash(light, dark, paper, card, day, cheer, icon, iconDark, fresh, freshDepth, tabLabels);
 }
 
 /// Включён ли новый дизайн: последнее слово сервера, без ответа — включён.
 bool design2FromPrefs(SharedPreferences p) => p.getBool('uib_design2') ?? true;
 
 /// Дизайн по брендбуку v1: 'off' — сервер выключил (все в «Классике»,
-/// переключателя нет), 'opt' — по выбору человека, 'on' — новое по умолчанию.
-/// Последнее слово сервера; без ответа — 'opt'.
+/// переключателя нет), 'opt' — по выбору человека, 'new' — новое основное
+/// (шаг 9: один раз переводим всех из «Классики», dark_vote.dart), 'on' — то
+/// же и в сборках до шага 9. Последнее слово сервера; без ответа — 'opt'.
 String design3FromPrefs(SharedPreferences p) => p.getString('uib_design3') ?? 'opt';
+
+/// Новый вид по умолчанию: сервер сказал «new» (шаг 9) или «on».
+bool freshByDefault(String design3) => design3 == 'new' || design3 == 'on';
+
+const _design3 = {'off', 'opt', 'new', 'on'};
 
 /// Спросить сервер (/api/meta → features.design2) и запомнить ответ.
 /// [get] — запрос к API; ошибка сети — остаётся то, что помнили. Выключает
@@ -162,7 +179,7 @@ Future<bool?> refreshDesign2(Future<dynamic> Function(String) get) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('uib_design2', on);
     final d3 = f is Map ? f['design3'] : null;
-    await prefs.setString('uib_design3', d3 == 'off' || d3 == 'on' ? d3 as String : 'opt');
+    await prefs.setString('uib_design3', _design3.contains(d3) ? d3 as String : 'opt');
     return on;
   } catch (_) {
     return null;

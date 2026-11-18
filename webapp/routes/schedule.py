@@ -142,6 +142,7 @@ async def api_today(user: dict = CurrentUser):
                      "due_time": d.get("due_time") or "", "days": days})
     from database.groups import viewer_group
     from kapibara.features.social import ugc
+    from database import inbox
     notes = ugc.without_hidden(await get_lesson_notes(today.isoformat(), await viewer_group(user["id"])),
                                await ugc.hidden(user["id"]), "created_by")
     return {
@@ -150,6 +151,7 @@ async def api_today(user: dict = CurrentUser):
         "weather": weather, "campus": campus, "stale": await _stale_for(user["id"]),
         "deadlines": {"active": len(items), "soon": soon},
         "notes": [{"subject": n.get("subject") or "", "text": _clip(n["text"])} for n in notes],
+        "inbox_unread": await inbox.unread(user["id"]),     # точка на колокольчике (новый дизайн)
     }
 
 

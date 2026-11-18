@@ -165,7 +165,8 @@ function errorText(e) { return e && e.message ? e.message : "Что-то пош�
 // ── Тема и шрифт («Оформление», theme/look.dart) ──
 const Theme = {
   design2: Prefs.get("uib_design2", true) !== false,
-  // дизайн по брендбуку v1 (11.11): off — сервер выключил, opt — по выбору, on — новое всем
+  // дизайн по брендбуку v1 (11.11): off — сервер выключил, opt — по выбору,
+  // new — новое основное (шаг 9, DarkVote), on — то же и в сборках до шага 9
   design3: Prefs.get("uib_design3", "opt"),
   // «Новое» включено: «Тетрадь», «Ночная тетрадь», «Книжный» (ставит apply)
   fresh: false,
@@ -183,6 +184,7 @@ const Theme = {
   apply() {
     const { dark, dusk } = this.pick();
     this.dark = dark;
+    if (dark) DarkVote.darkDay();   // опрос о тёмной (шаг 9) считает тёмные дни
     const look = this.design2 ? Look.load() : Look.classic;
     const fresh = this.design2 && this.design3 !== "off" && look.fresh;
     this.fresh = fresh;
@@ -194,6 +196,7 @@ const Theme = {
     root.dataset.fresh = fresh ? "1" : "0";
     root.dataset.paper = !dark && (fresh || name === "notebook") ? look.paper : "smooth";
     root.dataset.card = look.card;
+    root.dataset.tabs = fresh && look.tabLabels ? "labels" : "short";   // меню «С подписями» — только в «Новом»
     root.style.filter = "";
     root.style.setProperty("--dusk", String(dusk));
     let font = Prefs.get("uib_font") || "book";
@@ -215,20 +218,104 @@ const Theme = {
   },
 };
 const Look = {
-  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic", fresh: false, freshDepth: false },
+  classic: { light: "notebook", dark: "depth", paper: "smooth", card: "tint", day: "cards", cheer: "quiet", icon: "classic", fresh: false, freshDepth: false, tabLabels: false },
   load() {
     const c = this.classic;
     return { light: Prefs.get("uib_look_light", c.light), dark: Prefs.get("uib_look_dark", c.dark),
              paper: Prefs.get("uib_look_paper", c.paper), card: Prefs.get("uib_look_card", c.card),
              day: Prefs.get("uib_look_day", c.day), cheer: Prefs.get("uib_look_cheer", c.cheer),
              icon: Prefs.get("uib_look_icon", c.icon),
-             // сам не выбирал — как велит сервер (DESIGN3=1 — новое всем)
-             fresh: Prefs.get("uib_look_fresh", Theme.design3 === "on") === true,
-             freshDepth: Prefs.get("uib_look_fresh_depth", false) === true };
+             // сам не выбирал — как велит сервер (с шага 9 новое — основной вид)
+             fresh: Prefs.get("uib_look_fresh", freshByDefault(Theme.design3)) === true,
+             freshDepth: Prefs.get("uib_look_fresh_depth", false) === true,
+             tabLabels: Prefs.get("uib_look_tab_labels", false) === true };
   },
   save(l) { for (const k of ["light", "dark", "paper", "card", "day", "cheer", "icon"]) Prefs.set("uib_look_" + k, l[k]);
-    Prefs.set("uib_look_fresh", !!l.fresh); Prefs.set("uib_look_fresh_depth", !!l.freshDepth); },
+    Prefs.set("uib_look_fresh", !!l.fresh); Prefs.set("uib_look_fresh_depth", !!l.freshDepth);
+    Prefs.set("uib_look_tab_labels", !!l.tabLabels); },
 };
+/** Новый вид по умолчанию: сервер сказал «new» (шаг 9) или «on». */
+function freshByDefault(d3) { return d3 === "new" || d3 === "on"; }
+
+// ── Переход на новый дизайн (шаг 9, Никита 18.11, theme/dark_vote.dart) ──
+// Сервер говорит «новое — основной вид»: один раз переводим в «Новое» всех из
+// «Классики». Светлым ничего; у кого тёмная — экран «Мы обновили дизайн»
+// (openDarkIntro), дальше на «Сегодня» по одной карточке (darkAskCard): через
+// 3 тёмных дня «Как тебе новая тёмная?», после сравнения ещё 3 дня — «Какая
+// тёмная лучше?»; оставил прежнюю — через неделю «Попробуешь новую?». Голос —
+// POST /design/vote, счёт — в /stats. Сам поменял тёмную — опрос окончен.
+const DarkVote = {
+  daysToAsk: 3, daysToRetry: 7,
+  stage() { return Prefs.get("uib_dark_stage"); },
+  oldName(l) { return l.dark === "library" ? "Библиотека" : "Глубина"; },
+  applyNew(l) { return { ...l, fresh: true, freshDepth: false }; },
+  applyOld(l) { return l.dark === "library" ? { ...l, fresh: false } : { ...l, fresh: true, freshDepth: true }; },
+  /** Один раз, когда сервер сказал «новое по умолчанию»; true — вид поменялся. */
+  migrate(d3) {
+    if (!freshByDefault(d3) || Prefs.get("uib_fresh_moved") === true) return false;
+    Prefs.set("uib_fresh_moved", true);
+    if (Prefs.get("uib_look_fresh") === true) return false;   // уже в новом — спрашивать не о чем
+    Prefs.set("uib_look_fresh", true);
+    if (Prefs.get("uib_toured") === true) Prefs.set("uib_dark_stage", "intro");
+    return true;
+  },
+  /** Что спросить на «Сегодня»: howNew / which / retry или null. */
+  ask(today = now()) {
+    const days = Prefs.get("uib_dark_days", 0);
+    switch (this.stage()) {
+      case "new": return days >= this.daysToAsk ? "howNew" : null;
+      case "compare": return days >= this.daysToAsk ? "which" : null;
+      case "old": {
+        const since = Prefs.get("uib_dark_since");
+        if (!since) return null;
+        const passed = Math.round((Date.parse(isoDay(today) + "T12:00:00+03:00") - Date.parse(since + "T12:00:00+03:00")) / 864e5);
+        return passed >= this.daysToRetry ? "retry" : null;
+      }
+    }
+    return null;
+  },
+  /** Открыто в тёмной: засчитать день (раз в сутки). true — день засчитан. */
+  darkDay(today = now()) {
+    const s = this.stage();
+    if (s !== "new" && s !== "compare") return false;
+    const d = isoDay(today);
+    if (Prefs.get("uib_dark_last") === d) return false;
+    Prefs.set("uib_dark_last", d);
+    Prefs.set("uib_dark_days", Prefs.get("uib_dark_days", 0) + 1);
+    return true;
+  },
+  _own: false,
+  go(next, { change, vote, today } = {}) {
+    Prefs.set("uib_dark_stage", next);
+    Prefs.set("uib_dark_days", 0);
+    Prefs.set("uib_dark_last", null);
+    if (today) Prefs.set("uib_dark_since", isoDay(today));
+    if (change) { this._own = true; try { Look.save(change(Look.load())); Theme.apply(); } finally { this._own = false; } }
+    if (vote) { Prefs.set("uib_dark_vote", vote); Prefs.set("uib_dark_sent", false); return this.send(); }
+    return Promise.resolve();
+  },
+  /** Голос на сервер; без сети — дошлём при следующем запуске. */
+  send() {
+    const v = Prefs.get("uib_dark_vote");
+    if (!v || Prefs.get("uib_dark_sent") === true || !Api.token) return Promise.resolve();
+    return Api.post("/design/vote", { choice: v }).then(() => Prefs.set("uib_dark_sent", true), () => {});
+  },
+  tryNew() { return this.go("new", { change: (l) => this.applyNew(l) }); },
+  keepOld() { return this.go("old", { change: (l) => this.applyOld(l), today: now() }); },
+  likeNew() { return this.go("done", { vote: "new" }); },
+  compare() { return this.go("compare", { change: (l) => this.applyOld(l) }); },
+  pick(fresh) { return this.go("done", { change: (l) => (fresh ? this.applyNew(l) : this.applyOld(l)), vote: fresh ? "new" : "old" }); },
+  retry() { return this.go("new", { change: (l) => this.applyNew(l) }); },
+  stayOld() { return this.go("done", { vote: "old" }); },
+  /** Сам поменял вид или тёмную в «Оформлении»: опрос окончен, голос — выбранное. */
+  manual(before, after) {
+    const s = this.stage();
+    if (this._own || !s || s === "done") return;
+    if (before.fresh === after.fresh && before.freshDepth === after.freshDepth) return;
+    this.go("done", { vote: s === "intro" ? null : (after.fresh && !after.freshDepth ? "new" : "old") });
+  },
+};
+
 /** Восход и закат в Москве (moscowSun) и фаза «по закату» (sunsetPhase). */
 function moscowSun(d) {
   const lat = 55.7558, lon = 37.6173, t = msk(d);
@@ -344,8 +431,19 @@ function screenTitle(title, { sub = "", trailing = "", lead = "", size = 34 } = 
   return `<div style="padding:var(--l) var(--xl) var(--m)">${lead ? lead + '<div style="height:6px"></div>' : ""}${t}</div>`;
 }
 function section(text) { return `<div class="section eyebrow">${esc(text)}</div>`; }
-/** Пусто или ошибка (Notice): pose — капибара, retry — data-act кнопки. */
+/** Пустой экран и сбой нового вида (FreshEmpty, шаг 8): капибара крупно по центру,
+ *  заголовок, что дальше и кнопка act. capy=false — капибара уже есть на экране. */
+function freshEmpty(pose, title, text, { action = "", act = "", capy: withCapy = true, id = "" } = {}) {
+  const small = innerHeight < 640;
+  return `<div class="fe"${id ? ` id="${id}"` : ""}>${withCapy ? capy(pose, small ? 96 : 150) : ""}
+    <div class="ttl" style="--sz:26px">${esc(title)}</div>
+    <div class="bd mut" style="--sz:15px">${esc(text)}</div>
+    ${action && act ? `<button class="fe-btn" data-act="${act}">${esc(action)}</button>` : ""}</div>`;
+}
+/** Пусто или ошибка (Notice): pose — капибара, retry — data-act кнопки.
+ *  В новом виде «не вышло» с кнопкой — крупно по центру (как Loader в приложении). */
 function notice(title, text, { pose = "", retry = "", retryLabel = "Ещё раз" } = {}) {
+  if (Theme.fresh && pose === "sad" && retry) return freshEmpty("sad", title, text, { action: retryLabel, act: retry });
   // «Пусто, всё хорошо» — капибара выглядывает снизу справа из-за края карточки (CapyPeek)
   if (pose && pose !== "sad") {
     const size = 84, shown = size * 0.8, h = msk(now()).h, night = h >= 23 || h < 5;

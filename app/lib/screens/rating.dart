@@ -7,6 +7,8 @@
 // «Показывать меня всем» — распространение (ст. 10.1 152-ФЗ, ревью 18.10):
 // включается только через лист с отдельным согласием, а чужие видят свой ник
 // человека или «Капибара №…», не имя.
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -20,6 +22,8 @@ import 'files.dart' show BackRow;
 import 'legal.dart' show LegalLink, openLegal;
 import 'notify.dart' show AppSwitch;
 
+part 'rating_fresh.dart';
+
 class RatingScreen extends StatefulWidget {
   final Api api;
   final VoidCallback? onUnauthorized;
@@ -32,20 +36,40 @@ class RatingScreen extends StatefulWidget {
 class _RatingScreenState extends State<RatingScreen> {
   int _epoch = 0;
 
+  // «Новое»: что открыто — «Я» (0) или «Группы» (1), вкладка «Я» (group /
+  // inst / all), свёрнут ли хвост группы, вкладка «Групп» (институт / вуз).
+  // Здесь, а не в виде: после правки ника экран перезагружается.
+  int _view = 0, _groupsTab = 0;
+  String _scope = 'group';
+  bool _expanded = false;
+
   Api get api => widget.api;
 
-  Future<void> _save(Map<String, Object?> body) async {
+  void _set(VoidCallback f) => setState(f);
+
+  /// Свежий «я» для листа «Мой опыт» после правки.
+  Future<Map?> _me() async {
+    try {
+      final d = await api.get('/rating');
+      return d is Map && d['me'] is Map ? d['me'] as Map : null;
+    } on ApiError {
+      return null;
+    }
+  }
+
+  Future<bool> _save(Map<String, Object?> body) async {
     tick();
     try {
       await api.put('/rating/me', body);
     } on ApiError catch (e) {
       if (mounted) showToast(context, e.message, kind: ToastKind.error);
-      return;
+      return false;
     }
     if (mounted) setState(() => _epoch++);
+    return true;
   }
 
-  Future<void> _nick(Map me) async {
+  Future<bool> _nick(Map me) async {
     final v = await inputSheet(
       context,
       title: 'Ник в рейтинге',
@@ -60,11 +84,11 @@ class _RatingScreenState extends State<RatingScreen> {
       hint: me['nick'] as String? ?? '',
       initial: me['custom_nick'] == true ? me['nick'] as String? ?? '' : '',
     );
-    if (v != null) await _save({'nick': v});
+    return v != null && await _save({'nick': v});
   }
 
   /// Включить «всем» — только через лист отдельного согласия; выключить — сразу.
-  Future<void> _showAll(Map me) async {
+  Future<bool> _showAll(Map me) async {
     if (me['show_all'] == true) return _save({'show_all': false});
     tick();
     final Map doc;
@@ -72,14 +96,14 @@ class _RatingScreenState extends State<RatingScreen> {
       doc = Map<String, dynamic>.from(await api.get('/legal/rating_all') as Map);
     } on ApiError catch (e) {
       if (mounted) showToast(context, e.message, kind: ToastKind.error);
-      return;
+      return false;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
     final version = await appSheet<String>(
       context,
       (_) => ShowAllSheet(api: api, doc: doc, seenAs: me['public_nick'] as String?),
     );
-    if (version != null) await _save({'show_all': true, 'consent': version});
+    return version != null && await _save({'show_all': true, 'consent': version});
   }
 
   @override
@@ -91,6 +115,7 @@ class _RatingScreenState extends State<RatingScreen> {
           load: () async => Map<String, dynamic>.from(await api.get('/rating')),
           onUnauthorized: widget.onUnauthorized,
           builder: (context, d, _) {
+            if (AppStyle.of(context).fresh) return _FreshRating(d: d, st: this);
             final group = Map<String, dynamic>.from(d['group'] as Map? ?? const {});
             final me = Map<String, dynamic>.from(d['me'] as Map? ?? const {});
             final inst = (d['institute_top'] as List?) ?? const [];
@@ -601,6 +626,7 @@ class GroupRatingScreen extends StatelessWidget {
           load: () async => Map<String, dynamic>.from(await api.get('/rating/group/$id')),
           onUnauthorized: onUnauthorized,
           builder: (context, g, _) {
+            if (AppStyle.of(context).fresh) return _FreshGroup(g: g, name: name);
             final s = AppStyle.of(context);
             final p = s.p;
             final people = (g['people_list'] as List?) ?? const [];

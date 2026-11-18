@@ -181,5 +181,46 @@ button.mf-row:active { background: color-mix(in srgb, var(--text) 5%, transparen
   background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 .mr-dot { display: block; width: 6px; height: 6px; border-radius: 3px; background: var(--line); margin-left: 5px; transition: width .22s, background .22s; }
 .mr-dot.on { width: 18px; background: var(--accent); }
+/* «Каким сделать меню»: две карточки с образцами */
+.tr-opts { display: flex; flex-direction: column; gap: var(--s); margin-top: var(--m); }
+.tr-opt { display: block; width: 100%; text-align: left; padding: var(--m); background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-tile); transition: border-color .2s; }
+.tr-opt.on { border: 2px solid var(--accent); padding: calc(var(--m) - 1px); }
+.tr-opt .mut { text-wrap: balance; }
+.tr-sample { margin-top: var(--s); overflow: hidden; pointer-events: none; }
+.tr-sample .capsule { transform-origin: 0 0; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
 .mr-skip { padding: 10px 12px; font-size: 15px; font-weight: 600; color: var(--muted); }
 .mr-next { padding: 10px var(--l); min-height: 40px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 500; }
+
+/* ── Уведомления нового дизайна (notify_fresh.dart): лента и «Что присылать» ── */
+.nf-list { overflow: hidden; border-radius: var(--r-card); }
+.nf-row { display: flex; align-items: flex-start; gap: var(--s); width: 100%; text-align: left; padding: var(--m) var(--l) var(--m) var(--m); }
+.nf-row[disabled] { cursor: default; }
+.nf-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; background: transparent; }
+.nf-dot.on { background: var(--accent); }
+.nf-time { flex: none; display: flex; flex-direction: column; align-items: flex-end; }
+.nf-choices { display: flex; flex-direction: column; gap: var(--s); }
+.nf-choice { display: flex; align-items: center; gap: var(--s); width: 100%; text-align: left; padding: var(--l); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-tile); transition: border-color .2s; }
+.nf-choice.on { border: 2px solid var(--accent); padding: calc(var(--l) - 1px); }
+.nf-line { display: flex; align-items: center; gap: var(--m); width: 100%; min-height: 60px; text-align: left; padding: var(--s) var(--m) var(--s) var(--l); }
+.nf-where { display: flex; align-items: center; gap: var(--m); width: 100%; text-align: left; padding: var(--m) 0; }
+
+/* ── Переход на новый дизайн (шаг 9, dark_intro.dart) ── */
+.dk-intro { display: flex; flex-direction: column; box-sizing: border-box; padding: calc(var(--sat) + var(--xl)) var(--l) calc(var(--sab) + var(--m));
+  min-height: 100dvh; }
+.dk-intro .grow { flex: 1; min-height: var(--xl); }
+.dk-shots { display: flex; gap: var(--m); margin: var(--l) 0; }
+.dk-shot-col { flex: 1; min-width: 0; }
+/* пример в своей теме: цвета — от data-app-theme на самой коробке */
+.dk-shot { --bg: var(--t-bg); --glow1: var(--t-bg-glow-1); --glow2: var(--t-bg-glow-2); --card: var(--t-card);
+  --card-solid: var(--t-card-solid); --line: var(--t-line); --edge: var(--t-edge); --text: var(--t-text); --muted: var(--t-muted);
+  --accent: var(--t-accent); --on-accent: var(--t-on-accent); --ok: var(--t-ok); --warn: var(--t-warn); --danger: var(--t-danger);
+  color: var(--text); pointer-events: none; }
+.dk-shot[data-app-theme="paper"] { color-scheme: light; --g1a: 60%; --g2a: 50%; }
+.dk-shot-in { width: 330px; }
+.dk-intro .btn.dk-second { color: var(--text); min-height: 48px; margin-top: var(--s); font-weight: 600; }
+.dk-ask-row { display: flex; gap: var(--s); margin-top: var(--m); }
+.dk-ask-btn { flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border-radius: 22px; border: 1px solid var(--edge);
+  font: 600 14.5px/1.2 Onest, sans-serif; color: var(--text); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-ask-btn.main { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
