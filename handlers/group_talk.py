@@ -102,7 +102,10 @@ async def ask(message: Message, command: CommandObject):
 
 
 async def respond(message: Message, question: str):
-    starosta = config.is_starosta(message.from_user.id)
+    if not message.from_user:
+        return
+    uid = message.from_user.id
+    starosta = config.is_starosta(uid)
     chat = await members.chat_id()
     logger.info(f"группа: обратились к боту в чате {message.chat.id} (запомнен {chat}), "
                 f"включено: {group_talk.enabled()}")
@@ -115,9 +118,9 @@ async def respond(message: Message, question: str):
             await message.reply(f"Не отвечаю: этот чат (id {message.chat.id}) не запомнен как чат группы"
                                 f"{f', запомнен {chat}' if chat else ''}. Напиши здесь /groupchat.")
         return
-    refusal = None if starosta else group_talk.allow(message.from_user.id, message.chat.id)
+    refusal = None if starosta else group_talk.allow(uid, message.chat.id)
     if refusal:
-        logger.info(f"группа: не отвечаю {message.from_user.id}: {refusal}")
+        logger.info(f"группа: не отвечаю {uid}: {refusal}")
     if refusal == "user":
         return                                              # слишком часто — молча
     if refusal == "day":
