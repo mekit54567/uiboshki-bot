@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/screens/pulse.dart';
 import 'package:uiboshki/theme/app_theme.dart';
+import 'package:uiboshki/widgets/goal_card.dart';
 
 import 'fake_api.dart';
 import 'util.dart';
@@ -80,5 +81,39 @@ void main() {
     expect(find.byKey(const Key('pulse:scan')), findsOneWidget);
     expect(find.byKey(const Key('pulse:login')), findsNothing);
     await t.scrollUntilVisible(find.text('Отключить Пульс'), 200);
+  });
+
+  testWidgets('«Брать посещения из Пульса» в листе — только когда /me открыл Пульс (PULSE=0 — нет)', (t) async {
+    phone(t);
+    final att = <String, dynamic>{
+      'ok': true,
+      'score': 5,
+      'max': 20,
+      'unit': 2.5,
+      'total': 1,
+      'past': 1,
+      'attended': 1,
+      'waiting': 0,
+      'lectures': [
+        {'date': '2026-09-27', 'n': 1, 'status': 'ok', 'manual': false},
+      ],
+    };
+    Future<void> open(bool on) async {
+      pulseOpenNow.value = on;
+      await t.pumpWidget(
+        host(
+          Scaffold(
+            body: AttendanceSheet(api: fakeApi(), courseId: 7, att: att, color: Colors.teal, onChanged: () {}),
+          ),
+        ),
+      );
+      await t.pump();
+    }
+
+    await open(false);
+    expect(find.byKey(const Key('att:pulse')), findsNothing);
+    await open(true);
+    expect(find.text('Брать посещения из Пульса'), findsOneWidget);
+    pulseOpenNow.value = false;
   });
 }

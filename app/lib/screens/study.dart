@@ -15,7 +15,7 @@ import '../widgets/goal_card.dart';
 import 'chat.dart';
 import 'files.dart';
 import 'lesson.dart' show AskKapi, sameSubject;
-import 'pulse.dart' show PulseStudyLine, pulseAvailable, pulseVariant;
+import 'pulse.dart' show PulseStudyLine, pulseOpenNow;
 import 'sdo_connect.dart';
 import 'task.dart';
 

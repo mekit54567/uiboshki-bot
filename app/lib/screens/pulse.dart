@@ -17,7 +17,6 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../api/api.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
-import '../widgets/capy.dart';
 import '../widgets/capy_refresh.dart';
 import '../widgets/common.dart';
 import 'files.dart';
@@ -38,15 +37,15 @@ const _labAliveKey = 'pulse_lab_alive_at';
 /// экран и кружок QR, хотя окна входа в браузере нет.
 const _stand = bool.fromEnvironment('PULSE_STAND');
 
-/// Вариант оформления для показа Никите (стенд, --dart-define=PULSE_VARIANT=b|c);
-/// после выбора остаётся один, переключатель уходит.
-const pulseVariant = String.fromEnvironment('PULSE_VARIANT');
-
 /// Пульс есть только в приложении на телефоне (и на стенде).
 bool get pulseAvailable => sdoWebLoginAvailable || _stand;
 
 /// Открыт ли Пульс этому человеку (/api/me → pulse; старые серверы — lab).
 bool pulseOpen(Map me) => pulseAvailable && (me['pulse'] == true || me['lab'] == true);
+
+/// То же для экранов без /me (лист «Посещения», «Учёба», отступ «Сегодня»):
+/// ставит shell.dart по /api/me — при PULSE=0 у всех, кроме старосты, false.
+final pulseOpenNow = ValueNotifier<bool>(false);
 
 /// Вошёл ли телефон в Пульс хоть раз (окно сохраняет вход само).
 Future<bool> pulseLoggedHere() async {
@@ -58,7 +57,7 @@ Future<bool> pulseLoggedHere() async {
 const pulsePerks = [
   (Icons.verified_outlined, 'Посещения лекций в «Цели» — ровно как отметил преподаватель'),
   (Icons.qr_code_scanner_rounded, 'Отметка по QR с «Сегодня»: кружок над меню, без сайта Пульса'),
-  (Icons.restore_rounded, 'Пульс отвалится — посещения снова считаются по СДО, ничего не теряется'),
+  (Icons.restore_rounded, 'Если вход слетит, посещения снова считаются по СДО, ничего не пропадёт'),
 ];
 
 /// Подпись строки «Пульс МИРЭА» в «Ещё» по /pulse/status.
@@ -71,7 +70,7 @@ const pulsePerks = [
 /// Ответ /pulse/connect человеческими словами (null — всё хорошо).
 String? pulseConnectProblem(Map r) => switch ('${r['state']}') {
   'ok' => null,
-  'blocked' => 'Пульс сейчас не пускает наш сервер. Отметка по QR работает, а посещения подтянем, когда пустит — войди позже ещё раз.',
+  'blocked' => 'Пульс сейчас не пускает наш сервер. Отметка по QR работает, а для посещений войди ещё раз попозже.',
   'expired' => 'Пульс не принял вход. Войди ещё раз.',
   'empty' => 'Вход не нашёлся — войди в Пульс в окне до конца.',
   'network' => 'Пульс не ответил серверу. Попробуй через пару минут.',
@@ -165,7 +164,7 @@ class _PulseScreenState extends State<PulseScreen> {
     final ok = await confirmSheet(
       context,
       title: 'Отключить Пульс?',
-      text: 'Сервер забудет вход, посещения снова будут считаться по СДО. То, что Пульс уже отметил, останется.',
+      text: 'Капибара забудет вход: посещения снова пойдут по СДО, для отметки по QR надо будет войти заново. Что Пульс уже отметил, останется.',
       action: 'Отключить',
       cancel: 'Оставить',
       danger: true,
@@ -228,13 +227,13 @@ class _PulseScreenState extends State<PulseScreen> {
         padding: pad,
         child: switch (state) {
           'ok' => StatusCard(color: p.ok, title: 'Подключён, работает', text: checkedAgo(st['checked_at'] as String?)),
-          'expired' => StatusCard(color: p.danger, title: 'Вход устарел', text: 'Пульс разлогинил вход — войди заново'),
+          'expired' => StatusCard(color: p.danger, title: 'Вход устарел', text: 'Пульс сбросил вход — войди заново'),
           _ when _here => StatusCard(
             color: p.warn,
             title: 'Вход только на телефоне',
             text: 'Отметка по QR работает, посещения сервер пока не видит',
           ),
-          _ => StatusCard(color: p.muted, title: 'Не подключён', text: 'Посещения пока считаются по баллам СДО'),
+          _ => StatusCard(color: p.muted, title: 'Не подключён', text: 'Посещения пока считаются по баллам\u00a0СДО'),
         },
       ),
       if (on) ...[
@@ -266,26 +265,21 @@ class _PulseScreenState extends State<PulseScreen> {
           ),
         ),
       ] else ...[
-        if (pulseVariant == 'c') ...[
-          const SizedBox(height: Space.l),
-          Padding(padding: pad, child: const _Steps()),
-        ] else ...[
-          const Section('Что даст вход'),
-          Padding(
-            padding: pad,
-            child: _Perks(items: pulsePerks),
-          ),
-          const Section('Как подключить'),
-          Padding(
-            padding: pad,
-            child: Tile(
-              child: Text(
-                'Откроется обычный вход МИРЭА: почта, пароль, код. Войди как всегда — Капибара подключится сама.',
-                style: s.body(14),
-              ),
+        const Section('Что даст вход'),
+        Padding(
+          padding: pad,
+          child: _Perks(items: pulsePerks),
+        ),
+        const Section('Как подключить'),
+        Padding(
+          padding: pad,
+          child: Tile(
+            child: Text(
+              'Откроется обычный вход МИРЭА: почта, пароль, код. Войди как всегда — Капибара подключится сама.',
+              style: s.body(14),
             ),
           ),
-        ],
+        ),
         if (!_consented)
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
@@ -314,8 +308,8 @@ class _PulseScreenState extends State<PulseScreen> {
               const SizedBox(width: Space.s),
               Expanded(
                 child: Text(
-                  'Пароль видит только сайт МИРЭА. Вход хранится зашифрованным, Капибара только читает твои '
-                  'посещения. Отключить — одной кнопкой.',
+                  'Пароль видит только сайт МИРЭА. Вход хранится зашифрованным. Капибара читает посещения, а отмечает '
+                  'тебя, только когда ты сам сканируешь QR. Отключить — одной кнопкой.',
                   style: s.body(13, color: p.muted),
                 ),
               ),
@@ -490,70 +484,8 @@ Future<bool?> openPulseScan(BuildContext context, Api api) async {
       .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const PulseScanScreen()));
 }
 
-/// Вариант «В»: три шага с номерами и капибарой — как знакомство, а не настройка.
-class _Steps extends StatelessWidget {
-  const _Steps();
-
-  static const _items = [
-    ('Войди в Пульс', 'Один раз, обычным входом МИРЭА: почта, пароль, код'),
-    ('Посещения — сами', 'Лекции в «Цели» отмечены ровно как у преподавателя'),
-    ('На паре — кружок QR', 'На «Сегодня» над меню: навёл на экран — ты отмечен'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppStyle.of(context);
-    final p = s.p;
-    return Tile(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('Один раз войди — дальше всё само', style: s.title(22))),
-              const SizedBox(width: Space.s),
-              CapyImage(pose: CapyPose.joy, size: 56, color: p.text),
-            ],
-          ),
-          const SizedBox(height: Space.m),
-          for (final (i, (title, text)) in _items.indexed)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: Space.s),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: p.accent.withValues(alpha: 0.14), shape: BoxShape.circle),
-                    child: Text(
-                      '${i + 1}',
-                      style: s.body(14, weight: FontWeight.w800, color: p.accent),
-                    ),
-                  ),
-                  const SizedBox(width: Space.m),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: s.body(15, weight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(text, style: s.body(13, color: p.muted)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Вариант «Б»: строка про Пульс под «баллы из СДО» на «Учёбе» — там же, где
-/// посещения. Нажал — экран «Пульс МИРЭА».
+/// Строка про Пульс под «баллы из СДО» на «Учёбе» (Никита 18.11, к основному
+/// варианту) — там же, где посещения. Нажал — экран «Пульс МИРЭА».
 class PulseStudyLine extends StatefulWidget {
   final Api api;
   const PulseStudyLine({super.key, required this.api});
@@ -582,10 +514,17 @@ class _PulseStudyLineState extends State<PulseStudyLine> {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final (String text, Color? color) = switch ('${_st?['state'] ?? ''}') {
-      'ok' => ('посещения из Пульса', null),
-      'expired' => ('вход в Пульс устарел · войти заново', p.danger),
-      _ => ('посещения точнее · подключить Пульс', p.accent),
+    final state = '${_st?['state'] ?? ''}';
+    final muted = s.body(13, color: p.muted);
+    final link = s.body(13, weight: FontWeight.w600, color: state == 'expired' ? p.danger : p.accent);
+    // тихо: подпись — цветом подписей, ссылкой — только действие
+    final spans = switch (state) {
+      'ok' => [TextSpan(text: 'посещения из Пульса', style: muted)],
+      'expired' => [
+        TextSpan(text: 'вход в Пульс устарел · ', style: muted),
+        TextSpan(text: 'войти заново', style: link),
+      ],
+      _ => [TextSpan(text: 'посещения точнее · ', style: muted), TextSpan(text: 'подключить Пульс', style: link)],
     };
     return Semantics(
       button: true,
@@ -599,10 +538,7 @@ class _PulseStudyLineState extends State<PulseStudyLine> {
         },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Text(
-            text,
-            style: s.body(13, weight: color == null ? FontWeight.w400 : FontWeight.w600, color: color ?? p.muted),
-          ),
+          child: Text.rich(TextSpan(children: spans)),
         ),
       ),
     );

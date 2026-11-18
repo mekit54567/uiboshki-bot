@@ -268,6 +268,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     // (у своей группы plan остаётся «own» и с подпиской), до него — plan
     AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
     // кружок QR на «Сегодня» (сканер Пульса, 01.11) — с 18.11 у всех, кому открыт Пульс
+    pulseOpenNow.value = pulseOpen(me);
     if (pulseOpen(me)) setState(() => _qr = true);
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {

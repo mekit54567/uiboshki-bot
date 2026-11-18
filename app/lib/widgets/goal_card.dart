@@ -10,7 +10,7 @@ import '../api/api.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
-import '../screens/pulse.dart' show PulseScreen, pulseAvailable;
+import '../screens/pulse.dart' show PulseScreen, pulseOpenNow;
 import 'capy.dart';
 import 'common.dart';
 
@@ -942,7 +942,7 @@ class _AttendanceSheetState extends State<AttendanceSheet> {
             const SizedBox(height: Space.s),
             Text(hint, style: s.body(14, color: p.muted)),
             // посещения не из Пульса — предложить его (18.11: Пульс для всех)
-            if (a['source'] != 'pulse' && pulseAvailable) ...[
+            if (a['source'] != 'pulse' && pulseOpenNow.value) ...[
               const SizedBox(height: Space.m),
               Align(
                 alignment: Alignment.centerLeft,
@@ -955,7 +955,7 @@ class _AttendanceSheetState extends State<AttendanceSheet> {
                   ),
                   icon: const Icon(Icons.verified_outlined, size: 17),
                   label: Text(
-                    a['source'] == 'pulse_lost' ? 'Войти в Пульс заново' : 'Брать отметки из Пульса',
+                    a['source'] == 'pulse_lost' ? 'Войти в Пульс заново' : 'Брать посещения из Пульса',
                     style: s.body(13.5, weight: FontWeight.w600),
                   ),
                   onPressed: () async {
