@@ -52,3 +52,8 @@ def test_storm_and_hail_change_by_the_hour():
     hail = {clothes_tip(15, code=96, day=DAY, hour=h) for h in range(3)}
     assert len(storm) == 3 and len(hail) == 3
     assert clothes_tip(1, feels=-2, code=75, day=DAY, hour=3) == clothes_tip(1, feels=-2, code=75, day=DAY, hour=9)
+
+
+def test_snow_showers_get_snow_phrases():
+    assert clothes_tip(2, feels=1, code=85, day=DAY) in tips._SNOW
+    assert clothes_tip(2, feels=1, code=86, day=DAY) in tips._SNOW_HEAVY
