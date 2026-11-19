@@ -333,6 +333,11 @@ function dlRemindSheet(d) {
 }
 
 // ── «Сдать файлом» (SubmitSheet) ──
+/** «PDF, DOCX или картинка» — список через запятую, последний через «или». */
+function dlOrList(xs) {
+  return xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} или ${xs[xs.length - 1]}`;
+}
+
 function dlRules(j) {
   const r = {
     accepted: (j.accepted || []).map((a) => String(a).toLowerCase()), labels: (j.labels || []).map(String),
@@ -341,14 +346,15 @@ function dlRules(j) {
   };
   r.perSubmit = r.maxFiles <= 0 ? 3 : Math.min(r.maxFiles, 3);
   r.fits = (name) => !r.accepted.length || r.accepted.some((e) => name.toLowerCase().endsWith(e));
-  r.limit = `${(r.maxBytes / 1048576).toFixed(r.maxBytes >= 10485760 ? 0 : 1)} МБ`;
+  r.limit = `${(r.maxBytes / 1048576).toFixed(r.maxBytes >= 10485760 ? 0 : 1)}\u00A0МБ`;
+  r.need = `нужен файл: ${dlOrList(r.labels.length ? r.labels : r.accepted)}`;
   r.describe = () => [r.labels.length ? r.labels.join(", ") : r.accepted.length ? r.accepted.join(" ") : "любые файлы",
-    `до ${r.perSubmit} ${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до ${r.limit}` : ""].filter(Boolean).join(" · ");
+    `до\u00A0${r.perSubmit}\u00A0${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до\u00A0${r.limit}` : ""].filter(Boolean).join(" · ");
   r.problem = (f) => {
     if (!r.fits(f.name)) {
       const dot = f.name.lastIndexOf(".");
       const what = dot > 0 ? f.name.slice(dot).toLowerCase() : "Файл без расширения";
-      return `${what} задание не примет — нужно ${r.labels.length ? r.labels.join(", ") : r.accepted.join(", ")}`;
+      return `${what} задание не примет — ${r.need}`;
     }
     if (r.maxBytes > 0 && f.size > r.maxBytes) return `больше ${r.limit} — задание не примет`;
     return null;
@@ -444,7 +450,7 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
         const bad = got.filter((f) => !rules.fits(f.name)).map((f) => f.name);
         const big = rules.maxBytes > 0 ? got.filter((f) => f.size > rules.maxBytes).map((f) => f.name) : [];
         for (const f of got) if (!bad.includes(f.name) && !big.includes(f.name) && files.length < rules.perSubmit) files.push({ f, why: null });
-        error = bad.length ? `Задание не примет: ${bad.join(", ")} — нужно ${rules.labels.length ? rules.labels.join(", ") : rules.accepted.join(" ")}`
+        error = bad.length ? `Задание не примет: ${bad.join(", ")} — ${rules.need}`
           : big.length ? `Слишком большой: ${big.join(", ")}` : null;
       }
       draw();
@@ -725,6 +731,19 @@ Screens.deadlines = {
     const actions = async (d) => {
       const a = await dlActionsSheet(d);
       if (!a) return;
+      await act(a, d);
+    };
+    // новый вид: нажал на срок или «Сдать» — полноценная страница задания (Никита 18.11)
+    const page = (d) => openTaskFresh(dlWorkOf(d), "", {
+      deadline: d,
+      async onDeadline(a, cur) {
+        if (a) await act(a, cur); else await reload();
+        const list = data && data.list;
+        if (!list) return cur;
+        return list.find((e) => e.id === cur.id) || null;   // нет — удалили или скрыли
+      },
+    });
+    const act = async (a, d) => {
       switch (a) {
         case "submit": await submit(d); break;
         case "task": openLink(d.x.description); break;
@@ -780,9 +799,9 @@ Screens.deadlines = {
       open(b) {
         if (swiped) return;
         const d = rows[b.dataset.id];
-        if (d) { tick(); actions(d); }
+        if (d) { tick(); if (Theme.fresh) page(d); else actions(d); }
       },
-      submit(b, e) { e.stopPropagation(); tick(); const d = rows[b.dataset.id]; if (d) submit(d); },
+      submit(b, e) { e.stopPropagation(); tick(); const d = rows[b.dataset.id]; if (d) { if (Theme.fresh) page(d); else submit(d); } },
       async doneHot(b, e) { e.stopPropagation(); tick(); const d = rows[b.dataset.id]; if (d) { await toggle(d, true); await reload(); } },
     });
 
@@ -861,6 +880,7 @@ function dlNeedsSdo(msg) { return /подключи|устарел/.test(msg); }
 
 /** Экран задания: work — работа из журнала (name, module, cmid, status, grade, max, pass_mark, url). */
 function openTask(work, course = "") {
+  if (Theme.fresh) { openTaskFresh(work, course); return; }   // новый вид — карточка задания (Никита 18.11)
   const w = work || {}, quiz = w.module === "quiz";
   Nav.push((body, screen) => {
     let t = null, error = null, loadedAt = 0, back = false;
@@ -983,3 +1003,386 @@ function openTask(work, course = "") {
   }, { tint: course ? subjectColor(course) : "" });
 }
 window.openTask = openTask;
+
+// ── Карточка задания нового вида (task_fresh.dart; только при «Новом») ──
+// Никита 18.11: «как в СДО, только красивее, полноценная страница». Срок с
+// отсчётом и полоской «открыто с → срок», «Ответ и оценка» со шкалой баллов,
+// задание и файлы, «Твой ответ» со сдачей прямо здесь (прикрепил — видишь
+// файл, комментарий, «Отправить»), комментарии к ответу и — у срока из
+// «Сдать» — «Напомнить / Отметить / Изменить / Удалить».
+
+/** «четверг, 26 ноября 2026, 00:00» (по Москве) → Date; не разобрали — null. */
+function dlSdoDate(raw) {
+  const m = /(\d{1,2})\s+([а-яё]+)\s+(\d{4})(?:\D+(\d{1,2}):(\d{2}))?/.exec(String(raw ?? "").toLowerCase());
+  if (!m) return null;
+  const mo = MONTHS.indexOf(m[2]);
+  if (mo < 0) return null;
+  const p2 = (v) => String(v).padStart(2, "0");
+  return new Date(`${m[3]}-${p2(mo + 1)}-${p2(m[1])}T${p2(m[4] ?? 23)}:${m[5] ?? "59"}:00+03:00`);
+}
+/** «чт, 26 ноября, 00:00». */
+function dlTaskDay(date, time = true) {
+  const t = msk(date);
+  return `${WD_SHORT[t.wd].toLowerCase()}, ${t.d} ${MONTHS[t.m - 1]}${time ? `, ${hm(date)}` : ""}`;
+}
+/** «вторник, 10 ноября 2026, 21:14» → «вт, 10 ноября, 21:14»; не дата — как есть. */
+function dlShortSdo(raw) {
+  const d = dlSdoDate(raw);
+  return d && /\d{4}/.test(raw) ? dlTaskDay(d, /\d{1,2}:\d{2}/.test(raw)) : String(raw ?? "");
+}
+/** Номер задания и вид из ссылки СДО; не задание — null. */
+function dlTaskOfLink(url) {
+  const m = /\/mod\/(assign|quiz)\/view\.php\?(?:[^#\s"]*&)?id=(\d+)/.exec(String(url || ""));
+  return m ? { cmid: +m[2], module: m[1] } : null;
+}
+/** Срок из «Сдать» → работа для экрана задания (как из журнала «Учёбы»). */
+function dlWorkOf(d) {
+  const link = dlTaskOfLink(d.x.description);
+  return { name: dlSplit(d.subject).task, ...(link || {}), ...(/^https:\/\//.test(d.x.description) ? { url: d.x.description } : {}) };
+}
+/** Страница задания: work — как у openTask; deadline — срок из «Сдать» (dlOf),
+ *  onDeadline(a, d) — действие со сроком (a = null — просто перечитать) → новый срок или null (убран). */
+function openTaskFresh(work, course = "", { deadline = null, onDeadline = null } = {}) {
+  const w = work || {}, quiz = w.module === "quiz", sdo = typeof w.cmid === "number";
+  let d = deadline;
+  if (!course && d) course = dlSplit(d.subject).course;
+  Nav.push((body, screen) => {
+    let t = null, error = null, loadedAt = 0, back = false;
+    let rules = null, rulesError = null, sending = false, sendError = null, posting = false, replace = false;
+    const files = [];   // {f, why}
+    let note = "", comment = "";
+    const good = () => files.filter((e) => !e.why).map((e) => e.f);
+    // поле растёт по тексту (как TextField с maxLines)
+    const fit = (ta) => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, 140) + "px"; };
+
+    const loadRules = async () => {
+      try { rules = dlRules(await Api.get(`/sdo/submit-rules?cmid=${w.cmid}&deadline_id=${d ? d.id : 0}`) || {}); rulesError = null; }
+      catch (e) { rulesError = errorText(e); }
+      draw();
+    };
+    const load = async () => {
+      if (!sdo) return;
+      try {
+        t = (await Api.get(`/sdo/task/${w.cmid}${quiz ? "?module=quiz" : ""}`)) || {};
+        error = null; loadedAt = Date.now();
+      } catch (e) { error = errorText(e); }
+      draw();
+      if (t && t.can_submit === true && !rules) loadRules();
+    };
+    const answer = () => {
+      if (!t) return "none";
+      const st = String(t.status ?? "").toLowerCase(), gr = String(t.grading ?? "").toLowerCase();
+      if (t.grade != null || w.grade != null || (gr.startsWith("оценено") && !gr.includes("не"))) return "graded";
+      if (t.offline === true || st.includes("вне сайта")) return "offline";
+      if (t.draft === true) return "draft";
+      if (t.submitted === true) return "sent";
+      return "none";
+    };
+    // комментарии видны, когда есть ответ или переписка; до сдачи комментарий —
+    // в форме ответа: два поля, уходящие в одно место, путают (сверка UI 19.11)
+    const commentsShown = (ans) => {
+      const c = t && t.comments;
+      if (!c || typeof c !== "object") return false;
+      return (Array.isArray(c.items) && c.items.length > 0) || (Array.isArray(t.mine) && t.mine.length > 0) || ans === "sent" || ans === "graded";
+    };
+    const dueOfPage = () => (d ? d.due : dlSdoDate(t && t.due));
+
+    // ── «Срок»: отсчёт крупно, полоска, обе даты ──
+    const dueCard = (at, ans) => {
+      const due = dueOfPage(), opened = dlSdoDate(t && t.opened);
+      const done = (d && d.done) || ans === "sent" || ans === "graded";
+      const late = !done && due && due <= at;
+      const left = due ? due - at : null, burning = !done && left != null && left >= 0 && left < 864e5;
+      // акцент — только у главной кнопки и ссылок; у сроков свои цвета (брендбук, сверка UI 19.11)
+      const color = done ? "var(--ok)" : late ? "var(--danger)" : burning ? "var(--warn)" : "var(--text)";
+      const head = done ? (ans === "graded" ? "Оценено" : "Сдано") : late ? "Срок прошёл" : due ? "Осталось" : "Срок не указан";
+      const count = (ms, tail = "") => {
+        const days = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, hrs = Math.floor(ms / 36e5), m = Math.floor(ms / 6e4) % 60;
+        const parts = days > 0 ? [[days, "дн"], ...(h > 0 ? [[h, "ч"]] : [])] : hrs > 0 ? [[hrs, "ч"], [m, "мин"]] : [[Math.max(1, m), "мин"]];
+        return `<div class="tf-count">${parts.map(([n, u]) => `<span class="num" style="--sz:46px;color:${color}">${n}</span><span class="bd b6 mut tf-unit">${u}</span>`).join("")}${tail ? `<span class="bd b6 mut tf-unit">${tail}</span>` : ""}</div>`;
+      };
+      // после сдачи отсчёт уже не нужен — когда сдано (последнее изменение в СДО)
+      const sentOn = ans === "sent" || ans === "graded" ? dlSdoDate(t && t.modified) : null;
+      let mid = "";
+      if (!done && !late && left != null) mid = count(left);
+      else if (late) mid = count(at - due, "назад");
+      else if (done && sentOn) mid = `<div class="bd b6" style="--sz:16px;margin-top:4px" id="task-sent-on">${ans === "graded" ? "сдано " : ""}${dlTaskDay(sentOn, false)}</div>`;
+      let bar = "";
+      if (opened && due && due > opened && !done && !late) {
+        const p = Math.max(0, Math.min(1, (at - opened) / (due - opened)));
+        bar = `<div class="tf-bar"><i style="width:${(p * 100).toFixed(1)}%;background:${color}"></i></div>`;
+      }
+      const row = (label, value, c = "") => `<div class="tf-drow"><span class="bd mut" style="--sz:14px">${label}</span>
+        <span class="bd b6" style="--sz:15px${c ? `;color:${c}` : ""}">${esc(value)}</span></div>`;
+      return `<div class="hx"><div class="tile tf-card" id="task-due">
+        <div class="row" style="gap:6px"><i class="cm-dot" style="width:8px;height:8px;background:${color}"></i>
+          <span class="bd b7" style="--sz:14px;color:${color}">${head}</span></div>
+        ${mid}${bar}<div style="height:var(--s)"></div>
+        ${opened ? row("Открыто с", dlTaskDay(opened)) : ""}
+        ${row("Срок сдачи", due ? dlTaskDay(due, !d || !!d.dueTime) : "не указан", late ? "var(--danger)" : "")}
+      </div></div>`;
+    };
+
+    // ── «Ответ и оценка»: шкала баллов и строки таблицы СДО ──
+    const gradeCard = (ans) => {
+      const max = t.max_grade ?? w.max, pass = t.pass ?? w.pass_mark, grade = t.grade ?? w.grade;
+      const [txt, col] = { graded: ["Сдано", "var(--ok)"], sent: ["Сдано, ждёт оценки", "var(--ok)"], draft: ["Черновик, не отправлен", "var(--warn)"],
+        offline: ["Сдаётся на занятии", "var(--muted)"], none: [t.quiz === true ? "Тест в СДО" : "Ещё не сдано", "var(--muted)"] }[ans];
+      const gcol = grade != null && pass != null && grade < pass ? "var(--danger)" : "var(--ok)";
+      const row = (label, value) => `<div class="tf-grow"><span class="bd mut" style="--sz:14px">${label}</span><div>${value}</div></div>`;
+      const word = (text, c = "", dot = false) => `<span class="bd b6 tf-word" style="--sz:15px${c ? `;color:${c}` : ""}">${dot ? `<i class="cm-dot" style="width:7px;height:7px;background:${c}"></i>` : ""}${esc(text)}</span>`;
+      const rows = [row("Ответ", word(txt, col, true))];
+      // оценка — шкалой сверху; строкой, только пока не проверено или шкалы нет (сверка UI 19.11)
+      if (grade != null && !(max > 0)) rows.push(row("Оценка", word(dlNum(grade), gcol)));
+      else if (ans === "sent" || ans === "offline") rows.push(row("Оценка", word("ещё не проверено", "var(--muted)")));
+      if (String(t.modified ?? "")) rows.push(row("Изменено", word(dlShortSdo(t.modified))));
+      if (String(t.graded_by ?? "")) rows.push(row("Преподаватель", word(t.graded_by)));
+      let scale = "";
+      if (max > 0) {
+        const fill = grade == null ? 0 : Math.max(0, Math.min(1, grade / max)), at = pass == null ? null : Math.max(0, Math.min(1, pass / max));
+        scale = `<div class="tf-scale" role="img" aria-label="Максимум ${dlNum(max)}${pass != null ? `, проходной ${dlNum(pass)}` : ""}${grade != null ? `, у тебя ${dlNum(grade)}` : ""}">
+          <div class="row" style="align-items:flex-end;gap:var(--s)"><div class="grow">${grade != null
+            ? `<span class="bd b7" style="--sz:22px;color:${gcol}">${dlNum(grade)}&nbsp; </span><span class="bd mut" style="--sz:14px">из <b class="b6">${dlNum(max)} ${plural(Math.round(max), "балла", "баллов", "баллов")}</b></span>`
+            : `<span class="bd mut" style="--sz:14px">Максимум </span><span class="bd b6" style="--sz:14px">${dlNum(max)} ${plural(Math.round(max), "балл", "балла", "баллов")}</span>`}</div>
+            ${pass != null ? `<span class="bd b6 mut" style="--sz:13px">проходной ${dlNum(pass)}</span>` : ""}</div>
+          <div class="tf-track">${fill > 0 ? `<i style="width:${(fill * 100).toFixed(1)}%;background:${gcol}"></i>` : ""}
+            ${at != null ? `<b style="left:calc(${(at * 100).toFixed(1)}% - 1.5px)"></b>` : ""}</div></div>`;
+      }
+      return `<div class="hx" style="margin-top:var(--m)"><div class="tile tf-grade" id="task-grade">${scale}${rows.join('<div class="divider"></div>')}</div></div>`;
+    };
+
+    const fileList = (list, mine) => `<div class="hx"><div class="tile p0">${list.map((f, i) => `${i ? '<div class="divider"></div>' : ""}
+      <button class="irow dl-tfile" data-act="dl" data-k="${i}" data-mine="${mine ? 1 : 0}">${icon(dlFileIcon(String(f.name)), "o", "font-size:20px;color:var(--accent)")}
+        <span class="bd b6 grow" style="--sz:14px">${esc(f.name)}</span>${icon("download", "", "font-size:20px;color:var(--muted)")}</button>`).join("")}</div></div>`;
+
+    // ── «Твой ответ»: свои файлы, сдача прямо здесь ──
+    const form = () => {
+      if (!rules && !rulesError) return `<div class="tile row"><span class="dl-mini" style="border-color:var(--accent);border-right-color:transparent"></span><span class="bd mut" style="--sz:14px">Смотрю, что принимает задание…</span></div>`;
+      if (!rules || rules.closed != null) return `<div class="tile bd" style="--sz:14.5px;color:var(--danger)">${esc(rules ? rules.closed : rulesError)}</div>`;
+      const n = good().length, more = n < rules.perSubmit && files.length < rules.perSubmit + 3, accept = rules.accepted.join(",");
+      const picked = files.map((e, i) => `<div class="tf-file${e.why ? " bad" : ""}">${icon(dlFileIcon(e.f.name), "o", `font-size:22px;color:${e.why ? "var(--danger)" : "var(--accent)"}`)}
+        <div class="grow"><div class="bd b6" style="--sz:14.5px;word-break:break-word">${esc(e.f.name)}</div>
+        <div class="bd${e.why ? " b6" : ""}" style="--sz:12.5px;margin-top:1px;color:${e.why ? "var(--danger)" : "var(--ok)"}">${esc(e.why || `${dlFileSize(e.f.size)} · подходит`)}</div></div>
+        <button class="dl-ib" data-act="rmFile" data-k="${i}" aria-label="Убрать"${sending ? " disabled" : ""}>${icon("close", "", "font-size:19px;color:var(--muted)")}</button></div>`).join("");
+      return `<div class="tile tf-card" id="task-form">
+        <div class="bd mut" style="--sz:13.5px">${replace ? "Новые файлы заменят прежние. " : ""}Принимает: ${esc(rules.describe())}</div>
+        <div style="height:var(--m)"></div>${picked}
+        ${more ? `<label class="tf-attach${files.length ? "" : " first"}${sending ? " off" : ""}" id="task-attach">${icon("attach_file", "", "font-size:20px")}${files.length ? "Ещё файл" : "Прикрепить файл"}
+          <input type="file" class="tf-input" multiple${accept ? ` accept="${esc(accept)}"` : ""}${sending ? " disabled" : ""}></label>` : ""}
+        ${commentsShown(answer()) ? "" : `<textarea class="tf-field" id="task-note" rows="1" maxlength="2000" placeholder="Комментарий преподавателю, если нужно">${esc(note)}</textarea>`}
+        ${sendError ? `<div class="bd" style="--sz:14px;color:var(--danger);margin-top:var(--s)">${esc(sendError)}</div>` : ""}
+        <button class="btn primary tf-send" data-act="send" id="task-send"${n === 0 || sending ? " disabled" : ""}>${sending ? '<span class="dl-mini"></span>' : icon("send")}${sending ? "Отправляю…" : n ? `Отправить ${n} ${plural(n, "файл", "файла", "файлов")}` : "Отправить"}</button>
+        <div class="bd mut" style="--sz:12.5px;text-align:center;margin-top:var(--s)">${replace ? "Ответ обновится в СДО от твоего имени" : "Уйдёт преподавателю в СДО от твоего имени"}</div>
+        ${replace ? `<button class="dl-retry" data-act="noReplace" style="display:block;margin:var(--xs) auto 0">Не заменять</button>` : ""}</div>`;
+    };
+    const answerBlock = (ans) => {
+      if (t.quiz === true) return t.open_now === true ? `<div class="hx" style="padding-top:var(--l)"><button class="btn primary" data-act="link" data-url="${esc(t.url)}">${icon("open_in_new")}Пройти тест в СДО</button></div>` : "";
+      const mine = Array.isArray(t.mine) ? t.mine : [], canSubmit = t.can_submit === true, canEdit = t.can_edit === true, canRemove = t.can_remove === true;
+      const showForm = canSubmit && ((!mine.length && ans !== "sent") || replace);
+      const noteText = ans === "offline" ? "Эту работу сдают на занятии, не через СДО. Ответ можно не прикреплять."
+        : !canSubmit && !mine.length ? (String(t.closed ?? "") ? `Сдача закрыта: ${t.closed}` : "Сейчас СДО не даёт прикрепить ответ: срок прошёл или сдача закрыта.") : "";
+      let h = section("Твой ответ");
+      if (mine.length) h += fileList(mine, true);
+      if (noteText && !showForm) h += `<div class="hx"><div class="tile bd mut" style="--sz:14.5px">${esc(noteText)}</div></div>`;
+      if (showForm) h += `<div class="hx"${mine.length ? ' style="margin-top:var(--s)"' : ""}>${form()}</div>`;
+      if (!showForm && (canEdit || canRemove)) {
+        h += `<div class="hx row tf-pills">${canEdit ? `<button class="tf-pill" data-act="replace" id="task-replace">Заменить файлы</button>` : ""}
+          ${canRemove ? `<button class="tf-pill danger" data-act="remove" id="task-remove">Удалить ответ</button>` : ""}</div>`;
+      }
+      if (!showForm && canSubmit && !canEdit && !mine.length && ans === "sent") h += `<div class="hx row tf-pills"><button class="tf-pill" data-act="replace">${icon("attach_file", "", "font-size:18px")}Прикрепить ещё</button></div>`;
+      return h;
+    };
+
+    // ── Комментарии к ответу ──
+    const commentsBlock = (c) => {
+      const items = Array.isArray(c.items) ? c.items : [], count = typeof c.count === "number" ? c.count : items.length;
+      return section(count > 0 ? `Комментарии · ${count}` : "Комментарии") + `<div class="hx"><div class="tile tf-comments" id="task-comments">
+        ${items.length ? items.map((m) => `<div class="tf-msg"><div><span class="bd b7" style="--sz:13.5px">${esc(m.author)}</span>
+          <span class="bd mut" style="--sz:12.5px">&nbsp; ${esc(dlShortSdo(m.time))}</span></div>
+          <div class="bd dl-sel" style="--sz:15px;margin-top:3px;white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")
+          : `<div class="bd mut" style="--sz:14px;margin-bottom:var(--s)">Пока пусто. Преподаватель увидит комментарий в&nbsp;СДО.</div>`}
+        ${c.can_post === true ? `<div class="row tf-cform"><textarea class="tf-field grow" id="task-comment" rows="1" maxlength="2000" placeholder="Написать комментарий">${esc(comment)}</textarea>
+          <button class="dl-ib tf-csend" data-act="comment" aria-label="Отправить комментарий"${posting ? " disabled" : ""}>${posting ? '<span class="dl-mini" style="border-color:var(--accent);border-right-color:transparent"></span>' : icon("arrow_upward", "", "font-size:24px;color:var(--accent)")}</button></div>` : ""}
+      </div></div>`;
+    };
+
+    // ── Срок в Капибаре ──
+    const deadlineBlock = () => {
+      const x = d.x;
+      const act = (a, ic, text, { sub = "", color = "" } = {}) => `<button class="irow tf-act" data-act="dlAct" data-a="${a}" id="task-act-${a}">
+        ${icon(ic, ic === "notifications_none" || ic === "edit" || ic === "delete_outline" || ic === "flag" ? "o" : "", `font-size:21px;color:${color || "var(--muted)"}`)}
+        <span class="grow"><span class="bd b6" style="--sz:15px;display:block${color ? `;color:${color}` : ""}">${esc(text)}</span>
+        ${sub ? `<span class="bd mut" style="--sz:13px">${esc(sub)}</span>` : ""}</span>
+        ${color ? "" : icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button>`;
+      const rows = [], ans = answer(), sdoDone = ans === "sent" || ans === "graded";
+      if (!d.done) rows.push(act("remind", "notifications_none", "Напомнить", { sub: "за день, за час или в своё время" }));
+      // в СДО уже «Сдано» — отмечать нечего (сверка UI 19.11)
+      if (d.done) rows.push(act("undone", "undo", "Вернуть в активные"));
+      else if (!sdoDone) rows.push(act("done", "check", "Отметить сданным", { sub: d.canSubmit ? "только у тебя, в СДО ничего не\u00A0уйдёт" : "" }));
+      if (x.canEdit) rows.push(act("edit", "edit", "Изменить", { sub: "название, дата и время" }));
+      if (x.mineChanged) rows.push(act("resetMine", "restart_alt", "Как у всех"));
+      if (x.canEdit) rows.push(act("delete", "delete_outline", x.editScope === "me" ? "Убрать у себя" : "Удалить срок", { color: "var(--danger)" }));
+      if (x.reportable) rows.push(act("report", "flag", "Пожаловаться или скрыть", { color: "var(--muted)" }));
+      return section("Срок в Капибаре") + (dlHasChips(x, !d.done) ? `<div class="hx" style="margin-bottom:var(--s)">${dlChips(x, !d.done)}</div>` : "")
+        + `<div class="hx"><div class="tile p0" id="task-deadline">${rows.join('<div class="divider"></div>')}</div></div>`;
+    };
+
+    const draw = () => {
+      // поля ввода живут между перерисовками
+      const n = body.querySelector("#task-note"), c = body.querySelector("#task-comment");
+      if (n) note = n.value;
+      if (c) comment = c.value;
+      const at = now(), ans = answer();
+      const name = String((t && t.title) ?? w.name ?? "").replaceAll(" №", "\u00A0№"), due = dueOfPage();
+      const done = (d && d.done) || ans === "sent" || ans === "graded", late = !done && due && due <= at;
+      const pose = done ? "joy" : late ? "evening" : "day";
+      let h = backRow() + `<div class="row tf-head"><div class="grow">
+        ${course || quiz ? `<div class="row" style="gap:6px;margin-bottom:6px">${course ? `<i class="cm-dot" style="width:8px;height:8px;background:${ink(course)}"></i>` : ""}
+          <span class="bd b6 mut" style="--sz:13px">${esc([course, quiz ? "тест" : ""].filter(Boolean).join(" · "))}</span></div>` : ""}
+        <div class="ttl" style="--sz:${titleSize(name, 30)}px">${esc(glue(name))}</div></div>
+        <span class="tf-capy">${capy(pose, 58)}</span></div>`;
+      h += dueCard(at, ans);
+      if (t && sdo) h += gradeCard(ans);
+      if (!t && sdo && error == null) h += `<div style="padding:var(--xxl)">${spinner()}</div>`;
+      if (!t && sdo && error != null) {
+        const login = dlNeedsSdo(error);
+        h += `<div class="hx" style="margin-top:var(--m)"><div class="tile" id="task-nosdo"><div class="bd b7" style="--sz:17px">${login ? "Подключи СДО" : "СДО не ответило"}</div>
+          <div class="bd mut" style="--sz:14px;margin-top:4px">${login ? "Тогда здесь будут баллы, состояние ответа и комментарии, а сдать можно будет прямо отсюда."
+            : `${esc(error)}. Срок и твои отметки ниже работают и без СДО.`}</div>
+          <button class="btn primary" style="min-height:44px;width:auto;padding:0 20px;margin-top:var(--m)" data-act="${login ? "connect" : "retry"}">${login ? "Подключить СДО" : "Ещё раз"}</button></div></div>`;
+      }
+      if (t) {
+        if (String(t.description ?? "")) h += section("Задание") + `<div class="hx"><div class="tile dl-sel bd" style="--sz:15.5px;white-space:pre-wrap">${esc(t.description)}</div></div>`;
+        const files = Array.isArray(t.files) ? t.files : [];
+        if (files.length) h += section(`Файлы задания · ${files.length}`) + fileList(files, false);
+      }
+      if (!t && !sdo && d && d.x.description && !d.x.isLink) h += section("Описание") + `<div class="hx"><div class="tile dl-sel bd" style="--sz:15px;white-space:pre-wrap">${esc(d.x.description)}</div></div>`;
+      if (t && sdo) h += answerBlock(ans);
+      if (t && commentsShown(ans)) h += commentsBlock(t.comments);
+      if (t && String(t.feedback ?? "")) h += section("Отзыв преподавателя") + `<div class="hx"><div class="tile dl-sel bd" style="--sz:15px;white-space:pre-wrap">${esc(t.feedback)}</div></div>`;
+      if (d) h += deadlineBlock();
+      const url = (t && t.url) || w.url;
+      if (typeof url === "string") h += `<div class="hx" style="padding-top:var(--l);text-align:center"><button class="dl-tlink" data-act="link" data-url="${esc(url)}">
+        ${icon("open_in_new", "", "font-size:18px;color:var(--accent)")}<span class="bd b6" style="--sz:15px;color:var(--accent)">Открыть в СДО</span></button></div>`;
+      const y = screen.scroller ? screen.scroller.scrollTop : 0;
+      body.innerHTML = `<div id="task-fresh">${h}</div><div style="height:var(--xxl)"></div>`;
+      body.querySelectorAll("textarea.tf-field").forEach(fit);   // перерисовка не сжимает набранный текст
+      if (screen.scroller) screen.scroller.scrollTop = y;
+    };
+
+    const refreshDeadline = async (a) => {
+      if (!d || !onDeadline) return;
+      const res = await onDeadline(a, d);
+      if (res === null) { Nav.pop(); return; }   // срок убран — странице он больше не нужен
+      if (res) d = res;
+      draw();
+    };
+    body.addEventListener("change", async (e) => {
+      const inp = e.target.closest("input.tf-input");
+      if (!inp || !inp.files || !rules) return;
+      tick();
+      const got = [];
+      try { for (const f of inp.files) got.push(await dlReadFile(f)); } catch (er) { sendError = errorText(er); draw(); return; }
+      for (const f of got) {
+        const why = rules.problem(f);
+        if (why == null ? good().length < rules.perSubmit : files.length < rules.perSubmit + 3) files.push({ f, why });
+      }
+      sendError = null;
+      draw();
+    });
+    body.addEventListener("input", (e) => { const ta = e.target.closest("textarea.tf-field"); if (ta) fit(ta); });
+    on(body, {
+      retry() { error = null; draw(); load(); },
+      async dl(b) {
+        tick();
+        if (loadedAt && Date.now() - loadedAt > 9 * 60000) await load();   // ссылки живут 10 минут
+        if (!t) return;
+        const list = (b.dataset.mine === "1" ? t.mine : t.files) || [], f = list[+b.dataset.k];
+        if (f) openLink(dlSdoLink(String(f.dl)));
+      },
+      link(b) { tick(); openLink(b.dataset.url); },
+      rmFile(b) { files.splice(+b.dataset.k, 1); draw(); },
+      replace() { tick(); replace = true; draw(); if (!rules) loadRules(); },
+      noReplace() { replace = false; files.length = 0; draw(); },
+      async send() {
+        if (sending || !good().length) return;
+        tick();
+        const n = body.querySelector("#task-note");
+        if (n) note = n.value;
+        const text = note.trim();
+        sending = true; sendError = null; draw();
+        try {
+          const r = await Api._req("POST", "/sdo/submit", { deadline_id: d ? d.id : 0, cmid: w.cmid, ...(replace ? { replace: true } : {}),
+            ...(text ? { comment: text } : {}), files: good().map((f) => ({ name: f.name, data: f.data })) }, 120000);
+          try { navigator.vibrate && navigator.vibrate(18); } catch (er) {}
+          const state = r && typeof r.state === "string" ? r.state : "submitted";
+          files.length = 0; replace = false; sending = false;
+          if (!(r && r.comment === "failed")) note = "";
+          if (state === "submitted") dlCheer();
+          await dlDoneSheet(r && typeof r.status === "string" ? r.status : "Отправлено в СДО", state,
+            r && typeof r.url === "string" && /^https:\/\//.test(r.url) ? r.url : "");
+          if (r && r.comment === "failed") { toast("Файл ушёл, а комментарий нет. Он ждёт в поле ниже, отправь ещё раз", "info"); comment = text; note = ""; }
+          if (d) await refreshDeadline(null);   // сдано в СДО — сервер сам отметил срок сданным
+          await load();
+        } catch (e) {
+          sendError = e.status ? e.message : "Связь оборвалась, и неизвестно, дошёл ли файл. Обнови страницу, прежде чем сдавать снова.";
+        }
+        sending = false; draw();
+      },
+      async comment() {
+        const c = body.querySelector("#task-comment");
+        const text = (c ? c.value : comment).trim();
+        if (!text || posting) return;
+        tick();
+        comment = text; posting = true; draw();
+        try {
+          const r = await Api.post(`/sdo/task/${w.cmid}/comment`, { text });
+          comment = "";
+          if (r && Array.isArray(r.items)) t = { ...t, comments: r };
+        } catch (e) { toast(errorText(e), "error"); }
+        posting = false; draw();
+      },
+      async remove() {
+        const ok = await confirmSheet({ title: "Удалить ответ?", text: "Файлы ответа уберутся из СДО. Сдать заново можно, пока не прошёл срок.",
+          action: "Удалить ответ", danger: true });
+        if (!ok) return;
+        try { await Api.post("/sdo/submission/remove", { cmid: w.cmid }); toast("Ответ удалён", "done"); }
+        catch (e) { toast(errorText(e), "error"); return; }
+        await load();
+      },
+      dlAct(b) { tick(); refreshDeadline(b.dataset.a); },
+      connect() {
+        tick();
+        if (!window.openSdoConnect) { toast("Скоро"); return; }
+        back = true;
+        openSdoConnect();
+      },
+    });
+    screen.onShow = () => { if (back) { back = false; error = null; draw(); load(); } };
+    const timer = setInterval(() => { if (!sending && !document.activeElement?.closest?.(".tf-field")) draw(); }, 30000);
+    draw();
+    load();
+    return () => clearInterval(timer);
+  }, { tint: course ? subjectColor(course) : "" });
+}
+window.openTaskFresh = openTaskFresh;
+
+/** Итог сдачи листом (как в «Сдать файлом»): «Сдано» — только когда СДО подтвердил. */
+function dlDoneSheet(status, state, url) {
+  return Sheet.show(`<div class="dl-sub"></div>`, (body, close) => {
+    const ok = state === "submitted", draft = state === "draft";
+    const col = ok ? "var(--ok)" : draft ? "var(--warn)" : "var(--accent)";
+    const ttl = ok ? "Сдано" : draft ? "Сохранено черновиком" : "Файл в СДО";
+    const hint = ok ? status : draft
+      ? `Файл лежит в СДО, но на проверку ещё не отправлен. Открой задание и нажми там «Отправить на проверку». Статус: ${status}`
+      : `СДО не подтвердил сдачу — загляни в задание, чтобы убедиться.${status ? ` Статус: ${status}` : ""}`;
+    body.querySelector(".dl-sub").innerHTML = `<div class="dl-donebox"><div class="${ok ? "dl-hop" : "dl-hop dl-calm"}">${capy(ok ? "joy" : "day", 104, col)}
+      <span class="dl-hopcheck" style="background:${col}">${icon(ok ? "check" : "priority_high", "", "font-size:22px")}</span></div>
+      <div class="ttl" style="--sz:28px;margin-top:var(--l);text-align:center">${ttl}</div>
+      <div class="bd mut" style="--sz:14px;margin-top:var(--s);text-align:center">${esc(hint)}</div>
+      ${!ok && url ? `<a class="btn dl-okbtn" href="${esc(url)}" target="_blank" rel="noopener" style="background:${col};text-decoration:none">Открыть задание в СДО</a>
+      <button class="dl-retry" data-act="close" style="margin-top:var(--s)">Закрыть</button>`
+      : `<button class="btn dl-okbtn" data-act="close" style="background:${col}">${ok ? "Отлично" : "Понятно"}</button>`}</div>`;
+    on(body, { close: () => close(true) });
+  });
+}

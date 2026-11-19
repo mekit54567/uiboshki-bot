@@ -26,6 +26,8 @@ def _activity_dates(soup) -> dict:
         value = _clean(div.get_text(" "))[len(_clean(strong.get_text(" "))):].strip()
         if label.startswith("закрыто"):
             label = "закрыто"
+        elif label.startswith("открыто"):        # «Открыто с:» — когда задание открыли (тоже бывает с латинской «c»)
+            label = "открыто"
         out.setdefault(label, value)
     return out
 
@@ -82,6 +84,13 @@ def parse_assign_page(html: str) -> dict:
     # «Оценено» / «Оценено в» в блоке «Отзыв» — кто и когда поставил оценку
     graded_by = next((v for k, v in rows.items() if k == "оценено"), "")
     graded_at = next((v for k, v in rows.items() if k == "оценено в"), "")
+    # строки таблицы, как в СДО (Никита 18.11, карточка задания): максимум,
+    # состояние оценивания, последнее изменение, «Комментарии (2)»
+    max_m = re.match(r"(\d+(?:[.,]\d+)?)", next((v for k, v in rows.items() if k.startswith("максимальная оценка")), ""))
+    # «Оценка: 12,00 / 15,00» в блоке «Отзыв» — балл за работу (из «Сдать» журнала под рукой нет)
+    grade_m = re.match(r"(\d+(?:[.,]\d+)?)", rows.get("оценка", ""))
+    modified = next((v for k, v in rows.items() if k.startswith("последнее изменение")), "")
+    com_m = re.search(r"\((\d+)\)", next((v for k, v in rows.items() if k.startswith("комментарии к ответу")), ""))
     # «Отзыв в виде комментария» в блоке оценки — что написал преподаватель
     feedback = ""
     for tr in soup.find_all("tr"):
@@ -103,12 +112,18 @@ def parse_assign_page(html: str) -> dict:
         "draft": draft,
         "offline": "вне сайта" in low,
         "remaining": next((v for k, v in rows.items() if k.startswith("оставшееся время")), ""),
-        "due": due, "opens": opens, "closed": closed, "unavailable": unavailable,
+        # opens — «Открывается:» (ещё закрыто), opened — «Открыто с:» (уже открыто, для карточки задания)
+        "due": due, "opens": opens, "opened": dates.get("открыто", ""), "closed": closed, "unavailable": unavailable,
         "time_limit": time_limit, "feedback": feedback[:3000],
         # блок теста со сведениями (попытки, проходная, время) — без строки про
         # время у такого теста ограничения нет (quiz_time.learned)
         "quiz_info": bool(soup.find(class_="quizinfo")),
         "graded_by": graded_by, "graded_at": graded_at,
+        "grade": float(grade_m.group(1).replace(",", ".")) if grade_m else None,
+        "max_grade": float(max_m.group(1).replace(",", ".")) if max_m else None,
+        "grading": next((v for k, v in rows.items() if k.startswith("состояние оценивания")), ""),
+        "modified": "" if modified.strip("-–— ") == "" else modified,
+        "comments_count": int(com_m.group(1)) if com_m else None,
         "can_submit": bool(soup.find(None, {"name": "action", "value": "editsubmission"})
                            or "action=editsubmission" in html),
     }

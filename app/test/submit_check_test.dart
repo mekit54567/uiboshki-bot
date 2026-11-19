@@ -51,14 +51,14 @@ void main() {
       'accepted': ['.docx', '.pdf'],
       'maxbytes': 20 * _mb,
     });
-    expect(r.problem(_file('макет.pages', 10)), '.pages задание не примет — нужно .docx, .pdf');
-    expect(r.problem(_file('отчёт.pdf', 21 * _mb)), 'больше 20 МБ — задание не примет');
+    expect(r.problem(_file('макет.pages', 10)), '.pages задание не примет — нужен файл: .docx или .pdf');
+    expect(r.problem(_file('отчёт.pdf', 21 * _mb)), 'больше 20\u00A0МБ — задание не примет');
     expect(r.problem(_file('отчёт.docx', 10)), isNull);
     final z = SubmitRules.fromJson({
       'accepted': ['.zip'],
       'labels': ['Архив ZIP'],
     });
-    expect(z.problem(_file('README', 1)), 'Файл без расширения задание не примет — нужно Архив ZIP');
+    expect(z.problem(_file('README', 1)), 'Файл без расширения задание не примет — нужен файл: Архив ZIP');
   });
 
   testWidgets('новый дизайн: галочка у подходящего, «!» и причина у плохих, уходит только zip', (t) async {
@@ -69,8 +69,8 @@ void main() {
     ]);
     expect(find.text('отчёт.docx'), findsOneWidget);
     expect(find.text('большой.zip'), findsOneWidget);
-    expect(find.text('.docx задание не примет — нужно Архив ZIP'), findsOneWidget);
-    expect(find.text('больше 10 МБ — задание не примет'), findsOneWidget);
+    expect(find.text('.docx задание не примет — нужен файл: Архив ZIP'), findsOneWidget);
+    expect(find.text('больше 10\u00A0МБ — задание не примет'), findsOneWidget);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
     expect(find.byIcon(Icons.priority_high_rounded), findsNWidgets(2));
     expect(find.text('1,2 МБ'), findsOneWidget);

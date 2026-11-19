@@ -47,13 +47,16 @@ class SubmitRules {
   bool fits(String name) => accepted.isEmpty || accepted.any((e) => name.toLowerCase().endsWith(e));
 
   /// Предел размера: «20 МБ».
-  String get limit => '${(maxBytes / 1048576).toStringAsFixed(maxBytes >= 10485760 ? 0 : 1)} МБ';
+  String get limit => '${(maxBytes / 1048576).toStringAsFixed(maxBytes >= 10485760 ? 0 : 1)}\u00A0МБ';
+
+  /// «нужен файл: PDF или документ Word» — что подойдёт, одним списком.
+  String get need => 'нужен файл: ${orList(labels.isNotEmpty ? labels : accepted)}';
 
   String describe() {
     final parts = <String>[
       if (labels.isNotEmpty) labels.join(', ') else if (accepted.isNotEmpty) accepted.join(' ') else 'любые файлы',
-      'до $perSubmit ${plural(perSubmit, 'файла', 'файлов', 'файлов')}',
-      if (maxBytes > 0) 'до $limit',
+      'до\u00A0$perSubmit\u00A0${plural(perSubmit, 'файла', 'файлов', 'файлов')}',
+      if (maxBytes > 0) 'до\u00A0$limit',
     ];
     return parts.join(' · ');
   }
@@ -63,12 +66,16 @@ class SubmitRules {
     if (!fits(f.name)) {
       final dot = f.name.lastIndexOf('.');
       final what = dot > 0 ? f.name.substring(dot).toLowerCase() : 'Файл без расширения';
-      return '$what задание не примет — нужно ${labels.isNotEmpty ? labels.join(', ') : accepted.join(', ')}';
+      return '$what задание не примет — $need';
     }
     if (maxBytes > 0 && f.bytes.length > maxBytes) return 'больше $limit — задание не примет';
     return null;
   }
 }
+
+/// «PDF, DOCX или картинка» — список через запятую, последний через «или».
+String orList(List<String> xs) =>
+    xs.length < 2 ? xs.join() : '${xs.sublist(0, xs.length - 1).join(', ')} или ${xs.last}';
 
 /// Размер по-человечески: «820 КБ», «1,2 МБ».
 String fileSize(int bytes) {
@@ -181,7 +188,7 @@ class _SubmitSheetState extends State<SubmitSheet> {
         }
       }
       _error = bad.isNotEmpty
-          ? 'Задание не примет: ${bad.join(', ')} — нужно ${rules.labels.isNotEmpty ? rules.labels.join(', ') : rules.accepted.join(' ')}'
+          ? 'Задание не примет: ${bad.join(', ')} — ${rules.need}'
           : big.isNotEmpty
           ? 'Слишком большой: ${big.join(', ')}'
           : null;
@@ -393,6 +400,26 @@ class _SubmitSheetState extends State<SubmitSheet> {
     icon: Icon(Icons.close_rounded, size: 18, color: p.muted),
   );
 }
+
+/// Итог сдачи листом поверх страницы задания (новый вид: сдают прямо на странице).
+Future<void> showSubmitDone(
+  BuildContext context, {
+  required String status,
+  String state = 'submitted',
+  String url = '',
+}) => showModalBottomSheet<void>(
+  useSafeArea: true,
+  context: context,
+  backgroundColor: AppStyle.of(context).p.cardSolid,
+  showDragHandle: true,
+  isScrollControlled: true,
+  builder: (ctx) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.xl),
+      child: _Done(status: status, state: state, url: url, onClose: () => Navigator.pop(ctx)),
+    ),
+  ),
+);
 
 /// Сдал — капибара радуется: подпрыгивает, рядом зелёная галочка. Зелёное
 /// «Сдано» — только когда СДО подтвердил отправку; черновик и непонятный

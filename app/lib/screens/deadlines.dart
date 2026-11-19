@@ -28,6 +28,7 @@ import '../widgets/report.dart' show openReportMenu;
 import 'deadline_edit.dart';
 import 'homework.dart';
 import 'submit.dart';
+import 'task.dart';
 
 part 'deadlines_fresh.dart';
 
@@ -89,8 +90,13 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
     final sdo = _sdo = SdoCheck.fromJson(j['sdo']);
     final list = [for (final x in raw) Deadline.fromJson(x)];
     if (!Api.cacheOnly) unawaited(HomeWidgets.fromDeadlines(list)); // горящий срок на виджете
-    return (list: list, extra: {for (final x in raw) x['id'] as int: DlExtra.fromJson(x)}, sdo: sdo);
+    final items = (list: list, extra: {for (final x in raw) x['id'] as int: DlExtra.fromJson(x)}, sdo: sdo);
+    _last = items;
+    return items;
   }
+
+  /// Последний прочитанный список: страница задания берёт из него свежий срок.
+  _Items? _last;
 
   SdoCheck? _sdo;
 
@@ -151,10 +157,43 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
   }
 
   Future<void> _actions(Deadline d, DlExtra x, Future<void> Function() reload) async {
+    final a = await showDeadlineActions(context, d, x, due: _dueLabel(d));
+    if (a == null || !mounted) return;
+    await _act(a, d, x, reload);
+  }
+
+  /// Новый вид: нажал на срок — полноценная страница задания (Никита 18.11),
+  /// действия со сроком — на ней же; вернулся — список заново.
+  Future<void> _page(Deadline d, DlExtra x, Future<void> Function() reload) async {
+    tick();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TaskScreen(
+          api: widget.api,
+          work: workOfDeadline(d, x.description),
+          deadline: d,
+          extra: x,
+          onDeadline: (a, d, x) async {
+            if (a != null) {
+              await _act(a, d, x, reload);
+            } else {
+              await reload();
+            }
+            final last = _last;
+            if (last == null) return (d: d, x: x);
+            final i = last.list.indexWhere((e) => e.id == d.id);
+            if (i < 0) return null; // удалили или скрыли
+            return (d: last.list[i], x: last.extra[d.id] ?? x);
+          },
+        ),
+      ),
+    );
+    if (mounted) await reload();
+  }
+
+  Future<void> _act(DlAction a, Deadline d, DlExtra x, Future<void> Function() reload) async {
     final api = widget.api;
     final due = _dueLabel(d);
-    final a = await showDeadlineActions(context, d, x, due: due);
-    if (a == null || !mounted) return;
     switch (a) {
       case DlAction.submit:
         await _submit(d, reload);
@@ -206,8 +245,13 @@ class _DeadlinesScreenState extends State<DeadlinesScreen> {
       sdo: items.sdo,
       onRetry: () => _retry(reload),
       onAdd: () => _add(reload),
-      onOpen: (d) => _actions(d, items.extra[d.id] ?? DlExtra.fromJson(const {}), reload),
-      onSubmit: (d) => _submit(d, reload),
+      onOpen: (d) => AppStyle.of(context).fresh
+          ? _page(d, items.extra[d.id] ?? DlExtra.fromJson(const {}), reload)
+          : _actions(d, items.extra[d.id] ?? DlExtra.fromJson(const {}), reload),
+      // новый вид: «Сдать» тоже ведёт на страницу задания — сдают там (Никита 18.11)
+      onSubmit: (d) => AppStyle.of(context).fresh
+          ? _page(d, items.extra[d.id] ?? DlExtra.fromJson(const {}), reload)
+          : _submit(d, reload),
       onToggle: (d, done) async {
         await _toggle(d, done);
         await reload();
