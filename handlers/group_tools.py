@@ -7,7 +7,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 from database import init_hw_table, set_setting
 from kapibara.core.utils import esc, plural
 from kapibara.bot.tg import data_of, msg, sender, text_of
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @router.message(Command("setzam"))
 async def cmd_setzam(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     parts = text_of(message).split()
@@ -59,7 +59,7 @@ async def cmd_rating(message: Message):
 @router.message(Command("status"))
 async def cmd_status(message: Message):
     """Здоровье бота (health.py): СДО, расписание, бэкап, ошибки — только староста."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.ops import health
     await message.answer(await health.report(), parse_mode="HTML")
@@ -71,7 +71,7 @@ async def cmd_aimain(message: Message):
     только староста, на всех сразу: /aimain all — все (по умолчанию); на случай
     отката: plus — староста и «Капибара+», me — только старосты, gemini — все на
     Gemini. Без аргумента — что сейчас."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.ai import gemini as gemini_solver
     if not gemini_solver.AI_SPARE_MODEL:
@@ -99,7 +99,7 @@ async def cmd_aitest(message: Message):
     /aitest — отбор многих моделей с оценкой судьёй; /aitest id1 id2 — отбор
     только этих; /aitest list — кто попадёт и почём, без прогона;
     /aitest vote id1 id2 — слепое голосование финалистов."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.core.config import OPENROUTER_API_KEY
     if not OPENROUTER_API_KEY:
@@ -143,7 +143,7 @@ async def cmd_aitest(message: Message):
 async def cmd_sub(message: Message):
     """/sub <id> <дней> — выдать подписку вручную (0 дней — снять); без
     аргументов — тариф и группа своего аккаунта. Только староста (plans.py)."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from datetime import timedelta
     from kapibara.features.groups import groups
@@ -166,7 +166,7 @@ async def cmd_sub(message: Message):
 async def cmd_embedtest(message: Message):
     """Своя модель векторов против Gemini на лекциях группы (embed_bench.py) —
     только староста. /embedtest — все модели, /embedtest ключ… — выбранные."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.ai import embed_bench
     from kapibara.features.ai import local_embed
@@ -187,7 +187,7 @@ async def cmd_embedtest(message: Message):
 @router.message(Command("netcheck"))
 async def cmd_netcheck(message: Message):
     """Кто отвечает серверу бота и каким путём (net_check.py) — только староста."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.ops import net_check
     await message.answer(net_check.text(await net_check.check(message.bot)), parse_mode="HTML")
@@ -202,7 +202,7 @@ PUSH_RESULTS = {"ok": "✅ ушёл", "gone": "❌ телефон отписан
 async def cmd_pushtest(message: Message):
     """Пробный пуш на свои телефоны (app_push) — только староста. Текст
     шифруется, как у настоящих: дошёл с этим текстом — расшифровка работает."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.notifications import app_push
     data = {"title": "Пробный пуш", "body": "Если ты читаешь этот текст — расшифровка на телефоне работает.",
@@ -219,7 +219,7 @@ async def cmd_pushtest(message: Message):
 @router.message(Command("pulsecheck"))
 async def cmd_pulsecheck(message: Message):
     """Пускает ли pulse.mirea.ru сервер бота (pulse_check.py) — только староста."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.pulse import check as pulse_check
     await message.answer(pulse_check.text(await pulse_check.check()))
@@ -229,7 +229,7 @@ async def cmd_pulsecheck(message: Message):
 async def cmd_pulseprobe(message: Message):
     """Разведка Пульса архивом (pulse_probe.py): файлы приложения и, с
     PULSE_COOKIE, свои ответы методов — только староста."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     from kapibara.features.pulse import probe as pulse_probe
     from aiogram.types import BufferedInputFile
@@ -289,14 +289,14 @@ async def _send_stats(bot, chat_id: int, days: int):
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
     """Статистика бота картинкой (stats.py) — только староста."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     await _send_stats(message.bot, message.chat.id, 30)
 
 
 @router.callback_query(F.data.startswith("stats:"))
 async def cb_stats(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer()
         return
     parts = data_of(callback).split(":")

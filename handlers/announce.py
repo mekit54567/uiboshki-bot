@@ -12,7 +12,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from database import get_all_subscribed_users
 from kapibara.bot.tg import msg, sender
 from kapibara.core.telegram import cosmetic
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 
 router = Router()
 
@@ -25,7 +25,7 @@ class AnnounceState(StatesGroup):
 
 @router.message(Command("announce"))
 async def cmd_announce(message: Message, state: FSMContext):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await state.set_state(AnnounceState.waiting)
@@ -93,7 +93,7 @@ async def send_announce(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(Command("clearsem"))
 async def cmd_clearsem(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[[
@@ -114,7 +114,7 @@ async def cmd_clearsem(message: Message):
 
 @router.callback_query(F.data.startswith("clearsem:"))
 async def clearsem_confirm(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     with cosmetic("announce.clearsem: снять кнопки"):      # уже сняты (двойное нажатие) — не страшно

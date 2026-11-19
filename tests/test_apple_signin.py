@@ -82,8 +82,10 @@ async def test_sign_in_creates_account_and_keeps_token(client, apple):
     assert r.status_code == 200
     uid = await find_user("apple", "001234.abc")
     assert is_local(uid)
-    me = client.get("/api/me", headers={"Authorization": "Bearer " + r.json()["token"]}).json()
-    assert me["first_name"] == "Аня"
+    auth = {"Authorization": "Bearer " + r.json()["token"]}
+    assert client.get("/api/me", headers=auth).json()["first_name"] == "Apple"   # до согласия имени нет
+    assert client.post("/api/consent", json={"kind": "pd"}, headers=auth).status_code == 200
+    assert client.get("/api/me", headers=auth).json()["first_name"] == "Аня"
     url, data = apple[0]
     assert url == apple_signin.TOKEN_URL and data["code"] == "c-1" and data["client_id"] == "ru.uiboshki.app"
     # второй вход — тот же аккаунт

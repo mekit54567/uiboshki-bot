@@ -46,6 +46,7 @@ async def test_add_note_shows_for_group(client):
     assert [(n["subject"], n["text"], n["mine"]) for n in mine] == [("Матан", "контрольная в 401", True)]
     mate = c.get(f"/api/notes?date={_day()}", headers=h(MATE)).json()["items"]
     assert [n["mine"] for n in mate] == [False]                     # одногруппник видит, но не своё
+    assert "created_by" not in mate[0]                              # чужой id группе не отдаём (152-ФЗ)
     assert c.get(f"/api/notes?date={_day()}", headers=h(OTHER_GROUP_USER)).json()["items"] == []
     assert c.post("/api/v1/notes", json={"date": _day(), "text": "x"}, headers=h(AUTHOR)).status_code == 200
 

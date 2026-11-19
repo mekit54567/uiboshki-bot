@@ -261,7 +261,9 @@ async def auth_oauth_callback(provider: str, request: Request, code: str = "", s
                      f"<form method='post' action='/api/auth/{provider}/confirm'><input type='hidden' name='state' "
                      f"value='{confirm}'><button style='font:inherit;padding:12px 20px'>Да, привязать</button></form>")
     if not owner:
-        owner = await new_local_user(name or oauth.NAMES[provider])
+        # имя — только в identities, в профиль оно попадёт после согласия (privacy.give):
+        # до согласия о человеке храним лишь то, без чего не войти (сверка 152-ФЗ 19.11)
+        owner = await new_local_user(oauth.NAMES[provider])
         await link(provider, subject, owner, name)
     elif name and not (await get_user(owner) or {}).get("full_name"):
         await upsert_user(owner, "", name)
@@ -350,7 +352,7 @@ async def auth_apple(body: AppleBody, request: Request):
     name = " ".join(body.name.split())[:80]
     owner = await find_user("apple", claims["sub"])
     if not owner:
-        owner = await new_local_user(name or apple_signin.NAME)
+        owner = await new_local_user(apple_signin.NAME)       # имя — после согласия (privacy.give)
         await link("apple", claims["sub"], owner, name)
     with aside(logging.getLogger(__name__), "Apple /auth/token"):  # без refresh-токена вход всё равно состоялся
         await apple_signin.save_token(owner, await apple_signin.exchange(body.code[:2000]))

@@ -353,6 +353,24 @@ async def test_group_view_people_by_consent(db):
 
 
 @pytest.mark.asyncio
+async def test_erasing_hidden_from_group(db):
+    """Попросил удалить данные — до полного стирания группа его в рейтинге не видит
+    (политика: «никак не используются и никому не видны»; сверка 152-ФЗ 19.11)."""
+    from database.groups import upsert_group
+    from database.privacy import request_erase
+    await upsert_group(501, "УИБО-01-24")
+    for uid in (1, 2):
+        await _person(db, uid, f"Имя{uid} Ф", 501)
+        await db.save_score_points(uid, _day(-1), {1: uid * 10})
+    await xp.save(2, show=True)
+    xp.forget()
+    assert [p["nick"] for p in (await xp.group_view(1, 501, 501))["people_list"]][:1] == ["Имя2 Ф."]
+    await request_erase(2, "2099-01-01")
+    xp.forget()
+    assert "Имя2 Ф." not in [p["nick"] for p in (await xp.group_view(1, 501, 501))["people_list"]]
+
+
+@pytest.mark.asyncio
 async def test_show_all_is_own_consent(db, monkeypatch):
     """«Показывать меня всем» — только с галочкой отдельного согласия (ст. 10.1),
     его версия — в consents; новая версия текста выключает показ до нового

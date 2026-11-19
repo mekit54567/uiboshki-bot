@@ -403,13 +403,8 @@ async def init_db():
                 PRIMARY KEY (vote_id, user_id)
             )
         """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS group_members (
-                user_id   INTEGER PRIMARY KEY,
-                full_name TEXT,
-                username  TEXT
-            )
-        """)
+        # group_members (имя, ник) не заполнялась и нигде не читалась — убрана (сверка 152-ФЗ 19.11)
+        await db.execute("DROP TABLE IF EXISTS group_members")
         # ── Диффы расписания ─────────────────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS schedule_snapshots (
