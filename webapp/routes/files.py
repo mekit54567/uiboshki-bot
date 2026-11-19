@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
@@ -62,7 +62,7 @@ async def api_files(subject: str = "", q: str = "", user: dict = CurrentUser):
             "can_edit": editor or f.get("uploaded_by") == user["id"],
         })
     return {"items": out, "categories": [{"key": k, "label": v} for k, v in CATEGORIES],
-            "can_delete": not STAROSTA_ID or is_starosta(user["id"])}
+            "can_delete": is_starosta(user["id"])}
 
 
 @router.post("/api/files/{file_id}/send")
@@ -175,7 +175,7 @@ async def api_files_delete(body: FileIds, user: dict = CurrentUser):
     """Удалить файл или сразу папку/раздел (лишнее из выгрузки СДО) — у
     всей группы. Как /delfile в боте: только староста."""
     from database import delete_files, get_files
-    if STAROSTA_ID and not is_starosta(user["id"]):
+    if not is_starosta(user["id"]):
         raise HTTPException(status_code=403, detail="удалять файлы может только староста")
     ids = sorted(set(body.ids))
     if not ids or len(ids) > 1000:

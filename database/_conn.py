@@ -7,6 +7,7 @@ database.DATABASE_PATH: пакет пересылает чтение и запи
 сам пакет — иначе пакет и подмодули сцепляются в клубок (03.11)."""
 
 import asyncio
+import contextlib
 import logging
 import sqlite3
 
@@ -29,11 +30,9 @@ class _Tuned(sqlite3.Connection):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        try:
+        with contextlib.suppress(sqlite3.Error):      # база не ответила на PRAGMA — режим по умолчанию (FULL)
             if self.execute("PRAGMA journal_mode").fetchone()[0] == "wal":
                 self.execute("PRAGMA synchronous=NORMAL")
-        except sqlite3.Error:
-            pass
 
 
 def connect():

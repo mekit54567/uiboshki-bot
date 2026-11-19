@@ -30,7 +30,7 @@ from database import (
     get_last_feed_post_time, add_feed_post, set_feed_post_message_id,
     get_feed_post, delete_feed_post, set_feed_reaction, get_feed_reaction_counts,
 )
-from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, STAROSTA_ID, is_starosta
+from kapibara.core.config import GROUP_CHAT_ID, FEED_COOLDOWN_MINUTES, is_starosta
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
 from kapibara.core.errors import EXTERNAL, aside
@@ -159,7 +159,7 @@ async def handle_reaction(callback: CallbackQuery):
 
 @router.message(Command("delpost"))
 async def cmd_delpost(message: Message, bot: Bot):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     parts = text_of(message).split()

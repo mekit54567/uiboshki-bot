@@ -1,16 +1,18 @@
 """Файлы из СДО (/sdofiles): пробный прогон, перенос по предметам, выгрузка по кнопке."""
 
 import asyncio
+import sqlite3
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
 from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
 )
 
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 from kapibara.bot.tg import bot_of, msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
+from kapibara.core.errors import EXTERNAL, NETWORK
 
 router = Router()
 
@@ -85,7 +87,7 @@ def _sdo_report(courses, known: set[str], current: dict | None = None) -> tuple[
 
 @router.message(Command("sdofiles"))
 async def cmd_sdo_files(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.features.sdo import files as sdo_files
@@ -104,7 +106,7 @@ async def cmd_sdo_files(message: Message):
     except sdo_parser.SdoSessionExpired:
         await wait.edit_text("⚠️ Кука СДО протухла — обнови SDO_SESSION_COOKIE в переменных хостинга (подробно — /syncsdo).")
         return
-    except Exception as e:
+    except (*NETWORK, ValueError) as e:          # сеть или странный ответ СДО; баг — в dp.error
         await wait.edit_text(f"❌ СДО не ответил: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")
         return
     if not courses:
@@ -132,7 +134,7 @@ async def cmd_sdo_files(message: Message):
 
 @router.callback_query(F.data == "sdof:mv")
 async def sdo_files_move(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     moves = _sdo_moves.pop(callback.from_user.id, None)
@@ -151,7 +153,7 @@ async def sdo_files_move(callback: CallbackQuery):
 
 @router.callback_query(F.data == "sdof:go")
 async def sdo_files_go(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     if any(not t.done() for t in _sdo_tasks):
@@ -187,7 +189,7 @@ async def _sdo_import(bot: Bot, chat_id: int, status: Message, files: list):
     try:
         async with sdo_files.make_client((await sdo_parser.home_cookie())[0]) as client:
             st = await sdo_files.import_files(bot, chat_id, client, files, progress)
-    except Exception as e:
+    except (*EXTERNAL, sqlite3.Error, OSError) as e:     # по файлу сбои считает import_files; тут — общее
         await bot.send_message(chat_id, f"❌ Выгрузка прервалась: {esc(str(e) or type(e).__name__)}", parse_mode="HTML")
         return
     lines = [f"✅ <b>Из СДО добавлено: {st['added']}</b>"]

@@ -99,14 +99,15 @@ async def test_validation(client):
 
 
 @pytest.mark.asyncio
-async def test_not_member_has_no_group_counts(client, monkeypatch):
+async def test_not_in_chat_still_has_group_counts(client, monkeypatch):
+    """19.11, Никита: своя группа открыта и тем, кого нет в чате группы."""
     from database import members
     c, h = client
 
     async def known(uid):
         return False
     monkeypatch.setattr(members, "known", known)
-    assert c.get(_q(_start()), headers=h(ME)).status_code == 403
+    assert c.get(_q(_start()), headers=h(ME)).status_code == 200
 
 
 @pytest.mark.asyncio

@@ -3,10 +3,12 @@
 Команда /weather — в handlers/weather.py."""
 import logging
 import time
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from kapibara.core import net
 from kapibara.core.errors import NETWORK, aside
+from kapibara.features.weather.tips import clothes_tip
 
 # имя логгера — прежнее: раздел «Погода» в /status не меняется
 logger = logging.getLogger("handlers.weather")
@@ -74,7 +76,7 @@ def weather_emoji(code: int) -> str:
     elif code in (45, 48):      return "🌫"
     elif code in (51, 53, 55):  return "🌦"
     elif code in (61, 63, 65):  return "🌧"
-    elif code in (71, 73, 75):  return "❄️"
+    elif code in (71, 73, 75, 85, 86):  return "❄️"
     elif code in (80, 81, 82):  return "🌦"
     elif code in (95, 96, 99):  return "⛈"
     return "🌡"
@@ -87,6 +89,7 @@ def weather_desc(code: int) -> str:
         51: "Лёгкая морось", 53: "Морось", 55: "Сильная морось",
         61: "Лёгкий дождь", 63: "Дождь", 65: "Сильный дождь",
         71: "Лёгкий снег", 73: "Снег", 75: "Сильный снег",
+        85: "Снегопад", 86: "Сильный снегопад",
         80: "Ливень", 81: "Сильный ливень", 82: "Очень сильный ливень",
         95: "Гроза", 96: "Гроза с градом", 99: "Сильная гроза",
     }
@@ -121,20 +124,16 @@ async def format_weather() -> str:
     if precip > 0:
         text += f"🌧 Осадки {precip} мм\n"
 
-    tip = _clothes_tip(temp)
-    text += f"\n{tip[0]} {tip[2:].capitalize()}"
+    tip = _clothes_tip(temp, feels, code, wind, precip)
+    text += f"\n{tip[:1].upper()}{tip[1:]}"
 
     return text
 
 
-def _clothes_tip(temp: int) -> str:
-    if temp < 0:
-        return "🧥 оденься потеплее"
-    if temp < 10:
-        return "🧣 куртка не помешает"
-    if temp < 18:
-        return "👕 лёгкая куртка"
-    return "😎 можно налегке"
+def _clothes_tip(temp: int, feels: int | None = None, code: int = 0,
+                 wind: float = 0, precip: float = 0) -> str:
+    now = datetime.now(TZ)
+    return clothes_tip(temp, feels, code, wind, precip, now.date(), now.hour)
 
 
 async def get_weather_for_morning() -> str:
@@ -149,7 +148,7 @@ async def get_weather_for_morning() -> str:
     sign = lambda t: f"+{t}" if t > 0 else str(t)
     code = c["weathercode"]
     return (f"{weather_emoji(code)} {sign(temp)}°, {weather_desc(code).lower()}, "
-            f"ощущается {sign(feels)}° · {_clothes_tip(temp)}")
+            f"ощущается {sign(feels)}° · {_clothes_tip(temp, feels, code, c["windspeed_10m"], c["precipitation"])}")
 
 
 # Вечерняя сводка (evening_digest.py) — погода на завтра: дневной прогноз
@@ -160,7 +159,7 @@ _tomorrow_cache: tuple[float, str, dict | None] | None = None   # (до когд
 async def fetch_tomorrow() -> dict | None:
     """{"tmin": 2, "tmax": 6, "code": 63} на завтра по Москве или None."""
     global _tomorrow_cache
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     day = (datetime.now(TZ).date() + timedelta(days=1)).isoformat()
     if _tomorrow_cache and _tomorrow_cache[0] > time.monotonic() and _tomorrow_cache[1] == day:
         return _tomorrow_cache[2]

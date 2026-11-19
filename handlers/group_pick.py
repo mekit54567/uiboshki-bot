@@ -62,9 +62,6 @@ async def group_chosen(callback: CallbackQuery, state: FSMContext):
     if not g:
         await callback.answer("Такой группы нет", show_alert=True)
         return
-    if g.get("denied"):
-        await callback.answer(g["denied"].capitalize(), show_alert=True)
-        return
     await state.clear()
     await callback.answer()
     text = f"Готово: ты в группе <b>{esc(g['name'])}</b>. Сменить — /group"

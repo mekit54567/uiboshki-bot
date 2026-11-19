@@ -578,5 +578,14 @@ async def task_detail(cookie: str, cmid: int, module: str = "assign") -> dict:
                 page["maxbytes"] = edit["maxbytes"]
             except sdo_submit.SubmitError:
                 page["can_submit"] = page["can_edit"] = False
+        if module == "assign":
+            # комментарии к ответу, как в СДО (карточка задания, Никита 18.11);
+            # не вышло — задание всё равно показываем, без переписки
+            from kapibara.features.sdo import comments as sdo_comments
+            try:
+                page["comments"] = await sdo_comments.fetch(client, html)
+            except (sdo_comments.CommentError, httpx.HTTPError) as e:
+                logger.info(f"СДО: комментарии задания {cmid} не открылись: {e}")
+                page["comments"] = None
     page.update(cmid=cmid, url=url, limit=min(sdo_submit.MAX_FILES, page["maxfiles"] or sdo_submit.MAX_FILES))
     return page

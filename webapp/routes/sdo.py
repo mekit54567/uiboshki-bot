@@ -77,10 +77,15 @@ class SdoSubmit(BaseModel):
     data: str = ""  # base64 — один файл (старый формат)
     files: list[SdoFile] = []
     replace: bool = False  # «Редактировать ответ»: новые файлы вместо прежних
+    comment: str = ""      # комментарий к ответу (карточка задания): уходит после файлов
 
 
 class SdoRemove(BaseModel):
     cmid: int
+
+
+class SdoComment(BaseModel):
+    text: str
 
 
 @router.get("/api/sdo/status")
@@ -252,6 +257,40 @@ async def api_sdo_submit(body: SdoSubmit, user: dict = CurrentUser):
                   url=f"{SDO_BASE_URL}/mod/assign/view.php?id={cmid}")
     if result["state"] == "submitted":   # ушло на проверку — дедлайн у себя сданным (черновик — нет)
         await _aside("отметка «сдал» после сдачи", lambda: sdo_done.mark(user["id"], [cmid]))
+    if body.comment.strip():
+        # комментарий — отдельным запросом, как в СДО; файлы уже ушли, поэтому
+        # его сбой — не сбой сдачи: приложение скажет «комментарий не ушёл»
+        from kapibara.features.sdo import comments as sdo_comments
+        try:
+            await sdo_comments.add(cookie, cmid, body.comment)
+            result["comment"] = "ok"
+        except (sdo_comments.CommentError, SdoSessionExpired) as e:
+            logger.info(f"СДО: комментарий к ответу {cmid} у {user['id']} не ушёл: {e}")
+            result["comment"] = "failed"
+    return result
+
+
+@router.post("/api/sdo/task/{cmid}/comment")
+async def api_sdo_task_comment(cmid: int, body: SdoComment, user: dict = CurrentUser):
+    """Комментарий к своему ответу на задание — как поле «Комментарии» в СДО.
+    → комментарии заново: {count, items: [{author, time, at, text}], can_post}."""
+    from kapibara.core import ratelimit
+    from kapibara.features.sdo import accounts as sdo_accounts
+    from kapibara.features.sdo import comments as sdo_comments
+    from kapibara.features.sdo.parser import SdoSessionExpired
+    if not ratelimit.allow("sdo_comment", user["id"]):
+        raise HTTPException(status_code=429, detail="слишком много комментариев подряд — попробуй через 10 минут")
+    cookie = await sdo_accounts.cookie_for(user["id"])
+    if not cookie:
+        raise HTTPException(status_code=403, detail="сначала подключи СДО: вкладка СДО → Вход")
+    try:
+        result = await sdo_comments.add(cookie, cmid, body.text)
+    except SdoSessionExpired:
+        await sdo_accounts.mark_expired(user["id"])
+        raise HTTPException(status_code=403, detail="вход в СДО устарел — подключи заново: вкладка СДО → Вход") from None
+    except sdo_comments.CommentError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    logger.info(f"СДО: {user['id']} написал комментарий к ответу в задании {cmid}")
     return result
 
 

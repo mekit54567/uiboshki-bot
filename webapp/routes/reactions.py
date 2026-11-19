@@ -23,7 +23,7 @@ def _when(start: str) -> datetime:
 async def _group(user: dict) -> int:
     from database.groups import home, viewer_group
     gid = await viewer_group(user["id"])
-    if not gid and home():   # не в чате своей группы и другую не выбрал — счёта нет
+    if not gid and home():   # группы нет — счёта нет
         raise HTTPException(status_code=403, detail="реакции — для своей группы")
     return gid
 

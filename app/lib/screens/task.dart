@@ -2,19 +2,27 @@
 // осталось, статус и оценка, описание, файлы преподавателя и мой ответ,
 // «Сдать работу»; ответ уже есть и не оценён — «Редактировать ответ» и
 // «Удалить ответ», как в СДО. У теста — попытки и лучший результат; пройти — на сайте.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api.dart';
 import '../api/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
+import '../widgets/capy.dart';
 import '../widgets/capy_refresh.dart';
+import '../widgets/cheer.dart';
 import '../widgets/common.dart';
 import '../widgets/goal_card.dart';
+import 'deadline_edit.dart';
 import 'files.dart';
 import 'sdo_connect.dart';
 import 'submit.dart';
+
+part 'task_fresh.dart';
 
 /// Открыть ссылку — системным браузером; в тестах подменяется.
 typedef OpenLink = Future<void> Function(Uri uri);
@@ -59,6 +67,14 @@ class TaskScreen extends StatefulWidget {
   final String course;
   final OpenLink open;
   final PickFiles pick;
+
+  /// Срок из «Сдать» (новый вид): дата, отметки и действия со сроком на странице.
+  final Deadline? deadline;
+  final DlExtra? extra;
+  final DeadlineAct? onDeadline;
+
+  /// «Сейчас» для тестов; без него — часы.
+  final DateTime? at;
   const TaskScreen({
     super.key,
     required this.api,
@@ -66,6 +82,10 @@ class TaskScreen extends StatefulWidget {
     this.course = '',
     this.open = openExternal,
     this.pick = systemPick,
+    this.deadline,
+    this.extra,
+    this.onDeadline,
+    this.at,
   });
 
   @override
@@ -80,13 +100,48 @@ class _TaskScreenState extends State<TaskScreen> {
   Map<String, dynamic> get w => widget.work;
   bool get _quiz => w['module'] == 'quiz';
 
+  // новый вид: срок со страницы «Сдать», сдача и комментарии прямо здесь
+  Deadline? _d;
+  DlExtra? _x;
+  SubmitRules? _rules;
+  String? _rulesError, _sendError;
+  final _files = <({Picked f, String? why})>[];
+  bool _sending = false, _posting = false, _replace = false;
+  final _noteCtl = TextEditingController();
+  final _commentCtl = TextEditingController();
+
+  void _setState(VoidCallback f) {
+    if (mounted) setState(f);
+  }
+
+  /// Что уйдёт в СДО — только подходящие файлы.
+  List<Picked> get _good => [
+    for (final e in _files)
+      if (e.why == null) e.f,
+  ];
+
   @override
   void initState() {
     super.initState();
+    _d = widget.deadline;
+    _x = widget.extra;
+    if (w['cmid'] is int) _load();
+  }
+
+  @override
+  void dispose() {
+    _noteCtl.dispose();
+    _commentCtl.dispose();
+    super.dispose();
+  }
+
+  void _retry() {
+    _setState(() => _error = null);
     _load();
   }
 
   Future<void> _load() async {
+    if (w['cmid'] is! int) return;
     try {
       final r = await widget.api.get('/sdo/task/${w['cmid']}${_quiz ? '?module=quiz' : ''}');
       if (!mounted) return;
@@ -95,11 +150,146 @@ class _TaskScreenState extends State<TaskScreen> {
         _error = null;
         _loadedAt = DateTime.now();
       });
+      if (_t?['can_submit'] == true && _rules == null && mounted && AppStyle.of(context).fresh) {
+        await _loadRules();
+      }
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
       if (mounted) setState(() => _error = errorText(e));
     }
+  }
+
+  /// Что принимает задание — до выбора файлов (как в листе «Сдать файлом»).
+  Future<void> _loadRules() async {
+    try {
+      final r = await widget.api.get('/sdo/submit-rules?cmid=${w['cmid']}&deadline_id=${_d?.id ?? 0}');
+      _setState(() {
+        _rules = SubmitRules.fromJson(Map<String, dynamic>.from(r));
+        _rulesError = null;
+      });
+    } on ApiError catch (e) {
+      _setState(() => _rulesError = e.message);
+    } catch (e) {
+      _setState(() => _rulesError = errorText(e));
+    }
+  }
+
+  /// Прикрепить: плохой файл остаётся в списке с причиной, хорошие — до лимита задания.
+  Future<void> _pick() async {
+    final rules = _rules;
+    if (rules == null) return;
+    final got = await widget.pick(rules.accepted);
+    if (!mounted) return;
+    setState(() {
+      for (final f in got) {
+        final why = rules.problem(f);
+        if (why == null ? _good.length < rules.perSubmit : _files.length < rules.perSubmit + 3) {
+          _files.add((f: f, why: why));
+        }
+      }
+      _sendError = null;
+    });
+  }
+
+  /// «Отправить»: файлы в СДО своим входом, комментарий — следом.
+  Future<void> _send() async {
+    setState(() {
+      _sending = true;
+      _sendError = null;
+    });
+    final note = _noteCtl.text.trim();
+    try {
+      final r = await widget.api.post('/sdo/submit', {
+        'deadline_id': _d?.id ?? 0,
+        'cmid': w['cmid'],
+        if (_replace) 'replace': true,
+        if (note.isNotEmpty) 'comment': note,
+        'files': [
+          for (final f in _good) {'name': f.name, 'data': base64Encode(f.bytes)},
+        ],
+      });
+      HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      final m = r is Map ? r : const {};
+      final state = m['state'] is String ? m['state'] as String : 'submitted';
+      final url = m['url'] is String && (m['url'] as String).startsWith('https://') ? m['url'] as String : '';
+      setState(() {
+        _files.clear();
+        _replace = false;
+        if (m['comment'] != 'failed') _noteCtl.clear();
+      });
+      if (state == 'submitted') cheer(context);
+      await showSubmitDone(
+        context,
+        status: m['status'] is String ? m['status'] as String : 'Отправлено в СДО',
+        state: state,
+        url: url,
+      );
+      if (!mounted) return;
+      if (m['comment'] == 'failed') {
+        showToast(context, 'Файл ушёл, а комментарий нет. Он ждёт в поле ниже, отправь ещё раз', kind: ToastKind.info);
+        _commentCtl.text = note;
+        _noteCtl.clear();
+      }
+      if (_d != null && _x != null) {
+        // сдано в СДО — сервер сам отметил срок сданным; берём свежий срок
+        final res = await widget.onDeadline?.call(null, _d!, _x!);
+        if (res != null) {
+          _setState(() {
+            _d = res.d;
+            _x = res.x;
+          });
+        }
+      }
+      await _load();
+    } on ApiError catch (e) {
+      _setState(() => _sendError = e.message);
+    } catch (e) {
+      // связь могла оборваться уже после сдачи — не пишем «не ушёл» наугад
+      _setState(
+        () => _sendError = isOffline(e)
+            ? 'Связь оборвалась, и неизвестно, дошёл ли файл. Обнови страницу, прежде чем сдавать снова.'
+            : errorText(e),
+      );
+    } finally {
+      _setState(() => _sending = false);
+    }
+  }
+
+  /// Комментарий к ответу — сразу в СДО.
+  Future<void> _postComment() async {
+    final text = _commentCtl.text.trim();
+    if (text.isEmpty) return;
+    tick();
+    setState(() => _posting = true);
+    try {
+      final r = await widget.api.post('/sdo/task/${w['cmid']}/comment', {'text': text});
+      _commentCtl.clear();
+      if (r is Map && r['items'] is List) _setState(() => _t = {...?_t, 'comments': r});
+    } on ApiError catch (e) {
+      if (mounted) showToast(context, e.message, kind: ToastKind.error);
+    } catch (e) {
+      if (mounted) showToast(context, errorText(e), kind: ToastKind.error);
+    } finally {
+      _setState(() => _posting = false);
+    }
+  }
+
+  /// Действие со сроком: делает экран «Сдать», страница берёт новые данные срока.
+  Future<void> _deadlineAct(DlAction a) async {
+    final d = _d, x = _x, act = widget.onDeadline;
+    if (d == null || x == null || act == null) return;
+    final res = await act(a, d, x);
+    if (!mounted) return;
+    if (res == null) {
+      Navigator.of(context).maybePop(); // срок убран — страница ему больше не нужна
+      return;
+    }
+    setState(() {
+      _d = res.d;
+      _x = res.x;
+    });
   }
 
   /// Ссылки на файлы живут 10 минут — экран открыт дольше, берём свежие.
@@ -155,6 +345,15 @@ class _TaskScreenState extends State<TaskScreen> {
   Widget build(BuildContext context) {
     final p = AppStyle.of(context).p;
     final t = _t;
+    if (AppStyle.of(context).fresh) {
+      return Scaffold(
+        body: Backdrop(
+          child: SafeArea(
+            child: CapyRefresh(onRefresh: _load, child: _fresh(context)),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       body: Backdrop(
         tint: widget.course.isEmpty ? null : subjectColor(widget.course),

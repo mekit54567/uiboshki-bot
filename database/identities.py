@@ -92,3 +92,18 @@ async def new_local_user(name: str) -> int:
         await db.execute("INSERT INTO users (user_id, username, full_name) VALUES (?, '', ?)", (uid, name))
         await db.commit()
     return uid
+
+
+async def name_from_login(user_id: int, placeholders: tuple[str, ...]) -> bool:
+    """После согласия: имя из входа VK ID, Яндекс ID или Apple — в профиль, если там
+    пока заглушка («VK ID») или пусто. До согласия имя лежит только в identities."""
+    marks = ",".join("?" * len(placeholders)) or "''"
+    async with connect() as db:
+        cur = await db.execute(
+            "UPDATE users SET full_name = (SELECT name FROM identities i WHERE i.user_id = users.user_id "
+            "AND COALESCE(i.name, '') != '' LIMIT 1) "
+            f"WHERE user_id = ? AND (COALESCE(full_name, '') = '' OR full_name IN ({marks})) "
+            "AND EXISTS (SELECT 1 FROM identities i WHERE i.user_id = users.user_id AND COALESCE(i.name, '') != '')",
+            (user_id, *placeholders))
+        await db.commit()
+        return cur.rowcount > 0

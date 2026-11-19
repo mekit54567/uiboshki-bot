@@ -166,12 +166,17 @@ def _all_args() -> tuple[str, str]:
 
 
 async def _people() -> dict[int, dict]:
-    """Все люди: группа (NULL — своя), имя, профиль рейтинга."""
+    """Все люди: группа (NULL — своя), имя, профиль рейтинга. Кто попросил
+    удалить данные, тот до полного стирания никому не виден (политика: «никак не
+    используются и никому не видны»): «группе» — выкл.; «всем» и так выкл. —
+    согласия удалены сразу."""
     from database.groups import home
+    from database.privacy import NOT_ERASING_FOR
     async with connect() as db:
         rows = await (await db.execute(
             "SELECT u.user_id, COALESCE(u.group_id, ?), COALESCE(u.full_name, ''), "
-            f"       p.nick, COALESCE(p.show, 0), {_SHOW_ALL_SQL}, p.alias "
+            f"       p.nick, CASE WHEN {NOT_ERASING_FOR('u.user_id')} THEN COALESCE(p.show, 0) ELSE 0 END, "
+            f"       {_SHOW_ALL_SQL}, p.alias "
             "FROM users u LEFT JOIN rating_profiles p ON p.user_id = u.user_id", (home(), *_all_args()))).fetchall()
     return {uid: {"group": gid, "name": name, "nick": nick, "show": bool(show), "show_all": bool(show_all),
                   "alias": alias}

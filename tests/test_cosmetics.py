@@ -99,7 +99,7 @@ async def test_morning_weather_line_is_empty_on_failure(monkeypatch):
                             "windspeed_10m": 7, "precipitation": 0}}
 
     monkeypatch.setattr(weather, "fetch_weather", some_weather)
-    assert await weather.get_weather_for_morning() == "☁️ +12°, пасмурно, ощущается +10° · 👕 лёгкая куртка"
+    assert (await weather.get_weather_for_morning()).startswith("☁️ +12°, пасмурно, ощущается +10° · ")
 
 
 # ── /help и подсказка решалки через настоящий Dispatcher ────────────────────

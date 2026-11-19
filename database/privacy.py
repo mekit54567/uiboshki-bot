@@ -251,3 +251,16 @@ async def purge_solver_history(keep_days: int) -> int:
                                (f"-{int(keep_days)} days",))
         await db.commit()
         return cur.rowcount
+
+
+async def purge_payments(keep_days: int) -> int:
+    """Оплаты подписки и поддержки проекта — 5 лет (налоговый учёт), потом
+    удаляются: так обещают политика и оферта (сверка 152-ФЗ 19.11)."""
+    n = 0
+    async with connect() as db:
+        for table in ("payments", "donations"):
+            cur = await db.execute(f"DELETE FROM {table} WHERE created_at < datetime('now', ?)",
+                                   (f"-{int(keep_days)} days",))
+            n += cur.rowcount
+        await db.commit()
+    return n

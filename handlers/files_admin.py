@@ -15,8 +15,14 @@ from aiogram.types import (
 )
 
 from database import add_file, get_files, delete_file
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 from kapibara.core.utils import esc, today_msk
+from kapibara.core.errors import EXTERNAL
+from kapibara.ops.backup import RestoreError
+
+# Импорт из JSON старосты: файл не скачался, битый JSON, не тот формат, база.
+# Баг — не «❌ Ошибка»: уходит в dp.error, Никите с traceback (ADR 0004).
+IMPORT_ERRORS = (*EXTERNAL, RuntimeError, ValueError, TypeError, AttributeError, sqlite3.Error)
 from kapibara.bot.tg import bot_of, document_of, download_bytes, msg, sender, text_of
 
 router = Router()
@@ -41,7 +47,7 @@ async def cmd_delfile(message: Message):
     # удалять может только староста — так решил владелец. Раньше мог и тот,
     # кто загрузил, и зам. STAROSTA_ID не задан — как у остальных
     # админ-команд, без ограничений.
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Удалять файлы может только староста — файл пропадёт у всей группы.")
         return
     await delete_file(fid)
@@ -51,7 +57,7 @@ async def cmd_delfile(message: Message):
 @router.message(Command("backup"))
 async def cmd_backup(message: Message):
     """Копия базы прямо сейчас (обычно приходит сама каждую ночь)."""
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.ops.backup import send_backup
@@ -223,7 +229,7 @@ async def restore_confirm(callback: CallbackQuery):
         note = f"Прежняя база сохранена на томе: <code>{esc(os.path.basename(local))}</code>."
     try:
         await apply_backup(tmp)
-    except Exception as e:
+    except (RestoreError, sqlite3.Error, OSError) as e:     # остальное — баг: в dp.error с traceback
         await msg(callback).edit_text(f"❌ Не получилось: {esc(str(e))}. {note}", parse_mode="HTML")
         return
     await msg(callback).edit_text(f"✅ База восстановлена из копии. {note}", parse_mode="HTML")
@@ -233,7 +239,7 @@ async def restore_confirm(callback: CallbackQuery):
 
 @router.message(Command("syncfiles"))
 async def cmd_syncfiles(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer(
@@ -250,7 +256,7 @@ async def cmd_syncfiles(message: Message):
 # вызывался. Теперь этот хендлер реагирует только вне активных диалогов.
 @router.message(F.document, StateFilter(None))
 async def handle_sync_json(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         return
     fname = (document_of(message).file_name or "").lower()
     if not fname.endswith('.json'):
@@ -303,7 +309,7 @@ async def handle_sync_json(message: Message):
             await wait.edit_text(
                 f"✅ Дедлайны импортированы!\n\nДобавлено: {added}\nПропущено: {skipped}"
             )
-        except Exception as e:
+        except IMPORT_ERRORS as e:
             await wait.edit_text(f"❌ Ошибка: {e}")
         return
 
@@ -347,5 +353,5 @@ async def handle_sync_json(message: Message):
         await wait.edit_text(
             f"✅ Синхронизация завершена!\n\nДобавлено: {added}\nС текстом лекции: {with_text}\nПропущено: {skipped}"
         )
-    except Exception as e:
+    except IMPORT_ERRORS as e:
         await wait.edit_text(f"❌ Ошибка: {e}")

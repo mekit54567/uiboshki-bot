@@ -38,6 +38,7 @@ async def api_deadlines(include_done: bool = False, user: dict = CurrentUser):
         d["reportable"] = (not d["personal"] and not d["mine"] and bool(d.get("created_by"))
                            and not (d.get("external_id") or "").startswith("sdo:"))
         d["reminders"] = [{"at": at, "label": dl_label(at)} for at in reminders.get(d["id"], [])]
+        d.pop("created_by", None)       # чужой id группе не отдаём (152-ФЗ): хватает mine/reportable
     from kapibara.features.deadlines import quiz_time    # у тестов — ограничение по времени из СДО (минуты или None)
     await quiz_time.attach(items)
     stats = await get_deadline_stats(user["id"])

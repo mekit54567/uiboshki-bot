@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from webapp.deps import CurrentUser
 
-from kapibara.core.errors import log_failure
+from kapibara.core.errors import NETWORK, aside, log_failure
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def _chat_with_fallback(history: list, subject: str, context: str, lecture
     from kapibara.features.ai.solver import chat_with_reasoning
     try:
         return await chat_with_reasoning(history, subject=subject, extra_system=context, lectures=lectures)
-    except Exception as e:
+    except (*NETWORK, RuntimeError) as e:          # модель не ответила (GeminiError — RuntimeError); баг — в reply
         if not lectures:
             raise
         logger.warning(f"webapp chat: с лекциями не вышло ({e!r}) — отвечаю без них")
@@ -392,29 +392,25 @@ async def api_chat(body: ChatBody, user: dict = CurrentUser, x_app: str = Header
     # всего курса и случайные куски (Никита 21.10)
     lecture_note = ""
     if subject and subject in with_text and not body.attachment and last:
-        try:
+        from kapibara.features.schedule.parser import FETCH_ERRORS
+        with aside(logger, "лекция дня", expected=FETCH_ERRORS, level=logging.INFO):
             lectures, lecture_note = await _lecture_of_day(user["id"], subject, last, query)
-        except Exception as e:
-            logger.info(f"лекция дня: {type(e).__name__}: {e}")
-            lectures, lecture_note = "", ""
     # Потом — поиск по смыслу (semantic_search): куски лекций с номером
     # страницы/слайда. «Объясни 3 лекцию» (номер лекции, а не смысл) и пустой
     # индекс (сразу после деплоя) — по-старому, целыми лекциями.
     if lectures:
         pass
     elif query.strip() and (not subject or subject in with_text) and not lecture_picker.wants_course(query):
-        try:
+        import sqlite3
+        from kapibara.features.ai import embedder
+        # не вышло — подбираю лекции по словам (всё, что ниже, остаётся пустым)
+        with aside(logger, "поиск по смыслу", expected=(embedder.EmbedError, sqlite3.Error)):
             from kapibara.features.ai import semantic_search
             if await semantic_search.ready():
-                from kapibara.features.ai import embedder
                 hits = await semantic_search.search(query, subject)
-                searched = embedder.rel_min(embedder.provider()) is not None   # у модели есть порог
                 if hits:
                     lectures, sources = semantic_search.build_context(hits)
-        except Exception as e:
-            logger.warning(f"поиск по смыслу: {type(e).__name__}: {e} — подбираю лекции по словам")
-            lectures, sources = "", None
-            searched = False
+                searched = embedder.rel_min(embedder.provider()) is not None   # у модели есть порог
     if lectures or searched:
         # нашлось — или поиск решил, что вопрос не про лекции («Буря мглою»,
         # «тебя обижают?»): целые лекции по словам тогда не подмешиваем

@@ -1,13 +1,13 @@
-"""Свой профиль: /api/me, экран «Безопасность», уведомления, проверка Пульса
-(староста) и персональный ICS-календарь."""
+"""Свой профиль: /api/me, экран «Безопасность», уведомления, вход в Пульс
+и персональный ICS-календарь."""
 
 import time
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from kapibara.core.config import design2_on, is_starosta
+from kapibara.core.config import design2_on, is_starosta, pulse_on
 from webapp.deps import CurrentUser
 from kapibara.features.schedule.parser import FETCH_ERRORS
 from kapibara.core.errors import EXTERNAL
@@ -22,8 +22,14 @@ async def api_me(user: dict = CurrentUser):
     return {"id": user["id"], "first_name": user.get("first_name", ""), "username": user.get("username", ""),
             "group": await groups.of_user(user["id"]), "plan": await plans.plan_of(user["id"]),
             "plus": await plans.has_plus(user["id"]),     # «Капибара+» (иконки «по подписке» и т. п.)
-            "lab": is_starosta(user["id"]),               # экспериментальное (вход в Пульс) — только старосте
+            "lab": is_starosta(user["id"]),               # разведка Пульса и прочее экспериментальное — старосте
+            "pulse": pulse_allowed(user["id"]),           # Пульс МИРЭА: вход, посещения, QR (18.11 — всем)
             **await consent_state(user["id"])}
+
+
+def pulse_allowed(uid: int) -> bool:
+    """Пульс открыт всем (18.11); PULSE=0 — снова только старосте."""
+    return pulse_on() or is_starosta(uid)
 
 
 async def consent_state(uid: int) -> dict:
@@ -74,8 +80,6 @@ async def api_set_group(body: GroupBody, user: dict = CurrentUser):
     g = await groups.choose(user["id"], body.id, deps.tg_bot())
     if not g:
         raise HTTPException(404, "Такой группы нет")
-    if g.get("denied"):
-        raise HTTPException(403, g["denied"].capitalize())
     return {"group": g}
 
 
@@ -259,22 +263,35 @@ async def api_pulse_lab(request: Request, user: dict = CurrentUser):
 
 class PulseConnectBody(BaseModel):
     cookie: str
+    agree: bool = False
 
 
 @router.post("/api/pulse/connect")
-async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser):
+async def api_pulse_connect(body: PulseConnectBody, user: dict = CurrentUser,
+                            x_telegram_init_data: str = Header(default=""), x_app: str = Header(default="")):
     """Вход в Пульс из окна приложения → серверу (pulse_accounts): проверка
-    с сервера (пускает ли DDoS-Guard) и хранение зашифрованным. Пока — эксперимент старосты."""
-    if not is_starosta(user["id"]):
-        raise HTTPException(status_code=403, detail="только для старосты")
+    с сервера (пускает ли DDoS-Guard) и хранение зашифрованным, как СДО.
+    Своё согласие (`pulse`, ст. 9 152-ФЗ) — галочкой, как у СДО."""
+    from kapibara.core import ratelimit
+    from kapibara.features.privacy import privacy
     from kapibara.features.pulse import service as pulse_service
+    if not pulse_allowed(user["id"]):
+        raise HTTPException(status_code=403, detail="Пульс пока закрыт")
+    if not body.agree and await privacy.needs(user["id"], "pulse"):
+        raise HTTPException(status_code=400, detail="поставь галочку согласия на обработку данных из Пульса")
+    if not ratelimit.allow("pulse_connect", user["id"]):
+        raise HTTPException(status_code=429, detail="слишком много попыток — попробуй через 10 минут")
+    if body.agree:
+        from webapp.routes.legal import _via
+        try:
+            await privacy.give(user["id"], "pulse", _via(x_telegram_init_data, x_app))
+        except privacy.Erasing as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
     return await pulse_service.connect_from_app(user["id"], body.cookie[:16384])
 
 
 @router.get("/api/pulse/status")
 async def api_pulse_status(user: dict = CurrentUser):
-    if not is_starosta(user["id"]):
-        raise HTTPException(status_code=403, detail="только для старосты")
     from kapibara.features.pulse import accounts as pulse_accounts
     return await pulse_accounts.status_for(user["id"])
 
