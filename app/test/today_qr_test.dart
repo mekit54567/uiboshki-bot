@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/main.dart';
+import 'package:uiboshki/screens/pulse.dart';
 import 'package:uiboshki/screens/pulse_scan.dart';
 import 'package:uiboshki/theme/app_theme.dart';
 import 'package:uiboshki/theme/look.dart';
@@ -32,13 +33,25 @@ Map<String, Object> _answers({required bool pulse}) => {
   },
 };
 
-Future<void> _open(WidgetTester t, {required bool pulse, required bool fresh, double bottomInset = 0}) async {
+Future<void> _open(
+  WidgetTester t, {
+  required bool pulse,
+  required bool fresh,
+  double bottomInset = 0,
+  bool loggedHere = false,
+}) async {
   phone(t);
   if (bottomInset > 0) {
     t.view.padding = FakeViewPadding(bottom: bottomInset * 3);
     t.view.viewPadding = FakeViewPadding(bottom: bottomInset * 3);
   }
-  SharedPreferences.setMockInitialValues({'uib_toured': true, 'uib_look_fresh': fresh, 'uib_fresh_moved': true});
+  SharedPreferences.setMockInitialValues({
+    'uib_toured': true,
+    'uib_look_fresh': fresh,
+    'uib_fresh_moved': true,
+    // в Пульс уже входили с этого телефона (#392): кружок сразу открывает сканер
+    if (loggedHere) pulseLoginKey: 1763500000,
+  });
   await t.pumpWidget(
     UiboApp(
       key: UniqueKey(),
@@ -87,10 +100,19 @@ void main() {
   }, variant: ios);
 
   testWidgets('нажал на кружок — открылся сканер', (t) async {
-    await _open(t, pulse: true, fresh: true);
+    await _open(t, pulse: true, fresh: true, loggedHere: true);
     await t.tap(find.byKey(const Key('today:qr')));
     await t.pump();
     await t.pump(const Duration(milliseconds: 400));
     expect(find.byType(PulseScanScreen), findsOneWidget);
+  }, variant: ios);
+
+  testWidgets('нажал на кружок, а в Пульс с этого телефона не входили — сначала экран Пульса', (t) async {
+    await _open(t, pulse: true, fresh: true);
+    await t.tap(find.byKey(const Key('today:qr')));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.byType(PulseScreen), findsOneWidget);
+    expect(find.byType(PulseScanScreen), findsNothing);
   }, variant: ios);
 }

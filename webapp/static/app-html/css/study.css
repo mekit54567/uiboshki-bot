@@ -118,7 +118,7 @@
 .sf-head + .sf-doors { padding-top: 0; }   /* сразу под шапкой — её отступа хватает */
 .sf-door { flex: 1; min-width: 0; padding: var(--m) var(--m) var(--m) var(--l); display: flex; flex-direction: column; justify-content: flex-start; }
 .sf-door .mi { display: block; }
-.sf-row { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: var(--m); }
+.sf-row { width: 100%; text-align: left; padding: var(--m) var(--m) var(--m) var(--l); gap: 10px; }
 .sf-row:active, .sf-work:active, .sf-filesrow:active { background: color-mix(in srgb, var(--text) 5%, transparent); }
 /* экран предмета */
 /* «Спросить Kapi» в строке «назад»: у её кнопок 44×44 — у этой своя ширина */

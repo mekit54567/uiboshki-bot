@@ -225,15 +225,10 @@ class _FreshDoor extends StatelessWidget {
   }
 }
 
-/// «до «4» ещё 12», «до зачёта ещё 6», «итог — 5», «на «4» уже хватает».
-String _needText(Course c) {
-  if (c.finalMark.isNotEmpty) return 'итог — ${c.finalMark}';
-  if (c.need <= 0) return c.enoughText;
-  final to = c.needLabel == 'зачёт' ? 'зачёта' : '«${c.needLabel}»';
-  return 'до $to ещё ${fmtNum(c.need)}';
-}
+/// Кольцо в строке предмета: 50, а не 46, чтобы «18,5» не касалось края.
+const double _ring = 50, _stroke = 4;
 
-/// Строка предмета в общей карточке: кольцо с баллом, название, что дальше.
+/// Строка предмета в общей карточке: кольцо с баллом, название, сколько работ зачтено.
 class _FreshCourseRow extends StatelessWidget {
   final Course c;
   final VoidCallback onTap;
@@ -243,7 +238,6 @@ class _FreshCourseRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppStyle.of(context);
     final p = s.p;
-    final done = c.finalMark.isNotEmpty || c.need <= 0;
     return InkWell(
       onTap: () {
         tick();
@@ -256,31 +250,32 @@ class _FreshCourseRow extends StatelessWidget {
             ScoreRing(
               value: c.score / c.top,
               color: s.ink(c.title),
-              size: 46,
-              stroke: 4,
-              child: Text(fmtNum(c.score), style: s.number(c.score >= 100 ? 15 : 17)),
+              size: _ring,
+              stroke: _stroke,
+              // «18,5» не наползает на кольцо (Никита 19.11): кольцо чуть больше, а длинное число — мельче до влезания
+              child: SizedBox(
+                width: _ring - 2 * _stroke - 6,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(fmtNum(c.score), style: s.number(c.score >= 100 ? 15 : 17)),
+                ),
+              ),
             ),
-            const SizedBox(width: Space.m),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // «бизнес-процессов» не рвётся после дефиса; длинное слово на узком экране — мельче
                   FitWords(c.title, style: s.name(15)),
-                  const SizedBox(height: 2),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: _needText(c),
-                          style: TextStyle(color: done ? p.ok : p.muted, fontWeight: done ? FontWeight.w600 : null),
-                        ),
-                        if (c.worksTotal > 0)
-                          TextSpan(text: ' · зачтено\u00A0${c.worksPassed}\u00A0из\u00A0${c.worksTotal}'),
-                      ],
+                  // только работы: «до зачёта ещё…» и «итог — 2» под названием не пишем (Никита 19.11)
+                  if (c.worksTotal > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Работ зачтено\u00A0${c.worksPassed}\u00A0из\u00A0${c.worksTotal}',
+                      style: s.body(13, color: p.muted),
                     ),
-                    style: s.body(13, color: p.muted),
-                  ),
+                  ],
                 ],
               ),
             ),
