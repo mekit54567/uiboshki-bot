@@ -105,9 +105,9 @@ def is_starosta(user_id) -> bool:
 
 if not STAROSTA_ID:
     logger.warning(
-        "⚠️ STAROSTA_ID не задан (0)! Все admin-команды (/announce, /setzam, "
-        "/importdeadlines, /syncfiles, /delpost) сейчас доступны АБСОЛЮТНО ВСЕМ "
-        "пользователям бота. Задай STAROSTA_ID в переменных окружения как можно скорее."
+        "⚠️ STAROSTA_ID не задан (0)! Admin-команды (/announce, /stats, /setzam, "
+        "/importdeadlines, /syncfiles, /delpost) закрыты для всех. Задай STAROSTA_ID "
+        "в переменных окружения."
     )
 
 # ─── Лента "Подслушано" ─────────────────────────────────────────────────────────

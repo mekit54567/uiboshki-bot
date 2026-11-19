@@ -117,6 +117,23 @@ async def test_retention_purge(db):
 
 
 @pytest.mark.asyncio
+async def test_payments_kept_five_years(db):
+    """Оплаты — 5 лет, как обещают политика и оферта, потом удаляются (сверка 152-ФЗ 19.11)."""
+    from kapibara.features.privacy import privacy
+    async with aiosqlite.connect(db.DATABASE_PATH) as conn:
+        await conn.execute("INSERT INTO payments (id, provider, payer_id, plan, amount, days, status, created_at) "
+                           "VALUES ('old', 'yookassa', NULL, 'm1', 149, 30, 'succeeded', datetime('now','-1900 days')),"
+                           " ('new', 'yookassa', ?, 'm1', 149, 30, 'succeeded', datetime('now','-1700 days'))", (OTHER,))
+        await conn.execute("INSERT INTO donations (id, provider, amount, status, created_at) "
+                           "VALUES ('old', 'yookassa', 100, 'succeeded', datetime('now','-1900 days'))")
+        await conn.commit()
+    await privacy.purge()
+    async with aiosqlite.connect(db.DATABASE_PATH) as conn:
+        assert [r[0] for r in await (await conn.execute("SELECT id FROM payments")).fetchall()] == ["new"]
+        assert (await (await conn.execute("SELECT COUNT(*) FROM donations")).fetchone())[0] == 0
+
+
+@pytest.mark.asyncio
 async def test_seen_marks_last_visit(db):
     from kapibara.features.privacy import privacy
     await db.upsert_user(ME, "", "x")
@@ -649,7 +666,23 @@ def test_consent_names_pulse():
     text = str(legal_texts.CONSENT)
     assert "Пульс МИРЭА" in text and "pulse.mirea.ru" in text and "QR" in text
     assert "СДО и Пульс" in text
-    assert privacy.HOSTS["timeweb"]["version"] == "5"
+    assert int(privacy.HOSTS["timeweb"]["version"]) >= 5
+
+
+def test_texts_match_code_after_review():
+    """Сверка 152-ФЗ 19.11: текст говорит то, что делает код — сдача работ в СДО, что видит
+    группа, копия базы в Telegram за границей, журналы сервера, что лежит на устройстве."""
+    from kapibara.features.privacy import legal_texts, privacy
+    consent, policy = str(legal_texts.CONSENT), str(legal_texts.PRIVACY)
+    assert privacy.HOSTS["timeweb"]["version"] == "6"
+    assert "Пульс МИРЭА (отдельной галочкой)" in consent
+    assert consent.count("отправка работ") == 1 and policy.count("отправка работ") == 1
+    assert "только чтение" not in policy
+    assert "имя и первая буква фамилии" in consent and "имя и первая буква фамилии" in policy
+    assert "Делиться заданиями с группой" in consent and "Делиться заданиями с группой" in policy
+    assert "технические журналы сервера" in policy and "историю чатов с Kapi ИИ" in policy
+    assert "{BACKUP_ABROAD}" in consent
+    assert "Telegram" in privacy.backup_texts()["BACKUP_ABROAD"] or privacy.backup_texts()["BACKUP_ABROAD"] == ""
 
 
 def test_upsert_only_through_privacy():

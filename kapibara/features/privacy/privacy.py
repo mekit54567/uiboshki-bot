@@ -9,7 +9,7 @@
 Поменял текст согласия по смыслу — подними VERSION: всех спросят заново.
 
 Срок хранения: год без заходов — всё стирается той же erase_user; запросы
-решалки — полгода.
+решалки — полгода; оплаты — 5 лет (налоговый учёт).
 
 «Удалить мои данные» (Никита 18.10) — вводом фразы ERASE_PHRASE руками.
 Сразу — согласия, выход со всех устройств и из СДО, обработка встаёт
@@ -44,7 +44,10 @@ HOSTS = {
     # 4.2 — копия базы в Telegram зашифрована (BACKUP_KEY); 4.3 — юрадрес Timeweb и ЦОД в Москве;
     # 4.4 (02.11) — вход в Пульс и отметки посещений из него (pulse_accounts, pulse_attendance);
     # 5 (03.11) — Пульс и в согласии (кука, посещения, отметка по QR): всех спросят заново
-    "timeweb": {"version": "5", "date": "03.11.2026", "policy": "5", "policy_date": "03.11.2026",
+    # 6 (19.11, сверка 152-ФЗ) — Пульс отдельной галочкой, сдача работ в СДО, что видит группа
+    # (комментарии, ник или «Имя Ф.» в рейтинге, задания при «делиться»), копия базы за границей;
+    # политика — ещё журналы сервера и что лежит на устройстве
+    "timeweb": {"version": "6", "date": "19.11.2026", "policy": "6", "policy_date": "19.11.2026",
                 "name": "Timeweb Cloud",
                 "org": "ООО «ТАЙМВЭБ.КЛАУД» (ОГРН 1227800052215, ИНН 7810945525; Республика "
                        "Татарстан, г. Иннополис, ул. Университетская, д. 7, оф. 605)",
@@ -67,6 +70,7 @@ VIAS = ("bot", "pwa", "tg", "app")
 
 INACTIVE_DAYS = 365
 SOLVER_DAYS = 180
+PAYMENT_DAYS = 5 * 366         # оплаты — 5 лет по налоговым правилам (политика, оферта)
 ERASE_DAYS = 7                 # «удалил по ошибке» — столько дней можно попросить восстановить
 ERASE_PHRASE = "удалить мои данные"
 ANSWER_DAYS = 10               # ответ на запрос о данных — рабочих дней (ст. 14 ч. 3, ст. 20)
@@ -129,10 +133,13 @@ def backup_texts() -> dict:
         proxy = (f"Запросы к Telegram и ИИ уходят с сервера через сеть хостинга {HOST['name']} в зашифрованном "
                  "виде (HTTPS): по пути их содержимое не видно и не хранится. СДО МИРЭА, VK и Яндекс — напрямую.")
     if s3_store.configured():
+        s3_enc = (", зашифрованная ключом, который есть только у оператора (AES-256-GCM)"
+                  if os.getenv("BACKUP_KEY", "").strip() else "")
         return {
             "PROXY": proxy,
-            "BACKUP_WHERE": "Раз в сутки делается резервная копия базы и ложится в хранилище в России "
-                            f"({s3_store.provider()}). Хранятся копии за последние 7 дней, каждая новая "
+            "BACKUP_ABROAD": "",
+            "BACKUP_WHERE": "Раз в сутки делается резервная копия базы" + s3_enc + " и ложится в хранилище "
+                            f"в России ({s3_store.provider()}). Хранятся копии за последние 7 дней, каждая новая "
                             "заменяет недельной давности, поэтому удалённое из базы уходит из копий за 7 дней.",
             "BACKUP_TO": f"{s3_store.provider()} (Россия) — хранение резервной копии базы, по поручению "
                          "оператора;",
@@ -144,6 +151,7 @@ def backup_texts() -> dict:
            "нечитаемый файл") if os.getenv("BACKUP_KEY", "").strip() else ""
     return {
         "PROXY": proxy,
+        "BACKUP_ABROAD": ", а также резервная копия базы оператору в Telegram" + (" — зашифрованная" if enc else ""),
         "BACKUP_WHERE": "Раз в сутки делается резервная копия базы и приходит оператору в Telegram "
                         "(Telegram FZ-LLC, ОАЭ)" + enc + ". Копии старше 30 дней оператор удаляет вручную, "
                         "поэтому удалённое из базы может до 30 дней оставаться в копиях.",
@@ -275,6 +283,12 @@ async def give(user_id: int, kind: str, via: str):
         raise Erasing(erasing_text(due))
     await give_consent(user_id, kind, VERSION, via if via in VIAS else "pwa")
     _given.add((user_id, kind, VERSION))
+    if kind == "pd":     # вход без Telegram: имя из VK ID, Яндекс ID, Apple — только теперь
+        from database.identities import name_from_login
+        from kapibara.features.identity import apple, oauth
+        if await name_from_login(user_id, (*oauth.NAMES.values(), apple.NAME)):
+            from database.users import forget_user
+            forget_user(user_id)
 
 
 async def seen(user_id: int):
@@ -382,7 +396,7 @@ async def undo_erase(user_id: int) -> bool:
 async def purge():
     """Раз в сутки (scheduler): попросил удалить и прошло ERASE_DAYS — стереть
     полностью; год без заходов — тоже; старые запросы решалки."""
-    from database.privacy import due_erasures, inactive_users, purge_solver_history
+    from database.privacy import due_erasures, inactive_users, purge_payments, purge_solver_history
     from kapibara.core.utils import today_msk
     for uid in await due_erasures(today_msk().isoformat()):
         await erase(uid)
@@ -390,5 +404,6 @@ async def purge():
     for uid in gone:
         await erase(uid)
     n = await purge_solver_history(SOLVER_DAYS)
-    if gone or n:
-        logger.info(f"срок хранения: людей {len(gone)}, запросов решалки {n}")
+    paid = await purge_payments(PAYMENT_DAYS)
+    if gone or n or paid:
+        logger.info(f"срок хранения: людей {len(gone)}, запросов решалки {n}, оплат старше 5 лет {paid}")

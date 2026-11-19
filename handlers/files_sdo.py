@@ -8,7 +8,7 @@ from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
 )
 
-from kapibara.core.config import STAROSTA_ID, is_starosta
+from kapibara.core.config import is_starosta
 from kapibara.bot.tg import bot_of, msg, sender
 from kapibara.core.utils import esc
 from kapibara.core.telegram import cosmetic
@@ -87,7 +87,7 @@ def _sdo_report(courses, known: set[str], current: dict | None = None) -> tuple[
 
 @router.message(Command("sdofiles"))
 async def cmd_sdo_files(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from kapibara.features.sdo import files as sdo_files
@@ -134,7 +134,7 @@ async def cmd_sdo_files(message: Message):
 
 @router.callback_query(F.data == "sdof:mv")
 async def sdo_files_move(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     moves = _sdo_moves.pop(callback.from_user.id, None)
@@ -153,7 +153,7 @@ async def sdo_files_move(callback: CallbackQuery):
 
 @router.callback_query(F.data == "sdof:go")
 async def sdo_files_go(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     if any(not t.done() for t in _sdo_tasks):
