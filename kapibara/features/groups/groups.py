@@ -87,19 +87,14 @@ async def of_user(user_id: int) -> dict | None:
     return {"id": gid, "name": g["name"] if g else "", "own": bool(g and g["own"]) or gid == home_id()}
 
 
-HOME_ONLY_MEMBERS = "в эту группу — только участники её чата в Telegram. Попроси старосту добавить тебя в чат"
-
-
 async def choose(user_id: int, group_id: int, bot=None) -> dict | None:
-    """Записать человека в группу. None — такой группы нет в справочнике;
-    {"denied": …} — своя группа, а человек не в её чате (members.py)."""
+    """Записать человека в группу. None — такой группы нет в справочнике.
+    Свою группу может выбрать любой (Никита 19.11): проверку по чату группы
+    в Telegram убрали."""
     from kapibara.features.schedule import index as schedule_index
     from database import set_user_group, upsert_group
     group_id = int(group_id)
     if group_id == home_id():
-        from kapibara.features.groups import members
-        if await members.is_member(user_id, bot) is False:
-            return {"denied": HOME_ONLY_MEMBERS}
         await ensure_home()
         name = await name_of(group_id)
     else:
@@ -115,7 +110,7 @@ async def choose(user_id: int, group_id: int, bot=None) -> dict | None:
 
 async def in_home_group(user_id: int) -> bool:
     """Человек — из своей группы бота (тариф own, подарок «Капибары+»):
-    староста, участник чата группы или выбрал её (и не вышел из чата).
+    староста, участник чата группы или выбрал её (с 19.11 — без проверки чата).
     Жило в billing/plans._own (03.11): его спрашивает и сама оплата."""
     from kapibara.core import config
     from database import get_user_group
@@ -129,7 +124,7 @@ async def in_home_group(user_id: int) -> bool:
         return True
     gid = await get_user_group(user_id)
     if gid and gid == home_id():
-        return member is not False
+        return True
     if gid:
         from database import get_group
         g = await get_group(gid)

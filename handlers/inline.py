@@ -194,16 +194,12 @@ async def inline_schedule(query: InlineQuery):
         from kapibara.core.utils import today_msk
         if d := parse_day(q, today_msk()):
             only = f"d{d:%Y%m%d}"
-    try:
+    results: list = []
+    with aside(logger, "inline", expected=(ValueError, RuntimeError)):     # пусто, а не «ошибка» в поле ввода
         if q.lower() in SHARE_WORDS:
             results = await _share_results(query.from_user.id)
         elif not q or only:
             results = await _own_results(only, query.from_user.id)
         elif len(q) >= 3:
             results = await _target_results(q)
-        else:
-            results = []
-    except Exception as e:
-        logger.warning(f"inline: {e}")
-        results = []
     await query.answer(results, cache_time=60, is_personal=True)

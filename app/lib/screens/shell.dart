@@ -24,10 +24,9 @@ import 'deadlines.dart';
 import 'group_pick.dart';
 import 'legal.dart';
 import 'more.dart';
-import 'pulse_scan.dart';
+import 'pulse.dart';
 import 'push_ask.dart';
 import 'rating_offer.dart';
-import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'sdo_relogin.dart';
 import 'study.dart';
 import 'today.dart';
@@ -271,8 +270,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     // подписочные иконки — только с подпиской (5.91): plus из /api/me
     // (у своей группы plan остаётся «own» и с подпиской), до него — plan
     AppIcon.premium.value = me['plus'] == true || me['plan'] == 'sub';
-    // кружок QR на «Сегодня» (сканер Пульса, 01.11) — пока у тех, кому открыт эксперимент
-    if (me['lab'] == true && sdoWebLoginAvailable) setState(() => _qr = true);
+    // кружок QR на «Сегодня» (сканер Пульса, 01.11) — с 18.11 у всех, кому открыт Пульс
+    pulseOpenNow.value = pulseOpen(me);
+    if (pulseOpen(me)) setState(() => _qr = true);
     // 152-ФЗ: согласие на обработку персональных данных — до всего (legal.dart)
     if (me['consent_needed'] == true) {
       final blocked = me['consent_blocked'] == true;
@@ -309,10 +309,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   final _bar = GlobalKey();
   bool _qr = false;
 
-  /// Сканер отметки в Пульсе; отметился — плашка «Есть, ты на паре».
+  /// Сканер отметки в Пульсе (не входил в Пульс — сперва вход); отметился —
+  /// плашка «Есть, ты на паре».
   Future<void> _scan() async {
-    final ok = await Navigator.of(context)
-        .push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const PulseScanScreen()));
+    final ok = await openPulseScan(context, widget.api);
     if (ok == true && mounted) showToast(context, 'Есть, ты на паре', kind: ToastKind.done);
   }
 

@@ -216,27 +216,27 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
       Padding(
         padding: pad,
         child: switch (state) {
-          'ok' => _StatusCard(
+          'ok' => StatusCard(
             color: p.ok,
             title: 'Подключено, работает',
             text: shared ? 'Вход старосты из настроек бота' : checkedAgo(st['checked_at'] as String?),
           ),
-          'expired' when shared => _StatusCard(
+          'expired' when shared => StatusCard(
             color: p.danger,
             title: 'Вход старосты устарел',
             text: 'Общая кука из настроек бота протухла. Подключи свой вход — он от неё не зависит',
           ),
-          'expired' when _silent => _StatusCard(
+          'expired' when _silent => StatusCard(
             color: p.muted,
             title: 'Обновляю вход…',
             text: 'Если МИРЭА тебя помнит, пароль не понадобится',
           ),
-          'expired' => _StatusCard(
+          'expired' => StatusCard(
             color: p.danger,
             title: 'Вход устарел',
             text: 'СДО разлогинил сессию — подключи заново',
           ),
-          _ => _StatusCard(color: p.muted, title: 'Не подключено', text: 'Сроки группы видны и без этого'),
+          _ => StatusCard(color: p.muted, title: 'Не подключено', text: 'Сроки группы видны и без этого'),
         },
       ),
       if (state == 'ok') ...[
@@ -453,10 +453,10 @@ class _SdoConnectScreenState extends State<SdoConnectScreen> {
 }
 
 /// Статус входа: точка цвета состояния, заголовок и подпись.
-class _StatusCard extends StatelessWidget {
+class StatusCard extends StatelessWidget {
   final Color color;
   final String title, text;
-  const _StatusCard({required this.color, required this.title, required this.text});
+  const StatusCard({super.key, required this.color, required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {

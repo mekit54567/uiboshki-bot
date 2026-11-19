@@ -66,6 +66,13 @@ def design2_on() -> bool:
     return os.getenv("DESIGN2", "1").strip() != "0"
 
 
+def pulse_on() -> bool:
+    """Пульс МИРЭА для всех (18.11, 2.0.1): вход в Пульс, посещения из него и
+    кружок QR на «Сегодня». PULSE=0 — снова только у старосты (откат без
+    выпуска). Читается при вызове."""
+    return os.getenv("PULSE", "1").strip() != "0"
+
+
 def design3() -> str:
     """Новый дизайн по брендбуку v1 (11.11): «Тетрадь», «Ночная тетрадь», новые
     экраны. /api/meta features.design3; читается при вызове.
@@ -98,9 +105,9 @@ def is_starosta(user_id) -> bool:
 
 if not STAROSTA_ID:
     logger.warning(
-        "⚠️ STAROSTA_ID не задан (0)! Все admin-команды (/announce, /setzam, "
-        "/importdeadlines, /syncfiles, /delpost) сейчас доступны АБСОЛЮТНО ВСЕМ "
-        "пользователям бота. Задай STAROSTA_ID в переменных окружения как можно скорее."
+        "⚠️ STAROSTA_ID не задан (0)! Admin-команды (/announce, /stats, /setzam, "
+        "/importdeadlines, /syncfiles, /delpost) закрыты для всех. Задай STAROSTA_ID "
+        "в переменных окружения."
     )
 
 # ─── Лента "Подслушано" ─────────────────────────────────────────────────────────

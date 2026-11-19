@@ -80,5 +80,5 @@ async def embed(texts: list[str], *, query: bool = False, titles: list[str] | No
         texts = [f"{t}\n{x}" if t else x for t, x in zip(titles, texts, strict=False)]
     try:
         return await local_embed.embed(p, texts, query=query)
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError, MemoryError) as e:     # не скачалась, не та, мало памяти
         raise EmbedError(f"своя модель {p}: {type(e).__name__}: {e}") from e

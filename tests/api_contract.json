@@ -120,6 +120,7 @@
  "POST /api/sdo/share",
  "POST /api/sdo/submission/remove",
  "POST /api/sdo/submit",
+ "POST /api/sdo/task/{cmid}/comment",
  "POST /api/summary/{file_id}",
  "POST /api/teacher/rating",
  "PUT /api/pins/{target_type}/{target_id}",

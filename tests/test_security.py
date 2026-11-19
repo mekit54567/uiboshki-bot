@@ -95,3 +95,16 @@ async def test_ai_daily_limit_switch(db, monkeypatch):
     assert database.homework                                               # счёт в settings, не в памяти
     day[0] = date(2026, 10, 7)
     assert await ai_quota.gate(555) is None                                # новый день — заново
+
+
+def test_admin_commands_closed_without_starosta_id():
+    """Не задан STAROSTA_ID — admin-команды закрыты, а не открыты всем (сверка
+    152-ФЗ 19.11: /stats показывал бы любому имена и ники людей)."""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    bad = [f"{p.relative_to(root)}:{i}" for d in ("handlers", "kapibara", "webapp")
+           for p in (root / d).rglob("*.py")
+           for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+           if re.search(r"STAROSTA_ID and not (await )?is_starosta|not STAROSTA_ID or is_starosta", line)]
+    assert bad == []

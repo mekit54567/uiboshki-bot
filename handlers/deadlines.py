@@ -330,7 +330,7 @@ def should_skip(name: str) -> bool:
 
 @router.message(Command("importdeadlines"))
 async def cmd_import_deadlines(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     await message.answer("📤 Пришли файл <b>deadlines.json</b>", parse_mode="HTML")
@@ -338,7 +338,7 @@ async def cmd_import_deadlines(message: Message):
 
 @router.message(Command("syncsdo"))
 async def cmd_sync_sdo(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
 
@@ -396,7 +396,7 @@ async def _old_sdo_deadlines(items: list[dict]) -> list[dict]:
 
 @router.message(Command("sdoclean"))
 async def cmd_sdo_clean(message: Message):
-    if STAROSTA_ID and not is_starosta(sender(message).id):
+    if not is_starosta(sender(message).id):
         await message.answer("❌ Только для старосты.")
         return
     from database import get_sdo_deadlines
@@ -421,7 +421,7 @@ async def cmd_sdo_clean(message: Message):
 
 @router.callback_query(F.data.startswith("sdoclean:"))
 async def sdo_clean_confirm(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     if data_of(callback) == "sdoclean:no":
@@ -447,7 +447,7 @@ _dlpost_done: set[tuple[int, int]] = set()
 
 @router.callback_query(F.data == "dlpost:yes")
 async def deadline_post_confirm(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     from kapibara.features.groups import members
@@ -479,7 +479,7 @@ async def deadline_post_confirm(callback: CallbackQuery):
 
 @router.callback_query(F.data == "dlpost:no")
 async def deadline_post_decline(callback: CallbackQuery):
-    if STAROSTA_ID and not is_starosta(callback.from_user.id):
+    if not is_starosta(callback.from_user.id):
         await callback.answer("Только для старосты", show_alert=True)
         return
     text = msg(callback).html_text

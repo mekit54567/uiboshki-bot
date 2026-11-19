@@ -21,10 +21,9 @@ import '../widgets/common.dart';
 import 'look_screen.dart';
 import 'notify.dart';
 import 'notify_fresh.dart' show NotifyHome, freshNotifySummary;
-import 'pulse_lab.dart';
+import 'pulse.dart';
 import 'rating.dart';
 import 'sdo_connect.dart';
-import 'sdo_login.dart' show sdoWebLoginAvailable;
 import 'security.dart';
 import 'study.dart';
 
@@ -234,16 +233,15 @@ class MoreScreen extends StatelessWidget {
                             ],
                           ),
                   ),
-                  // экспериментальный вход в Пульс (31.10) — только старосте и только в приложении
-                  if (me['lab'] == true && sdoWebLoginAvailable) ...[
+                  // Пульс МИРЭА (18.11 — всем; только в приложении): посещения и QR
+                  if (pulseOpen(me)) ...[
                     Divider(height: 1, color: p.line),
                     _MenuRow(
                       key: const Key('more:pulse'),
-                      icon: Icons.science_outlined,
-                      title: 'Пульс · эксперимент',
-                      sub: 'вход в Пульс МИРЭА и разведка, что он отдаёт',
-                      onTap: () =>
-                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => PulseLabScreen(api: api))),
+                      icon: Icons.verified_outlined,
+                      title: 'Пульс МИРЭА',
+                      sub: 'посещения лекций и отметка по QR',
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PulseScreen(api: api))),
                     ),
                   ],
                   if (me['group'] != null && me['group']['own'] != true) ...[

@@ -137,7 +137,8 @@ async def api_consent(user: dict = CurrentUser):
     from kapibara.features.privacy import privacy
     return {"version": privacy.VERSION, "date": privacy.DATE,
             "pd": not await privacy.needs(user["id"], "pd"),
-            "sdo": not await privacy.needs(user["id"], "sdo")}
+            "sdo": not await privacy.needs(user["id"], "sdo"),
+            "pulse": not await privacy.needs(user["id"], "pulse")}
 
 
 class ConsentBody(BaseModel):

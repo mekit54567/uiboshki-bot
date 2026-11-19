@@ -78,7 +78,7 @@ async def test_connect_keepalive_expire(db, monkeypatch):
     assert (await pulse_accounts.status_for(1))["state"] == "off"
 
 
-def test_endpoints_only_for_starosta(db, monkeypatch):
+def test_endpoints_rollback_only_starosta(db, monkeypatch):
     from fastapi.testclient import TestClient
 
     import webapp.server as server
@@ -96,9 +96,10 @@ def test_endpoints_only_for_starosta(db, monkeypatch):
     c = TestClient(server.app)
     other = {"X-Telegram-Init-Data": _make_init_data(user={"id": 222, "first_name": "U"})}
     me = {"X-Telegram-Init-Data": _make_init_data(user={"id": STAROSTA_ID, "first_name": "N"})}
-    assert c.post("/api/pulse/connect", headers=other, json={"cookie": "sid=abc"}).status_code == 403
-    assert c.get("/api/pulse/status", headers=other).status_code == 403
-    assert c.post("/api/pulse/connect", headers=me, json={"cookie": "sid=abc"}).json() == {"state": "ok"}
+    monkeypatch.setenv("PULSE", "0")                     # откат: Пульс снова только у старосты
+    assert c.post("/api/pulse/connect", headers=other, json={"cookie": "sid=abc", "agree": True}).status_code == 403
+    assert c.get("/api/pulse/status", headers=other).json() == {"state": "off"}
+    assert c.post("/api/pulse/connect", headers=me, json={"cookie": "sid=abc", "agree": True}).json() == {"state": "ok"}
     assert c.get("/api/v1/pulse/status", headers=me).json()["state"] == "ok"
     assert c.post("/api/pulse/disconnect", headers=me).json() == {"ok": True}
     assert c.get("/api/pulse/status", headers=me).json() == {"state": "off"}
@@ -121,3 +122,39 @@ async def test_connect_starts_attendance_in_background(db, monkeypatch):
     assert (await pulse_service.connect_from_app(8, "sid=good"))["state"] == "ok"
     await asyncio.sleep(0)
     assert started == [8]
+
+
+async def test_api_pulse_for_everyone(db, monkeypatch):
+    """Пульс для всех (18.11): /api/me → pulse, подключение — только с галочкой
+    согласия `pulse` (ст. 9 152-ФЗ, как у СДО); PULSE=0 — снова только старосте."""
+    from fastapi.testclient import TestClient
+    import webapp.server as server
+    from kapibara.core import ratelimit
+    from tests.test_webapp_home import BOT_TOKEN, _make_init_data
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    ratelimit.reset()
+
+    async def fake_check(cookie):
+        return "ok"
+    monkeypatch.setattr(pulse_accounts, "check", fake_check)
+
+    async def no_sync(uid, now=None):
+        return None
+    monkeypatch.setattr(pulse_attendance, "sync_due", no_sync)
+    c, h = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
+
+    assert c.get("/api/me", headers=h).json()["pulse"] is True
+    assert c.get("/api/pulse/status", headers=h).json()["state"] == "off"
+    res = c.post("/api/pulse/connect", json={"cookie": "sid=abc"}, headers=h)
+    assert res.status_code == 400 and "согласия" in res.json()["detail"]
+    assert c.get("/api/consent", headers=h).json()["pulse"] is False
+    res = c.post("/api/pulse/connect", json={"cookie": "sid=abc", "agree": True}, headers=h)
+    assert res.json()["state"] == "ok"
+    assert c.get("/api/consent", headers=h).json()["pulse"] is True
+    assert c.get("/api/pulse/status", headers=h).json()["state"] == "ok"
+    # согласие уже есть — второй вход без галочки
+    assert c.post("/api/pulse/connect", json={"cookie": "sid=abd"}, headers=h).json()["state"] == "ok"
+
+    monkeypatch.setenv("PULSE", "0")
+    assert c.get("/api/me", headers=h).json()["pulse"] is False
+    assert c.post("/api/pulse/connect", json={"cookie": "sid=abc"}, headers=h).status_code == 403

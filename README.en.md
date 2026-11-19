@@ -88,6 +88,14 @@ sessions are stored encrypted (Fernet, key kept apart from the database, key
 rotation on start). See [`kapibara/features/sdo/`](kapibara/features/sdo/) and
 [`kapibara/core/crypto.py`](kapibara/core/crypto.py).
 
+**Attendance from the university's Pulse.** In the mobile app a student can
+sign in to Pulse (pulse.mirea.ru) through the regular university login page;
+only the site's session cookie reaches the server, stored encrypted and kept
+alive like the Moodle one, and lecture attendance is read from its gRPC-Web
+API. Checking in at a lecture by the teacher's QR code is done by the phone
+itself: the app's own camera scanner opens the code in a hidden web view with
+the student's Pulse login. See [`kapibara/features/pulse/`](kapibara/features/pulse/).
+
 **AI answers that cite the lecture slide.** Lectures are split by slide or
 page and indexed in SQLite twice: FTS5/BM25 for words and `sqlite-vec` for
 meaning. The two result lists are merged with Reciprocal Rank Fusion, MMR

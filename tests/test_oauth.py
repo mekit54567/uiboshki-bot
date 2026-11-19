@@ -53,8 +53,11 @@ async def test_login_creates_account_without_telegram(db, client, keys):  # noqa
     assert q["code_challenge_method"] == ["S256"] and q["client_id"] == ["vk-app"]   # PKCE
     res = client.get(f"/api/auth/vk/callback?code=good&state={state}&device_id=d1", follow_redirects=False)
     assert res.status_code == 303 and res.headers["location"].startswith("/app#token=")
-    me = client.get("/api/me", headers={"Authorization": f"Bearer {_token(res.headers['location'])}"}).json()
-    assert me["id"] <= LOCAL_BASE and me["first_name"] == "Аня"
+    auth = {"Authorization": f"Bearer {_token(res.headers['location'])}"}
+    me = client.get("/api/me", headers=auth).json()
+    assert me["id"] <= LOCAL_BASE and me["first_name"] == "VK"      # до согласия имени в профиле нет (152-ФЗ)
+    assert client.post("/api/consent", json={"kind": "pd"}, headers=auth).status_code == 200
+    assert client.get("/api/me", headers=auth).json()["first_name"] == "Аня"     # после — из VK ID
     assert me["group"] is None                                               # дальше — «Из какой ты группы?»
     again = client.get(f"/api/auth/vk/callback?code=good&state={state}", follow_redirects=False)
     assert again.status_code == 400                                          # state — один раз
@@ -156,8 +159,9 @@ async def test_app_gets_one_time_code_not_token(db, client, keys):  # noqa: F811
                       follow_redirects=False).headers["location"].split("#code=", 1)[1]
     r = client.post("/api/v1/auth/exchange", json={"code": code, "verifier": verifier})
     assert r.status_code == 200
-    me = client.get("/api/me", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()
-    assert me["first_name"] == "Аня"
+    auth = {"Authorization": f"Bearer {r.json()['token']}"}
+    assert client.post("/api/consent", json={"kind": "pd"}, headers=auth).status_code == 200
+    assert client.get("/api/me", headers=auth).json()["first_name"] == "Аня"
     assert client.post("/api/auth/exchange", json={"code": code, "verifier": verifier}).status_code == 400  # один раз
     # код входа — не код обмена: state начатого входа на обмен не годится
     state, _ = _start(client, client_kind="app")

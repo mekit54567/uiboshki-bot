@@ -26,6 +26,7 @@ async def test_edit_and_hide_only_for_me(db, client):  # noqa: F811
            ("Тест 2 (перенесли)", "2099-10-05", "10:00", "ауд. 214")
     b = mine(borya)[shared]
     assert (b["subject"], b["due_date"]) == ("Тест 2", "2099-10-01")          # у Бори — как у всех
+    assert "created_by" not in b                                             # чужой id не отдаём (152-ФЗ)
     soon = await db.get_deadlines_soon(days=36500, viewer_id=ANYA)
     assert next(d for d in soon if d["id"] == shared)["due_date"] == "2099-10-05"  # рассылки — по своей правке
 

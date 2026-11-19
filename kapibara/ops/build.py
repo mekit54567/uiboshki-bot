@@ -2,6 +2,7 @@
 (/api/meta и шапка /status). Переехало из webapp/routes/meta.py (03.11):
 /status (ops/health) брал это из веб-слоя, и импорт снизу вверх сцеплял
 модули в клубок."""
+import contextlib
 import json
 import time
 from functools import lru_cache
@@ -17,9 +18,7 @@ def build_info() -> dict:
     видеть, что сервер обновился, нужно после каждого мержа): короткий хеш
     коммита, номер последнего смерженного PR, когда собрано и запущено."""
     info = {"commit": "", "commit_time": "", "pr": None, "built": ""}
-    try:
+    with contextlib.suppress(OSError, ValueError):   # не на сервере (нет build-info.json) — пустые поля
         data = json.loads(BUILD_INFO.read_text(encoding="utf-8"))
         info.update({k: data[k] for k in info if k in data})
-    except (OSError, ValueError):
-        pass
     return {**info, "started": STARTED}
