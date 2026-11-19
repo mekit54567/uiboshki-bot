@@ -98,6 +98,7 @@ class _FreshRating extends StatelessWidget {
     final (key, _, eyebrow) = scopes[i];
     final scope = ranks[key] is Map ? ranks[key] as Map : const {};
     return [
+      RatingOfferCard(api: st.api, me: me, onChanged: () => st._set(() => st._epoch++)),
       _pad(_MeCard(scope: scope, me: me, rules: rules, eyebrow: eyebrow, vuz: key == 'all')),
       const SizedBox(height: Space.m),
       _pad(

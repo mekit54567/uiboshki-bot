@@ -267,6 +267,20 @@ async def init_db():
         # «Капибара №…» — ник для чужих групп, если свой не задан: случайный
         # номер, без связи с id и именем (ревью 152-ФЗ 18.10)
         await _add_column(db, "rating_profiles", "alias INTEGER")
+        # Предложение показаться в рейтинге (rating_offer.py): сколько раз
+        # показали лист, когда в последний раз, «Больше не предлагать», пауза
+        # карточки, последнее предложение по поводу, после чего согласился.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS rating_offers (
+                user_id      INTEGER PRIMARY KEY,
+                shown        INTEGER NOT NULL DEFAULT 0,
+                last_at      TEXT,
+                stopped      INTEGER NOT NULL DEFAULT 0,
+                card_until   TEXT,
+                event_at     TEXT,
+                accepted_via TEXT
+            )
+        """)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS solver_history (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,

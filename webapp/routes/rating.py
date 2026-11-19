@@ -49,3 +49,25 @@ async def api_rating_me(body: ProfileBody, user: dict = CurrentUser,
                              consent=body.consent, via=_via(x_telegram_init_data, x_app))
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
+
+
+@router.get("/api/rating/offer")
+async def api_rating_offer(user: dict = CurrentUser):
+    """Предложить показаться: {'card': ..., 'sheet': ...} (rating_offer.py).
+    Ничего не включает — только говорит клиенту, можно ли спросить."""
+    from kapibara.features.social import rating_offer
+    return await rating_offer.state(user["id"])
+
+
+class OfferBody(BaseModel):
+    action: str                    # shown / later / stop / accepted
+    source: str | None = None      # card / sheet / event — для accepted
+
+
+@router.post("/api/rating/offer")
+async def api_rating_offer_act(body: OfferBody, user: dict = CurrentUser):
+    from kapibara.features.social import rating_offer
+    try:
+        return await rating_offer.act(user["id"], body.action, body.source)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
