@@ -392,8 +392,8 @@ async def report() -> str:
         from kapibara.core.utils import today_msk
         subs, unl = await manual_active(today_msk().isoformat())
         lines.append(f"Ручные выдачи (/grant): подписок {subs} · безлимитов {unl}")
-        from kapibara.features.billing import billing
-        lines.append(await billing.donate_status_line())
+        from kapibara.features.billing import billing, donate
+        lines.append(await donate.donate_status_line())
         if config.OPENROUTER_API_KEY and gemini_solver.AI_SPARE_MODEL:
             mode = await gemini_solver.ai_main()
             answered = gemini_solver.answered

@@ -103,7 +103,7 @@ def render(data: dict) -> str:
 
 @router.get("/roadmap", response_class=HTMLResponse, include_in_schema=False)
 async def roadmap_page(k: str = ""):
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, donate
     from kapibara.core import config
     from kapibara.features.content import roadmap
     uid = billing.read_key(k)
@@ -119,5 +119,5 @@ async def roadmap_page(k: str = ""):
                else '<span class="note">Поддержать можно будет совсем скоро — оплата ещё подключается.</span>')
         return _page(_head("Роадмап", "Что я делаю сейчас и что дальше")
                      + f'<p class="note">Роадмап открывается тем, кто поддержал проект любой суммой от '
-                       f'{billing.DONATE_MIN}&nbsp;₽. Это спасибо, а не покупка.</p><p class="note">{btn}</p>')
+                       f'{donate.DONATE_MIN}&nbsp;₽. Это спасибо, а не покупка.</p><p class="note">{btn}</p>')
     return _page(render(await roadmap.with_links(roadmap.load())))

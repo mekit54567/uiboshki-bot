@@ -6,12 +6,6 @@
 боте — ещё и счёт в звёздах Telegram (Stars: цифровое внутри Telegram — только
 они), дороже рублей на STARS_MARKUP (Никита 21.10: +55 % — комиссия Telegram).
 
-Касса — та, ключи которой заданы: ЮKassa (YOOKASSA_SHOP_ID +
-YOOKASSA_SECRET_KEY) или Robokassa (ROBOKASSA_LOGIN + ROBOKASSA_PASS1 +
-ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не ответила, Robokassa.
-Нет ключей — «оплата скоро», статус и бонусы работают. Автосписаний нет:
-каждый срок оплачивается отдельно, срок складывается.
-
 Цена первых (Никита 17.10): пока не сказано иначе, все платят «early»-цену
 (месяц 149 ₽), и кто оплатил по ней — метка Early Supporter, платит так навсегда.
 Новым — полная цена с `/plus stage full` (settings plus:stage). Своей группе
@@ -19,26 +13,20 @@ ROBOKASSA_PASS2); заданы обе — ЮKassa, а если она не от�
 лимитах подписки (plans.py). Ручные продления и безлимит — `/grant`
 (plus_grant.py); все продления пишутся в журнал plus_grants. Июль и август в
 срок не считаются (пауза на лето): оплаченные дни переносятся на сентябрь.
-
-«Поддержать проект» (Никита 18.10) — донат той же кассой на сайте (/donate по
-такой же личной ссылке): сумма на выбор, своя таблица donations, дней
-подписки не даёт — просто спасибо; в ответ открывается роадмап (roadmap.py). Уведомления касс
-отличают его от подписки по таблице, где лежит платёж (settle). На iPhone —
-скрыт, как и подписка (донат не через Apple — против правил App Store)."""
+"""
 
 import hashlib
 import hmac
-import json
 import logging
-import os
 import secrets
 import time
-import uuid
 from typing import TypedDict
 from datetime import date, timedelta
 
 from kapibara.core import config
-from kapibara.core.errors import NETWORK, aside
+from kapibara.core.errors import aside
+from kapibara.features.billing import kassa
+from kapibara.features.billing.kassa import PayError  # общая ошибка оплаты, её ловят как billing.PayError
 
 logger = logging.getLogger(__name__)
 
@@ -55,30 +43,7 @@ PLANS: dict[str, Plan] = {           # price — полная, early — цен�
 }
 GIFT_UNTIL = "2026-12-31"             # подарок своей группе (Никита 17.10: «месяц или два»)
 SUMMER = (7, 8)                       # месяцы паузы: оплаченные дни в них не идут
-
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "").strip()
-YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "").strip()
-ROBOKASSA_LOGIN = os.getenv("ROBOKASSA_LOGIN", "").strip()
-ROBOKASSA_PASS1 = os.getenv("ROBOKASSA_PASS1", "").strip()
-ROBOKASSA_PASS2 = os.getenv("ROBOKASSA_PASS2", "").strip()
-ROBOKASSA_TEST = os.getenv("ROBOKASSA_TEST", "") == "1"
-
-DONATE_AMOUNTS = (100, 300, 500)      # «Поддержать проект»: кнопки сумм, и своя — от MIN до MAX
-DONATE_MIN = 50
-DONATE_MAX = 15000
-DONATE_TITLE = "Добровольная поддержка проекта «Капибара»"   # позиция в кассе и в чеке «Мой налог»
-
-STARS_RUB = float(os.getenv("STARS_RUB", "1.8") or 0)       # сколько ₽ платят за звезду; 0 — без Stars
-STARS_MARKUP = float(os.getenv("STARS_MARKUP", "1.55") or 1)  # в звёздах дороже рублей (комиссия Telegram)
-
 LINK_TTL = 24 * 3600                  # личная ссылка на /plus живёт сутки
-YOOKASSA_API = "https://api.yookassa.ru/v3"
-ROBOKASSA_URL = "https://auth.robokassa.ru/Merchant/Index.aspx"
-
-
-def _kassas() -> list[str]:
-    return ((["yookassa"] if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY else []) +
-            (["robokassa"] if ROBOKASSA_LOGIN and ROBOKASSA_PASS1 and ROBOKASSA_PASS2 else []))
 
 
 def provider(configured_only: bool = False, uid: int | None = None) -> str:
@@ -86,7 +51,7 @@ def provider(configured_only: bool = False, uid: int | None = None) -> str:
     реквизитов исполнителя (PD_FIO, PD_INN, PD_EMAIL) — оферта без них, для
     самозанятого так нельзя: оплата закрыта (configured_only — какая задана).
     uid — для кого: в тестовом режиме Robokassa касса открыта только Никите."""
-    kind = (_kassas() or [""])[0]
+    kind = (kassa.configured() or [""])[0]
     if configured_only or not kind:
         return kind
     if missing_requisites() or (uid is not None and test_only(uid)):
@@ -94,19 +59,10 @@ def provider(configured_only: bool = False, uid: int | None = None) -> str:
     return kind
 
 
-def test_mode() -> bool:
-    """Касса в тестовом режиме — деньги не списываются: Robokassa с
-    ROBOKASSA_TEST=1 или тестовый магазин ЮKassa (секретный ключ test_…)."""
-    kind = (_kassas() or [""])[0]
-    if kind == "yookassa":
-        return YOOKASSA_SECRET_KEY.startswith("test_")
-    return ROBOKASSA_TEST and kind == "robokassa"
-
-
 def test_only(uid: int | None) -> bool:
     """Тестовая оплата — только Никите (21.10: иначе любой набрал бы «Капибару+»
     бесплатно); остальным пока «оплата скоро»."""
-    return test_mode() and not (uid and config.is_starosta(uid))
+    return kassa.test_mode() and not (uid and config.is_starosta(uid))
 
 
 def missing_requisites() -> list[str]:
@@ -270,9 +226,6 @@ async def grant(uid: int, days: int, source: str, founder: bool | None = None, b
 
 # ── Платёж ───────────────────────────────────────────────────────────────────
 
-class PayError(Exception):
-    pass
-
 
 async def create(uid: int, plan: str, return_url: str) -> str:
     """Создать платёж и вернуть адрес страницы кассы."""
@@ -287,265 +240,27 @@ async def create(uid: int, plan: str, return_url: str) -> str:
     title = f"Подписка «Капибара+» на {days} дней"
     if kind == "yookassa":
         try:
-            return await _yookassa_create(uid, plan, price, days, title, return_url)
+            return await kassa.yookassa_create(uid, plan, price, days, title, return_url)
         except PayError:
-            if "robokassa" not in _kassas():
+            if "robokassa" not in kassa.configured():
                 raise
             logger.warning("ЮKassa не ответила — платёж через Robokassa")
-    inv = await _new_inv_id()
+    inv = await kassa.new_inv_id()
     await add_payment(str(inv), "robokassa", uid, plan, price, days)
-    return robokassa_url(inv, price, title, return_url)
+    return kassa.robokassa_url(inv, price, title, return_url)
 
 
-def stars_on() -> bool:
-    """Оплата звёздами в боте: курс задан и есть реквизиты исполнителя (как у кассы)."""
-    return STARS_RUB > 0 and not missing_requisites()
-
-
-def stars_price(rub: int) -> int:
-    """Цена в звёздах: рубли × STARS_MARKUP по курсу STARS_RUB, вверх до целой звезды."""
-    import math
-    return max(1, math.ceil(round(rub * STARS_MARKUP / STARS_RUB, 6)))
-
-
-async def stars_invoice(uid: int, plan: str) -> dict:
-    """Платёж звёздами: запись в payments (provider stars, amount — цена в
-    рублях, по ней же метка Early Supporter) → поля счёта Telegram."""
-    from database.billing import add_payment, set_payment_stars
-    if not stars_on():
-        raise PayError("оплата звёздами выключена")
-    if plan not in PLANS:
-        raise PayError("нет такого тарифа")
-    price = next(p["price"] for p in await prices(uid) if p["plan"] == plan)
-    days = PLANS[plan]["days"]
-    stars = stars_price(price)
-    pid = f"stars-{uuid.uuid4().hex}"
-    await add_payment(pid, "stars", uid, plan, price, days)
-    await set_payment_stars(pid, stars)
-    return {"payload": pid, "stars": stars, "days": days,
-            "title": f"Капибара+ · {PLANS[plan]['title'].lower()}",
-            "description": f"Подписка «Капибара+» на {days} дней (июль и август не считаются). "
-                           "Без автосписаний."}
-
-
-async def stars_check(pid: str, uid: int, total: int, currency: str) -> str:
-    """Перед списанием (pre_checkout_query): '' — можно, иначе причина."""
-    from database.billing import get_payment
-    pay = await get_payment(pid)
-    if not pay or pay["provider"] != "stars" or pay["payer_id"] != uid:
-        return "Счёт не найден — открой /plus заново."
-    if pay["status"] != "pending":
-        return "Этот счёт уже оплачен — открой /plus заново."
-    if currency != "XTR" or total != pay["stars"]:
-        return "Цена изменилась — открой /plus заново."
-    return ""
-
-
-async def stars_paid(pid: str, uid: int, charge_id: str, bot=None) -> bool:
-    """Telegram списал звёзды: запомнить номер списания и продлить подписку."""
-    from database.billing import get_payment, set_payment_charge
-    pay = await get_payment(pid)
-    if not pay or pay["provider"] != "stars" or pay["payer_id"] != uid:
-        logger.warning(f"Stars: оплата {pid} не найдена или чужая ({uid})")
-        return False
-    await set_payment_charge(pid, charge_id)
-    return await paid(pid, bot)
-
-
-def donate_amount(value) -> int:
-    """Сумма доната из формы: целые рубли от DONATE_MIN до DONATE_MAX."""
-    try:
-        amount = int(str(value).strip().replace(" ", "").replace("₽", ""))
-    except (TypeError, ValueError):
-        raise PayError(f"сумма — целым числом рублей, от {DONATE_MIN} ₽") from None
-    if amount < DONATE_MIN or amount > DONATE_MAX:
-        raise PayError(f"сумма — от {DONATE_MIN} до {DONATE_MAX} ₽")
-    return amount
-
-
-async def create_donation(uid: int | None, amount, return_url: str, claim: str | None = None) -> str:
-    """Донат «Поддержать проект»: платёж в кассе → адрес её страницы. Та же
-    касса и те же условия, что у подписки (без реквизитов — закрыто).
-    uid None — донат без входа с открытой страницы /donate, claim — код,
-    по которому его потом привязывают к Telegram (claim_link)."""
-    from database.billing import add_donation
-    kind = provider(uid=uid or 0)          # 0: без входа в тестовом режиме касса закрыта
-    if not kind:
-        raise PayError("оплата ещё не подключена")
-    amount = donate_amount(amount)
-    if kind == "yookassa":
-        try:
-            return await _yookassa_create(uid, "donation", amount, 0, DONATE_TITLE, return_url,
-                                          donation=True, claim=claim)
-        except PayError:
-            if "robokassa" not in _kassas():
-                raise
-            logger.warning("ЮKassa не ответила — донат через Robokassa")
-    inv = await _new_inv_id()
-    await add_donation(str(inv), "robokassa", uid, amount, claim)
-    return robokassa_url(inv, amount, DONATE_TITLE, return_url)
-
-
-async def _yookassa_create(uid: int | None, plan: str, price: int, days: int, title: str, return_url: str,
-                           donation: bool = False, claim: str | None = None) -> str:
-    from database import billing as store
-    local = f"local-{uuid.uuid4()}"
-    if donation:
-        await store.add_donation(local, "yookassa", uid, price, claim)
-    else:
-        await store.add_payment(local, "yookassa", uid or 0, plan, price, days)   # подписка — всегда с uid
-    body = {"amount": {"value": f"{price}.00", "currency": "RUB"}, "capture": True,
-            "confirmation": {"type": "redirect", "return_url": return_url},
-            "description": title,        # без id человека (152-ФЗ): связь — в payments/donations
-            "metadata": {"kind": "donation"} if donation else {"plan": plan}}
-    try:
-        async with _yk_client() as c:
-            r = await c.post(f"{YOOKASSA_API}/payments", json=body, headers={"Idempotence-Key": local})
-        r.raise_for_status()
-        data = r.json()
-    except (*NETWORK, ValueError) as e:
-        logger.warning(f"ЮKassa: платёж не создан: {e}")
-        await (store.mark_donation if donation else store.mark_payment)(local, "canceled")
-        raise PayError("касса не отвечает — попробуй через минуту") from e
-    await (store.set_donation_id if donation else store.set_payment_id)(local, data["id"])
-    return data["confirmation"]["confirmation_url"]
-
-
-async def _new_inv_id() -> int:
-    """Номер счёта Robokassa — один на подписки и донаты (уведомление
-    находит платёж по номеру)."""
-    from database.billing import get_donation, get_payment
-    while True:
-        inv = secrets.randbelow(2_000_000_000) + 1
-        if not await get_payment(str(inv)) and not await get_donation(str(inv)):
-            return inv
-
-
-def _yk_client():
-    import httpx
-    from kapibara.core import net
-    return net.client(timeout=20, auth=httpx.BasicAuth(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY))
-
-
-def robokassa_url(inv: int, price: int, title: str, back: str = "") -> str:
-    """Ссылка на оплату. back — куда вернуть после оплаты (/plus/done или
-    /donate/done с личным ключом): в кабинете Robokassa Success URL один на
-    всё, поэтому свой адрес — SuccessUrl2, отказ — та же страница без /done
-    (FailUrl2). Оба входят в подпись после InvId."""
-    from urllib.parse import urlencode
-    out_sum = f"{price}.00"
-    extra = []
-    if back:
-        extra = [("SuccessUrl2", back), ("SuccessUrl2Method", "GET"),
-                 ("FailUrl2", back.replace("/done", "", 1)), ("FailUrl2Method", "GET")]
-    base = ":".join([ROBOKASSA_LOGIN, out_sum, str(inv)] + [v for _, v in extra] + [ROBOKASSA_PASS1])
-    sig = hashlib.md5(base.encode()).hexdigest()
-    q = {"MerchantLogin": ROBOKASSA_LOGIN, "OutSum": out_sum, "InvId": inv, "Description": title,
-         "SignatureValue": sig, "Culture": "ru", "Encoding": "utf-8", **dict(extra)}
-    if ROBOKASSA_TEST:
-        q["IsTest"] = 1
-    return f"{ROBOKASSA_URL}?{urlencode(q)}"
-
-
-def robokassa_ok(out_sum: str, inv: str, sig: str) -> bool:
-    """Подпись уведомления Robokassa (ResultURL): md5(OutSum:InvId:Pass2)."""
-    want = hashlib.md5(f"{out_sum}:{inv}:{ROBOKASSA_PASS2}".encode()).hexdigest()
-    return bool(ROBOKASSA_PASS2) and hmac.compare_digest(want.lower(), (sig or "").lower())
-
-
-async def yookassa_check(pid: str) -> str | None:
-    """Статус платежа у самой ЮKassa (уведомлению на слово не верим)."""
-    try:
-        async with _yk_client() as c:
-            r = await c.get(f"{YOOKASSA_API}/payments/{pid}")
-        r.raise_for_status()
-        data = r.json()
-    except (*NETWORK, ValueError) as e:
-        logger.warning(f"ЮKassa: статус {pid} не узнать: {e}")
-        return None
-    pay = await _payment(pid)
-    if pay and data.get("status") == "succeeded" and data.get("test") and not config.is_starosta(pay["payer_id"] or 0):
-        # тестовый платёж (денег нет) засчитывается только Никите — как у Robokassa, 21.10
-        logger.warning(f"ЮKassa: тестовый платёж {pid} не от Никиты — не засчитан")
-        return "test"
-    if pay and data.get("status") == "succeeded":
-        amount = data.get("amount") or {}
-        if amount.get("currency") != "RUB" or float(amount.get("value", 0)) + 0.001 < pay["amount"]:
-            logger.warning(f"ЮKassa: сумма {pid} не та: {json.dumps(amount)}")
-            return "mismatch"
-    return data.get("status")
-
-
-async def _payment(pid: str) -> dict | None:
+async def find_payment(pid: str) -> dict | None:
     """Платёж подписки или донат — у обоих есть amount и payer_id."""
     from database.billing import get_donation, get_payment
     return await get_payment(pid) or await get_donation(pid)
-
-
-async def is_ours(pid: str) -> bool:
-    return await _payment(pid) is not None
-
-
-async def settle(pid: str, bot=None) -> bool:
-    """Касса подтвердила оплату: донат — спасибо, без дней подписки; платёж
-    подписки — продлить (paid). Различаем по таблице, а не по телу
-    уведомления: ему не верим. True — засчитали сейчас (не повтор)."""
-    from database.billing import get_donation
-    if await get_donation(pid):
-        return await donation_paid(pid, bot)
-    return await paid(pid, bot)
-
-
-async def cancel(pid: str):
-    from database.billing import mark_donation, mark_payment
-    await mark_payment(pid, "canceled")
-    await mark_donation(pid, "canceled")
-
-
-def donate_thanks(amount: int) -> str:
-    return (f"💛 Спасибо за поддержку! {amount} ₽ дошли до Капибары — на сервер, ИИ и новые функции.\n\n"
-            "Это не подписка: ничего не спишется — просто твоё спасибо. В ответ тебе открыт роадмап — "
-            "что я делаю сейчас и что дальше: /roadmap. Мне правда приятно. — Никита")
-
-
-async def donation_paid(pid: str, bot=None) -> bool:
-    """Донат оплачен: отметить (один раз), поблагодарить человека, коротко
-    сказать Никите. Подписку не трогает."""
-    from database.billing import donation_totals, get_donation, mark_donation_paid
-    pay = await get_donation(pid)
-    if not pay or not await mark_donation_paid(pid):
-        return False
-    uid, amount = pay["payer_id"], pay["amount"]
-    logger.info(f"поддержка проекта: {pid} — {amount} ₽")
-    if bot is not None:
-        if uid:
-            await notify(bot, uid, donate_thanks(amount))
-        if config.STAROSTA_ID and uid != config.STAROSTA_ID:
-            n, total = await donation_totals()
-            await notify(bot, config.STAROSTA_ID,
-                         f"💛 Поддержка проекта: {amount} ₽ от {await _who(uid)}. Всего: {n} · {total} ₽.")
-    return True
-
-
-def who_text(u: dict) -> str:
-    from kapibara.core.utils import esc
-    name = esc(u.get("full_name") or "")
-    nick = f"@{esc(u['username'])}" if u.get("username") else ""
-    parts = [p for p in (name, nick) if p]
-    return " ".join(parts + [f"(<code>{u['user_id']}</code>)"])
-
-
-async def _who(uid: int | None) -> str:
-    from database import get_user
-    u = await get_user(uid) if uid else None
-    return who_text(u) if u else "кого-то без аккаунта"
 
 
 async def paid(pid: str, bot=None) -> bool:
     """Касса подтвердила оплату: продлить подписку (один раз на платёж) и
     написать человеку. True — продлили сейчас."""
     from database.billing import add_bonus, mark_paid
-    pay = await _payment(pid)
+    pay = await find_payment(pid)
     if not pay or not await mark_paid(pid) or not pay["payer_id"]:
         return False
     uid = pay["payer_id"]
@@ -559,16 +274,6 @@ async def paid(pid: str, bot=None) -> bool:
     if bot is not None:
         await notify(bot, uid, f"Оплата прошла, спасибо! «Капибара+» до {fmt_day(until)}.")
     return True
-
-
-async def donate_status_line() -> str:
-    """Строка для /status: сколько донатов и на какую сумму."""
-    from database.billing import donation_totals
-    n, total = await donation_totals()
-    if not n:
-        return "Поддержка проекта (/donate): донатов пока нет"
-    m, month = await donation_totals(30)
-    return f"Поддержка проекта (/donate): {n} · {total} ₽, за 30 дней — {m} · {month} ₽"
 
 
 async def notify(bot, uid: int, text: str):
