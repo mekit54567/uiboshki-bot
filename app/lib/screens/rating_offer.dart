@@ -7,20 +7,14 @@
 //
 // Нельзя: галочка заранее, серая мелкая «нет», «чтобы видеть других, покажи
 // себя», одна кнопка сразу на «группе» и «всем», включение молча.
-//
-// Вид: RATING_OFFER=a|b — два варианта на выбор Никиты (a — карточка с
-// капибарой, b — компактная полоса); после выбора второй убрать.
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
-import '../widgets/capy.dart';
 import '../widgets/common.dart';
 import 'notify.dart' show AppSwitch;
 import 'rating.dart' show ratingSave, ratingShowAll;
-
-const ratingOfferVariant = String.fromEnvironment('RATING_OFFER', defaultValue: 'a');
 
 /// Спросить у сервера и отметить ответ; сбой сети — молча: предложение не повод тревожить.
 Future<Map?> ratingOfferState(Api api) async {
@@ -118,18 +112,16 @@ class _RatingOfferCardState extends State<RatingOfferCard> {
   @override
   Widget build(BuildContext context) {
     if (!_show || !_hiddenMe(widget.me)) return const SizedBox.shrink();
-    final compact = ratingOfferVariant == 'b';
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.l, 0, Space.l, Space.m),
-      child: _OfferCard(compact: compact, onShow: _open, onLater: _later, onStop: _stop),
+      child: _OfferCard(onShow: _open, onLater: _later, onStop: _stop),
     );
   }
 }
 
 class _OfferCard extends StatelessWidget {
-  final bool compact;
   final VoidCallback onShow, onLater, onStop;
-  const _OfferCard({required this.compact, required this.onShow, required this.onLater, required this.onStop});
+  const _OfferCard({required this.onShow, required this.onLater, required this.onStop});
 
   @override
   Widget build(BuildContext context) {
@@ -138,29 +130,19 @@ class _OfferCard extends StatelessWidget {
     final words = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Тебя не видно в рейтинге группы', style: s.body(compact ? 16 : 17, weight: FontWeight.w600)),
+        Text('Тебя не видно в рейтинге группы', style: s.body(16, weight: FontWeight.w600)),
         const SizedBox(height: 4),
         Text('Покажешься? Вместо имени — ник или «Капибара\u00A0№…».', style: s.body(14, color: p.muted)),
       ],
     );
     return Tile(
       key: const Key('rating:offer'),
-      padding: EdgeInsets.fromLTRB(Space.l, compact ? Space.m : Space.l, Space.l, Space.s),
+      padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, Space.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (compact)
-            words
-          else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: words),
-                const SizedBox(width: Space.m),
-                const CapyImage(pose: CapyPose.joy, size: 64),
-              ],
-            ),
-          SizedBox(height: compact ? Space.m : Space.l),
+          words,
+          const SizedBox(height: Space.m),
           // кнопки одного размера: «не сейчас» так же заметна, как «показать»
           Row(
             children: [
@@ -327,7 +309,6 @@ class _OfferSheetState extends State<_OfferSheet> {
     final group = _me['show'] == true;
     final all = _me['show_all'] == true;
     final anyOn = group || all;
-    final capy = ratingOfferVariant == 'b';
     return SafeArea(
       child: SingleChildScrollView(
         key: const Key('rating:offer:sheet'),
@@ -336,7 +317,6 @@ class _OfferSheetState extends State<_OfferSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (capy) const Center(child: CapyImage(pose: CapyPose.joy, size: 84)) else const SizedBox.shrink(),
             Text('Показаться в рейтинге?', style: s.title(24)),
             const SizedBox(height: Space.s),
             Text(

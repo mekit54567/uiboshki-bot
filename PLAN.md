@@ -6,8 +6,8 @@
 `claude/project-thread-d07wxn`):** карточка на «Рейтинге», лист при входе с двумя
 выключенными тумблерами, «Больше не предлагать»; по поводу — пуш не чаще раза в
 месяц. Сервер — `kapibara/features/social/rating_offer.py`, счёт в /stats. Вид
-(`RATING_OFFER=a|b` в приложении, `window.RATING_OFFER` в PWA) ждёт выбора Никиты,
-второй потом убрать. Снимки: `/mnt/project-files/rating-offer/`.
+выбран по сверке UI-треда: компактная карточка и лист без капибары. Снимки:
+`/mnt/project-files/rating-offer/`.
 
 **18.11 — новый дизайн, шаги 8–9 (ветка `claude/project-thread-9otqto`):**
 шаг 8 — Kapi ИИ, пустые экраны и сбои, «Каким сделать меню», уведомления

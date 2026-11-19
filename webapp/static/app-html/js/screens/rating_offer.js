@@ -1,9 +1,8 @@
 // Предложение показаться в рейтинге (screens/rating_offer.dart): карточка на
 // «Рейтинге», лист с двумя выключенными тумблерами при входе. Когда спрашивать —
 // решает сервер (rating_offer.py). Ничего не включается само; «Не сейчас» и
-// «Показать» — одного размера. Вид: window.RATING_OFFER = "a" | "b" (на выбор Никиты).
+// «Показать» — одного размера.
 
-const roVariant = () => (window.RATING_OFFER === "b" ? "b" : "a");
 const roHidden = (me) => me && me.show !== true && me.show_all !== true;
 
 function roAct(action, source) {
@@ -11,11 +10,11 @@ function roAct(action, source) {
 }
 
 /** Карточка (место в разметке — #rating-offer, заполняет roMountCard). */
-function roCardHtml(compact) {
-  const words = `<div class="bd b6" style="--sz:${compact ? 16 : 17}px">Тебя не видно в рейтинге группы</div>
+function roCardHtml() {
+  const words = `<div class="bd b6" style="--sz:16px">Тебя не видно в рейтинге группы</div>
     <div class="bd mut" style="--sz:14px;margin-top:4px">Покажешься? Вместо имени — ник или «Капибара\u00A0№…».</div>`;
   return `<div class="hx"><div class="tile ro-card" id="rating-offer">
-    ${compact ? words : `<div class="row" style="align-items:flex-start;gap:var(--m)"><div class="grow">${words}</div>${capy("joy", 64)}</div>`}
+    ${words}
     <div class="ro-btns"><button class="btn primary" id="rating-offer-show" data-act="ro-show">Показать</button>
       <button class="btn outline" id="rating-offer-later" data-act="ro-later">Не сейчас</button></div>
     <button class="btn text ro-stop" id="rating-offer-stop" data-act="ro-stop">Больше не предлагать</button></div></div>`;
@@ -31,7 +30,7 @@ async function roMountCard(body, st, me) {
     if (!body.isConnected) return;
   }
   const again = body.querySelector("#rating-offer-slot");
-  if (again && st.offer && st.offer.card === true) again.innerHTML = roCardHtml(roVariant() === "b");
+  if (again && st.offer && st.offer.card === true) again.innerHTML = roCardHtml();
 }
 
 /** Лист: оба тумблера выключены; «Группе» — сразу, «Всем» — через отдельное согласие. */
@@ -43,8 +42,7 @@ function roSheet(me0, source) {
       <div class="grow"><div class="bd b6" style="--sz:15px">${esc(title)}</div><div class="bd mut" style="--sz:12.5px;margin-top:2px">${esc(sub)}</div></div>${acSwitch(onS, id)}</div>`;
     const draw = () => {
       const g = me.show === true, a = me.show_all === true, any = g || a;
-      el.innerHTML = `${roVariant() === "b" ? `<div style="text-align:center">${capy("joy", 84)}</div>` : ""}
-        <div class="ttl" style="--sz:24px">Показаться в рейтинге?</div>
+      el.innerHTML = `<div class="ttl" style="--sz:24px">Показаться в рейтинге?</div>
         <div class="bd mut" style="--sz:15px;margin-top:var(--s)">${any
           ? "Включено то, что ты выбрал. Выключить можно в любой момент в «Мой опыт»."
           : "Сейчас тебя никто не видит. Не включишь — ничего не изменится."}</div>
