@@ -22,8 +22,8 @@ void main() {
     expect(r.fits('отчёт.zip'), isTrue);
     expect(r.fits('отчёт.docx'), isFalse);
     expect(r.perSubmit, 3); // за раз — не больше трёх
-    expect(r.describe(), 'Архив ZIP · до\u00A03\u00A0файлов · до\u00A010\u00A0МБ');
-    expect(SubmitRules.fromJson({'maxfiles': 1}).describe(), 'любые файлы · до\u00A01\u00A0файла');
+    expect(r.describe(), 'Архив ZIP ·\u00A0до\u00A03\u00A0файлов ·\u00A0до\u00A010\u00A0МБ');
+    expect(SubmitRules.fromJson({'maxfiles': 1}).describe(), 'любые файлы ·\u00A0до\u00A01\u00A0файла');
     expect(SubmitRules.fromJson({'closed': 'срок вышел'}).closed, 'срок вышел');
   });
 
@@ -53,7 +53,7 @@ void main() {
     );
     await settle(t);
     expect(asked, contains('GET /api/sdo/submit-rules?cmid=0&deadline_id=7'));
-    expect(find.textContaining('Архив ZIP · до\u00A02\u00A0файлов · до\u00A010\u00A0МБ'), findsOneWidget);
+    expect(find.textContaining('Архив ZIP ·\u00A0до\u00A02\u00A0файлов ·\u00A0до\u00A010\u00A0МБ'), findsOneWidget);
     await t.tap(find.text('Выбрать файл'));
     await settle(t);
     expect(find.textContaining('Задание не примет: отчёт.docx'), findsOneWidget);

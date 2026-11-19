@@ -349,7 +349,7 @@ function dlRules(j) {
   r.limit = `${(r.maxBytes / 1048576).toFixed(r.maxBytes >= 10485760 ? 0 : 1)}\u00A0МБ`;
   r.need = `нужен файл: ${dlOrList(r.labels.length ? r.labels : r.accepted)}`;
   r.describe = () => [r.labels.length ? r.labels.join(", ") : r.accepted.length ? r.accepted.join(" ") : "любые файлы",
-    `до\u00A0${r.perSubmit}\u00A0${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до\u00A0${r.limit}` : ""].filter(Boolean).join(" · ");
+    `до\u00A0${r.perSubmit}\u00A0${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до\u00A0${r.limit}` : ""].filter(Boolean).join(" ·\u00A0");
   r.problem = (f) => {
     if (!r.fits(f.name)) {
       const dot = f.name.lastIndexOf(".");
