@@ -120,8 +120,10 @@ def ctx(dp, bot, uid=UID) -> FSMContext:
 def _all_states():
     import handlers.announce, handlers.deadlines, handlers.feed, handlers.files_admin  # noqa: E401
     import handlers.files_upload, handlers.homework, handlers.schedule, handlers.social, handlers.solver  # noqa: E401
+    import handlers.solver_lectures, handlers.solver_reply, handlers.solver_think  # noqa: E401
     mods = [handlers.announce, handlers.deadlines, handlers.feed, handlers.files_admin, handlers.files_upload,
-            handlers.homework, handlers.schedule, handlers.social, handlers.solver]
+            handlers.homework, handlers.schedule, handlers.social, handlers.solver,
+            handlers.solver_lectures, handlers.solver_reply, handlers.solver_think]
     groups = {obj for m in mods for obj in vars(m).values()
               if inspect.isclass(obj) and issubclass(obj, StatesGroup) and obj is not StatesGroup}
     return sorted(s.state for g in groups for s in g.__all_states__)

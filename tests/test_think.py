@@ -124,6 +124,7 @@ async def test_webapp_chat_button_and_think_request(db, client, monkeypatch, on)
 @pytest.mark.asyncio
 async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on):  # noqa: F811
     import handlers.solver as solver
+    from handlers import solver_reply
     from tests.test_review_bot import UID
     await _plus(db, UID)
     asked = []
@@ -139,10 +140,10 @@ async def test_bot_button_under_answer_and_callback(db, dp, bot, monkeypatch, on
     monkeypatch.setattr(think, "solve", fake_think)
     await send(dp, bot, "что такое NPV и как его посчитать")
     marks = bot.session.named("EditMessageReplyMarkup")
-    assert marks and marks[-1].reply_markup.inline_keyboard[0][0].callback_data == solver.THINK_CB
+    assert marks and marks[-1].reply_markup.inline_keyboard[0][0].callback_data == solver_reply.THINK_CB
     assert "Подумать ещё · 2" in marks[-1].reply_markup.inline_keyboard[0][0].text
 
-    await press(dp, bot, solver.THINK_CB)
+    await press(dp, bot, solver_reply.THINK_CB)
     assert asked == [[{"role": "user", "content": "Задание:\nчто такое NPV и как его посчитать"}]]
     assert "ответ подумав ещё" in bot.session.texts()[-1]
 
@@ -266,16 +267,17 @@ async def _solve_until_task(dp, bot):  # noqa: F811
 
 
 def _arm(bot):  # noqa: F811
-    import handlers.solver as solver
+    from handlers import solver_think
     return [m for m in bot.session.named("SendMessage")
             if getattr(m.reply_markup, "inline_keyboard", None)
-            and m.reply_markup.inline_keyboard[0][0].callback_data == solver.THINK_ARM_CB]
+            and m.reply_markup.inline_keyboard[0][0].callback_data == solver_think.THINK_ARM_CB]
 
 
 @pytest.mark.asyncio
 async def test_bot_solve_toggle_think_before_answer(db, dp, bot, monkeypatch, on):  # noqa: F811
     from kapibara.features.ai import quota as ai_quota
     import handlers.solver as solver
+    from handlers import solver_reply, solver_think
     from tests.test_review_bot import UID, ctx
     await _plus(db, UID)
     asked, ordinary = [], []
@@ -296,7 +298,7 @@ async def test_bot_solve_toggle_think_before_answer(db, dp, bot, monkeypatch, on
     mid = 7
     await ctx(dp, bot).update_data(think_arm=mid)            # в фейковой сессии id сообщений свои
 
-    await press(dp, bot, solver.THINK_ARM_CB, message_id=mid)
+    await press(dp, bot, solver_think.THINK_ARM_CB, message_id=mid)
     marks = bot.session.named("EditMessageReplyMarkup")
     assert "Подумать включено" in marks[-1].reply_markup.inline_keyboard[0][0].text
     before = (await ai_quota.today()).get(UID, 0)
@@ -304,17 +306,18 @@ async def test_bot_solve_toggle_think_before_answer(db, dp, bot, monkeypatch, on
     assert asked == [([{"role": "user", "content": "Задание:\nчто такое NPV и как его посчитать"}], True)]
     assert ordinary == [] and "ответ подумав сразу" in "\n".join(bot.session.texts())
     assert (await ai_quota.today()).get(UID, 0) == before    # не в обычный дневной счёт
-    assert await ctx(dp, bot).get_state() == solver.SolverState.in_dialog.state
+    assert await ctx(dp, bot).get_state() == solver_reply.SolverState.in_dialog.state
     assert any(m.message_id == mid and m.reply_markup is None
                for m in bot.session.named("EditMessageReplyMarkup"))     # переключатель убран
 
-    await press(dp, bot, solver.THINK_ARM_CB, message_id=mid)   # старая кнопка — не работает
+    await press(dp, bot, solver_think.THINK_ARM_CB, message_id=mid)   # старая кнопка — не работает
     assert "уже решена" in bot.session.named("AnswerCallbackQuery")[-1].text
 
 
 @pytest.mark.asyncio
 async def test_bot_toggle_off_and_hidden_without_left(db, dp, bot, monkeypatch, on):  # noqa: F811
     import handlers.solver as solver
+    from handlers import solver_think
     from database import set_setting
     from tests.test_review_bot import UID, ctx
     from kapibara.core.utils import today_msk
@@ -328,8 +331,8 @@ async def test_bot_toggle_off_and_hidden_without_left(db, dp, bot, monkeypatch, 
     monkeypatch.setattr(solver, "solve_text", fake_solve_text)
     await _solve_until_task(dp, bot)
     await ctx(dp, bot).update_data(think_arm=7)
-    await press(dp, bot, solver.THINK_ARM_CB)
-    await press(dp, bot, solver.THINK_ARM_CB)                # выключил обратно — решаем как обычно
+    await press(dp, bot, solver_think.THINK_ARM_CB)
+    await press(dp, bot, solver_think.THINK_ARM_CB)                # выключил обратно — решаем как обычно
     await send(dp, bot, "что такое NPV и как его посчитать")
     assert ordinary == ["что такое NPV и как его посчитать"]
 
@@ -352,7 +355,7 @@ async def test_bot_no_toggle_for_non_subscriber(db, dp, bot, monkeypatch, on):  
 
 @pytest.mark.asyncio
 async def test_bot_think_command(db, dp, bot, monkeypatch, on):  # noqa: F811
-    import handlers.solver as solver
+    from handlers import solver_think
     from tests.test_review_bot import UID, ctx
     await _plus(db, UID)
     asked = []
@@ -366,7 +369,7 @@ async def test_bot_think_command(db, dp, bot, monkeypatch, on):  # noqa: F811
     assert asked == [("Задание:\nчто такое NPV", True)] and "ответ подумав сразу" in bot.session.texts()[-1]
 
     await send(dp, bot, "/think")
-    assert await ctx(dp, bot).get_state() == solver.ThinkState.waiting.state
+    assert await ctx(dp, bot).get_state() == solver_think.ThinkState.waiting.state
     assert "2 на сегодня" in bot.session.texts()[-1]
     await send(dp, bot, "а чем IRR отличается от NPV")
     assert asked[-1] == ("Задание:\nа чем IRR отличается от NPV", True)
@@ -391,8 +394,8 @@ async def test_think_first_for_unlimited_without_counter(db, dp, bot, monkeypatc
 def test_model_not_named_to_user():
     # Никита 18.10: модели нигде не называем — ни в подписи ответа, ни в подсказках
     from pathlib import Path
-    from handlers import solver
-    texts = [think.FOOTER, think.FOOTER_FIRST, solver.ARM_TEXT, solver.THINK_ASK]
+    from handlers import solver_think
+    texts = [think.FOOTER, think.FOOTER_FIRST, solver_think.ARM_TEXT, solver_think.THINK_ASK]
     texts += [Path(f).read_text(encoding="utf-8") for f in ("webapp/static/js/chat.js", "app/lib/screens/chat.dart")]
     assert not any("DeepSeek" in t for t in texts)
-    assert "Капибара решит" in solver.ARM_TEXT and "подумав подольше" in solver.THINK_ASK
+    assert "Капибара решит" in solver_think.ARM_TEXT and "подумав подольше" in solver_think.THINK_ASK
