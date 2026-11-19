@@ -154,6 +154,9 @@ def main(argv: list[str]) -> int:
     try:
         app_id = find_app(asc)
         version_id = ensure_version(asc, app_id, a.version)
+        if version_id == "DRY":   # версии ещё нет, дальше без неё нечего проверять
+            print("пробный прогон: ключ и приложение найдены, версию 2.0.1 создам при настоящем запуске")
+            return 0
         locs = set_whats_new(asc, version_id, text)
         for folder, (display_type, size) in SETS.items():
             files = sorted(p for p in (a.screens / folder).glob("*.jpg"))
