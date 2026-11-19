@@ -165,7 +165,12 @@ def main(argv: list[str]) -> int:
                 print(f"{folder}: размер не {size[0]}×{size[1]}: {', '.join(bad)}", file=sys.stderr)
                 return 2
             for loc in locs:
-                upload_set(asc, loc["id"], display_type, files)
+                try:
+                    upload_set(asc, loc["id"], display_type, files)
+                except AscError as e:
+                    if folder != "appstore-6.3":   # 6,9″ обязателен, 6,3″ Apple умеет делать из него сам
+                        raise
+                    print(f"{folder}: не залился ({e}); 6,9″ достаточно, продолжаю", file=sys.stderr)
     except (AscError, httpx.HTTPError) as e:
         print(f"ошибка: {e}", file=sys.stderr)
         return 1
