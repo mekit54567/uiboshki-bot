@@ -38,7 +38,7 @@ import math
 from typing import Any
 
 OPEN = ("todo", "soon", "offline", "wait", "late")   # ещё могут дать баллы и зачёт
-# late — срок прошёл, оценки нет, но не больше 15 дней: могли сдать на паре (sdo_grades.GRACE_DAYS)
+# late — срок прошёл, оценки нет, но не больше 15 дней: могли сдать на паре (gradebook.GRACE_DAYS)
 LOST = ("low", "miss")
 TIGHT_MARGIN = 5.0                            # запас меньше — «впритык»
 EXAM_POINTS = 40.0                            # «Семестровый контроль 0–40», если в журнале его нет
