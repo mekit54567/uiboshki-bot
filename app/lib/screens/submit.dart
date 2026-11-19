@@ -394,6 +394,26 @@ class _SubmitSheetState extends State<SubmitSheet> {
   );
 }
 
+/// Итог сдачи листом поверх страницы задания (новый вид: сдают прямо на странице).
+Future<void> showSubmitDone(
+  BuildContext context, {
+  required String status,
+  String state = 'submitted',
+  String url = '',
+}) => showModalBottomSheet<void>(
+  useSafeArea: true,
+  context: context,
+  backgroundColor: AppStyle.of(context).p.cardSolid,
+  showDragHandle: true,
+  isScrollControlled: true,
+  builder: (ctx) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.xl),
+      child: _Done(status: status, state: state, url: url, onClose: () => Navigator.pop(ctx)),
+    ),
+  ),
+);
+
 /// Сдал — капибара радуется: подпрыгивает, рядом зелёная галочка. Зелёное
 /// «Сдано» — только когда СДО подтвердил отправку; черновик и непонятный
 /// ответ — свой заголовок и цвет (аудит 21.10, R5).
