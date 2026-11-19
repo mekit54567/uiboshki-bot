@@ -13,9 +13,7 @@ function roAct(action, source) {
 /** Карточка (место в разметке — #rating-offer, заполняет roMountCard). */
 function roCardHtml(compact) {
   const words = `<div class="bd b6" style="--sz:${compact ? 16 : 17}px">Тебя не видно в рейтинге группы</div>
-    <div class="bd mut" style="--sz:14px;margin-top:4px">${compact
-      ? "Покажешься? Вместо имени — ник или «Капибара №…»."
-      : "Покажешься? Вместо имени можно ник или «Капибара №…». Всё выключено, пока сам не включишь."}</div>`;
+    <div class="bd mut" style="--sz:14px;margin-top:4px">Покажешься? Вместо имени — ник или «Капибара\u00A0№…».</div>`;
   return `<div class="hx"><div class="tile ro-card" id="rating-offer">
     ${compact ? words : `<div class="row" style="align-items:flex-start;gap:var(--m)"><div class="grow">${words}</div>${capy("joy", 64)}</div>`}
     <div class="ro-btns"><button class="btn primary" id="rating-offer-show" data-act="ro-show">Показать</button>
@@ -49,13 +47,13 @@ function roSheet(me0, source) {
         <div class="ttl" style="--sz:24px">Показаться в рейтинге?</div>
         <div class="bd mut" style="--sz:15px;margin-top:var(--s)">${any
           ? "Включено то, что ты выбрал. Выключить можно в любой момент в «Мой опыт»."
-          : "Сейчас тебя не видно. Решаешь ты: оба тумблера выключены, отказ ничего не закрывает."}</div>
+          : "Сейчас тебя никто не видит. Не включишь — ничего не изменится."}</div>
         <div class="tile p0" style="margin-top:var(--l)">
           ${row("Группе", g ? "группа видит твой ник и опыт" : "одногруппники увидят твой ник и опыт", g, "rating-offer-group")}
           <div class="divider"></div>
-          ${row("Всем", a ? `все видят тебя как «${me.public_nick ?? "Капибара №…"}»` : "все увидят «Капибара №…» или твой ник · отдельное согласие", a, "rating-offer-all")}
+          ${row("Всем", a ? `все видят тебя как «${me.public_nick ?? "Капибара №…"}»` : "другие группы увидят ник или «Капибара №…» · нужно отдельное согласие", a, "rating-offer-all")}
         </div>
-        <div class="bd mut" style="--sz:12.5px;margin-top:var(--xs)">Имя и фамилию не показываем. Тумблер «Всем» откроет отдельное согласие с текстом.</div>
+        <div class="bd mut" style="--sz:12.5px;margin-top:var(--xs)">Имя и фамилию не показываем. Тумблер «Всем» сначала покажет текст согласия.</div>
         <button class="btn ${any ? "primary" : "outline ro-keep"}" id="rating-offer-done" data-act="ro-done" style="margin-top:var(--l);min-height:50px">${any ? "Готово" : "Оставить скрытым"}</button>
         ${any ? "" : `<button class="btn text ro-stop" id="rating-offer-sheet-stop" data-act="ro-sstop">Больше не предлагать</button>`}`;
     };

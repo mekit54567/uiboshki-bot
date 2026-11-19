@@ -157,13 +157,13 @@ def reason(b: dict, user_id: int) -> dict | None:
 def text(why: dict) -> tuple[str, str, str]:
     """(заголовок, текст для ленты и пуша, HTML для Telegram). Без нажима:
     сразу сказано, что решать человеку и что по умолчанию его не видно."""
-    tail = "Хочешь — покажись группе, тумблеры выключены, решать тебе."
+    tail = "Хочешь — покажись группе, решать тебе."
     if why["kind"] == "group":
         up = why["up"]
         title = "Группа поднялась в рейтинге"
         body = f"Группа {why['group']} поднялась на {why['place']} место в вузе (+{up}). {tail}"
     else:
-        title = "Ты набрал опыт"
+        title = f"+{why['week']} опыта за неделю"
         body = f"За эту неделю у тебя +{why['week']} опыта. {tail}"
     return title, body, f"<b>{title}</b>\n{body}"
 

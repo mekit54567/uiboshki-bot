@@ -114,7 +114,7 @@ def test_reason_group_up_then_xp_then_none():
 def test_event_text_does_not_pressure():
     for why in ({"kind": "xp", "week": 40}, {"kind": "group", "group": "Г", "place": 2, "up": 1}):
         _t, body, html = offer.text(why)
-        assert "решать тебе" in body and "тумблеры выключены" in body
+        assert "решать тебе" in body
         assert "чтобы видеть" not in body.lower() and html.startswith("<b>")
 
 

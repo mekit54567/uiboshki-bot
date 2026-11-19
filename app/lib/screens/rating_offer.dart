@@ -140,12 +140,7 @@ class _OfferCard extends StatelessWidget {
       children: [
         Text('Тебя не видно в рейтинге группы', style: s.body(compact ? 16 : 17, weight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text(
-          compact
-              ? 'Покажешься? Вместо имени — ник или «Капибара №…».'
-              : 'Покажешься? Вместо имени можно ник или «Капибара №…». Всё выключено, пока сам не включишь.',
-          style: s.body(14, color: p.muted),
-        ),
+        Text('Покажешься? Вместо имени — ник или «Капибара\u00A0№…».', style: s.body(14, color: p.muted)),
       ],
     );
     return Tile(
@@ -347,7 +342,7 @@ class _OfferSheetState extends State<_OfferSheet> {
             Text(
               anyOn
                   ? 'Включено то, что ты выбрал. Выключить можно в любой момент в «Мой опыт».'
-                  : 'Сейчас тебя не видно. Решаешь ты: оба тумблера выключены, отказ ничего не закрывает.',
+                  : 'Сейчас тебя никто не видит. Не включишь — ничего не изменится.',
               style: s.body(15, color: p.muted),
             ),
             const SizedBox(height: Space.l),
@@ -369,7 +364,7 @@ class _OfferSheetState extends State<_OfferSheet> {
                     'Всем',
                     all
                         ? 'все видят тебя как «${_me['public_nick'] ?? 'Капибара №…'}»'
-                        : 'все увидят «Капибара №…» или твой ник · отдельное согласие',
+                        : 'другие группы увидят ник или «Капибара №…» · нужно отдельное согласие',
                     all,
                     () => _toggle(true),
                     const Key('rating:offer:all'),
@@ -379,7 +374,7 @@ class _OfferSheetState extends State<_OfferSheet> {
             ),
             const SizedBox(height: Space.xs),
             Text(
-              'Имя и фамилию не показываем. Тумблер «Всем» откроет отдельное согласие с текстом.',
+              'Имя и фамилию не показываем. Тумблер «Всем» сначала покажет текст согласия.',
               style: s.body(12.5, color: p.muted),
             ),
             const SizedBox(height: Space.l),
