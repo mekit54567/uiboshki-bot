@@ -119,13 +119,6 @@ function stSdoLine(d) {
   if (d.sdo === "expired") return expired;
   return [d.updated == null ? "баллы из СДО" : `баллы из СДО · обновлено ${stUpdatedText(d.updated)}`, ""];
 }
-/** «до «4» ещё 12», «до зачёта ещё 6», «итог — 5», «на «4» уже хватает» (_needText). */
-function stNeedText(c) {
-  if (c.finalMark) return `итог — ${c.finalMark}`;
-  if (c.need <= 0) return c.enoughText;
-  return `до ${c.needLabel === "зачёт" ? "зачёта" : `«${c.needLabel}»`} ещё ${stNum(c.need)}`;
-}
-
 /** Сколько автоматов (Никита 17.11 — вместо среднего балла БРС; _FreshAutos):
  *  маленькая карточка, только когда хоть где-то баллов хватает на «3» или зачёт.
  *  Где баллов хватает, а работ зачтено меньше 75 %, — строкой ниже. */
@@ -147,14 +140,14 @@ function stFreshDoor(act, ic, title, text) {
   return `<button class="tile sf-door" data-act="${act}">${icon(ic, "o", "font-size:24px;color:var(--accent)")}
     <div class="ttl" style="--sz:21px;margin-top:var(--s)">${title}</div><div class="bd mut" style="--sz:13px;margin-top:2px">${text}</div></button>`;
 }
-/** Строка предмета в общей карточке: кольцо с баллом, название, что дальше (_FreshCourseRow). */
+/** Строка предмета в общей карточке: кольцо с баллом, название, сколько работ зачтено (_FreshCourseRow).
+ *  Кольцо 50, а не 46: «18,5» не касается края (Никита 19.11). «до зачёта ещё…» и «итог — 2» под
+ *  названием не пишем — только работы. */
 function stFreshCourseRow(c, k) {
-  const done = !!c.finalMark || c.need <= 0;
   return `<button class="row sf-row" data-act="course" data-k="${k}">
-    ${stRing(c.score / c.top, ink(c.title), `<span class="num" style="--sz:${c.score >= 100 ? 15 : 17}px">${esc(stNum(c.score))}</span>`, 46, 4)}
-    <div class="grow"><div class="nm sf-fit" style="--sz:15px">${esc(glue(c.title))}</div>
-      <div class="bd mut" style="--sz:13px;margin-top:2px"><span${done ? ' style="color:var(--ok);font-weight:600"' : ""}>${esc(stNeedText(c))}</span>${
-        c.worksTotal > 0 ? ` · зачтено ${c.worksPassed} из ${c.worksTotal}` : ""}</div></div>
+    ${stRing(c.score / c.top, ink(c.title), `<span class="num" style="--sz:${c.score >= 100 ? 15 : 17}px">${esc(stNum(c.score))}</span>`, 50, 4)}
+    <div class="grow"><div class="nm sf-fit" style="--sz:15px">${esc(glue(c.title))}</div>${
+      c.worksTotal > 0 ? `<div class="bd mut" style="--sz:13px;margin-top:2px">Работ зачтено\u00a0${c.worksPassed}\u00a0из\u00a0${c.worksTotal}</div>` : ""}</div>
     ${icon("chevron_right", "", "font-size:24px;color:var(--muted)")}</button>`;
 }
 /** Слово через дефис не рвётся (glue), а если такое слово шире строки (узкий
