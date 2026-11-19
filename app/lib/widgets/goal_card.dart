@@ -127,9 +127,9 @@ String updatedText(int unix, DateTime at) {
   final t = msk(DateTime.fromMillisecondsSinceEpoch(unix * 1000, isUtc: true)), a = msk(at);
   final days = DateTime(a.year, a.month, a.day).difference(DateTime(t.year, t.month, t.day)).inHours ~/ 24;
   final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-  if (days <= 0) return 'сегодня в\u00A0$hm';
-  if (days == 1) return 'вчера в\u00A0$hm';
-  return '${t.day}\u00A0${monthsGen[t.month - 1]} в\u00A0$hm';
+  if (days <= 0) return 'сегодня\u00A0в\u00A0$hm';
+  if (days == 1) return 'вчера\u00A0в\u00A0$hm';
+  return '${t.day}\u00A0${monthsGen[t.month - 1]}\u00A0в\u00A0$hm';
 }
 
 /// Строки «откуда взять» цели в новом дизайне (макет 4, 11.11) — те же данные,

@@ -16,7 +16,17 @@ class _FreshView extends StatelessWidget {
 
   /// Открыть вкладку «Сдать» (кнопка у срока в «Важно сегодня»).
   final VoidCallback? onDeadlines;
-  const _FreshView({super.key, required this.data, required this.api, required this.top, this.onDeadlines});
+
+  /// Отступ под списком: меню, а с кружком QR — и он (TodayScreen.qr).
+  final double bottom;
+  const _FreshView({
+    super.key,
+    required this.data,
+    required this.api,
+    required this.top,
+    this.onDeadlines,
+    this.bottom = 120,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +143,7 @@ class _FreshView extends StatelessWidget {
     if (lessons.isEmpty && data.scheduleOk) {
       final nCancelled = ahead.length;
       return ListView(
-        padding: const EdgeInsets.only(bottom: 120),
+        padding: EdgeInsets.only(bottom: bottom),
         children: [
           top,
           ?banner,
@@ -161,7 +171,7 @@ class _FreshView extends StatelessWidget {
       );
     }
     return ListView(
-      padding: const EdgeInsets.only(bottom: 120),
+      padding: EdgeInsets.only(bottom: bottom),
       children: [
         top,
         ?banner,
