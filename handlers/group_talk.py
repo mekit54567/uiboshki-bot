@@ -138,9 +138,10 @@ async def respond(message: Message, question: str):
     if refusal == "day":
         await message.reply("Я на сегодня выговорилась 🦫 Завтра отвечу, а расписание и дедлайны — в боте.")
         return
-    with aside(logger, "«печатает» в группе", EXTERNAL):
-        await message.bot.send_chat_action(message.chat.id, "typing",
-                                           message_thread_id=message.message_thread_id if message.is_topic_message else None)
+    if message.bot:
+        with aside(logger, "«печатает» в группе", EXTERNAL):
+            await message.bot.send_chat_action(message.chat.id, "typing",
+                                               message_thread_id=message.message_thread_id if message.is_topic_message else None)
     try:
         async with asyncio.timeout(group_talk.TOTAL_TIMEOUT):
             text = await group_talk.answer(question)
