@@ -30,6 +30,7 @@ from kapibara.features.billing.kassa import PayError  # общая ошибка 
 
 logger = logging.getLogger(__name__)
 
+
 class Plan(TypedDict):
     days: int
     price: int

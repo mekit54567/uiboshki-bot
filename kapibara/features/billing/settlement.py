@@ -9,6 +9,7 @@ from kapibara.features.billing import billing, donate, kassa
 
 logger = logging.getLogger("kapibara.features.billing.billing")  # старое имя: /status
 
+
 async def yookassa_check(pid: str) -> str | None:
     """Статус платежа у самой ЮKassa (уведомлению на слово не верим)."""
     try:

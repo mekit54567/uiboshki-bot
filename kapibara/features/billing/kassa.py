@@ -47,7 +47,7 @@ class PayError(Exception):
 
 
 async def yookassa_create(uid: int | None, plan: str, price: int, days: int, title: str, return_url: str,
-                           donation: bool = False, claim: str | None = None) -> str:
+                          donation: bool = False, claim: str | None = None) -> str:
     from database import billing as store
     local = f"local-{uuid.uuid4()}"
     if donation:

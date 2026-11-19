@@ -211,7 +211,7 @@ async def _public() -> HTMLResponse:
     bot = f"https://t.me/{escape(config.BOT_USERNAME)}?start=plus"
     contact = escape(privacy.CONTACT)          # уже с почтой, если она задана
     stars_note = (" В боте Telegram можно оплатить и звёздами Telegram (Stars) — цена в звёздах выше, в неё входит "
-             "комиссия Telegram." if stars.stars_on() else "")
+                  "комиссия Telegram." if stars.stars_on() else "")
     return _page(
         '<p class="lead">«Капибара+» — подписка на дополнительные функции сервиса «Капибара», помощника '
         'студентов РТУ МИРЭА (бот в Telegram, сайт и приложение uiboshki.ru/app, приложение для Android и iPhone). '

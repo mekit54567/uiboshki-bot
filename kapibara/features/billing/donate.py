@@ -42,7 +42,7 @@ async def create_donation(uid: int | None, amount, return_url: str, claim: str |
     if kind == "yookassa":
         try:
             return await kassa.yookassa_create(uid, "donation", amount, 0, DONATE_TITLE, return_url,
-                                          donation=True, claim=claim)
+                                               donation=True, claim=claim)
         except kassa.PayError:
             if "robokassa" not in kassa.configured():
                 raise
@@ -73,7 +73,7 @@ async def donation_paid(pid: str, bot=None) -> bool:
         if config.STAROSTA_ID and uid != config.STAROSTA_ID:
             n, total = await donation_totals()
             await billing.notify(bot, config.STAROSTA_ID,
-                         f"💛 Поддержка проекта: {amount} ₽ от {await _who(uid)}. Всего: {n} · {total} ₽.")
+                                 f"💛 Поддержка проекта: {amount} ₽ от {await _who(uid)}. Всего: {n} · {total} ₽.")
     return True
 
 

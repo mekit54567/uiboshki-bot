@@ -515,7 +515,6 @@ def test_public_plus_page_for_robokassa(client, robokassa, monkeypatch):  # noqa
 def test_no_kassa_yet_names_yookassa(client, monkeypatch):  # noqa: F811
     """28.10: Robokassa отказала, подключаем ЮKassa — пока кассы нет, на /plus,
     в оферте и политике называем ЮKassa, а не Robokassa (её проверяющий смотрит сайт)."""
-    from kapibara.features.billing import kassa
     from kapibara.features.privacy import legal_texts
     for k in ("ROBOKASSA_LOGIN", "YOOKASSA_SHOP_ID"):
         monkeypatch.setattr(kassa, k, "")
