@@ -74,8 +74,6 @@ async def api_set_group(body: GroupBody, user: dict = CurrentUser):
     g = await groups.choose(user["id"], body.id, deps.tg_bot())
     if not g:
         raise HTTPException(404, "Такой группы нет")
-    if g.get("denied"):
-        raise HTTPException(403, g["denied"].capitalize())
     return {"group": g}
 
 

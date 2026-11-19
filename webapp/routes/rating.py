@@ -14,7 +14,7 @@ async def api_rating(user: dict = CurrentUser):
     from database.groups import get_user_group, home, viewer_group
     gid = await get_user_group(user["id"]) or home()
     # люди «своей» группы с тумблером «группе» — только тем, кто правда в ней
-    # (своя группа бота — участникам её чата, members.py)
+    # (своя группа бота с 19.11 открыта всем, кто её выбрал)
     member = await viewer_group(user["id"]) == gid
     return await xp.for_user(user["id"], gid, member=member)
 

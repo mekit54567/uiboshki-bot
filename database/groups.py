@@ -98,15 +98,14 @@ def file_scope_sql(alias: str = "f") -> str:
 async def viewer_group(user_id: int | None) -> int:
     """Группа, чьи общие данные видит человек. Не выбрал (только что пришёл —
     приложение и бот тут же спрашивают группу) — своя, как было до этапа 1.
-    Своя группа — только участникам её чата в Telegram (members.py, владелец
-    09.10): известно, что человек не в чате, — 0, данных своей группы нет."""
+    С 19.11 своя группа открыта всем, кто её выбрал: проверку по чату группы
+    в Telegram (members.py, 09.10) Никита убрал."""
     if not home():
         return 0
     gid = await get_user_group(user_id) if user_id else None
     if gid and gid != home():
         return gid
-    from database import members
-    return 0 if user_id and await members.known(user_id) is False else home()
+    return home()
 
 
 async def add_group_admin(group_id: int, user_id: int, added_by: int):
