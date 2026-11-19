@@ -13,6 +13,12 @@ class FakeMsg:
         self.chat = type("C", (), {"id": chat_id, "type": "supergroup"})()
         self.from_user = type("U", (), {"id": uid, "is_bot": bot})()
         self.reply_to_message = reply_to
+        self.message_thread_id, self.is_topic_message = 1, True
+
+        class _Bot:
+            async def send_chat_action(self, *a, **k):
+                return True
+        self.bot = _Bot()
 
     async def reply(self, text):
         self.replies.append(text)
@@ -93,12 +99,12 @@ async def test_fallback_chain_and_failure(monkeypatch):
 
     async def ask(model, q):
         tried.append(model)
-        if model != "nvidia/nemotron-3.5-lightning:free":
+        if model != "nvidia/nemotron-3.5-super-vl:free":
             raise group_talk.TalkError("429")
         return "ок"
     monkeypatch.setattr(group_talk, "_ask", ask)
     assert await group_talk.answer("@UiboshkiBot привет") == "ок"
-    assert tried[0] == "nvidia/nemotron-3-ultra-550b-a55b:free" and len(tried) == 3
+    assert tried[0] == "nvidia/nemotron-3-ultra-550b-a55b:free" and len(tried) == 2
 
     async def bad(model, q):
         raise group_talk.TalkError("down")

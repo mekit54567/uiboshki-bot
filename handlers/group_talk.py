@@ -8,7 +8,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from aiogram import F, Bot, Router
+from aiogram import BaseMiddleware, F, Bot, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BufferedInputFile, FSInputFile, Message
 
@@ -21,6 +21,23 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 GROUP = F.chat.type.in_({"group", "supergroup"})
+
+
+class GroupTrace(BaseMiddleware):
+    """Строка в лог на каждое обращение к боту в группе (тег, /ask, ответ ему) — видно, доходят ли такие
+    сообщения до бота вообще, раньше любых фильтров (Telegram, privacy mode, inline-режим)."""
+
+    async def __call__(self, handler, event, data):
+        chat = getattr(event, "chat", None)
+        if chat and chat.type in ("group", "supergroup"):
+            text = (getattr(event, "text", None) or "").lower()
+            reply = getattr(event, "reply_to_message", None)
+            to_bot = f"@{config.BOT_USERNAME}".lower() in text or text.startswith(("/ask", "/kapi"))
+            if to_bot or (reply and reply.from_user and reply.from_user.is_bot):
+                user = getattr(event, "from_user", None)
+                logger.info(f"группа: пришло {text[:30]!r} от {user.id if user else '?'} в чате {chat.id}, "
+                            f"тема {getattr(event, 'message_thread_id', None)}")
+        return await handler(event, data)
 
 
 async def send_intro(bot: Bot, chat_id: int, *, force: bool = False) -> bool:
@@ -121,6 +138,10 @@ async def respond(message: Message, question: str):
     if refusal == "day":
         await message.reply("Я на сегодня выговорилась 🦫 Завтра отвечу, а расписание и дедлайны — в боте.")
         return
+    if message.bot:
+        with aside(logger, "«печатает» в группе", EXTERNAL):
+            await message.bot.send_chat_action(message.chat.id, "typing",
+                                               message_thread_id=message.message_thread_id if message.is_topic_message else None)
     try:
         async with asyncio.timeout(group_talk.TOTAL_TIMEOUT):
             text = await group_talk.answer(question)
