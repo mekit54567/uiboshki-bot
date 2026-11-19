@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from kapibara.features.schedule import attendance
+from kapibara.features.sdo import gradebook
 from kapibara.features.sdo import grades as sdo_grades
 
 
@@ -21,10 +22,10 @@ def test_draft_is_not_submitted():
         "<table><tr><th>Состояние ответа на задание</th><td>Черновик (не отправлено)</td></tr></table>")
     assert page["submitted"] is False and page["draft"] is True
     w = {"grade": None, "passed": None}
-    assert sdo_grades.work_status(w, page) == "todo"                      # было «wait» — «сдано, ждёт оценки»
+    assert gradebook.work_status(w, page) == "todo"                      # было «wait» — «сдано, ждёт оценки»
     sent = sdo_grades.parse_assign_page(
         "<table><tr><th>Состояние ответа на задание</th><td>Отправлено для оценивания</td></tr></table>")
-    assert sent["submitted"] is True and sdo_grades.work_status(w, sent) == "wait"
+    assert sent["submitted"] is True and gradebook.work_status(w, sent) == "wait"
 
 
 def _report(rows: str) -> str:
@@ -40,19 +41,19 @@ def _report(rows: str) -> str:
 
 
 def test_scale_grades_count_as_graded():
-    s = sdo_grades.summarize(sdo_grades.parse_report(_report("")), "Предмет_Экзамен")
+    s = gradebook.summarize(gradebook.parse_report(_report("")), "Предмет_Экзамен")
     by = {w["name"]: w for w in s["works"]}
     assert by["ПР 1"]["graded"] and by["ПР 1"]["passed"] is True and by["ПР 1"]["grade"] is None
     assert by["ПР 2"]["graded"] and by["ПР 2"]["passed"] is False
     assert s["works_passed"] == 2 and s["works_graded"] == 3
-    assert sdo_grades.work_status(by["ПР 1"], {"submitted": True}) == "ok"   # было «ждёт оценки»
-    assert sdo_grades.work_status(by["ПР 2"], {}) == "low"
+    assert gradebook.work_status(by["ПР 1"], {"submitted": True}) == "ok"   # было «ждёт оценки»
+    assert gradebook.work_status(by["ПР 2"], {}) == "low"
 
 
 def test_diff_credit_has_marks():
-    s = sdo_grades.summarize({"items": [], "categories": []}, "Экономика_Дифференцированный зачет [I.26-27]")
+    s = gradebook.summarize({"items": [], "categories": []}, "Экономика_Дифференцированный зачет [I.26-27]")
     assert s["kind"] == "exam" and [m["label"] for m in s["marks"]] == ["3", "4", "5"]
-    assert sdo_grades.summarize({"items": [], "categories": []}, "Право_Зачет")["kind"] == "credit"
+    assert gradebook.summarize({"items": [], "categories": []}, "Право_Зачет")["kind"] == "credit"
 
 
 def test_overview_fresh_drops_course_screens(monkeypatch):

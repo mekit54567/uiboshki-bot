@@ -2,6 +2,7 @@
 import httpx
 import pytest
 
+from kapibara.features.sdo import gradebook
 from kapibara.features.sdo import grades as sdo_grades
 
 
@@ -40,7 +41,7 @@ REPORT = ('<table class="generaltable user-grade"><thead><tr><th>Элемент 
 
 
 def test_parse_report_like_owner_screenshot():
-    s = sdo_grades.summarize(sdo_grades.parse_report(REPORT), "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]")
+    s = gradebook.summarize(gradebook.parse_report(REPORT), "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]")
     assert s["kind"] == "credit" and s["score"] == 5 and s["max"] == 130 and s["final"] == "Не зачтено"
     assert [(c["name"], c["max"]) for c in s["categories"]] == [
         ("Текущий контроль", 45), ("Посещаемость", 20), ("Семестровый контроль", 40),
@@ -57,11 +58,11 @@ def test_parse_report_like_owner_screenshot():
 
 
 def test_exam_marks_and_closed():
-    rep = sdo_grades.parse_report(REPORT.replace("Сумма баллов", "Сумма баллов").replace(">5,0</td>\n", ""))
-    s = sdo_grades.summarize(rep, "Анализ данных_Экзамен (часть 1/1) [I.26-27]")
+    rep = gradebook.parse_report(REPORT.replace("Сумма баллов", "Сумма баллов").replace(">5,0</td>\n", ""))
+    s = gradebook.summarize(rep, "Анализ данных_Экзамен (часть 1/1) [I.26-27]")
     assert s["kind"] == "exam" and [m["label"] for m in s["marks"]] == ["3", "4", "5"]
     rep["items"][5]["grade"] = 64.0      # «Сумма баллов»
-    s = sdo_grades.summarize(rep, "Анализ данных_Экзамен")
+    s = gradebook.summarize(rep, "Анализ данных_Экзамен")
     assert s["closed"] and s["need_label"] == "5" and s["need"] == 16
 
 
@@ -78,11 +79,11 @@ def test_assign_page_and_status():
     p = sdo_grades.parse_assign_page(ASSIGN_OPEN)
     assert p["pass"] == 3 and p["can_submit"] and not p["submitted"] and p["due"] == "четверг, 15 октября 2026, 23:59"
     w = {"grade": None, "passed": None}
-    assert sdo_grades.work_status(w, p) == "todo"
-    assert sdo_grades.work_status(w, sdo_grades.parse_assign_page(ASSIGN_SENT)) == "wait"
+    assert gradebook.work_status(w, p) == "todo"
+    assert gradebook.work_status(w, sdo_grades.parse_assign_page(ASSIGN_SENT)) == "wait"
     off = sdo_grades.parse_assign_page(ASSIGN_OFFLINE)
-    assert off["offline"] and off["opens"] and sdo_grades.work_status(w, off) == "offline"
-    assert sdo_grades.work_status({"grade": 2, "passed": False}, None) == "low"
+    assert off["offline"] and off["opens"] and gradebook.work_status(w, off) == "offline"
+    assert gradebook.work_status({"grade": 2, "passed": False}, None) == "low"
 
 
 @pytest.mark.asyncio
@@ -233,13 +234,13 @@ def test_closed_quiz_dash_is_not_below_threshold():
     html = ('<table class="user-grade"><tr><th class="column-itemname level2">'
             '<a href="https://x/mod/quiz/view.php?id=7">Тест</a></th>'
             '<td class="column-grade gradefail">—</td><td class="column-range">0–5</td></tr></table>')
-    (it,) = sdo_grades.parse_report(html)["items"]
+    (it,) = gradebook.parse_report(html)["items"]
     assert not it["graded"] and it["grade"] is None and it["passed"] is None
     page = {"opens": "суббота, 1 ноября 2026, 00:00"}
-    assert sdo_grades.work_status(dict(it), page) == "soon"
+    assert gradebook.work_status(dict(it), page) == "soon"
     # даже если журнал что-то показал, тест, который ещё не открылся, — «закрыт»
-    assert sdo_grades.work_status({"grade": 0, "passed": False, "module": "quiz"}, page) == "soon"
-    assert sdo_grades._blank("Не оценено") and not sdo_grades._blank("Не зачтено")
+    assert gradebook.work_status({"grade": 0, "passed": False, "module": "quiz"}, page) == "soon"
+    assert gradebook._blank("Не оценено") and not gradebook._blank("Не зачтено")
 
 
 def test_overdue_without_grade_waits_15_days():
@@ -247,13 +248,13 @@ def test_overdue_without_grade_waits_15_days():
     работа ещё может дать баллы; потом — пропущена. Тест — пропущен сразу."""
     from datetime import datetime
     w, page = {"grade": None, "passed": None, "module": "assign"}, {"due": "среда, 1 октября 2026, 23:59"}
-    assert sdo_grades.work_status(w, page, now=datetime(2026, 9, 30)) == "todo"
-    assert sdo_grades.work_status(w, page, now=datetime(2026, 10, 10)) == "late"
-    assert sdo_grades.work_status(w, page, now=datetime(2026, 10, 17, 12)) == "miss"
-    assert sdo_grades.work_status(dict(w, module="quiz"), page, now=datetime(2026, 10, 2)) == "miss"
+    assert gradebook.work_status(w, page, now=datetime(2026, 9, 30)) == "todo"
+    assert gradebook.work_status(w, page, now=datetime(2026, 10, 10)) == "late"
+    assert gradebook.work_status(w, page, now=datetime(2026, 10, 17, 12)) == "miss"
+    assert gradebook.work_status(dict(w, module="quiz"), page, now=datetime(2026, 10, 2)) == "miss"
     off = dict(page, offline=True)
-    assert sdo_grades.work_status(w, off, now=datetime(2026, 9, 30)) == "offline"
-    assert sdo_grades.work_status(w, off, now=datetime(2026, 10, 20)) == "miss"
+    assert gradebook.work_status(w, off, now=datetime(2026, 9, 30)) == "offline"
+    assert gradebook.work_status(w, off, now=datetime(2026, 10, 20)) == "miss"
     from kapibara.features.sdo import goal as sdo_goal
     assert "late" in sdo_goal.OPEN
 
@@ -266,7 +267,7 @@ def test_works_order_numbers_and_test_by_due():
     works = [pr(1, "сентября"), pr(3, "ноября"), pr(2, "октября"),
              {"name": "Тестирование", "module": "quiz", "due": "8 ноября 2026, 23:59"},
              pr(4, "декабря"), {"name": "Контрольная работа", "module": "assign"}, pr(5, "декабря")]
-    names = [w["name"] for w in sdo_grades.order_works(works)]
+    names = [w["name"] for w in gradebook.order_works(works)]
     assert names == ["Практическая работа №1", "Практическая работа №2", "Практическая работа №3",
                      "Тестирование", "Практическая работа №4", "Контрольная работа", "Практическая работа №5"]
 
@@ -281,23 +282,23 @@ def test_auto_needs_75_percent_of_works():
     rep = {"categories": [{"name": "Текущий контроль", "level": 1}],
            "items": [item("Текущий контроль", 45, None, level=1)] +
                     [item(f"Работа {i}", 10 if i < 3 else None, True if i < 3 else None, cmid=i) for i in range(1, 5)]}
-    s = sdo_grades.summarize(rep, "Экономика")
+    s = gradebook.summarize(rep, "Экономика")
     assert s["closed"] and not s["auto"] and s["works_need"] == 1      # 45 баллов, но зачтено 2 из 4
     rep["items"][3].update(grade=10, graded=True, passed=True)
-    assert sdo_grades.summarize(rep, "Экономика")["auto"]
+    assert gradebook.summarize(rep, "Экономика")["auto"]
 
 
 def test_unknown_grade_text_is_not_credited():
     """Служебная надпись журнала у закрытого теста (не число и не «Зачтено») —
     не оценка: «Зачтено работ 3 из 6» при двух зачтённых (владелец, 06.10)."""
     for text in ("Скрыто", "Не доступно", "Недоступно", "Ограничено"):
-        assert sdo_grades._blank(text), text
+        assert gradebook._blank(text), text
     for text in ("Зачтено", "Не зачтено", "Отлично", "5,00"):
-        assert not sdo_grades._blank(text), text
+        assert not gradebook._blank(text), text
     html = ('<table class="user-grade"><tr><th class="column-itemname level2">'
             '<a href="https://x/mod/quiz/view.php?id=7">Тест</a></th>'
             '<td class="column-grade">Скрыто</td><td class="column-range">0–5</td></tr></table>')
-    (it,) = sdo_grades.parse_report(html)["items"]
+    (it,) = gradebook.parse_report(html)["items"]
     assert not it["graded"] and it["passed"] is None
 
 
@@ -322,13 +323,13 @@ def test_real_sdo_dates_and_closed_quiz():
     q = {"grade": None, "passed": None, "module": "quiz"}
     old = sdo_grades.parse_assign_page(QUIZ_CLOSED_OLD)
     assert old["closed"] == "среда, 25 декабря 2024, 18:00" and old["pass"] == 10
-    assert sdo_grades.work_status(q, old, now) == "soon"
+    assert gradebook.work_status(q, old, now) == "soon"
     recent = sdo_grades.parse_assign_page(QUIZ_CLOSED_OLD.replace("2024", "2026").replace("декабря", "сентября"))
-    assert sdo_grades.work_status(q, recent, now) == "miss"          # закрылся недавно, попыток нет
+    assert gradebook.work_status(q, recent, now) == "miss"          # закрылся недавно, попыток нет
     nyet = sdo_grades.parse_assign_page(QUIZ_NOT_YET)
     assert nyet["unavailable"] and nyet["opens"].startswith("вторник, 1 декабря")
     assert nyet["due"] == "воскресенье, 20 декабря 2026, 23:59"
-    assert sdo_grades.work_status(q, nyet, now) == "soon"
+    assert gradebook.work_status(q, nyet, now) == "soon"
 
 
 def test_comment_is_the_verdict_when_no_grade():
@@ -336,7 +337,7 @@ def test_comment_is_the_verdict_when_no_grade():
     комментарии: «зачет» — зачтено, «не принято» — нет (а не вечное «ждёт оценки»)."""
     w = {"grade": None, "passed": None, "module": "assign"}
     for text, want in (("зачет", "ok"), ("не принято", "low"), ("доработать выводы", "low"), ("Смотрите файл", "wait")):
-        assert sdo_grades.work_status(w, sdo_grades.parse_assign_page(ASSIGN_COMMENT % text)) == want, text
+        assert gradebook.work_status(w, sdo_grades.parse_assign_page(ASSIGN_COMMENT % text)) == want, text
 
 
 def test_who_graded_and_when():
@@ -350,15 +351,15 @@ def test_who_graded_and_when():
 def test_final_mark_without_words_when_digit():
     """Итог «2 (неудовлетворительно)» — просто «2» (Никита 12.10); без цифры —
     как в журнале."""
-    sf = sdo_grades.short_final
+    sf = gradebook.short_final
     assert sf("2 (неудовлетворительно)") == "2"
     assert sf("3 (Удовлетворительно)") == "3"
     assert sf("4,00 (хорошо)") == "4,00"
     assert sf("отлично (5)") == "5"
     assert sf("Не зачтено") == "Не зачтено" and sf("отлично") == "отлично" and sf("") == ""
     assert sf("Зачтено (5)") == "Зачтено (5)"      # не оценка экзамена — не трогаем
-    rep = sdo_grades.parse_report(REPORT.replace(">Не зачтено<", ">2 (неудовлетворительно)<", 1))
-    assert sdo_grades.summarize(rep, "Анализ данных_Экзамен")["final"] == "2"
+    rep = gradebook.parse_report(REPORT.replace(">Не зачтено<", ">2 (неудовлетворительно)<", 1))
+    assert gradebook.summarize(rep, "Анализ данных_Экзамен")["final"] == "2"
 
 
 @pytest.mark.asyncio
@@ -385,7 +386,7 @@ async def test_overview_retry_partial_and_dedup(monkeypatch):
         if broken.get(cid, 0) > 0:
             broken[cid] -= 1
             raise httpx.ConnectTimeout("нет")
-        return sdo_grades.parse_report(REPORT)
+        return gradebook.parse_report(REPORT)
 
     monkeypatch.setattr(sdo_net, "make_client", client)
     monkeypatch.setattr(sdo_grades, "this_semester_courses", listing)
@@ -466,7 +467,7 @@ async def test_course_detail_tells_when_grades_were_fetched(monkeypatch):
     assert abs(d["updated"] - time.time()) < 5                     # журнал взяли только что
     sdo_grades._cache.clear()
     then = time.time() - 300
-    sdo_grades._cache[("course", 1, 18672)] = (then, (course, sdo_grades.summarize(sdo_grades.parse_report(REPORT), course["name"])))
+    sdo_grades._cache[("course", 1, 18672)] = (then, (course, gradebook.summarize(gradebook.parse_report(REPORT), course["name"])))
     d = await sdo_grades.course_detail(1, "c", 18672)
     assert d["updated"] == int(then)                              # журнал из списка — его время
 
