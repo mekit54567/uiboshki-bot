@@ -333,6 +333,11 @@ function dlRemindSheet(d) {
 }
 
 // ── «Сдать файлом» (SubmitSheet) ──
+/** «PDF, DOCX или картинка» — список через запятую, последний через «или». */
+function dlOrList(xs) {
+  return xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} или ${xs[xs.length - 1]}`;
+}
+
 function dlRules(j) {
   const r = {
     accepted: (j.accepted || []).map((a) => String(a).toLowerCase()), labels: (j.labels || []).map(String),
@@ -341,14 +346,15 @@ function dlRules(j) {
   };
   r.perSubmit = r.maxFiles <= 0 ? 3 : Math.min(r.maxFiles, 3);
   r.fits = (name) => !r.accepted.length || r.accepted.some((e) => name.toLowerCase().endsWith(e));
-  r.limit = `${(r.maxBytes / 1048576).toFixed(r.maxBytes >= 10485760 ? 0 : 1)} МБ`;
+  r.limit = `${(r.maxBytes / 1048576).toFixed(r.maxBytes >= 10485760 ? 0 : 1)}\u00A0МБ`;
+  r.need = `нужен файл: ${dlOrList(r.labels.length ? r.labels : r.accepted)}`;
   r.describe = () => [r.labels.length ? r.labels.join(", ") : r.accepted.length ? r.accepted.join(" ") : "любые файлы",
-    `до ${r.perSubmit} ${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до ${r.limit}` : ""].filter(Boolean).join(" · ");
+    `до\u00A0${r.perSubmit}\u00A0${plural(r.perSubmit, "файла", "файлов", "файлов")}`, r.maxBytes > 0 ? `до\u00A0${r.limit}` : ""].filter(Boolean).join(" · ");
   r.problem = (f) => {
     if (!r.fits(f.name)) {
       const dot = f.name.lastIndexOf(".");
       const what = dot > 0 ? f.name.slice(dot).toLowerCase() : "Файл без расширения";
-      return `${what} задание не примет — нужно ${r.labels.length ? r.labels.join(", ") : r.accepted.join(", ")}`;
+      return `${what} задание не примет — ${r.need}`;
     }
     if (r.maxBytes > 0 && f.size > r.maxBytes) return `больше ${r.limit} — задание не примет`;
     return null;
@@ -444,7 +450,7 @@ function dlSubmitSheet({ title, deadlineId = 0, cmid = 0, replace = false }) {
         const bad = got.filter((f) => !rules.fits(f.name)).map((f) => f.name);
         const big = rules.maxBytes > 0 ? got.filter((f) => f.size > rules.maxBytes).map((f) => f.name) : [];
         for (const f of got) if (!bad.includes(f.name) && !big.includes(f.name) && files.length < rules.perSubmit) files.push({ f, why: null });
-        error = bad.length ? `Задание не примет: ${bad.join(", ")} — нужно ${rules.labels.length ? rules.labels.join(", ") : rules.accepted.join(" ")}`
+        error = bad.length ? `Задание не примет: ${bad.join(", ")} — ${rules.need}`
           : big.length ? `Слишком большой: ${big.join(", ")}` : null;
       }
       draw();
@@ -1034,14 +1040,6 @@ function dlWorkOf(d) {
   const link = dlTaskOfLink(d.x.description);
   return { name: dlSplit(d.subject).task, ...(link || {}), ...(/^https:\/\//.test(d.x.description) ? { url: d.x.description } : {}) };
 }
-function dlLeftWords(ms) {
-  const days = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, hrs = Math.floor(ms / 36e5);
-  if (days > 0) return `${days} ${plural(days, "день", "дня", "дней")}${h > 0 ? ` ${h} ${plural(h, "час", "часа", "часов")}` : ""}`;
-  if (hrs > 0) return `${hrs} ${plural(hrs, "час", "часа", "часов")}`;
-  const m = Math.max(1, Math.floor(ms / 6e4));
-  return `${m} ${plural(m, "минута", "минуты", "минут")}`;
-}
-
 /** Страница задания: work — как у openTask; deadline — срок из «Сдать» (dlOf),
  *  onDeadline(a, d) — действие со сроком (a = null — просто перечитать) → новый срок или null (убран). */
 function openTaskFresh(work, course = "", { deadline = null, onDeadline = null } = {}) {
@@ -1080,6 +1078,13 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
       if (t.submitted === true) return "sent";
       return "none";
     };
+    // комментарии видны, когда есть ответ или переписка; до сдачи комментарий —
+    // в форме ответа: два поля, уходящие в одно место, путают (сверка UI 19.11)
+    const commentsShown = (ans) => {
+      const c = t && t.comments;
+      if (!c || typeof c !== "object") return false;
+      return (Array.isArray(c.items) && c.items.length > 0) || (Array.isArray(t.mine) && t.mine.length > 0) || ans === "sent" || ans === "graded";
+    };
     const dueOfPage = () => (d ? d.due : dlSdoDate(t && t.due));
 
     // ── «Срок»: отсчёт крупно, полоска, обе даты ──
@@ -1088,20 +1093,20 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
       const done = (d && d.done) || ans === "sent" || ans === "graded";
       const late = !done && due && due <= at;
       const left = due ? due - at : null, burning = !done && left != null && left >= 0 && left < 864e5;
-      const color = done ? "var(--ok)" : late ? "var(--danger)" : burning ? "var(--warn)" : "var(--accent)";
+      // акцент — только у главной кнопки и ссылок; у сроков свои цвета (брендбук, сверка UI 19.11)
+      const color = done ? "var(--ok)" : late ? "var(--danger)" : burning ? "var(--warn)" : "var(--text)";
       const head = done ? (ans === "graded" ? "Оценено" : "Сдано") : late ? "Срок прошёл" : due ? "Осталось" : "Срок не указан";
-      let mid = "";
-      if (!done && !late && left != null) {
-        const days = Math.floor(left / 864e5), h = Math.floor(left / 36e5) % 24, hrs = Math.floor(left / 36e5), m = Math.floor(left / 6e4) % 60;
+      const count = (ms, tail = "") => {
+        const days = Math.floor(ms / 864e5), h = Math.floor(ms / 36e5) % 24, hrs = Math.floor(ms / 36e5), m = Math.floor(ms / 6e4) % 60;
         const parts = days > 0 ? [[days, "дн"], ...(h > 0 ? [[h, "ч"]] : [])] : hrs > 0 ? [[hrs, "ч"], [m, "мин"]] : [[Math.max(1, m), "мин"]];
-        mid = `<div class="tf-count">${parts.map(([n, u]) => `<span class="num" style="--sz:46px;color:${color}">${n}</span><span class="bd b6 mut tf-unit">${u}</span>`).join("")}</div>`;
-      } else if (late) {
-        const by = at - due, days = Math.floor(by / 864e5), hrs = Math.floor(by / 36e5);
-        mid = `<div class="ttl" style="--sz:24px;margin-top:4px">${days > 0 ? `${days} ${plural(days, "день", "дня", "дней")} назад`
-          : hrs > 0 ? `${hrs} ${plural(hrs, "час", "часа", "часов")} назад` : "только что"}</div>`;
-      } else if (done && due) {
-        mid = `<div class="bd mut" style="--sz:15px;margin-top:4px">${due > at ? `до срока ещё ${dlLeftWords(due - at)}` : "срок уже прошёл"}</div>`;
-      }
+        return `<div class="tf-count">${parts.map(([n, u]) => `<span class="num" style="--sz:46px;color:${color}">${n}</span><span class="bd b6 mut tf-unit">${u}</span>`).join("")}${tail ? `<span class="bd b6 mut tf-unit">${tail}</span>` : ""}</div>`;
+      };
+      // после сдачи отсчёт уже не нужен — когда сдано (последнее изменение в СДО)
+      const sentOn = ans === "sent" || ans === "graded" ? dlSdoDate(t && t.modified) : null;
+      let mid = "";
+      if (!done && !late && left != null) mid = count(left);
+      else if (late) mid = count(at - due, "назад");
+      else if (done && sentOn) mid = `<div class="bd b6" style="--sz:16px;margin-top:4px" id="task-sent-on">${ans === "graded" ? "сдано " : ""}${dlTaskDay(sentOn, false)}</div>`;
       let bar = "";
       if (opened && due && due > opened && !done && !late) {
         const p = Math.max(0, Math.min(1, (at - opened) / (due - opened)));
@@ -1123,15 +1128,15 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
       const max = t.max_grade ?? w.max, pass = t.pass ?? w.pass_mark, grade = t.grade ?? w.grade;
       const [txt, col] = { graded: ["Сдано", "var(--ok)"], sent: ["Сдано, ждёт оценки", "var(--ok)"], draft: ["Черновик, не отправлен", "var(--warn)"],
         offline: ["Сдаётся на занятии", "var(--muted)"], none: [t.quiz === true ? "Тест в СДО" : "Ещё не сдано", "var(--muted)"] }[ans];
-      const grading = String(t.grading ?? "");
       const gcol = grade != null && pass != null && grade < pass ? "var(--danger)" : "var(--ok)";
       const row = (label, value) => `<div class="tf-grow"><span class="bd mut" style="--sz:14px">${label}</span><div>${value}</div></div>`;
       const word = (text, c = "", dot = false) => `<span class="bd b6 tf-word" style="--sz:15px${c ? `;color:${c}` : ""}">${dot ? `<i class="cm-dot" style="width:7px;height:7px;background:${c}"></i>` : ""}${esc(text)}</span>`;
-      const rows = [row("Ответ", word(txt, col, true)),
-        row("Оценка", grade != null && !(max > 0) ? word(`${dlNum(grade)} из ${dlNum(max ?? grade)}`, gcol)
-          : grade != null ? word(grading || "Оценено", gcol) : word(grading || "Не оценено", "var(--muted)"))];
+      const rows = [row("Ответ", word(txt, col, true))];
+      // оценка — шкалой сверху; строкой, только пока не проверено или шкалы нет (сверка UI 19.11)
+      if (grade != null && !(max > 0)) rows.push(row("Оценка", word(dlNum(grade), gcol)));
+      else if (ans === "sent" || ans === "offline") rows.push(row("Оценка", word("ещё не проверено", "var(--muted)")));
       if (String(t.modified ?? "")) rows.push(row("Изменено", word(dlShortSdo(t.modified))));
-      if (String(t.graded_by ?? "")) rows.push(row("Оценил(а)", word(t.graded_by)));
+      if (String(t.graded_by ?? "")) rows.push(row("Преподаватель", word(t.graded_by)));
       let scale = "";
       if (max > 0) {
         const fill = grade == null ? 0 : Math.max(0, Math.min(1, grade / max)), at = pass == null ? null : Math.max(0, Math.min(1, pass / max));
@@ -1160,12 +1165,11 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
         <div class="bd${e.why ? " b6" : ""}" style="--sz:12.5px;margin-top:1px;color:${e.why ? "var(--danger)" : "var(--ok)"}">${esc(e.why || `${dlFileSize(e.f.size)} · подходит`)}</div></div>
         <button class="dl-ib" data-act="rmFile" data-k="${i}" aria-label="Убрать"${sending ? " disabled" : ""}>${icon("close", "", "font-size:19px;color:var(--muted)")}</button></div>`).join("");
       return `<div class="tile tf-card" id="task-form">
-        <div class="row" style="gap:var(--s);align-items:flex-start">${icon("rule", "", "font-size:18px;color:var(--muted)")}
-          <span class="bd mut grow" style="--sz:13.5px">${replace ? "Новые файлы заменят прежние. " : ""}Принимает: ${esc(rules.describe())}</span></div>
+        <div class="bd mut" style="--sz:13.5px">${replace ? "Новые файлы заменят прежние. " : ""}Принимает: ${esc(rules.describe())}</div>
         <div style="height:var(--m)"></div>${picked}
         ${more ? `<label class="tf-attach${files.length ? "" : " first"}${sending ? " off" : ""}" id="task-attach">${icon("attach_file", "", "font-size:20px")}${files.length ? "Ещё файл" : "Прикрепить файл"}
           <input type="file" class="tf-input" multiple${accept ? ` accept="${esc(accept)}"` : ""}${sending ? " disabled" : ""}></label>` : ""}
-        <textarea class="tf-field" id="task-note" rows="1" maxlength="2000" placeholder="Комментарий преподавателю, если нужно">${esc(note)}</textarea>
+        ${commentsShown(answer()) ? "" : `<textarea class="tf-field" id="task-note" rows="1" maxlength="2000" placeholder="Комментарий преподавателю, если нужно">${esc(note)}</textarea>`}
         ${sendError ? `<div class="bd" style="--sz:14px;color:var(--danger);margin-top:var(--s)">${esc(sendError)}</div>` : ""}
         <button class="btn primary tf-send" data-act="send" id="task-send"${n === 0 || sending ? " disabled" : ""}>${sending ? '<span class="dl-mini"></span>' : icon("send")}${sending ? "Отправляю…" : n ? `Отправить ${n} ${plural(n, "файл", "файла", "файлов")}` : "Отправить"}</button>
         <div class="bd mut" style="--sz:12.5px;text-align:center;margin-top:var(--s)">${replace ? "Ответ обновится в СДО от твоего имени" : "Уйдёт преподавателю в СДО от твоего имени"}</div>
@@ -1196,7 +1200,7 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
         ${items.length ? items.map((m) => `<div class="tf-msg"><div><span class="bd b7" style="--sz:13.5px">${esc(m.author)}</span>
           <span class="bd mut" style="--sz:12.5px">&nbsp; ${esc(dlShortSdo(m.time))}</span></div>
           <div class="bd dl-sel" style="--sz:15px;margin-top:3px;white-space:pre-wrap">${esc(m.text)}</div></div>`).join("")
-          : `<div class="bd mut" style="--sz:14px;margin-bottom:var(--s)">Пока пусто. Здесь можно написать преподавателю про эту работу, он увидит это в&nbsp;СДО.</div>`}
+          : `<div class="bd mut" style="--sz:14px;margin-bottom:var(--s)">Пока пусто. Преподаватель увидит комментарий в&nbsp;СДО.</div>`}
         ${c.can_post === true ? `<div class="row tf-cform"><textarea class="tf-field grow" id="task-comment" rows="1" maxlength="2000" placeholder="Написать комментарий">${esc(comment)}</textarea>
           <button class="dl-ib tf-csend" data-act="comment" aria-label="Отправить комментарий"${posting ? " disabled" : ""}>${posting ? '<span class="dl-mini" style="border-color:var(--accent);border-right-color:transparent"></span>' : icon("arrow_upward", "", "font-size:24px;color:var(--accent)")}</button></div>` : ""}
       </div></div>`;
@@ -1210,10 +1214,11 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
         <span class="grow"><span class="bd b6" style="--sz:15px;display:block${color ? `;color:${color}` : ""}">${esc(text)}</span>
         ${sub ? `<span class="bd mut" style="--sz:13px">${esc(sub)}</span>` : ""}</span>
         ${color ? "" : icon("chevron_right", "", "font-size:20px;color:var(--muted)")}</button>`;
-      const rows = [];
+      const rows = [], ans = answer(), sdoDone = ans === "sent" || ans === "graded";
       if (!d.done) rows.push(act("remind", "notifications_none", "Напомнить", { sub: "за день, за час или в своё время" }));
-      rows.push(d.done ? act("undone", "undo", "Вернуть в активные")
-        : act("done", "check", "Отметить сданным", { sub: d.canSubmit ? "только у тебя, в СДО ничего не уйдёт" : "" }));
+      // в СДО уже «Сдано» — отмечать нечего (сверка UI 19.11)
+      if (d.done) rows.push(act("undone", "undo", "Вернуть в активные"));
+      else if (!sdoDone) rows.push(act("done", "check", "Отметить сданным", { sub: d.canSubmit ? "только у тебя, в СДО ничего не\u00A0уйдёт" : "" }));
       if (x.canEdit) rows.push(act("edit", "edit", "Изменить", { sub: "название, дата и время" }));
       if (x.mineChanged) rows.push(act("resetMine", "restart_alt", "Как у всех"));
       if (x.canEdit) rows.push(act("delete", "delete_outline", x.editScope === "me" ? "Убрать у себя" : "Удалить срок", { color: "var(--danger)" }));
@@ -1228,7 +1233,7 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
       if (n) note = n.value;
       if (c) comment = c.value;
       const at = now(), ans = answer();
-      const name = String((t && t.title) ?? w.name ?? ""), due = dueOfPage();
+      const name = String((t && t.title) ?? w.name ?? "").replaceAll(" №", "\u00A0№"), due = dueOfPage();
       const done = (d && d.done) || ans === "sent" || ans === "graded", late = !done && due && due <= at;
       const pose = done ? "joy" : late ? "evening" : "day";
       let h = backRow() + `<div class="row tf-head"><div class="grow">
@@ -1253,7 +1258,7 @@ function openTaskFresh(work, course = "", { deadline = null, onDeadline = null }
       }
       if (!t && !sdo && d && d.x.description && !d.x.isLink) h += section("Описание") + `<div class="hx"><div class="tile dl-sel bd" style="--sz:15px;white-space:pre-wrap">${esc(d.x.description)}</div></div>`;
       if (t && sdo) h += answerBlock(ans);
-      if (t && t.comments && typeof t.comments === "object") h += commentsBlock(t.comments);
+      if (t && commentsShown(ans)) h += commentsBlock(t.comments);
       if (t && String(t.feedback ?? "")) h += section("Отзыв преподавателя") + `<div class="hx"><div class="tile dl-sel bd" style="--sz:15px;white-space:pre-wrap">${esc(t.feedback)}</div></div>`;
       if (d) h += deadlineBlock();
       const url = (t && t.url) || w.url;

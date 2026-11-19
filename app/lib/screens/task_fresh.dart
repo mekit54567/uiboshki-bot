@@ -71,6 +71,15 @@ extension _FreshTask on _TaskScreenState {
     return _Answer.none;
   }
 
+  /// Комментарии видны, когда есть ответ или переписка; до сдачи комментарий
+  /// пишется в форме ответа — два поля, уходящие в одно место, путают (сверка UI 19.11).
+  bool _commentsShown(Map<String, dynamic> t, _Answer answer) {
+    final c = t['comments'];
+    if (c is! Map) return false;
+    if (((c['items'] as List?) ?? const []).isNotEmpty) return true;
+    return ((t['mine'] as List?) ?? const []).isNotEmpty || answer == _Answer.sent || answer == _Answer.graded;
+  }
+
   /// Срок: у срока из «Сдать» — его дата (её мог поменять человек), иначе из СДО.
   DateTime? get _due => _d?.due ?? sdoDate(_t?['due'] as String?);
 
@@ -79,7 +88,8 @@ extension _FreshTask on _TaskScreenState {
     final p = s.p;
     final t = _t;
     final at = widget.at ?? now();
-    final name = '${t?['title'] ?? w['name'] ?? ''}';
+    // «№3» не остаётся один на строке (сверка UI 19.11)
+    final name = '${t?['title'] ?? w['name'] ?? ''}'.replaceAll(' №', '\u00A0№');
     final course = widget.course.isNotEmpty ? widget.course : (_d == null ? '' : splitCourse(_d!.subject));
     final answer = _answer(t);
     final due = _due;
@@ -153,7 +163,7 @@ extension _FreshTask on _TaskScreenState {
           pad(Tile(child: SelectableText(_x!.description, style: s.body(15)))),
         ],
         if (t != null && sdo) ..._answerBlock(context, t, answer),
-        if (t != null && t['comments'] is Map) ..._commentsBlock(context, t['comments'] as Map),
+        if (t != null && _commentsShown(t, answer)) ..._commentsBlock(context, t['comments'] as Map),
         if (t != null && '${t['feedback'] ?? ''}'.isNotEmpty) ...[
           const Section('Отзыв преподавателя'),
           pad(Tile(child: SelectableText('${t['feedback']}', style: s.body(15)))),
@@ -181,7 +191,7 @@ extension _FreshTask on _TaskScreenState {
         ? p.danger
         : burning
         ? p.warn
-        : p.accent;
+        : p.text; // акцент — только у главной кнопки и ссылок; у сроков свои цвета (брендбук)
     final head = done
         ? (_answer(_t) == _Answer.graded ? 'Оценено' : 'Сдано')
         : late
@@ -231,6 +241,10 @@ extension _FreshTask on _TaskScreenState {
       ),
     );
     final lateBy = late && left != null ? -left : null;
+    // после сдачи отсчёт уже не нужен — когда сдано (последнее изменение в СДО)
+    final sentOn = _answer(_t) == _Answer.sent || _answer(_t) == _Answer.graded
+        ? sdoDate(_t?['modified'] as String?)
+        : null;
     return Tile(
       key: const Key('task:due'),
       radius: Radii.card,
@@ -257,21 +271,19 @@ extension _FreshTask on _TaskScreenState {
               alignment: Alignment.bottomLeft,
               child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: countdown(left)),
             )
-          else if (lateBy != null) ...[
+          else if (lateBy != null)
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.bottomLeft,
+              child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [...countdown(lateBy), unit('назад')]),
+            )
+          else if (done && sentOn != null) ...[
             const SizedBox(height: 4),
             Text(
-              lateBy.inDays > 0
-                  ? '${lateBy.inDays} ${plural(lateBy.inDays, 'день', 'дня', 'дней')} назад'
-                  : lateBy.inHours > 0
-                  ? '${lateBy.inHours} ${plural(lateBy.inHours, 'час', 'часа', 'часов')} назад'
-                  : 'только что',
-              style: s.title(24),
-            ),
-          ] else if (done && due != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              due.isAfter(at) ? 'до срока ещё ${_leftWords(due.difference(at))}' : 'срок уже прошёл',
-              style: s.body(15, color: p.muted),
+              // под «Сдано» — просто дата, под «Оценено» — что это дата сдачи
+              '${_answer(_t) == _Answer.graded ? 'сдано ' : ''}${taskDay(sentOn, time: false)}',
+              key: const Key('task:sent-on'),
+              style: s.body(16, weight: FontWeight.w600),
             ),
           ],
           if (progress != null && !done && !late) ...[
@@ -315,7 +327,6 @@ extension _FreshTask on _TaskScreenState {
       _Answer.offline => ('Сдаётся на занятии', p.muted),
       _Answer.none => (t['quiz'] == true ? 'Тест в СДО' : 'Ещё не сдано', p.muted),
     };
-    final grading = '${t['grading'] ?? ''}';
     Widget row(String label, Widget value) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -352,17 +363,13 @@ extension _FreshTask on _TaskScreenState {
     );
     final rows = <Widget>[
       row('Ответ', word(ans, color: ansColor, dot: true)),
-      row(
-        'Оценка',
-        // шкала сверху уже показывает баллы — строкой только состояние, как в СДО
-        grade != null && (max == null || max <= 0)
-            ? word('${fmtNum(grade)} из ${fmtNum(max ?? grade)}', color: pass != null && grade < pass ? p.danger : p.ok)
-            : grade != null
-            ? word(grading.isNotEmpty ? grading : 'Оценено', color: pass != null && grade < pass ? p.danger : p.ok)
-            : word(grading.isNotEmpty ? grading : 'Не оценено', color: p.muted),
-      ),
+      // оценка — шкалой сверху; строкой, только пока не проверено или шкалы нет (сверка UI 19.11)
+      if (grade != null && (max == null || max <= 0))
+        row('Оценка', word(fmtNum(grade), color: pass != null && grade < pass ? p.danger : p.ok))
+      else if (answer == _Answer.sent || answer == _Answer.offline)
+        row('Оценка', word('ещё не проверено', color: p.muted)),
       if ('${t['modified'] ?? ''}'.isNotEmpty) row('Изменено', word(_shortSdo('${t['modified']}'))),
-      if ('${t['graded_by'] ?? ''}'.isNotEmpty) row('Оценил(а)', word('${t['graded_by']}')),
+      if ('${t['graded_by'] ?? ''}'.isNotEmpty) row('Преподаватель', word('${t['graded_by']}')),
     ];
     return Tile(
       key: const Key('task:grade'),
@@ -503,7 +510,7 @@ extension _FreshTask on _TaskScreenState {
         if (mine.isNotEmpty) const SizedBox(height: Space.s),
         Padding(
           padding: pad,
-          child: _SubmitForm(state: this, replace: _replace),
+          child: _SubmitForm(state: this, replace: _replace, comments: _commentsShown(t, answer)),
         ),
       ],
       if (!form && (canEdit || canRemove)) ...[
@@ -571,7 +578,7 @@ extension _FreshTask on _TaskScreenState {
                 Padding(
                   padding: const EdgeInsets.only(right: Space.s, bottom: Space.s),
                   child: Text(
-                    'Пока пусто. Здесь можно написать преподавателю про эту работу, он увидит это в\u00A0СДО.',
+                    'Пока пусто. Преподаватель увидит комментарий в\u00A0СДО.',
                     style: s.body(14, color: p.muted),
                   ),
                 ),
@@ -637,6 +644,8 @@ extension _FreshTask on _TaskScreenState {
     final s = AppStyle.of(context);
     final p = s.p;
     final d = _d!, x = _x!;
+    final answer = _answer(_t);
+    final sdoDone = answer == _Answer.sent || answer == _Answer.graded;
     Widget act(DlAction a, IconData icon, String text, {String? sub, Color? color}) => InkWell(
       key: ValueKey('task:act:${a.name}'),
       onTap: () {
@@ -671,12 +680,13 @@ extension _FreshTask on _TaskScreenState {
         act(DlAction.remind, Icons.notifications_none_rounded, 'Напомнить', sub: 'за день, за час или в своё время'),
       if (d.done)
         act(DlAction.undone, Icons.undo_rounded, 'Вернуть в активные')
-      else
+      // в СДО уже «Сдано» — отмечать нечего (сверка UI 19.11)
+      else if (!sdoDone)
         act(
           DlAction.done,
           Icons.check_rounded,
           'Отметить сданным',
-          sub: d.canSubmit ? 'только у тебя, в СДО ничего не уйдёт' : null,
+          sub: d.canSubmit ? 'только у тебя, в СДО ничего не\u00A0уйдёт' : null,
         ),
       if (x.canEdit) act(DlAction.edit, Icons.edit_outlined, 'Изменить', sub: 'название, дата и время'),
       if (x.mineChanged) act(DlAction.resetMine, Icons.restart_alt_rounded, 'Как у всех'),
@@ -717,18 +727,6 @@ String _shortSdo(String raw) {
   final d = sdoDate(raw);
   if (d == null || !RegExp(r'\d{4}').hasMatch(raw)) return raw;
   return taskDay(d, time: RegExp(r'\d{1,2}:\d{2}').hasMatch(raw));
-}
-
-/// «2 дня 4 часа», «5 часов», «20 минут».
-String _leftWords(Duration d) {
-  final days = d.inDays, h = d.inHours % 24;
-  if (days > 0) {
-    return '$days ${plural(days, 'день', 'дня', 'дней')}'
-        '${h > 0 ? ' $h ${plural(h, 'час', 'часа', 'часов')}' : ''}';
-  }
-  if (d.inHours > 0) return '${d.inHours} ${plural(d.inHours, 'час', 'часа', 'часов')}';
-  final m = d.inMinutes < 1 ? 1 : d.inMinutes;
-  return '$m ${plural(m, 'минута', 'минуты', 'минут')}';
 }
 
 /// Предмет из названия срока («Практика 5 · Анализ данных (Экз)» → «Анализ данных»).
@@ -938,8 +936,8 @@ class _Scale extends StatelessWidget {
 /// проверкой, комментарий преподавателю и «Отправить».
 class _SubmitForm extends StatelessWidget {
   final _TaskScreenState state;
-  final bool replace;
-  const _SubmitForm({required this.state, required this.replace});
+  final bool replace, comments;
+  const _SubmitForm({required this.state, required this.replace, this.comments = false});
 
   @override
   Widget build(BuildContext context) {
@@ -971,21 +969,9 @@ class _SubmitForm extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: Icon(Icons.rule_rounded, size: 18, color: p.muted),
-              ),
-              const SizedBox(width: Space.s),
-              Expanded(
-                child: Text(
-                  '${replace ? 'Новые файлы заменят прежние. ' : ''}Принимает: ${rules.describe()}',
-                  style: s.body(13.5, color: p.muted),
-                ),
-              ),
-            ],
+          Text(
+            '${replace ? 'Новые файлы заменят прежние. ' : ''}Принимает: ${rules.describe()}',
+            style: s.body(13.5, color: p.muted),
           ),
           const SizedBox(height: Space.m),
           for (final e in st._files)
@@ -1004,13 +990,16 @@ class _SubmitForm extends StatelessWidget {
               first: st._files.isEmpty,
               onTap: st._sending ? null : st._pick,
             ),
-          const SizedBox(height: Space.m),
-          _field(
-            context,
-            key: const Key('task:submit:comment'),
-            controller: st._noteCtl,
-            hint: 'Комментарий преподавателю, если нужно',
-          ),
+          // комментарий к ответу — здесь, пока ниже нет переписки (там своё поле)
+          if (!comments) ...[
+            const SizedBox(height: Space.m),
+            _field(
+              context,
+              key: const Key('task:submit:comment'),
+              controller: st._noteCtl,
+              hint: 'Комментарий преподавателю, если нужно',
+            ),
+          ],
           if (st._sendError != null) ...[
             const SizedBox(height: Space.s),
             Text(st._sendError!, style: s.body(14, color: p.danger)),

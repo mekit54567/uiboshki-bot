@@ -129,7 +129,8 @@ void main() {
     // ответ и оценка: шкала с проходным, строки по-человечески
     expect(find.text('проходной 5'), findsOneWidget);
     expect(find.text('Ещё не сдано'), findsOneWidget);
-    expect(find.text('Не оценено'), findsOneWidget);
+    expect(find.text('Не оценено'), findsNothing); // ответа нет — строки «Оценка» нет (сверка UI 19.11)
+    expect(find.byKey(const Key('task:comments')), findsNothing); // до сдачи комментарий — в форме ответа
     expect(find.text('Анализ данных'), findsOneWidget);
 
     await t.scrollUntilVisible(find.byKey(const Key('task:attach')), 200, scrollable: find.byType(Scrollable).first);
@@ -269,12 +270,21 @@ void main() {
     );
     await settle(t);
     expect(find.text('Сдано, ждёт оценки'), findsOneWidget);
+    // вместо «до срока ещё…» — когда сдано
+    expect((t.widget(find.byKey(const Key('task:sent-on'))) as Text).data, startsWith('вт, 17'));
+    expect(find.text('ещё не проверено'), findsOneWidget);
     expect(find.text('вт, 17 ноября, 21:14'), findsOneWidget);
     expect(find.text('Срок в Капибаре'), findsNothing); // из «Учёбы» — без своих отметок срока
     await t.scrollUntilVisible(find.byKey(const Key('task:replace')), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('kr3.pdf'), findsOneWidget);
     expect(find.byKey(const Key('task:remove')), findsOneWidget);
     expect(find.byKey(const Key('task:form')), findsNothing);
+    await t.ensureVisible(find.byKey(const Key('task:replace')));
+    await settle(t);
+    await t.tap(find.byKey(const Key('task:replace')));
+    await settle(t);
+    expect(find.byKey(const Key('task:form')), findsOneWidget);
+    expect(find.byKey(const Key('task:submit:comment')), findsNothing); // одно поле — в комментариях ниже
     await t.scrollUntilVisible(find.byKey(const Key('task:comment')), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Комментарии · 1'), findsOneWidget);
     expect(find.text('Получила'), findsOneWidget);
@@ -284,6 +294,39 @@ void main() {
     expect(bodies['POST /api/sdo/task/4242/comment'], {'text': 'Спасибо!'});
     expect(find.text('Комментарии · 2'), findsOneWidget);
     expect(find.text('Спасибо!'), findsOneWidget);
+  });
+
+  testWidgets('в СДО уже сдано: «Отметить сданным» не предлагаем, отсчёта нет', (t) async {
+    phone(t);
+    final api = fakeApi(
+      overrides: {
+        'GET /api/sdo/task/4242': {
+          ..._task,
+          'submitted': true,
+          'modified': 'вторник, 17 ноября 2026, 21:14',
+          'mine': [
+            {'name': 'kr3.pdf', 'dl': '/sdl/t/k.pdf'},
+          ],
+        },
+      },
+    );
+    await t.pumpWidget(
+      _host(
+        TaskScreen(
+          api: api,
+          work: workOfDeadline(_dl, _x.description),
+          deadline: _dl,
+          extra: _x,
+          at: _at,
+          onDeadline: (a, d, x) async => (d: d, x: x),
+        ),
+      ),
+    );
+    await settle(t);
+    expect(find.text('Осталось'), findsNothing);
+    await t.scrollUntilVisible(find.byKey(const Key('task:deadline')), 200, scrollable: find.byType(Scrollable).first);
+    expect(find.text('Напомнить'), findsOneWidget);
+    expect(find.text('Отметить сданным'), findsNothing);
   });
 
   testWidgets('без СДО: срок есть, вместо баллов — «Подключи СДО»', (t) async {
