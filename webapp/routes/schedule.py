@@ -472,7 +472,7 @@ async def api_note_add(body: NoteBody, user: dict = CurrentUser):
     if len(subject) > 80:
         raise HTTPException(status_code=400, detail="название пары слишком длинное")
     gid = await viewer_group(user["id"])
-    if not gid and home():   # не в чате своей группы — её заметок не видит и не пишет
+    if not gid and home():   # группы нет — заметок нет
         raise HTTPException(status_code=403, detail="заметки — для своей группы")
     if not ratelimit.allow("note", user["id"]):
         raise HTTPException(429, "Много заметок подряд — подожди пару минут")

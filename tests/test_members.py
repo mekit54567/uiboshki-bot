@@ -1,4 +1,4 @@
-"""Своя группа = участники чата группы в Telegram (members.py, владелец 09.10)."""
+"""Своя группа и чат группы в Telegram (members.py): с 19.11 группа открыта всем."""
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,32 +33,32 @@ async def test_without_chat_nothing_changes(db):
 
 
 @pytest.mark.asyncio
-async def test_only_chat_members_choose_home_group(chat):
+async def test_anyone_chooses_home_group(chat):
+    """19.11, Никита: свою группу выбирает любой, без проверки чата в Telegram."""
     from kapibara.features.groups import groups
     from kapibara.features.billing import plans
     from database.groups import viewer_group
     db = chat
     bot = FakeBot({601})
     await db.set_setting("plus:gift", "off")                            # тариф без подарка «Капибары+»
-    for uid in (601, 602):
+    for uid in (601, 602, 604):
         await db.upsert_user(uid, "", f"u{uid}")
+    from database.members import remember
+    await remember(601, True)                                           # Telegram сказал «в чате»
+    await remember(602, False)                                          # …и «не в чате»
     assert (await groups.choose(601, HOME, bot))["id"] == HOME
-    denied = await groups.choose(602, HOME, bot)
-    assert denied.get("denied") and "чат" in denied["denied"]
-    assert await db.get_user_group(602) is None
-    assert await viewer_group(602) == 0                                 # не в чате — данных своей группы нет
-    assert await plans.plan_of(601) == plans.OWN and await plans.plan_of(602) == plans.BASE
+    assert (await groups.choose(602, HOME, bot))["id"] == HOME          # не в чате — всё равно пускаем
+    assert await db.get_user_group(602) == HOME
+    assert await viewer_group(602) == HOME                              # видит данные своей группы
+    assert await viewer_group(604) == HOME                              # не выбрал, не в чате — тоже
+    assert await plans.plan_of(601) == plans.OWN and await plans.plan_of(602) == plans.OWN
     # в чате, но выбрал другую группу — тариф своей группы остаётся
     await db.set_user_group(601, 5001)
     assert await plans.plan_of(601) == plans.OWN
-    # ответ Telegram помнится — второй раз не спрашиваем
-    n = len(bot.asked)
-    await groups.choose(601, HOME, bot)
-    assert len(bot.asked) == n
 
 
 @pytest.mark.asyncio
-async def test_api_refuses_home_group_to_outsider(chat, monkeypatch):
+async def test_api_lets_outsider_into_home_group(chat, monkeypatch):
     import webapp.server as server
     from tests.test_webapp_auth import BOT_TOKEN, _make_init_data
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
@@ -66,7 +66,7 @@ async def test_api_refuses_home_group_to_outsider(chat, monkeypatch):
     c = TestClient(server.app)
     h = {"X-Telegram-Init-Data": _make_init_data(user={"id": 603, "first_name": "Чужой"})}
     r = c.post("/api/me/group", headers=h, json={"id": HOME})
-    assert r.status_code == 403 and "чат" in r.json()["detail"]
+    assert r.status_code == 200 and r.json()["group"]["id"] == HOME
 
 
 @pytest.mark.asyncio
