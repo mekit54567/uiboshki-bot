@@ -96,8 +96,8 @@ def _fixed_semester(monkeypatch):
     monkeypatch.setattr(sdo_courses, "current_semester_tag", lambda today=None: real(today or date(2026, 9, 26)))
     # сроки работ ТК (срок прошёл / 15 дней ждём оценку) — от той же даты
     from datetime import datetime
-    from kapibara.features.sdo import grades as sdo_grades
-    monkeypatch.setattr(sdo_grades, "_now_msk", lambda: datetime(2026, 9, 26, 12, 0))
+    from kapibara.features.sdo import gradebook
+    monkeypatch.setattr(gradebook, "_now_msk", lambda: datetime(2026, 9, 26, 12, 0))
 
 
 def pytest_configure(config):
