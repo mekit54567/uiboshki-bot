@@ -1,6 +1,7 @@
 // «Учёба» и экран предмета нового дизайна (вторая пачка макетов, Никита
 // 11.11): только при «Новом» в «Оформлении»; в «Классике» экраны прежние.
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uiboshki/screens/chat.dart';
@@ -100,7 +101,10 @@ void main() {
     expect(find.text('Баллов хватает в 3\u00A0предметах, осталось зачесть работы'), findsOneWidget);
     expect(find.text('Kapi ИИ'), findsOneWidget);
     expect(find.text('Предметы · 6'), findsOneWidget);
-    expect(find.textContaining('до «4» ещё 12'), findsOneWidget);
+    // под названием только работы (Никита 19.11): «до «4» ещё 12» и «итог — …» в строке не пишем
+    expect(find.textContaining('Работ зачтено\u00A0'), findsWidgets);
+    expect(find.textContaining('до «4» ещё'), findsNothing);
+    expect(find.textContaining('итог —'), findsNothing);
     // прежней метки «СДО» в шапке нет
     expect(find.text('СДО'), findsNothing);
 
@@ -108,6 +112,44 @@ void main() {
     await settle(t);
     expect(find.byKey(const ValueKey('course:fresh')), findsOneWidget);
   });
+
+  for (final scale in [1.0, 1.3]) {
+    testWidgets('строка предмета: «18,5» и «100» внутри кольца, не на нём (шрифт ×$scale); итог из СДО не пишется', (
+      t,
+    ) async {
+      phone(t);
+      t.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+      final grades = Map<String, dynamic>.from(demoFixtures()['GET /api/sdo/grades'] as Map);
+      final list = [for (final c in grades['courses'] as List) Map<String, dynamic>.from(c as Map)];
+      // скрин Никиты 19.11: «18,5» касалось кольца; под названием «итог — Не зачтено» зелёным
+      list[0] = {...list[0], 'score': 18.5, 'final': 'Не зачтено', 'works_total': 6, 'works_passed': 2};
+      list[1] = {...list[1], 'score': 100};
+      await t.pumpWidget(
+        _wrap(
+          StudyScreen(
+            api: fakeApi(
+              overrides: {
+                'GET /api/sdo/grades': {...grades, 'courses': list},
+              },
+            ),
+          ),
+        ),
+      );
+      await settle(t);
+      for (final n in ['18,5', '100']) {
+        final text = find.text(n).first;
+        final para = t.renderObject<RenderParagraph>(text);
+        // ширина самих цифр на экране (с учётом FittedBox), а не ширина коробки текста
+        final shown = para.getMaxIntrinsicWidth(double.infinity) * t.getRect(text).width / para.size.width;
+        final ring = t.getRect(find.ancestor(of: text, matching: find.byType(ScoreRing)));
+        // кольцо толщиной 4 и ещё хотя бы 3 пт воздуха с каждой стороны
+        expect((ring.width - shown) / 2, greaterThanOrEqualTo(4 + 3), reason: '$n: цифры ${shown.toStringAsFixed(1)}');
+      }
+      expect(find.text('Работ зачтено\u00A02\u00A0из\u00A06'), findsOneWidget);
+      expect(find.textContaining('Не зачтено'), findsNothing);
+    });
+  }
 
   testWidgets('карточка автоматов: сколько есть и где баллов хватает, а работ мало; без баллов — нет её', (t) async {
     phone(t);

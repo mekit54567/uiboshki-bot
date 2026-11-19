@@ -42,7 +42,9 @@ REPORT = ('<table class="generaltable user-grade"><thead><tr><th>Элемент 
 
 def test_parse_report_like_owner_screenshot():
     s = gradebook.summarize(gradebook.parse_report(REPORT), "Основы предпринимательской деятельности_Зачет (часть 1/1) [I.26-27]")
-    assert s["kind"] == "credit" and s["score"] == 5 and s["max"] == 130 and s["final"] == "Не зачтено"
+    # «Не зачтено» — вычисляемая оценка по текущим баллам: не итог, а «до зачёта ещё 35»
+    assert s["kind"] == "credit" and s["score"] == 5 and s["max"] == 130 and s["final"] == ""
+    assert s["need"] == 35 and s["need_label"] == "зачёт"
     assert [(c["name"], c["max"]) for c in s["categories"]] == [
         ("Текущий контроль", 45), ("Посещаемость", 20), ("Семестровый контроль", 40),
         ("Трудовая деятельность", 5), ("Достижения", 10), ("Балл за зачет(доп)", 10)]
@@ -358,8 +360,21 @@ def test_final_mark_without_words_when_digit():
     assert sf("отлично (5)") == "5"
     assert sf("Не зачтено") == "Не зачтено" and sf("отлично") == "отлично" and sf("") == ""
     assert sf("Зачтено (5)") == "Зачтено (5)"      # не оценка экзамена — не трогаем
+    rep = gradebook.parse_report(REPORT.replace(">Не зачтено<", ">4 (хорошо)<", 1))
+    assert gradebook.summarize(rep, "Анализ данных_Экзамен")["final"] == "4"
+
+
+def test_failing_final_is_not_shown():
+    """Посреди семестра СДО считает итог по текущим баллам — «2» и «Не
+    зачтено» у всех. Это не итог: вместо зелёного «итог — 2» клиенты пишут
+    «до «3» ещё N» (Никита 19.11, скрин «Учёбы»)."""
+    pf = gradebook.passing_final
+    assert not pf("2") and not pf("Не зачтено") and not pf("неудовлетворительно") and not pf("не явился")
+    assert not pf("") and not pf("0")
+    assert pf("3") and pf("4,00") and pf("5") and pf("Зачтено") and pf("отлично") and pf("Зачтено (5)")
     rep = gradebook.parse_report(REPORT.replace(">Не зачтено<", ">2 (неудовлетворительно)<", 1))
-    assert gradebook.summarize(rep, "Анализ данных_Экзамен")["final"] == "2"
+    s = gradebook.summarize(rep, "Анализ данных_Экзамен")
+    assert s["final"] == "" and s["kind"] == "exam" and s["need"] == 35 and s["need_label"] == "3"
 
 
 @pytest.mark.asyncio
