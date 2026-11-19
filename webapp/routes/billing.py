@@ -50,11 +50,11 @@ DONATE_NOTE = "Это не подписка — просто спасибо. В 
 async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
     """«Поддержать проект»: ссылка на страницу доната и суммы. На iPhone
     (X-App: ios) — hidden: донат не через Apple — против правил App Store."""
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, donate
     if x_app == "ios":
         return {"hidden": True}
     return {"hidden": False, "url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "",
-            "amounts": list(billing.DONATE_AMOUNTS), "min": billing.DONATE_MIN, "max": billing.DONATE_MAX,
+            "amounts": list(donate.DONATE_AMOUNTS), "min": donate.DONATE_MIN, "max": donate.DONATE_MAX,
             "note": DONATE_NOTE, "offer_url": f"{billing.site()}/offer"}
 
 
@@ -62,13 +62,13 @@ async def api_donate(user: dict = CurrentUser, x_app: str = Header(default="")):
 async def api_roadmap(user: dict = CurrentUser, x_app: str = Header(default="")):
     """Роадмап (roadmap.py) — тем, кто поддержал проект; остальным — locked и
     ссылка на донат. На iPhone (X-App: ios) — hidden, как и донат."""
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, donate
     from kapibara.features.content import roadmap
     if x_app == "ios":
         return {"hidden": True}
     if not await roadmap.can_see(user["id"]):
         return {"hidden": False, "locked": True,
-                "donate_url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "", "min": billing.DONATE_MIN}
+                "donate_url": billing.donate_link(user["id"]) if billing.provider(uid=user["id"]) else "", "min": donate.DONATE_MIN}
     return {"hidden": False, "locked": False, "page_url": roadmap.page_link(user["id"]),
             **await roadmap.with_links(roadmap.load())}
 
@@ -199,7 +199,7 @@ async def _public() -> HTMLResponse:
     """/plus без личной ссылки — открытая страница: что продаётся, цены, как
     заказать, оплатить, получить и вернуть, реквизиты и контакты (требования
     Robokassa к сайту магазина, 21.10). Купить — всё так же по личной ссылке."""
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, stars
     from kapibara.features.privacy import legal_texts
     from kapibara.features.privacy import privacy
     early = await billing.early()
@@ -210,8 +210,8 @@ async def _public() -> HTMLResponse:
     perks = "".join(f"<li>{escape(x)}</li>" for x in PERKS)
     bot = f"https://t.me/{escape(config.BOT_USERNAME)}?start=plus"
     contact = escape(privacy.CONTACT)          # уже с почтой, если она задана
-    stars = (" В боте Telegram можно оплатить и звёздами Telegram (Stars) — цена в звёздах выше, в неё входит "
-             "комиссия Telegram." if billing.stars_on() else "")
+    stars_note = (" В боте Telegram можно оплатить и звёздами Telegram (Stars) — цена в звёздах выше, в неё входит "
+                  "комиссия Telegram." if stars.stars_on() else "")
     return _page(
         '<p class="lead">«Капибара+» — подписка на дополнительные функции сервиса «Капибара», помощника '
         'студентов РТУ МИРЭА (бот в Telegram, сайт и приложение uiboshki.ru/app, приложение для Android и iPhone). '
@@ -230,7 +230,7 @@ async def _public() -> HTMLResponse:
         '<h2>Оплата</h2>'
         f'<p>Банковской картой или через СБП на защищённой странице платёжного сервиса {escape(legal_texts.payment_names())}. '
         'Данные карты вводятся только там, исполнитель их не получает. Чек приходит из ФНС («Мой налог») '
-        f'на почту, указанную при оплате.{stars}</p>'
+        f'на почту, указанную при оплате.{stars_note}</p>'
         '<h2>Как предоставляется услуга</h2>'
         '<p>Сразу после оплаты, автоматически: подписка включается на аккаунте, бот присылает сообщение '
         '«Оплата прошла» с датой окончания. Доставки нет — функции открываются в боте и приложении на '
@@ -323,7 +323,7 @@ async def plus_done(k: str = ""):
 
 @router.get("/plus/state")
 async def plus_state(k: str = ""):
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, settlement
     from database.billing import user_payments
     uid = billing.read_key(k)
     if not uid:
@@ -331,7 +331,7 @@ async def plus_state(k: str = ""):
     if billing.provider() == "yookassa":
         for p in await user_payments(uid, 3):
             if (p["status"] == "pending" and not p["id"].startswith("local-")
-                    and await billing.yookassa_check(p["id"]) == "succeeded"):
+                    and await settlement.yookassa_check(p["id"]) == "succeeded"):
                 await billing.paid(p["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
     st = await billing.status(uid)
     return {"active": st["active"], "until": st["until"],
@@ -355,11 +355,11 @@ SBP_HINT = ('<p class="small">Платишь через СБП или SberPay и
 
 def _donate_form(key: str = "") -> str:
     """Суммы доната. Без key — донат без входа (открытая страница /donate)."""
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import donate
     rows = "".join(f'<button name="amount" value="{a}"><span>Сказать спасибо</span><b>{a}&nbsp;₽</b></button>'
-                   for a in billing.DONATE_AMOUNTS)
-    own = (f'<div class="own"><input type="number" name="own" inputmode="numeric" min="{billing.DONATE_MIN}" '
-           f'max="{billing.DONATE_MAX}" step="1" placeholder="Своя сумма, от {billing.DONATE_MIN} ₽" '
+                   for a in donate.DONATE_AMOUNTS)
+    own = (f'<div class="own"><input type="number" name="own" inputmode="numeric" min="{donate.DONATE_MIN}" '
+           f'max="{donate.DONATE_MAX}" step="1" placeholder="Своя сумма, от {donate.DONATE_MIN} ₽" '
            f'aria-label="Своя сумма в рублях"><button name="amount" value="own">Поддержать</button></div>')
     return (f'<form method="post" action="/donate/pay"><input type="hidden" name="k" value="{escape(key)}">'
             + rows + own + "</form>")
@@ -394,7 +394,7 @@ async def donate_page(k: str = ""):
 
 @router.post("/donate/pay")
 async def donate_pay(request: Request):
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, donate
     form = parse_qs((await request.body()).decode("utf-8", "replace"))
     key = (form.get("k") or [""])[0]
     amount = (form.get("amount") or [""])[0]
@@ -405,7 +405,7 @@ async def donate_pay(request: Request):
     back = f"/donate?k={escape(key)}" if uid else "/donate"
     done = f"{billing.site()}/donate/done?" + (f"k={key}" if uid else f"c={claim}")
     try:
-        url = await billing.create_donation(uid, amount, done, claim)
+        url = await donate.create_donation(uid, amount, done, claim)
     except billing.PayError as e:
         return _donate_page(f'<p class="state">{escape(str(e))}</p><p><a href="{back}">Назад</a></p>', 400)
     return RedirectResponse(url, status_code=303)
@@ -442,7 +442,7 @@ async def donate_done(k: str = "", c: str = ""):
 @router.get("/donate/state")
 async def donate_state(k: str = "", c: str = ""):
     """Последний донат человека (?k=) или донат без входа (?c=): прошёл ли."""
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, settlement
     from database.billing import donation_by_claim, get_donation, user_donations
     if c and not k:
         last = [d] if (d := await donation_by_claim(c)) else []
@@ -454,8 +454,8 @@ async def donate_state(k: str = "", c: str = ""):
             raise HTTPException(403, "ссылка устарела")
         last = await user_donations(uid, 1)
     if last and last[0]["status"] == "pending" and billing.provider() == "yookassa" \
-            and not last[0]["id"].startswith("local-") and await billing.yookassa_check(last[0]["id"]) == "succeeded":
-        await billing.settle(last[0]["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
+            and not last[0]["id"].startswith("local-") and await settlement.yookassa_check(last[0]["id"]) == "succeeded":
+        await settlement.settle(last[0]["id"], deps.tg_bot() if deps.BOT_TOKEN else None)
         fresh = await get_donation(last[0]["id"])
         last = [fresh] if fresh else []
     paid = bool(last) and last[0]["status"] == "succeeded"
@@ -471,20 +471,20 @@ async def donate_state(k: str = "", c: str = ""):
 async def yookassa_hook(request: Request):
     """ЮKassa: payment.succeeded / payment.canceled. Телу не верим — статус
     спрашиваем у ЮKassa по id. Подписка это или донат — по нашей таблице
-    (billing.settle): донат дней подписки не даёт."""
-    from kapibara.features.billing import billing
+    (settlement.settle): донат дней подписки не даёт."""
+    from kapibara.features.billing import settlement
     try:
         data = await request.json()
         pid = str(data["object"]["id"])
     except (ValueError, KeyError, TypeError):
         raise HTTPException(400, "не то") from None
-    if not await billing.is_ours(pid):
+    if not await settlement.is_ours(pid):
         return {"ok": True}           # не наш платёж — не дёргаем кассу зря
-    st = await billing.yookassa_check(pid)
+    st = await settlement.yookassa_check(pid)
     if st == "succeeded":
-        await billing.settle(pid, deps.tg_bot() if deps.BOT_TOKEN else None)
+        await settlement.settle(pid, deps.tg_bot() if deps.BOT_TOKEN else None)
     elif st == "canceled":
-        await billing.cancel(pid)
+        await settlement.cancel(pid)
     elif st is None:
         raise HTTPException(503, "ЮKassa не ответила — пришлёт ещё раз")
     return {"ok": True}
@@ -493,15 +493,15 @@ async def yookassa_hook(request: Request):
 @router.api_route("/api/billing/robokassa", methods=["GET", "POST"])
 async def robokassa_hook(request: Request):
     """Robokassa ResultURL: OutSum, InvId, SignatureValue (Пароль №2). Номер
-    счёта один на подписки и донаты — что это, решает billing.settle."""
-    from kapibara.features.billing import billing
+    счёта один на подписки и донаты — что это, решает settlement.settle."""
+    from kapibara.features.billing import billing, kassa, settlement
     q = dict(request.query_params)
     if request.method == "POST":
         q.update({k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()})
     out_sum, inv, sig = q.get("OutSum", ""), q.get("InvId", ""), q.get("SignatureValue", "")
-    if not billing.robokassa_ok(out_sum, inv, sig):
+    if not kassa.robokassa_ok(out_sum, inv, sig):
         raise HTTPException(400, "bad sign")
-    pay = await billing._payment(inv)
+    pay = await billing.find_payment(inv)
     try:
         enough = pay and float(out_sum) + 0.001 >= pay["amount"]
     except ValueError:
@@ -509,9 +509,9 @@ async def robokassa_hook(request: Request):
     if not pay or not enough:
         logger.warning(f"Robokassa: платёж {inv} не наш или сумма {out_sum} не та")
         raise HTTPException(400, "bad payment")
-    if (q.get("IsTest") == "1" or billing.test_mode()) and not config.is_starosta(pay["payer_id"] or 0):
+    if (q.get("IsTest") == "1" or kassa.test_mode()) and not config.is_starosta(pay["payer_id"] or 0):
         # тестовый платёж (денег нет) засчитывается только Никите — 21.10
         logger.warning(f"Robokassa: тестовый платёж {inv} не от Никиты — не засчитан")
         raise HTTPException(400, "test payment")
-    await billing.settle(inv, deps.tg_bot() if deps.BOT_TOKEN else None)
+    await settlement.settle(inv, deps.tg_bot() if deps.BOT_TOKEN else None)
     return PlainTextResponse(f"OK{inv}")

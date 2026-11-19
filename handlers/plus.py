@@ -1,6 +1,6 @@
 """«Капибара+» в боте: /plus — статус, кнопка «Оплатить на сайте» и счёт в
 звёздах Telegram (Stars: цифровое внутри Telegram — только они; дороже
-рублей, billing.stars_price), /invite —
+рублей, stars.stars_price), /invite —
 готовое сообщение для друга с личной ссылкой, /donate — «Поддержать
 проект» (донат на сайте, не подписка), /grant — ручные выдачи
 Никиты (plus_grant.py). В инлайне «@бот share» —
@@ -18,7 +18,7 @@ router = Router()
 
 
 async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, stars
     from kapibara.core import config
     from kapibara.features.billing import referrals
     st = await billing.status(uid)
@@ -49,14 +49,14 @@ async def plus_text(uid: int) -> tuple[str, InlineKeyboardMarkup]:
     lines += [f"🎁 Позови друга — /invite. {referrals.invite_line(inv)} Пришло по твоей ссылке: {inv['came']}.",
               "🏅 Закрыл ранг ачивок в приложении — тоже дни подписки (Ещё → Ачивки)."]
     rows = []
-    stars = billing.stars_on() and not st["unlimited"]
+    stars_ok = stars.stars_on() and not st["unlimited"]
     if st["provider"] and not st["unlimited"]:
         rows.append([InlineKeyboardButton(text="💳 Оплатить на сайте", url=billing.pay_link(uid))])
-    elif not st["unlimited"] and not stars:
+    elif not st["unlimited"] and not stars_ok:
         lines.append("\nОплата скоро заработает.")
-    if stars:
+    if stars_ok:
         lines.append("\n⭐ Или звёздами Telegram прямо здесь — они дороже рублей: в цену входит комиссия Telegram.")
-        rows.append([InlineKeyboardButton(text=f"⭐ {p['title']} · {billing.stars_price(p['price'])} ⭐",
+        rows.append([InlineKeyboardButton(text=f"⭐ {p['title']} · {stars.stars_price(p['price'])} ⭐",
                                           callback_data=f"plus:stars:{p['plan']}") for p in st["prices"]])
     rows.append([InlineKeyboardButton(text="🎁 Позвать друга", callback_data="plus:invite")])
     rows.append([InlineKeyboardButton(text="💛 Поддержать проект", callback_data="plus:donate")])
@@ -117,8 +117,8 @@ async def cmd_plus(message: Message):
 # ── «Поддержать проект»: донат на сайте, не подписка ───────────────────────
 
 def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
-    from kapibara.features.billing import billing
-    amounts = " · ".join(f"{a} ₽" for a in billing.DONATE_AMOUNTS)
+    from kapibara.features.billing import billing, donate
+    amounts = " · ".join(f"{a} ₽" for a in donate.DONATE_AMOUNTS)
     lines = ["💛 <b>Поддержать проект</b>", "",
              "Если Капибара помогает тебе учиться — можно сказать спасибо рублём: деньги идут на сервер, "
              "ИИ и время на новые функции.", "",
@@ -128,7 +128,7 @@ def donate_text(uid: int) -> tuple[str, InlineKeyboardMarkup | None]:
     if not billing.provider(uid=uid):
         lines.append("Поддержать можно будет совсем скоро — оплата ещё подключается.")
         return "\n".join(lines), None
-    lines.append(f"Сумма — на выбор: {amounts} или своя (от {billing.DONATE_MIN} ₽). Разово, без автосписаний; "
+    lines.append(f"Сумма — на выбор: {amounts} или своя (от {donate.DONATE_MIN} ₽). Разово, без автосписаний; "
                  "оплата — на сайте uiboshki.ru по кнопке ниже, ссылка твоя и живёт сутки.")
     kb = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💛 Поддержать на сайте", url=billing.donate_link(uid))]])
@@ -144,7 +144,7 @@ async def claim_donation(message: Message, uid: int, claim: str):
     """/start dn_<код> со страницы «спасибо» после доната без входа (/donate без
     личной ссылки): донат становится твоим — спасибо и роадмап."""
     from database import billing as store
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import donate
     from kapibara.features.content import roadmap
     if message.chat.type != "private":          # uid = чат: только в личке с ботом
         return
@@ -161,7 +161,7 @@ async def claim_donation(message: Message, uid: int, claim: str):
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(
         text="🗺 Открыть роадмап", url=roadmap.page_link(uid))]])
-    await message.answer(billing.donate_thanks(don["amount"]), reply_markup=kb, disable_web_page_preview=True)
+    await message.answer(donate.donate_thanks(don["amount"]), reply_markup=kb, disable_web_page_preview=True)
 
 
 @router.message(Command("donate"))
@@ -326,9 +326,9 @@ async def invite_button(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("plus:stars:"))
 async def cb_stars(cb: CallbackQuery):
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import billing, stars
     try:
-        inv = await billing.stars_invoice(cb.from_user.id, data_of(cb).split(":", 2)[2])
+        inv = await stars.stars_invoice(cb.from_user.id, data_of(cb).split(":", 2)[2])
     except billing.PayError as e:
         await cb.answer(str(e), show_alert=True)
         return
@@ -339,15 +339,15 @@ async def cb_stars(cb: CallbackQuery):
 
 @router.pre_checkout_query()
 async def stars_pre_checkout(q: PreCheckoutQuery):
-    from kapibara.features.billing import billing
-    err = await billing.stars_check(q.invoice_payload, q.from_user.id, q.total_amount, q.currency)
+    from kapibara.features.billing import stars
+    err = await stars.stars_check(q.invoice_payload, q.from_user.id, q.total_amount, q.currency)
     await q.answer(ok=not err, error_message=err or None)
 
 
 @router.message(F.successful_payment)
 async def stars_done(message: Message):
-    from kapibara.features.billing import billing
+    from kapibara.features.billing import stars
     sp = message.successful_payment
     if sp is None or sp.currency != "XTR":          # None не бывает: фильтр F.successful_payment
         return
-    await billing.stars_paid(sp.invoice_payload, sender(message).id, sp.telegram_payment_charge_id, message.bot)
+    await stars.stars_paid(sp.invoice_payload, sender(message).id, sp.telegram_payment_charge_id, message.bot)

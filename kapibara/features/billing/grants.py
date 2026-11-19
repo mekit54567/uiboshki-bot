@@ -22,7 +22,7 @@ billing.grant) пишется в журнал plus_grants, поэтому «off�
 import re
 from datetime import date, datetime, timedelta
 
-from kapibara.features.billing.billing import who_text
+from kapibara.features.billing import donate
 
 UNIT_DAYS = {"d": 1, "д": 1, "m": 30, "м": 30, "y": 300, "г": 300, "л": 300}
 _TERM = re.compile(r"^(\d{1,4})\s*(d|days?|д|дн|дней|дня|день|m|months?|мес|м|y|years?|г|год|года|лет)$")
@@ -143,7 +143,7 @@ async def describe(u: dict) -> str:
     from database.billing import grant_log
     uid = u["user_id"]
     st = await billing.status(uid)
-    lines = [f"👤 {who_text(u)}", f"Тариф: <b>{plans.NAMES[await plans.plan_of(uid)]}</b>"]
+    lines = [f"👤 {donate.who_text(u)}", f"Тариф: <b>{plans.NAMES[await plans.plan_of(uid)]}</b>"]
     lines.append(f"Подписка: до {fmt(st['paid_until'])}" if st["paid_until"] else "Подписка: нет")
     if st["gift"]:
         lines.append(f"Подарок группе: до {fmt(st['gift'])}")

@@ -4,18 +4,18 @@
 import pytest
 from aiogram.types import Chat, Message, PreCheckoutQuery, SuccessfulPayment, Update, User
 
-from kapibara.features.billing import billing
+from kapibara.features.billing import billing, stars
 from tests.test_plus import ME, robokassa  # noqa: F401 — фикстура (реквизиты исполнителя)
 from tests.test_review_bot import _uid, bot, dp, press  # noqa: F401 — фикстуры
 
 
 def test_stars_price_is_rubles_plus_markup(monkeypatch):
-    monkeypatch.setattr(billing, "STARS_RUB", 1.8)
-    monkeypatch.setattr(billing, "STARS_MARKUP", 1.55)
-    assert billing.stars_price(149) == 129          # 149 × 1,55 / 1,8 = 128,3 → вверх
-    assert billing.stars_price(90) == 78            # 77,5 → 78
-    monkeypatch.setattr(billing, "STARS_RUB", 0)
-    assert not billing.stars_on()
+    monkeypatch.setattr(stars, "STARS_RUB", 1.8)
+    monkeypatch.setattr(stars, "STARS_MARKUP", 1.55)
+    assert stars.stars_price(149) == 129          # 149 × 1,55 / 1,8 = 128,3 → вверх
+    assert stars.stars_price(90) == 78            # 77,5 → 78
+    monkeypatch.setattr(stars, "STARS_RUB", 0)
+    assert not stars.stars_on()
 
 
 async def _pre_checkout(dp, bot, payload, total, uid=ME):  # noqa: F811
@@ -45,24 +45,24 @@ async def test_stars_invoice_check_and_paid_once(db, bot, dp, robokassa):  # noq
 
     await press(dp, bot, "plus:stars:month", uid=ME)
     inv = bot.session.named("SendInvoice")[-1]
-    stars = billing.stars_price(149)
-    assert inv.currency == "XTR" and inv.prices[0].amount == stars and not inv.provider_token
+    amount_stars = stars.stars_price(149)
+    assert inv.currency == "XTR" and inv.prices[0].amount == amount_stars and not inv.provider_token
 
-    assert (await _pre_checkout(dp, bot, inv.payload, stars - 1)).ok is False     # подменили цену
-    assert (await _pre_checkout(dp, bot, inv.payload, stars, uid=ME + 1)).ok is False   # чужой счёт
-    assert (await _pre_checkout(dp, bot, inv.payload, stars)).ok is True
+    assert (await _pre_checkout(dp, bot, inv.payload, amount_stars - 1)).ok is False     # подменили цену
+    assert (await _pre_checkout(dp, bot, inv.payload, amount_stars, uid=ME + 1)).ok is False   # чужой счёт
+    assert (await _pre_checkout(dp, bot, inv.payload, amount_stars)).ok is True
 
-    await _paid(dp, bot, inv.payload, stars)
-    await _paid(dp, bot, inv.payload, stars)                                       # повтор — не продлевает
+    await _paid(dp, bot, inv.payload, amount_stars)
+    await _paid(dp, bot, inv.payload, amount_stars)                                       # повтор — не продлевает
     pay = await get_payment(inv.payload)
-    assert pay["status"] == "succeeded" and pay["charge_id"] == "ch-1" and pay["stars"] == stars
+    assert pay["status"] == "succeeded" and pay["charge_id"] == "ch-1" and pay["stars"] == amount_stars
     assert (await get_sub(ME))["founder"]                                          # по цене первых
     import aiosqlite
     async with aiosqlite.connect(db.DATABASE_PATH) as c:
         n = (await (await c.execute("SELECT COUNT(*) FROM plus_grants WHERE user_id=? AND source='pay'",
                                      (ME,))).fetchone())[0]
     assert n == 1
-    assert (await _pre_checkout(dp, bot, inv.payload, stars)).ok is False         # оплаченный — второй раз нет
+    assert (await _pre_checkout(dp, bot, inv.payload, amount_stars)).ok is False         # оплаченный — второй раз нет
 
 
 @pytest.mark.asyncio
@@ -70,4 +70,4 @@ async def test_no_stars_without_requisites(db, monkeypatch):
     from kapibara.features.privacy import privacy
     monkeypatch.setattr(privacy, "INN", "")
     with pytest.raises(billing.PayError):
-        await billing.stars_invoice(ME, "month")
+        await stars.stars_invoice(ME, "month")

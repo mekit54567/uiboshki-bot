@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import aiosqlite
 import pytest
 
-from kapibara.features.billing import billing
+from kapibara.features.billing import billing, donate, kassa, settlement
 from kapibara.core import config
 from tests.conftest import STAROSTA_ID
 from tests.test_plus import robokassa  # noqa: F401 — фикстура
@@ -30,11 +30,11 @@ def _to(bot, uid):  # noqa: F811
 
 
 def test_amounts():
-    assert billing.donate_amount("300") == 300 and billing.donate_amount(" 1 000 ₽") == 1000
+    assert donate.donate_amount("300") == 300 and donate.donate_amount(" 1 000 ₽") == 1000
     for bad in ("", "abc", "49", "15001", "-5", None):
         with pytest.raises(billing.PayError):
-            billing.donate_amount(bad)
-    assert billing.DONATE_AMOUNTS == (100, 300, 500) and billing.DONATE_MIN == 50
+            donate.donate_amount(bad)
+    assert donate.DONATE_AMOUNTS == (100, 300, 500) and donate.DONATE_MIN == 50
 
 
 @pytest.mark.asyncio
@@ -42,9 +42,9 @@ async def test_robokassa_donation_gives_no_days(db, bot, client, monkeypatch, ro
     c, _ = client
     monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
     await db.upsert_user(ME, "vasya", "Вася")
-    url = await billing.create_donation(ME, 300, "https://x/done")
+    url = await donate.create_donation(ME, 300, "https://x/done")
     q = parse_qs(urlparse(url).query)
-    assert url.startswith(billing.ROBOKASSA_URL) and q["OutSum"] == ["300.00"]
+    assert url.startswith(kassa.ROBOKASSA_URL) and q["OutSum"] == ["300.00"]
     assert q["Description"] == ["Добровольная поддержка проекта «Капибара»"]          # позиция в чеке
     don = await _rows(db, "donations")
     assert [(d["payer_id"], d["amount"], d["status"]) for d in don] == [(ME, 300, "pending")]
@@ -60,10 +60,10 @@ async def test_robokassa_donation_gives_no_days(db, bot, client, monkeypatch, ro
     st = await billing.status(ME)
     assert not st["active"] and not st["paid_until"]                                  # дней подписки — ноль
     assert (await _rows(db, "donations"))[0]["status"] == "succeeded"
-    assert not await billing.settle(inv, bot)                                         # повтор — без второго спасибо
+    assert not await settlement.settle(inv, bot)                                         # повтор — без второго спасибо
 
-    inv2 = (parse_qs(urlparse(await billing.create_donation(ME, "500", "https://x")).query))["InvId"][0]
-    assert await billing.settle(inv2, bot)
+    inv2 = (parse_qs(urlparse(await donate.create_donation(ME, "500", "https://x")).query))["InvId"][0]
+    assert await settlement.settle(inv2, bot)
     thanks = _to(bot, ME)[-1]
     assert "Спасибо за поддержку! 500 ₽" in thanks and "Это не подписка" in thanks
     owner = _to(bot, STAROSTA_ID)[-1]
@@ -86,7 +86,7 @@ async def test_yookassa_hook_tells_donation_from_sub(db, client, monkeypatch):  
 
     async def check(pid):
         return answers[pid]
-    monkeypatch.setattr(billing, "yookassa_check", check)
+    monkeypatch.setattr(settlement, "yookassa_check", check)
 
     def hook(pid):
         return c.post("/api/billing/yookassa", json={"event": "payment.succeeded", "object": {"id": pid}}).json()
@@ -119,7 +119,7 @@ async def test_api_donate_hidden_on_iphone_and_closed_without_requisites(db, cli
     assert c.get("/api/donate", headers=h).json()["url"] == ""
     assert c.get("/api/plus", headers=h).json()["donate_url"] == ""
     with pytest.raises(billing.PayError):
-        await billing.create_donation(ME, 300, "https://x")
+        await donate.create_donation(ME, 300, "https://x")
     key = billing.make_key(ME)
     assert "совсем скоро" in c.get(f"/donate?k={key}").text
     assert c.post("/donate/pay", data={"k": key, "amount": "300"}, follow_redirects=False).status_code == 400
@@ -144,7 +144,7 @@ async def test_donate_page(db, client, robokassa):  # noqa: F811
     assert c.get(f"/donate/done?k={key}").status_code == 200
     assert c.get(f"/donate/state?k={key}").json() == {"paid": False, "amount": 0}
     inv = [d for d in await _rows(db, "donations") if d["payer_id"] == ME][-1]["id"]
-    await billing.settle(inv)
+    await settlement.settle(inv)
     assert c.get(f"/donate/state?k={key}").json() == {"paid": True, "amount": 250}
     assert c.get("/donate/state?k=битый").status_code == 403
     assert "Поддержка проекта" in c.get("/offer").text                                # раздел в оферте
@@ -152,8 +152,8 @@ async def test_donate_page(db, client, robokassa):  # noqa: F811
 
 @pytest.mark.asyncio
 async def test_yookassa_donation_metadata_without_person(db, monkeypatch, robokassa):  # noqa: F811
-    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
-    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "key")
+    monkeypatch.setattr(kassa, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(kassa, "YOOKASSA_SECRET_KEY", "key")
     sent = {}
 
     class Resp:
@@ -174,11 +174,11 @@ async def test_yookassa_donation_metadata_without_person(db, monkeypatch, roboka
             sent.update(json)
             return Resp()
 
-    monkeypatch.setattr(billing, "_yk_client", lambda: Client())
+    monkeypatch.setattr(kassa, "yk_client", lambda: Client())
     await db.upsert_user(ME, "", "u")
-    assert await billing.create_donation(ME, 100, "https://x/done") == "https://yoomoney.ru/pay"
+    assert await donate.create_donation(ME, 100, "https://x/done") == "https://yoomoney.ru/pay"
     assert str(ME) not in str(sent) and sent["metadata"] == {"kind": "donation"}
-    assert sent["description"] == billing.DONATE_TITLE and sent["amount"]["value"] == "100.00"
+    assert sent["description"] == donate.DONATE_TITLE and sent["amount"]["value"] == "100.00"
     assert [d["id"] for d in await _rows(db, "donations")] == ["yk-d9"] and await _rows(db, "payments") == []
 
 
@@ -235,9 +235,9 @@ async def test_roadmap_for_supporters(db, bot, dp, client, robokassa):  # noqa: 
     m = bot.session.named("SendMessage")[-1]
     assert "открывается тем, кто поддержал" in m.text and m.reply_markup.inline_keyboard[0][0].url
 
-    inv = parse_qs(urlparse(await billing.create_donation(ME, 50, "https://x")).query)["InvId"][0]
+    inv = parse_qs(urlparse(await donate.create_donation(ME, 50, "https://x")).query)["InvId"][0]
     assert not (await roadmap.can_see(ME))                                            # ещё не оплачен
-    assert await billing.settle(inv, bot)
+    assert await settlement.settle(inv, bot)
     assert "/roadmap" in _to(bot, ME)[-1]                                             # в спасибо — где роадмап
     d = c.get("/api/roadmap", headers=h).json()
     assert not d["locked"] and d["items"] and set(d["statuses"]) == {"now", "next", "idea", "done", "failed"}
@@ -271,8 +271,8 @@ async def test_roadmap_page(db, client, monkeypatch, robokassa):  # noqa: F811
     assert c.get("/roadmap").status_code == 403 and c.get("/roadmap?k=битый").status_code == 403
     page = c.get(roadmap.page_link(ME).split(billing.site())[1]).text
     assert "Поддержать проект" in page and "Сделано" not in page                     # ещё не поддержал
-    inv = parse_qs(urlparse(await billing.create_donation(ME, 50, "https://x")).query)["InvId"][0]
-    await billing.settle(inv, None)
+    inv = parse_qs(urlparse(await donate.create_donation(ME, 50, "https://x")).query)["InvId"][0]
+    await settlement.settle(inv, None)
     page = c.get(roadmap.page_link(ME).split(billing.site())[1]).text
     assert "Роадмап №" in page and "Спасибо за поддержку" in page and "/site/roadmap.css" in page
 
@@ -298,13 +298,13 @@ async def test_roadmap_page(db, client, monkeypatch, robokassa):  # noqa: F811
 def test_robokassa_returns_to_own_page(robokassa):  # noqa: F811
     """Success URL в кабинете Robokassa один (/plus/done), поэтому донат
     возвращает на «спасибо» сам — SuccessUrl2, отказ — FailUrl2; оба в подписи."""
-    url = billing.robokassa_url(7, 300, "x", "https://x/donate/done?k=K")
+    url = kassa.robokassa_url(7, 300, "x", "https://x/donate/done?k=K")
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     assert q["SuccessUrl2"] == "https://x/donate/done?k=K" and q["SuccessUrl2Method"] == "GET"
     assert q["FailUrl2"] == "https://x/donate?k=K" and q["FailUrl2Method"] == "GET"
     want = hashlib.md5(b"shop:300.00:7:https://x/donate/done?k=K:GET:https://x/donate?k=K:GET:p1")
     assert q["SignatureValue"] == want.hexdigest()
-    plain = {k: v[0] for k, v in parse_qs(urlparse(billing.robokassa_url(7, 300, "x")).query).items()}
+    plain = {k: v[0] for k, v in parse_qs(urlparse(kassa.robokassa_url(7, 300, "x")).query).items()}
     assert "SuccessUrl2" not in plain and plain["SignatureValue"] == hashlib.md5(b"shop:300.00:7:p1").hexdigest()
 
 
@@ -315,21 +315,21 @@ async def test_robokassa_test_mode_only_for_nikita(db, bot, client, monkeypatch,
     а тестовое уведомление за чужой платёж сервер не засчитывает."""
     c, _ = client
     monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
-    monkeypatch.setattr(billing, "ROBOKASSA_TEST", True)
+    monkeypatch.setattr(kassa, "ROBOKASSA_TEST", True)
     await db.upsert_user(ME, "", "u")
     assert billing.provider(uid=ME) == "" and billing.provider(uid=STAROSTA_ID) == "robokassa"
     assert not (await billing.status(ME))["provider"]
     with pytest.raises(billing.PayError):
         await billing.create(ME, "month", "https://x")
     with pytest.raises(billing.PayError):
-        await billing.create_donation(ME, 100, "https://x")
+        await donate.create_donation(ME, 100, "https://x")
     assert "оплата ещё подключается" in c.get(f"/donate?k={billing.make_key(ME)}").text
-    assert (await billing.create(STAROSTA_ID, "month", "https://x")).startswith(billing.ROBOKASSA_URL)
+    assert (await billing.create(STAROSTA_ID, "month", "https://x")).startswith(kassa.ROBOKASSA_URL)
 
     # платёж, созданный до теста (или подделанный), тестовым уведомлением не засчитывается
-    monkeypatch.setattr(billing, "ROBOKASSA_TEST", False)
+    monkeypatch.setattr(kassa, "ROBOKASSA_TEST", False)
     inv = parse_qs(urlparse(await billing.create(ME, "month", "https://x")).query)["InvId"][0]
-    out_sum = (await billing._payment(inv))["amount"]
+    out_sum = (await billing.find_payment(inv))["amount"]
     out_sum = f"{out_sum}.00"
     sig = hashlib.md5(f"{out_sum}:{inv}:p2".encode()).hexdigest()
     r = c.post("/api/billing/robokassa", data={"OutSum": out_sum, "InvId": inv, "SignatureValue": sig, "IsTest": "1"})
@@ -345,10 +345,10 @@ async def test_yookassa_test_shop_only_for_nikita(db, bot, client, monkeypatch, 
     from database.billing import add_payment
     c, _ = client
     monkeypatch.setattr(config, "STAROSTA_ID", STAROSTA_ID)
-    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
-    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "test_abc")
+    monkeypatch.setattr(kassa, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(kassa, "YOOKASSA_SECRET_KEY", "test_abc")
     await db.upsert_user(ME, "", "u")
-    assert billing.test_mode()
+    assert kassa.test_mode()
     assert billing.provider(uid=ME) == "" and billing.provider(uid=STAROSTA_ID) == "yookassa"
     with pytest.raises(billing.PayError):
         await billing.create(ME, "month", "https://x")
@@ -376,15 +376,15 @@ async def test_yookassa_test_shop_only_for_nikita(db, bot, client, monkeypatch, 
 
         async def get(self, url):
             return Resp(url.rsplit("/", 1)[1])
-    monkeypatch.setattr(billing, "_yk_client", Client)
+    monkeypatch.setattr(kassa, "yk_client", Client)
 
     def hook(pid):
         return c.post("/api/billing/yookassa", json={"event": "payment.succeeded", "object": {"id": pid}})
     assert hook("yk-t1").status_code == 200 and not (await billing.status(ME))["active"]
     assert hook("yk-t2").status_code == 200 and (await billing.status(STAROSTA_ID))["active"]
 
-    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "live_abc")      # боевой магазин — как раньше
-    assert not billing.test_mode() and billing.provider(uid=ME) == "yookassa"
+    monkeypatch.setattr(kassa, "YOOKASSA_SECRET_KEY", "live_abc")      # боевой магазин — как раньше
+    assert not kassa.test_mode() and billing.provider(uid=ME) == "yookassa"
 
 
 def _run_done_script(html: str, answer: dict) -> dict:
@@ -444,7 +444,7 @@ async def test_anonymous_donation_and_claim(db, bot, dp, client, monkeypatch, ro
     assert f"start=dn_{claim}" in done and "Открыть роадмап в Telegram" in done
     assert c.get(f"/donate/state?c={claim}").json() == {"paid": False, "amount": 0, "claimed": False}
     assert c.get("/donate/state?c=nope").status_code == 404
-    await billing.settle(don["id"], bot)
+    await settlement.settle(don["id"], bot)
     assert "без аккаунта" in _to(bot, STAROSTA_ID)[-1]
     assert c.get(f"/donate/state?c={claim}").json() == {"paid": True, "amount": 300, "claimed": False}
 
@@ -464,6 +464,6 @@ async def test_anonymous_donation_and_claim(db, bot, dp, client, monkeypatch, ro
 @pytest.mark.asyncio
 async def test_anonymous_donation_closed_in_test_mode(db, client, monkeypatch, robokassa):  # noqa: F811
     c, _ = client
-    monkeypatch.setattr(billing, "ROBOKASSA_TEST", True)
+    monkeypatch.setattr(kassa, "ROBOKASSA_TEST", True)
     assert "совсем скоро" in c.get("/donate").text
     assert c.post("/donate/pay", data={"k": "", "amount": "300"}, follow_redirects=False).status_code == 400

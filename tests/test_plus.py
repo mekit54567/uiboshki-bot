@@ -9,7 +9,7 @@ import aiosqlite
 import pytest
 
 from kapibara.features.groups import groups
-from kapibara.features.billing import billing
+from kapibara.features.billing import billing, kassa, settlement
 from kapibara.features.billing import referrals
 from tests.test_review_bot import send
 from tests.test_review_bot import bot, dp  # noqa: F401 — фикстуры
@@ -20,10 +20,10 @@ ME, FRIEND = 501, 502
 
 @pytest.fixture
 def robokassa(monkeypatch):
-    monkeypatch.setattr(billing, "ROBOKASSA_LOGIN", "shop")
-    monkeypatch.setattr(billing, "ROBOKASSA_PASS1", "p1")
-    monkeypatch.setattr(billing, "ROBOKASSA_PASS2", "p2")
-    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "")
+    monkeypatch.setattr(kassa, "ROBOKASSA_LOGIN", "shop")
+    monkeypatch.setattr(kassa, "ROBOKASSA_PASS1", "p1")
+    monkeypatch.setattr(kassa, "ROBOKASSA_PASS2", "p2")
+    monkeypatch.setattr(kassa, "YOOKASSA_SHOP_ID", "")
     from kapibara.features.privacy import privacy
     for k, v in (("FIO", "Иванов Никита"), ("INN", "123456789012"), ("EMAIL", "a@b.ru")):
         monkeypatch.setattr(privacy, k, v)
@@ -103,17 +103,17 @@ async def test_gift_for_own_group(db, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_yookassa_down_falls_back_to_robokassa(db, monkeypatch, robokassa):
-    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
-    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "secret")
+    monkeypatch.setattr(kassa, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(kassa, "YOOKASSA_SECRET_KEY", "secret")
     await db.upsert_user(ME, "", "u")
     assert billing.provider() == "yookassa"
 
     async def down(*a, **k):
         raise billing.PayError("касса не отвечает")
-    monkeypatch.setattr(billing, "_yookassa_create", down)
+    monkeypatch.setattr(kassa, "yookassa_create", down)
     url = await billing.create(ME, "month", "https://x/done")
-    assert url.startswith(billing.ROBOKASSA_URL)
-    monkeypatch.setattr(billing, "ROBOKASSA_PASS2", "")                      # Robokassa нет — ошибка как есть
+    assert url.startswith(kassa.ROBOKASSA_URL)
+    monkeypatch.setattr(kassa, "ROBOKASSA_PASS2", "")                      # Robokassa нет — ошибка как есть
     with pytest.raises(billing.PayError):
         await billing.create(ME, "month", "https://x/done")
 
@@ -134,7 +134,7 @@ async def test_page_and_robokassa_hook(db, client, monkeypatch, robokassa):  # n
     # робот 18.10: «~~249~~ / ₽ 149 ₽» — число и «₽» не разрываются, старая цена зачёркнута целиком
     assert re.search(r"<s>\d+&nbsp;₽</s>", page) and " ₽</s>" not in page and 'class="pr"' in page
     r = c.post("/plus/pay", data={"k": key, "plan": "semester"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith(billing.ROBOKASSA_URL)
+    assert r.status_code == 303 and r.headers["location"].startswith(kassa.ROBOKASSA_URL)
     inv = (await _payments(db))[0]
 
     def hook(out_sum, sig_pass="p2"):
@@ -170,7 +170,7 @@ async def test_yookassa_hook_trusts_only_api(db, client, monkeypatch):  # noqa: 
 
     async def check(pid):
         return answers[pid]
-    monkeypatch.setattr(billing, "yookassa_check", check)
+    monkeypatch.setattr(settlement, "yookassa_check", check)
     hook = {"type": "notification", "event": "payment.succeeded", "object": {"id": "yk-1"}}
     assert c.post("/api/billing/yookassa", json=hook).json() == {"ok": True}
     assert not (await billing.status(ME))["active"]                          # тело сказало «оплачено», ЮKassa — нет
@@ -357,8 +357,8 @@ def test_no_requisites_no_payment(monkeypatch, robokassa):
 @pytest.mark.asyncio
 async def test_yookassa_metadata_without_person(db, monkeypatch, robokassa):
     """152-ФЗ: у кассы не должно оставаться id человека — связь только в payments."""
-    monkeypatch.setattr(billing, "YOOKASSA_SHOP_ID", "shop")
-    monkeypatch.setattr(billing, "YOOKASSA_SECRET_KEY", "key")
+    monkeypatch.setattr(kassa, "YOOKASSA_SHOP_ID", "shop")
+    monkeypatch.setattr(kassa, "YOOKASSA_SECRET_KEY", "key")
     sent = {}
 
     class Resp:
@@ -379,7 +379,7 @@ async def test_yookassa_metadata_without_person(db, monkeypatch, robokassa):
             sent.update(json)
             return Resp()
 
-    monkeypatch.setattr(billing, "_yk_client", lambda: Client())
+    monkeypatch.setattr(kassa, "yk_client", lambda: Client())
     await db.upsert_user(ME, "", "u")
     assert await billing.create(ME, "month", "https://x/done") == "https://yoomoney.ru/pay"
     assert str(ME) not in str(sent) and sent["metadata"] == {"plan": "month"}
@@ -517,7 +517,7 @@ def test_no_kassa_yet_names_yookassa(client, monkeypatch):  # noqa: F811
     в оферте и политике называем ЮKassa, а не Robokassa (её проверяющий смотрит сайт)."""
     from kapibara.features.privacy import legal_texts
     for k in ("ROBOKASSA_LOGIN", "YOOKASSA_SHOP_ID"):
-        monkeypatch.setattr(billing, k, "")
+        monkeypatch.setattr(kassa, k, "")
     c, _ = client
     page = c.get("/plus").text
     offer = str(legal_texts.doc("offer"))
