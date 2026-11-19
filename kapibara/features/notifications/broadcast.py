@@ -5,6 +5,8 @@ kapibara/jobs/scheduler.py (03.11): дайджесты брали это из п
 import asyncio
 import logging
 
+from kapibara.core.errors import aside
+
 logger = logging.getLogger("kapibara.jobs.scheduler")   # в /status — раздел «Расписание», как было
 
 PACE_SECONDS = 0.05
@@ -27,15 +29,11 @@ async def group_raws(fetch_home):
         from kapibara.features.groups import groups
         key = None if not gid or gid == groups.home_id() else gid
         if key not in cache:
-            try:
-                if key is None:
-                    raw = await fetch_home()
-                else:
-                    from kapibara.features.schedule import parser as schedule_parser
-                    raw = await schedule_parser.fetch_schedule_raw(group_id=key)
+            from kapibara.features.schedule import parser as schedule_parser
+            cache[key] = (None, None)          # не загрузилось — этой группе рассылки нет, остальным есть
+            with aside(logger, f"Рассылка: расписание группы {key or 'своей'} не загрузилось",
+                       expected=schedule_parser.FETCH_ERRORS, level=logging.ERROR):
+                raw = await (fetch_home() if key is None else schedule_parser.fetch_schedule_raw(group_id=key))
                 cache[key] = (raw, notify_prefs.home_campus(raw))
-            except Exception as e:
-                logger.error(f"Рассылка: расписание группы {key or 'своей'} не загрузилось: {e}")
-                cache[key] = (None, None)
         return cache[key]
     return get

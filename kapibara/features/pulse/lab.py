@@ -156,17 +156,13 @@ def kit() -> dict:
     """Скрипты обхода: pulse_lab_kit/kit.json (числа, списки) и <ключ>.js
     (hook.js, scan.js…) рядом — только известные ключи; ничего нет — {}."""
     data = {}
-    try:
+    with contextlib.suppress(OSError, ValueError):   # нет набора или он битый — обход без него
         with open(KIT_PATH, encoding="utf-8") as f:
             loaded = json.load(f)
         if isinstance(loaded, dict):
             data.update(loaded)
-    except (OSError, ValueError):
-        pass
     for key in KIT_KEYS:
-        try:
-            with open(os.path.join(os.path.dirname(KIT_PATH), key + ".js"), encoding="utf-8") as f:
-                data[key] = f.read()
-        except OSError:
-            pass
+        path = os.path.join(os.path.dirname(KIT_PATH), key + ".js")
+        with contextlib.suppress(OSError), open(path, encoding="utf-8") as f:   # скрипта нет — шаг пропускаем
+            data[key] = f.read()
     return {k: v for k, v in data.items() if k in KIT_KEYS}

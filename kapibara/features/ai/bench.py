@@ -256,7 +256,7 @@ async def ask(client: httpx.AsyncClient, key: str, model: str, system: str, user
         return {"text": text or "[пустой ответ]", "cost": float((data.get("usage") or {}).get("cost") or 0),
                 "secs": time.monotonic() - started, "error": not text,
                 "cut": choice.get("finish_reason") == "length"}
-    except Exception as e:
+    except (*NETWORK, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:   # сеть или ответ не той формы
         return {"text": f"[ошибка: {type(e).__name__}]", "cost": 0.0, "secs": time.monotonic() - started, "error": True}
 
 
@@ -270,7 +270,7 @@ async def ask_gemini(system: str, user: str, max_tokens: int, temperature: float
                 [{"role": "user", "content": user}], system, max_output_tokens=max_tokens,
                 temperature=0.3 if temperature is None else temperature, fallback=False)
             break
-        except Exception as e:
+        except (*NETWORK, RuntimeError) as e:        # GeminiError — RuntimeError
             if attempt + 1 == GEMINI_TRIES:
                 return {"text": f"[ошибка: {e}]", "cost": 0.0, "secs": time.monotonic() - started, "error": True}
             await asyncio.sleep(GEMINI_WAIT)

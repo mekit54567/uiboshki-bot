@@ -183,12 +183,11 @@ async def peek(client, html: str) -> bool:
     seen = await get_setting(PEEK_KEY)
     if not m or seen is None:
         return False
-    try:
+    events = None
+    with aside(logger, "тесты СДО: peek не вышел", expected=(sdo_parser.SdoSessionExpired, ValueError),
+               level=logging.INFO):
         months = 2 if datetime.now(TZ).day >= 20 else 1
         events = await sdo_parser.calendar_months(client, m.group(1), months)
-    except Exception as e:
-        logger.info(f"тесты СДО: peek не вышел ({type(e).__name__})")
-        return False
     if events is None:
         return False
     fresh = set(signature(sdo_parser.parse_calendar_events(events))) - set(json.loads(seen))

@@ -42,7 +42,7 @@ async def can_rate(user_id: int, name: str) -> bool:
     from kapibara.features.schedule import parser as schedule_parser
     try:
         raw = await schedule_parser.raw_for_user(user_id)
-    except Exception:
+    except schedule_parser.FETCH_ERRORS:           # календарь не загрузился — оценить пока нельзя
         return False
     return key(name) in teachers_in(raw)
 

@@ -13,6 +13,7 @@
 «для куратора» не зовём (pulse_report.md, «Границы и риски»).
 """
 
+import contextlib
 import io
 import json
 import os
@@ -99,17 +100,13 @@ def decode(buf: bytes, depth: int = 0) -> list[tuple[int, object]]:
 def _bytes_value(raw: bytes, depth: int):
     if not raw:
         return ""
-    try:
+    with contextlib.suppress(UnicodeDecodeError):    # не текст — пробуем как вложенное сообщение
         text = raw.decode("utf-8")
         if text.isprintable():
             return text           # строка, даже если похожа на сообщение (UUID, имена)
-    except UnicodeDecodeError:
-        pass
     if depth < 30:
-        try:
+        with contextlib.suppress(ValueError):        # не сообщение — покажем байтами
             return decode(raw, depth + 1)
-        except ValueError:
-            pass
     return "0x" + raw.hex()
 
 
