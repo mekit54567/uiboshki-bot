@@ -166,6 +166,19 @@ def short_final(text: str) -> str:
     return re.sub(r"\s+", " ", rest) if re.fullmatch(r"[\d.,\s]+", rest) else t
 
 
+def passing_final(text: str) -> bool:
+    """Положительный ли итог: 3/4/5, «зачтено», «отлично»… «2», «неуд…»,
+    «Не зачтено», «не явился» — нет. В СДО итог — вычисляемая оценка по
+    текущим баллам: посреди семестра это двойка у всех, и показывать её
+    (да ещё зелёным) вместо «ещё 14,6 до «3»» на экране предмета нельзя
+    (скрин Никиты 19.11)."""
+    t = (text or "").strip().lower()
+    if not t or t.startswith(("не ", "неуд")):
+        return False
+    m = re.match(r"(\d+)", t)
+    return not (m and int(m.group(1)) <= 2)
+
+
 def summarize(report: dict, course_name: str = "") -> dict:
     """Сводка курса для экрана «Баллы»: сумма, категории БРС, итог, работы
     текущего контроля и сколько из них зачтено."""
@@ -199,7 +212,9 @@ def summarize(report: dict, course_name: str = "") -> dict:
     goal = next((p for p, _ in marks if score < p), None)
     return {
         "kind": "credit" if credit else "exam",
-        "score": round(score, 2), "max": total_max, "final": final_text,
+        "score": round(score, 2), "max": total_max,
+        # непройденный итог не показываем: клиенты пишут «до «3» ещё N»
+        "final": final_text if passing_final(final_text) else "",
         "marks": [{"at": p, "label": l} for p, l in marks],
         "closed": score >= marks[0][0],
         # «на автомат»: баллов на зачёт/«3» и зачтено ≥ 75 % работ ТК (правило БРС)
