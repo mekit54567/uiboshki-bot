@@ -1,4 +1,7 @@
-"""Решалка: /solve, свободный текст и фото, /history. Общая часть — в solver_reply, «Подумать» — в solver_think, решалка по лекциям — в solver_lectures."""
+"""Решалка: /solve, свободный текст и фото, /history.
+
+Общая часть — в solver_reply, «Подумать» — в solver_think, решалка по лекциям — в solver_lectures.
+"""
 
 import logging
 

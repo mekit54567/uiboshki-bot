@@ -11,11 +11,9 @@ from aiogram import F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import (InlineKeyboardButton, InlineKeyboardMarkup, Message)
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from database import (
-    get_subject_lecture_context,
-)
+from database import get_subject_lecture_context
 from kapibara.core.utils import md_to_tg_html_parts
 from kapibara.core.telegram import cosmetic
 from kapibara.core.errors import aside, log_failure

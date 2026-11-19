@@ -277,8 +277,7 @@ def _arm(bot):  # noqa: F811
 async def test_bot_solve_toggle_think_before_answer(db, dp, bot, monkeypatch, on):  # noqa: F811
     from kapibara.features.ai import quota as ai_quota
     import handlers.solver as solver
-    from handlers import solver_reply
-    from handlers import solver_think
+    from handlers import solver_reply, solver_think
     from tests.test_review_bot import UID, ctx
     await _plus(db, UID)
     asked, ordinary = [], []
