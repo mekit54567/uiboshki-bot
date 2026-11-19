@@ -287,7 +287,8 @@ def summary(s: dict) -> str:
                if s["ai_today"] else "")
             + platforms_line(s.get("platforms") or [])
             + groups_line(s.get("groups") or [])
-            + dark_vote_line(s.get("dark_votes") or {}))
+            + dark_vote_line(s.get("dark_votes") or {})
+            + rating_offer_line(s.get("rating_offer") or {}))
 
 
 def platforms_line(rows: list[tuple[str, int]]) -> str:
@@ -303,6 +304,15 @@ def dark_vote_line(votes: dict[str, int]) -> str:
         return ""
     return (f"\nКакая тёмная лучше: новая — <b>{votes.get('new', 0)}</b>"
             f" · прежняя — <b>{votes.get('old', 0)}</b>")
+
+
+def rating_offer_line(c: dict[str, int]) -> str:
+    """«Показаться в рейтинге: листом спросили 12 · согласились после карточки 3 · листа 2 · пуша 1 · отказались 4»."""
+    if not any(c.values()):
+        return ""
+    return (f"\nПоказаться в рейтинге: листом спросили <b>{c.get('shown', 0)}</b> · согласились после карточки"
+            f" <b>{c.get('card', 0)}</b> · листа <b>{c.get('sheet', 0)}</b> · пуша <b>{c.get('event', 0)}</b>"
+            f" · «больше не предлагать» <b>{c.get('stopped', 0)}</b>")
 
 
 def groups_line(rows: list[dict], top: int = 6) -> str:
@@ -428,5 +438,10 @@ async def report(days: int = 30) -> tuple[bytes, str]:
         s["dark_votes"] = await design_votes.counts()
     except sqlite3.Error as e:
         logger.info(f"/stats: голоса за тёмную: {e}")
+    try:
+        from kapibara.features.social import rating_offer
+        s["rating_offer"] = await rating_offer.counts()
+    except sqlite3.Error as e:
+        logger.info(f"/stats: предложение рейтинга: {e}")
     png = await asyncio.to_thread(render, s)
     return png, summary(s)

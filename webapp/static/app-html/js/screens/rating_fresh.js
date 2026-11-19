@@ -103,7 +103,7 @@ function rfMeView(d, st) {
   const [key, , eyebrow] = scopes[i];
   const sc = ranks[key] || {};
   const week = Math.trunc(me.week || 0), top = key === "all" && sc.above != null;
-  return `<div class="hx">${rfSummary({ id: "rating-me", eyebrow, place: sc.place ?? null,
+  return `<div id="rating-offer-slot"></div><div class="hx">${rfSummary({ id: "rating-me", eyebrow, place: sc.place ?? null,
       placeText: sc.place == null ? "пока без опыта" : `место из ${rfN(sc.of)}`, sideEyebrow: "Опыт", sideValue: rfN(me.total),
       sideSub: top ? `выше ${sc.above}%` : week > 0 ? `+${rfN(week)} за\u00A0неделю` : "", sideColor: top ? "muted" : "ok",
       footer: rfUpHint(sc, d.rules || {}) })}</div>
@@ -154,6 +154,7 @@ function rfDraw(body, d, st) {
     + screenTitle("Рейтинг", { sub: "активность в Капибаре, не успеваемость" })
     + `<div class="dl-segwrap">${rfTabs("rating-view", ["Я", "Группы"], st.view, "rf-view", true)}</div>`
     + (st.view === 0 ? rfMeView(d, st) : rfGroupsView(d, st)) + '<div style="height:var(--xxl)"></div>';
+  if (st.view === 0 && window.roMountCard) roMountCard(body, st, d.me || {});
 }
 
 /** Из чего опыт — в одну строку: название, полоса, число. */

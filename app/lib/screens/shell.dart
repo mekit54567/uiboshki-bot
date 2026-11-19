@@ -26,6 +26,7 @@ import 'legal.dart';
 import 'more.dart';
 import 'pulse.dart';
 import 'push_ask.dart';
+import 'rating_offer.dart';
 import 'sdo_relogin.dart';
 import 'study.dart';
 import 'today.dart';
@@ -188,6 +189,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       unawaited(AppPush.start(widget.api)); // нажатое уведомление, новый токен телефона
       await _maybeTour();
       if (mounted) await maybeAskPush(context, widget.api); // один раз, после тура
+      // лист «Показаться в рейтинге?»: только когда сервер скажет «пора»
+      if (mounted) await maybeOfferRating(context, widget.api);
       if (mounted) await _sdoRefresh();
     });
   }

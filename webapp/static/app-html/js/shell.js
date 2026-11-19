@@ -168,6 +168,7 @@ async function afterStart() {
   }
   if (window.sendRef) sendRef().catch(() => {});
   if (window.maybeTour) await maybeTour();
+  if (window.maybeOfferRating) maybeOfferRating();   // лист «Показаться в рейтинге?», когда сервер скажет «пора»
   DarkVote.send();   // голос, не ушедший без сети
   if (window.maybeDarkIntro) maybeDarkIntro();
 }

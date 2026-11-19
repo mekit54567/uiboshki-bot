@@ -134,3 +134,10 @@ button.rf-line:active { background: color-mix(in srgb, var(--text) 5%, transpare
 .rf-rules.open .mi { transform: rotate(90deg); }
 .sheet.rf-sheet { background: var(--bg); }
 .sheet.rf-sheet .body { padding: 0 var(--l); }
+
+/* предложение показаться в рейтинге (rating_offer.js): кнопки одного размера, «нет» не серая и не мелкая */
+.ro-card { padding: var(--l) var(--l) var(--s); }
+.ro-btns { display: flex; gap: var(--s); margin-top: var(--l); }
+.ro-btns .btn { min-height: 46px; font-size: 15px; flex: 1; padding: 0 var(--m); }
+.ro-btns .btn.outline, .ro-keep { color: var(--text); border-color: var(--edge); }
+.ro-stop { color: var(--muted); font-weight: 400; font-size: 13.5px; }

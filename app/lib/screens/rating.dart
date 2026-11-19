@@ -21,8 +21,43 @@ import '../widgets/trend_chart.dart';
 import 'files.dart' show BackRow;
 import 'legal.dart' show LegalLink, openLegal;
 import 'notify.dart' show AppSwitch;
+import 'rating_offer.dart';
 
 part 'rating_fresh.dart';
+
+/// Правка своего профиля в рейтинге (ник, «группе», «всем»): true — сохранилось.
+/// Общая для экрана «Рейтинг» и листа-предложения при входе.
+Future<bool> ratingSave(BuildContext context, Api api, Map<String, Object?> body) async {
+  tick();
+  try {
+    await api.put('/rating/me', body);
+  } on ApiError catch (e) {
+    if (context.mounted) showToast(context, e.message, kind: ToastKind.error);
+    return false;
+  }
+  return true;
+}
+
+/// Включить «всем» — только через лист отдельного согласия; выключить — сразу.
+/// Сохранено (true) или человек передумал (false).
+Future<bool> ratingShowAll(BuildContext context, Api api, Map me) async {
+  if (me['show_all'] == true) return ratingSave(context, api, {'show_all': false});
+  tick();
+  final Map doc;
+  try {
+    doc = Map<String, dynamic>.from(await api.get('/legal/rating_all') as Map);
+  } on ApiError catch (e) {
+    if (context.mounted) showToast(context, e.message, kind: ToastKind.error);
+    return false;
+  }
+  if (!context.mounted) return false;
+  final version = await appSheet<String>(
+    context,
+    (_) => ShowAllSheet(api: api, doc: doc, seenAs: me['public_nick'] as String?),
+  );
+  if (version == null || !context.mounted) return false;
+  return ratingSave(context, api, {'show_all': true, 'consent': version});
+}
 
 class RatingScreen extends StatefulWidget {
   final Api api;
@@ -58,15 +93,9 @@ class _RatingScreenState extends State<RatingScreen> {
   }
 
   Future<bool> _save(Map<String, Object?> body) async {
-    tick();
-    try {
-      await api.put('/rating/me', body);
-    } on ApiError catch (e) {
-      if (mounted) showToast(context, e.message, kind: ToastKind.error);
-      return false;
-    }
-    if (mounted) setState(() => _epoch++);
-    return true;
+    final ok = await ratingSave(context, api, body);
+    if (ok && mounted) setState(() => _epoch++);
+    return ok;
   }
 
   Future<bool> _nick(Map me) async {
@@ -89,21 +118,9 @@ class _RatingScreenState extends State<RatingScreen> {
 
   /// Включить «всем» — только через лист отдельного согласия; выключить — сразу.
   Future<bool> _showAll(Map me) async {
-    if (me['show_all'] == true) return _save({'show_all': false});
-    tick();
-    final Map doc;
-    try {
-      doc = Map<String, dynamic>.from(await api.get('/legal/rating_all') as Map);
-    } on ApiError catch (e) {
-      if (mounted) showToast(context, e.message, kind: ToastKind.error);
-      return false;
-    }
-    if (!mounted) return false;
-    final version = await appSheet<String>(
-      context,
-      (_) => ShowAllSheet(api: api, doc: doc, seenAs: me['public_nick'] as String?),
-    );
-    return version != null && await _save({'show_all': true, 'consent': version});
+    final ok = await ratingShowAll(context, api, me);
+    if (ok && mounted) setState(() => _epoch++);
+    return ok;
   }
 
   @override
