@@ -1,0 +1,40 @@
+name: Карточка версии в App Store Connect
+
+# Ручной запуск: кладёт «Что нового» и скрины (docs/store/screens/framed) в версию
+# iOS через API App Store Connect. НА ПРОВЕРКУ НЕ ОТПРАВЛЯЕТ — это делает владелец
+# в App Store Connect. Ключ — те же секреты, что у загрузки в TestFlight.
+# Сначала можно прогнать «dry_run»: покажет, что бы сделал, ничего не меняя.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия для магазина, например 2.0.1"
+        required: true
+      whats_new:
+        description: "Файл с текстом «Что нового» (от корня репозитория)"
+        required: true
+        default: "docs/store/whats-new-2.0.1.md"
+      dry_run:
+        description: "Только показать, что будет сделано"
+        type: boolean
+        default: false
+
+jobs:
+  listing:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q "pyjwt[crypto]" httpx pillow
+      - name: Выгрузка
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          ARGS=(--version "${{ inputs.version }}" --whats-new "${{ inputs.whats_new }}" --screens docs/store/screens/framed)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+          python tools/asc_listing.py "${ARGS[@]}"
