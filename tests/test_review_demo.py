@@ -212,3 +212,16 @@ def test_trial_text_on_ios_without_subscription():
     assert "подписк" in ai_quota.text("trial")
     assert "подписк" not in ai_quota.text("trial", app="ios")
     assert "подписк" not in ai_quota.text("trial", app="IOS")
+
+def test_phone_lecture_download_and_view(client):
+    h = _login(client)
+    r = client.post("/api/v1/files/4/link", headers=h)
+    assert r.status_code == 200
+    url = r.json()["url"]
+    saved = client.get(url)
+    viewed = client.get(url + "&view=1")
+    assert saved.status_code == viewed.status_code == 200
+    assert "Метрики и KPI" in saved.text == viewed.text
+    assert saved.headers["content-disposition"].startswith("attachment")
+    assert viewed.headers["content-disposition"].startswith("inline")
+    assert client.post("/api/v1/files/999/link", headers=h).status_code == 404

@@ -63,4 +63,20 @@ void main() {
     expect(find.text('Просмотр'), findsOneWidget); // в Safari — листать там (владелец, 09.10)
     expect(find.text('Прислать в Telegram'), findsOneWidget);
   });
+
+  testWidgets('обе кнопки показывают ошибку, если сервер не прислал ссылку', (t) async {
+    phone(t);
+    await t.pumpWidget(host(FilesScreen(api: fakeApi())));
+    await settle(t);
+    await t.tap(find.text('Основы бизнес-анализа в ИТ-сфере'));
+    await settle(t);
+    await t.tap(find.text('Требования и стейкхолдеры'));
+    await settle(t);
+    for (final action in ['Скачать', 'Просмотр']) {
+      await t.tap(find.text(action));
+      await settle(t);
+      expect(find.text('Сервер не прислал ссылку на файл.'), findsOneWidget);
+      expect(t.takeException(), isNull);
+    }
+  });
 }

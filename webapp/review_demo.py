@@ -369,6 +369,17 @@ class ReviewDemo:
             status, data = await _schedule(path, query)
         elif method == "POST" and path == "/api/chat":
             status, data = await demo_chat(body, datetime.now(TZ))
+        elif method == "POST" and (match := re.fullmatch(r"/api/files/(\d+)/link", path)):
+            from starlette.requests import Request
+            from urllib.parse import urljoin
+            from webapp import deps
+            lec = next((x for x in lectures() if x["id"] == int(match[1])), None)
+            if lec:
+                name = f"lecture-{lec['id']}.txt"
+                base = deps.WEBAPP_URL or str(Request(scope).base_url)
+                status, data = 200, {"url": urljoin(base, f"/site/demo-lectures/{name}?demo=1"), "file_name": name}
+            else:
+                status, data = 404, {"detail": "В демо-аккаунте нет оригинала этого файла"}
         else:
             status, data = answer(method, path, query, body, datetime.now(TZ))
         resp = JSONResponse(data, status_code=status, headers={"Cache-Control": "no-store"})

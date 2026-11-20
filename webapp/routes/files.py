@@ -5,6 +5,7 @@ import logging
 import re
 import threading
 from pathlib import Path
+from urllib.parse import quote, urljoin
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
@@ -14,7 +15,8 @@ from kapibara.core.config import is_starosta
 from webapp import deps
 from webapp.deps import CurrentUser
 
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
+from aiohttp import ClientError
 
 from kapibara.core.errors import NETWORK, log_failure
 
@@ -97,7 +99,7 @@ def _dl_sig(file_id: int, exp: int) -> str:
 def _download_name(f: dict, file_path: str = "") -> str:
     name = (f.get("file_name") or "").strip()
     if name:
-        return name
+        return re.sub(r'[\\/:*?"<>|\x00-\x1f]+', "_", name)
     ext = Path(file_path).suffix if file_path else ""
     return re.sub(r'[\\/:*?"<>|]+', " ", f.get("title") or "file").strip()[:100] + ext
 
@@ -115,16 +117,25 @@ async def _visible_file(file_id: int, user: dict) -> dict:
     return f
 
 
+async def _telegram_file(bot, f: dict):
+    try:
+        tf = await bot.get_file(f["file_id"])
+    except TelegramBadRequest as e:
+        if "file is too big" in e.message.lower():
+            raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат") from e
+        raise HTTPException(502, "Telegram не отдал файл лекции") from e
+    except (TelegramAPIError, *NETWORK) as e:
+        raise HTTPException(502, "Telegram сейчас недоступен — попробуй ещё раз") from e
+    if not tf.file_path:
+        raise HTTPException(502, "Telegram не прислал путь к файлу")
+    return tf
+
+
 @router.post("/api/files/{file_id}/link")
 async def api_file_link(file_id: int, request: Request, user: dict = CurrentUser):
     import time
-    from urllib.parse import quote, urljoin
     f = await _visible_file(file_id, user)
-    try:
-        tf = await deps.tg_bot().get_file(f["file_id"])
-    except (TelegramAPIError, *NETWORK) as e:      # больше 20 МБ — Bot API не отдаёт
-        logger.info(f"файл {file_id} не скачать через Bot API: {e}")
-        raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат") from e
+    tf = await _telegram_file(deps.tg_bot(), f)
     name = _download_name(f, tf.file_path or "")
     exp = int(time.time()) + DL_TTL
     path = f"/dl/{file_id}/{quote(name, safe='')}?exp={exp}&sig={_dl_sig(file_id, exp)}"
@@ -145,7 +156,6 @@ async def download_file(file_id: int, name: str, exp: int, sig: str, view: int =
     import hmac
     import mimetypes
     import time
-    from urllib.parse import quote
     from database import get_file_by_id
     if exp < time.time() or not hmac.compare_digest(sig, _dl_sig(file_id, exp)):
         raise HTTPException(403, "Ссылка устарела — нажми «Скачать» ещё раз")
@@ -153,8 +163,11 @@ async def download_file(file_id: int, name: str, exp: int, sig: str, view: int =
     if not f:
         raise HTTPException(404, "Файл не найден")
     bot = deps.tg_bot()
-    tf = await bot.get_file(f["file_id"])
-    data = await bot.download_file(tf.file_path)
+    tf = await _telegram_file(bot, f)
+    try:
+        data = await bot.download_file(tf.file_path)
+    except (TelegramAPIError, ClientError, *NETWORK) as e:
+        raise HTTPException(502, "Скачивание из Telegram прервалось — попробуй ещё раз") from e
     # Имя в пути — только для красоты ссылки: подпись его не покрывает, так
     # что имя и Content-Type берём из базы (иначе подменой пути .pdf
     # превращается в .html с типом text/html).
@@ -338,8 +351,8 @@ async def api_file_page(file_id: int, page: int, request: Request, user: dict = 
     out = {"id": file_id, "title": f["title"], "page": page, "pages": last, "kind": kind, "text": text, "image": None}
     if (f.get("file_name") or "").lower().endswith(".pdf"):
         exp = int(time.time()) + 600
-        base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-        out["image"] = f"{base}/pg/{file_id}/{page}.jpg?exp={exp}&sig={_pg_sig(file_id, page, exp)}"
+        path = f"/pg/{file_id}/{page}.jpg?exp={exp}&sig={_pg_sig(file_id, page, exp)}"
+        out["image"] = urljoin(deps.WEBAPP_URL or str(request.base_url), path)
     return out
 
 
