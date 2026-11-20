@@ -218,3 +218,55 @@ async def test_webapp_chat_returns_lecture_sources(db, monkeypatch):
     data = c.post("/api/chat", headers=headers, json={"history": [
         {"role": "user", "content": "Что такое дебет?"}], "subject": UCH}).json()
     assert "sources" not in data
+
+
+@pytest.mark.asyncio
+async def test_iphone_presentation_preview_returns_slide_pages(db, monkeypatch):
+    import os
+    from io import BytesIO
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    from pptx import Presentation
+    from pypdf import PdfReader
+    from database.sessions import create_session
+    from webapp import server
+    from webapp.routes import files
+    from tests.test_webapp_home import BOT_TOKEN
+
+    port = os.getenv("TEST_PREVIEW_PORT")
+    if not port:
+        pytest.skip("Для проверки с настоящим LibreOffice нужен TEST_PREVIEW_PORT")
+    deck = Presentation()
+    titles = ["Финансовое состояние", "Структура капитала"]
+    for title in titles:
+        deck.slides.add_slide(deck.slide_layouts[0]).shapes.title.text = title
+    pptx = BytesIO()
+    deck.save(pptx)
+    original = pptx.getvalue()
+    name = "Лекция 5 - Система показателей оценки финансового состояния-2.pptx"
+    fid = await db.add_file("Лекция 5", OPD, "TGF", name, 0)
+    bot = AsyncMock()
+    bot.get_file.return_value = SimpleNamespace(file_path="documents/file.pptx")
+    bot.download_file.return_value = pptx
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setattr(server.deps, "tg_bot", lambda: bot)
+    monkeypatch.setattr(files, "_PRESENTATION_CONVERTER", f"http://127.0.0.1:{port}/forms/libreoffice/convert")
+
+    token = await create_session(222, "Капибара · iPhone")
+    c = TestClient(server.app)
+    link = c.post(f"/api/v1/files/{fid}/link", headers={"Authorization": f"Bearer {token}", "X-App": "ios"})
+    assert link.status_code == 200
+    url = link.json()["url"]
+    viewed = c.get(url + "&view=1")
+    assert viewed.status_code == 200, viewed.text[:200]
+    assert viewed.headers["content-type"] == "application/pdf"
+    assert viewed.headers["content-disposition"].startswith("inline;")
+    assert viewed.headers["content-disposition"].endswith(".pdf")
+    pages = PdfReader(BytesIO(viewed.content)).pages
+    assert len(pages) == len(titles)
+    assert all(title in page.extract_text() for title, page in zip(titles, pages, strict=True))
+    saved = c.get(url)
+    assert saved.content == original
+    assert saved.headers["content-disposition"].startswith("attachment;")
+    assert saved.headers["content-disposition"].endswith(".pptx")

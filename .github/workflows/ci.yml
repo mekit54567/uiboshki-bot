@@ -15,6 +15,11 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    services:
+      lecture-preview:
+        image: gotenberg/gotenberg:9.9.1-libreoffice
+        ports:
+          - 3000/tcp
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,6 +62,8 @@ jobs:
         run: PYTHONPATH=. lint-imports
 
       - name: Run tests
+        env:
+          TEST_PREVIEW_PORT: ${{ job.services.lecture-preview.ports[3000] }}
         run: python -m pytest -v
 
   # Своё приложение (app/, Flutter, этап 3): анализатор и тесты виджетов.

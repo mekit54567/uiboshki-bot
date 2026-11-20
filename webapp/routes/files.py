@@ -1,6 +1,7 @@
 """Файлы курсов: список по предметам и типам, «В чат», подписанные ссылки
 /dl для «📥 Скачать», удаление и правка."""
 
+import httpx
 import logging
 import re
 import threading
@@ -151,6 +152,19 @@ _VIEW_TYPES = {"application/pdf", "image/png", "image/jpeg", "text/plain",
                "application/vnd.ms-powerpoint", "application/msword", "application/vnd.ms-excel"}
 
 
+# Сервис LibreOffice в закрытой сети Compose, без базы и токена бота.
+_PRESENTATION_CONVERTER = "http://lecture-preview:3000/forms/libreoffice/convert"
+
+
+async def _presentation_pdf(data: bytes, suffix: str) -> bytes:
+    async with httpx.AsyncClient(timeout=45, trust_env=False) as client:
+        reply = await client.post(_PRESENTATION_CONVERTER, files={"files": ("slides" + suffix, data)})
+        reply.raise_for_status()
+    if not reply.content.startswith(b"%PDF-"):
+        raise ValueError("Конвертер не вернул PDF")
+    return reply.content
+
+
 @router.get("/dl/{file_id}/{name}")
 async def download_file(file_id: int, name: str, exp: int, sig: str, view: int = 0):
     import hmac
@@ -173,8 +187,19 @@ async def download_file(file_id: int, name: str, exp: int, sig: str, view: int =
     # превращается в .html с типом text/html).
     name = _download_name(f, tf.file_path or "")
     mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    content = data.getvalue()
+    suffix = Path(name).suffix.lower()
+    if view and suffix in {".pptx", ".ppt"}:
+        try:
+            content = await _presentation_pdf(content, suffix)
+        except (httpx.HTTPError, ValueError) as e:
+            logger.warning("Просмотр презентации %s: %s", file_id, type(e).__name__)
+            return Response("Не удалось открыть презентацию. Вернись в приложение и нажми «Скачать».",
+                            status_code=502, media_type="text/plain")
+        name = str(Path(name).with_suffix(".pdf"))
+        mime = "application/pdf"
     how = "inline" if view and mime in _VIEW_TYPES else "attachment"
-    return Response(data.getvalue(), media_type=mime,
+    return Response(content, media_type=mime,
                     headers={"Content-Disposition": f"{how}; filename*=UTF-8''{quote(name, safe='')}"})
 
 

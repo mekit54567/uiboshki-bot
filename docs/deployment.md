@@ -14,6 +14,7 @@ merge в main → CI (ci.yml) зелёный → deploy.yml двигает ве�
 - Сервер — VPS в Москве с Ubuntu 24.04: Docker Compose, контейнер бота
   (тот же `Dockerfile`, что в CI) и Caddy, который сам получает HTTPS-сертификат
   для `www.uiboshki.ru`. По голому IP отвечает только `/api/meta`.
+- Для просмотра презентаций сервис `lecture-preview` в Compose преобразует PowerPoint в PDF через LibreOffice. У контейнера отдельная внутренняя сеть без выхода в интернет, нет публичного порта, токена бота и доступа к базе. Скачивание исходного файла идёт через бота.
 - Ветку `deploy` двигает [`deploy.yml`](../.github/workflows/deploy.yml) только
   после зелёного CI мержа. Упал CI, сборка CHANGELOG или PWA — сервер остаётся
   на прошлой сборке.

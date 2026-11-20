@@ -13,12 +13,20 @@ services:
       PORT: "8080"
     volumes:
       - /opt/kapibara/data:/data
+    networks: [default, preview]
     expose:
       - "8080"
     stop_grace_period: 30s
     logging:
       driver: json-file
       options: {max-size: 20m, max-file: "5"}
+
+  lecture-preview:
+    image: gotenberg/gotenberg:9.9.1-libreoffice
+    restart: unless-stopped
+    command: ["gotenberg", "--libreoffice-deny-list=.*", "--libreoffice-max-queue-size=3"]
+    networks: [preview]
+    mem_limit: 768m
 
   caddy:
     image: caddy:2.8
@@ -33,3 +41,7 @@ services:
     logging:
       driver: json-file
       options: {max-size: 5m, max-file: "2"}
+
+networks:
+  preview:
+    internal: true
