@@ -9,6 +9,7 @@
 2. прописывает «Что нового» в локали ru (и во всех остальных, что уже есть у версии);
 3. для каждой папки скринов (appstore-6.9, appstore-6.3) очищает набор нужного размера
    и заливает файлы по порядку 1…N.
+4. с --build-number выбирает указанную обработанную сборку iOS для этой версии.
 
 Ключ — те же секреты, что у загрузки в TestFlight: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8
 (переменные окружения; значения в логи не пишутся). Версия 2.0.1 появится в списке,
@@ -26,10 +27,10 @@ import jwt
 
 API = "https://api.appstoreconnect.apple.com"
 BUNDLE_ID = "ru.uiboshki.app"
-# папка со скринами → (displayType в API, размер в пикселях)
+# App Store Connect использует старые идентификаторы размеров по API.
 SETS = {
-    "appstore-6.9": ("APP_IPHONE_69", (1320, 2868)),
-    "appstore-6.3": ("APP_IPHONE_63", (1206, 2622)),
+    "appstore-6.9": ("APP_IPHONE_67", (1320, 2868)),
+    "appstore-6.3": ("APP_IPHONE_61", (1206, 2622)),
 }
 
 
@@ -135,11 +136,31 @@ def upload_set(asc: Asc, loc_id: str, display_type: str, files: list[Path]) -> N
         print(f"  {display_type}: {f.name} загружен")
 
 
+def attach_build(asc: Asc, app_id: str, version_id: str, version: str, number: str) -> None:
+    builds = asc.get("/v1/builds", **{
+        "filter[app]": app_id,
+        "filter[preReleaseVersion.platform]": "IOS",
+        "filter[preReleaseVersion.version]": version,
+        "filter[version]": number,
+        "filter[processingState]": "VALID",
+        "filter[expired]": "false",
+    })
+    if len(builds) != 1:
+        raise AscError(f"ожидалась одна обработанная сборка iOS {version} ({number}), найдено: {len(builds)}")
+    build_id = builds[0]["id"]
+    path = f"/v1/appStoreVersions/{version_id}/relationships/build"
+    current = asc.call("GET", path).get("data")
+    if not current or current["id"] != build_id:
+        asc.call("PATCH", path, json={"data": {"type": "builds", "id": build_id}})
+    print(f"сборка iOS {version} ({number}) {'выбрана или будет выбрана' if asc.dry else 'выбрана'}")
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--version", required=True)
     ap.add_argument("--whats-new", required=True, type=Path)
     ap.add_argument("--screens", required=True, type=Path)
+    ap.add_argument("--build-number")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     key_id, issuer, p8 = (os.environ.get(k, "") for k in ("ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_KEY_P8"))
@@ -155,7 +176,7 @@ def main(argv: list[str]) -> int:
         app_id = find_app(asc)
         version_id = ensure_version(asc, app_id, a.version)
         if version_id == "DRY":   # версии ещё нет, дальше без неё нечего проверять
-            print("пробный прогон: ключ и приложение найдены, версию 2.0.1 создам при настоящем запуске")
+            print(f"пробный прогон: ключ и приложение найдены, версию {a.version} создам при настоящем запуске")
             return 0
         locs = set_whats_new(asc, version_id, text)
         for folder, (display_type, size) in SETS.items():
@@ -174,6 +195,8 @@ def main(argv: list[str]) -> int:
                     if folder != "appstore-6.3":   # 6,9″ обязателен, 6,3″ Apple умеет делать из него сам
                         raise
                     print(f"{folder}: не залился ({e}); 6,9″ достаточно, продолжаю", file=sys.stderr)
+        if a.build_number:
+            attach_build(asc, app_id, version_id, a.version, a.build_number)
     except (AscError, httpx.HTTPError) as e:
         print(f"ошибка: {e}", file=sys.stderr)
         return 1

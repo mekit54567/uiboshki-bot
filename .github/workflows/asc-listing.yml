@@ -15,6 +15,9 @@ on:
         description: "Файл с текстом «Что нового» (от корня репозитория)"
         required: true
         default: "docs/store/whats-new-2.0.1.md"
+      build_number:
+        description: "Номер готовой iOS-сборки для этой версии (необязательно)"
+        required: false
       dry_run:
         description: "Только показать, что будет сделано"
         type: boolean
@@ -34,7 +37,12 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          VERSION: ${{ inputs.version }}
+          WHATS_NEW: ${{ inputs.whats_new }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          ARGS=(--version "${{ inputs.version }}" --whats-new "${{ inputs.whats_new }}" --screens docs/store/screens/framed)
-          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+          ARGS=(--version "$VERSION" --whats-new "$WHATS_NEW" --screens docs/store/screens/framed)
+          if [ -n "$BUILD_NUMBER" ]; then ARGS+=(--build-number "$BUILD_NUMBER"); fi
+          if [ "$DRY_RUN" = "true" ]; then ARGS+=(--dry-run); fi
           python tools/asc_listing.py "${ARGS[@]}"
