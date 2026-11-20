@@ -81,8 +81,9 @@ async def test_chat_request_ambiguous_asks_subject(db, monkeypatch):
     assert any("По какому предмету" in t for t, _ in session.sent)
 
 
+@pytest.mark.parametrize("app_path", ["", "/app/", "/app?source=telegram"])
 @pytest.mark.asyncio
-async def test_download_link_is_signed_and_expires(db, monkeypatch):
+async def test_download_link_is_signed_and_expires(db, monkeypatch, app_path):
     from types import SimpleNamespace
     from io import BytesIO
     from fastapi.testclient import TestClient
@@ -100,7 +101,7 @@ async def test_download_link_is_signed_and_expires(db, monkeypatch):
             return BytesIO(b"%PDF-1.4 test")
 
     monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
-    monkeypatch.setattr(server.deps, "WEBAPP_URL", "https://app.example")
+    monkeypatch.setattr(server.deps, "WEBAPP_URL", "https://app.example" + app_path)
     monkeypatch.setattr(server.deps, "tg_bot", lambda: FakeBot())
     c, headers = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
     link = c.post(f"/api/files/{fid}/link", headers=headers).json()
