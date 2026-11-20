@@ -202,6 +202,7 @@ async def test_chat_cites_pages_and_page_view(db, embed, monkeypatch):
     res = c.post("/api/chat", headers=h, json={"history": [{"role": "user", "content": "как учесть, что прибыль приходит позже"}]}).json()
     assert "sources" not in res
 
+    monkeypatch.setattr(server.deps, "WEBAPP_URL", "https://app.example/app/")
     p = c.get(f"/api/files/{fid}/page/2", headers=h).json()
     assert p["pages"] == 3 and p["kind"] == "стр." and "Дисконтирование" in p["text"] and p["image"]
     assert c.get(f"/api/files/{fid}/page/99", headers=h).json()["page"] == 3    # дальше последней — последняя

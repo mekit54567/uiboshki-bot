@@ -1014,34 +1014,46 @@ class _FileSheetState extends State<_FileSheet> {
     tick();
     try {
       final r = await widget.api.post('/files/${widget.f.id}/link');
-      final url = r['url'] as String;
+      if (!mounted) return;
+      final url = _fileUri(r);
       if (kIsWeb) {
-        await launchUrl(Uri.parse(url));
+        if (!await launchUrl(url)) throw ApiError('Не удалось открыть ссылку для скачивания.');
         return;
       }
       setState(() => _note = 'Скачиваю…');
       final name = r['file_name'] as String? ?? widget.f.fileName;
-      final bytes = await widget.api.download(url);
+      final bytes = await widget.api.download(url.toString());
       if (!mounted) return;
       final saved = await FilePicker.saveFile(fileName: name, bytes: bytes, mimeType: fileMime(name));
       if (mounted) setState(() => _note = saved == null ? null : 'Сохранил в Файлы.');
-    } on ApiError catch (e) {
-      // Больше 20 МБ Bot API не отдаёт — тогда файл придёт в Telegram.
-      setState(() => _note = e.message);
-      if (e.message.contains('отправлю в чат')) await _send();
-    } on TimeoutException {
-      if (mounted) setState(() => _note = 'Не скачалось — нажми ещё раз');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _note = errorText(e));
+      if (e is ApiError && e.message.contains('отправлю в чат')) await _send();
     }
   }
 
-  /// «Просмотр»: файл открывается в Safari (или браузере) — листать там.
+  Uri _fileUri(dynamic response) {
+    final value = response is Map ? response['url'] : null;
+    final uri = value is String ? Uri.tryParse(value) : null;
+    if (uri == null || !{'http', 'https'}.contains(uri.scheme) || uri.host.isEmpty) {
+      throw ApiError('Сервер не прислал ссылку на файл.');
+    }
+    return uri;
+  }
+
   Future<void> _view() async {
     tick();
     try {
       final r = await widget.api.post('/files/${widget.f.id}/link');
-      await launchUrl(Uri.parse('${r['url']}&view=1'), mode: LaunchMode.externalApplication);
-    } on ApiError catch (e) {
-      setState(() => _note = e.message);
+      if (!mounted) return;
+      final uri = _fileUri(r);
+      final view = uri.replace(queryParameters: {...uri.queryParameters, 'view': '1'});
+      if (!await launchUrl(view, mode: LaunchMode.externalApplication)) {
+        throw ApiError('Не удалось открыть файл в браузере.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _note = errorText(e));
     }
   }
 

@@ -90,7 +90,7 @@ async def test_download_link_is_signed_and_expires(db, monkeypatch, app_path):
     import webapp.server as server
     from database import add_file
     from tests.test_webapp_home import BOT_TOKEN, _make_init_data
-    fid = await add_file("ЛК1", OPD, "TGF", "Основы ЛК1.pdf", 0)
+    fid = await add_file("ЛК1", OPD, "TGF", "Основы/ЛК1.pdf", 0)
 
     class FakeBot:
         async def get_file(self, file_id):
@@ -104,8 +104,12 @@ async def test_download_link_is_signed_and_expires(db, monkeypatch, app_path):
     monkeypatch.setattr(server.deps, "WEBAPP_URL", "https://app.example" + app_path)
     monkeypatch.setattr(server.deps, "tg_bot", lambda: FakeBot())
     c, headers = TestClient(server.app), {"X-Telegram-Init-Data": _make_init_data()}
-    link = c.post(f"/api/files/{fid}/link", headers=headers).json()
-    assert link["file_name"] == "Основы ЛК1.pdf"
+    if app_path:
+        from database.sessions import create_session
+        token = await create_session(222, "Капибара · iPhone")
+        headers = {"Authorization": f"Bearer {token}", "X-App": "ios"}
+    link = c.post(f"/api/v1/files/{fid}/link", headers=headers).json()
+    assert link["file_name"] == "Основы_ЛК1.pdf"
     assert link["url"].startswith("https://app.example/dl/")
     path = link["url"].removeprefix("https://app.example")
     resp = c.get(path)                                   # без initData — по подписи
@@ -116,6 +120,24 @@ async def test_download_link_is_signed_and_expires(db, monkeypatch, app_path):
     assert c.get(path.replace("sig=", "sig=0")).status_code == 403
     monkeypatch.setattr(time, "time", lambda: 4102444800.0)  # 2100 год — ссылка протухла
     assert c.get(path).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_temporary_file_outage_does_not_trigger_chat_delivery(db, monkeypatch):
+    from unittest.mock import AsyncMock
+    from fastapi.testclient import TestClient
+    import webapp.server as server
+    from database import add_file
+    from tests.test_webapp_home import BOT_TOKEN, _make_init_data
+
+    fid = await add_file("ЛК1", OPD, "TG", "ЛК1.pdf", 0)
+    bot = AsyncMock()
+    bot.get_file.side_effect = TimeoutError()
+    monkeypatch.setattr(server.deps, "BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setattr(server.deps, "tg_bot", lambda: bot)
+    res = TestClient(server.app).post(f"/api/v1/files/{fid}/link", headers={"X-Telegram-Init-Data": _make_init_data()})
+    assert res.status_code == 502
+    assert "отправлю в чат" not in res.json()["detail"]
 
 
 @pytest.mark.asyncio

@@ -57,6 +57,19 @@ _PROMO_FILE = re.compile(r"[a-z0-9-]+\.(mp4|jpg)")
 _PROMO_TYPES = {"mp4": "video/mp4", "jpg": "image/jpeg"}
 
 
+@router.get("/site/demo-lectures/lecture-{file_id}.txt", include_in_schema=False)
+async def demo_lecture_file(file_id: int, view: int = 0):
+    from webapp.review_demo import lectures
+    lec = next((x for x in lectures() if x["id"] == file_id), None)
+    if not lec:
+        raise HTTPException(404, "Демо-лекция не найдена")
+    pages = [lec["text"][n] for n in sorted(lec["text"], key=int)]
+    text = "\n\n".join([lec["title"], *pages])
+    how = "inline" if view else "attachment"
+    return Response(text, media_type="text/plain", headers={
+        "Content-Disposition": f'{how}; filename="lecture-{file_id}.txt"'})
+
+
 @router.get("/site/promo/{name}", include_in_schema=False)
 def promo_file(name: str, request: Request):
     """Промо-ролик сайта (site/promo/). Отдаётся тут, а не общей статикой: Safari
