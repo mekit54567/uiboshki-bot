@@ -118,7 +118,7 @@ async def _visible_file(file_id: int, user: dict) -> dict:
 @router.post("/api/files/{file_id}/link")
 async def api_file_link(file_id: int, request: Request, user: dict = CurrentUser):
     import time
-    from urllib.parse import quote
+    from urllib.parse import quote, urljoin
     f = await _visible_file(file_id, user)
     try:
         tf = await deps.tg_bot().get_file(f["file_id"])
@@ -127,8 +127,8 @@ async def api_file_link(file_id: int, request: Request, user: dict = CurrentUser
         raise HTTPException(413, "Файл слишком большой для скачивания — отправлю в чат") from e
     name = _download_name(f, tf.file_path or "")
     exp = int(time.time()) + DL_TTL
-    base = (deps.WEBAPP_URL or str(request.base_url)).rstrip("/")
-    return {"url": f"{base}/dl/{file_id}/{quote(name, safe='')}?exp={exp}&sig={_dl_sig(file_id, exp)}", "file_name": name}
+    path = f"/dl/{file_id}/{quote(name, safe='')}?exp={exp}&sig={_dl_sig(file_id, exp)}"
+    return {"url": urljoin(deps.WEBAPP_URL or str(request.base_url), path), "file_name": name}
 
 
 # «Просмотр» в браузере (?view=1) — только типы, которые браузер не исполнит:
